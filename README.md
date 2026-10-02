@@ -1,0 +1,146 @@
+# mxd
+
+A tiny, offline replacement for Logi Options+ on macOS, built for the MX Master 3S. It talks to
+the mouse directly over Logitech's HID++ 2.0 protocol, through the Bolt receiver or Bluetooth,
+and turns its buttons into system actions. It can also do smooth scrolling itself, replacing
+[Mos](https://mos.caldis.me). No UI, no network access, no account, about 3 MB of memory.
+
+## What it does
+
+- Diverts chosen buttons to itself and maps them to actions: Mission Control, App Exposé, Show
+  Desktop, switching Spaces, back/forward (as trackpad swipes), any keystroke, or a shell command.
+- Turns a hold of the thumb button plus mouse movement into a four-way gesture.
+- Sets DPI, scroll-wheel direction (in hardware), thumb-wheel direction, and the ratchet/free-spin
+  mode, with a button to toggle the mode.
+- Optionally takes over both wheels for smooth, accelerated pixel scrolling (`smoothScroll`).
+- Re-applies all of this whenever the mouse wakes, reconnects or switches between the receiver
+  and Bluetooth, and after the Mac wakes. The mouse forgets these settings on every reconnect.
+- On quit (SIGTERM/SIGINT, including `launchctl bootout` and logout) it hands the mouse back in
+  its native state. Nothing is stored on the mouse or receiver, so they behave normally on a
+  computer without mxd.
+
+## Install
+
+```sh
+./scripts/install.sh          # build, install /Applications/mxd.app, start the login agent
+./scripts/uninstall.sh        # stop and remove (keeps your config)
+```
+
+The install registers a LaunchAgent (`~/Library/LaunchAgents/local.mxd.plist`) that starts mxd at
+login and restarts it within seconds if it ever exits. Re-running the script rebuilds and
+restarts it.
+
+The first run asks for two permissions. Grant both in **System Settings › Privacy & Security**:
+
+- **Accessibility**, to post scrolls, keystrokes and swipes. Until it is granted, the wheels stay
+  native and actions that post events (back/forward, Spaces, keystrokes) do nothing.
+- **Input Monitoring**, to read the mouse over Bluetooth (the Bolt receiver works without it).
+
+macOS only applies a grant to a newly started process, so mxd checks every so often and
+restarts itself when one arrives. The log says which permissions are missing.
+
+macOS ties these grants to the app's signature. The script signs with a code-signing
+certificate named `mxd` when the keychain has one, so grants survive rebuilds; otherwise it signs
+ad hoc and they must be granted again after every install. To create the certificate once, in
+Keychain Access choose **Certificate Assistant › Create a Certificate…**, name it `mxd` and set
+the type to **Code Signing**. `MXD_SIGN_IDENTITY` overrides the name.
+
+Quit Logi Options+ first: only one program can control the buttons at a time. To remove it
+entirely, use Logitech's uninstaller.
+
+## Configure
+
+Config lives at `~/.config/mxd/config.json`; `config.example.json` is a full example. Every field
+is optional, and anything you leave out stays as the device has it. Reload without restarting:
+
+```sh
+launchctl kill HUP gui/$UID/local.mxd
+```
+
+| Field | Meaning |
+|---|---|
+| `dpi` | Sensor resolution, 200–8000 in steps of 50 |
+| `scrollWheel.inverted` | Invert the main wheel in hardware. With natural scrolling on, `true` gives classic wheel direction and leaves the trackpad alone |
+| `scrollWheel.mode` | `"ratchet"` or `"freespin"` on first connect. Later toggles are kept |
+| `scrollWheel.smartShiftThreshold` | 1–50 enables SmartShift's automatic free-spin; 255 disables it |
+| `thumbWheel.inverted` | Invert the thumb wheel in hardware |
+| `buttons` | Button → action or gesture (below) |
+| `smoothScroll` | Present: mxd scrolls both wheels itself (below). Absent: the wheels report as ordinary scrolling |
+| `gesture.distanceMm` | Mouse travel before a gesture direction fires, in millimetres. Default 4 |
+| `gesture.repeatIntervalMs` | Minimum gap between repeated directions in one hold. Default 400 |
+
+**Smooth scrolling:** `smoothScroll` takes these optional fields:
+
+| Field | Default | Meaning |
+|---|---|---|
+| `speed` | 1 | Main wheel distance; 1 is about 40 px per notch when scrolling slowly |
+| `horizontalSpeed` | 1 | Thumb wheel distance; 1 is about 360 px per turn when slow |
+| `acceleration` | 1 | Extra distance when scrolling quickly (1.5× at 5 notches/s, 3× at 17, capped at 8×); 0 is linear |
+| `smoothingMs` | 125 | How long the momentum glide lasts. Most of each movement lands within about 100 ms regardless, so longer values add a softer landing rather than lag. 0 posts movement immediately |
+| `shiftScrollsHorizontally` | true | Shift + wheel scrolls sideways |
+
+It posts plain continuous pixel scrolls (like Mos, without trackpad gesture phases, which make
+browsers swipe back and forward), timed to the display's refresh. `scrollWheel.inverted` and
+`thumbWheel.inverted` keep their meaning, relative to the system's natural-scrolling setting.
+
+**Buttons:** `gesture` (thumb), `back`, `forward`, `top` (behind the wheel), `middle` (wheel
+press), or any hex control ID such as `"0x00c4"`. Run `mxd probe` to list a device's controls.
+
+**Actions:** `missionControl`, `appExpose`, `showDesktop`, `launchpad`, `spaceLeft`,
+`spaceRight`, `navigateBack`, `navigateForward`, `toggleScrollMode`, `none`,
+`{"keys": "cmd+shift+4"}`, `{"run": "open -a Safari"}`.
+
+**Gestures:** an object with any of `click`, `up`, `down`, `left`, `right`, each an action. A
+button bound to a gesture captures mouse movement while it is held, so the pointer stays still.
+
+`spaceLeft` and `spaceRight` send ctrl+←/→, so the "Move left/right a space" shortcuts must stay
+enabled in Keyboard settings.
+
+## System Settings
+
+- **Natural scrolling** applies as usual: mxd reads it at the start of each scroll.
+- **Scrolling speed** (Mouse) stops affecting the MX wheels once `smoothScroll` is on, because mxd
+  generates the scroll events; use `speed` and `acceleration` instead. Other mice are unaffected.
+- **Tracking speed** and pointer acceleration still apply on top of `dpi`.
+- **Swipe between pages** and the Mission Control/Spaces shortcuts must stay enabled for the
+  back/forward and Spaces actions.
+
+## Troubleshooting
+
+- Log: `~/Library/Logs/mxd.log`. For button-level detail, run `mxd --verbose run` in a terminal
+  after `launchctl bootout gui/$UID/local.mxd`.
+- `mxd probe` shows every HID++ device, its features and current settings. It only reads, so
+  it is safe to run alongside anything else.
+- Wheels native and buttons dead: check the log for a missing permission. After granting it,
+  mxd restarts itself; `launchctl kickstart -k gui/$UID/local.mxd` forces a restart.
+- If mxd is killed outright (`kill -9`, a crash) it cannot restore the mouse, so with
+  `smoothScroll` the wheels stay silent until launchd restarts it a few seconds later. Turning the
+  mouse off and on also resets it to factory behaviour.
+
+## Layout
+
+```
+Sources/HIDPP/   protocol only: framing (Report), IOKit transport (HIDInterface/HIDMonitor),
+                 request/response handling (HIDPPDevice), typed feature wrappers (Features)
+Sources/mxd/     policy: Config, Action/Keystroke/NavigationSwipe, GestureRecognizer,
+                 ScrollEngine/ScrollModel (smooth scrolling), Session (one per mouse),
+                 Daemon (discovery, reconnect, wake, reload, permissions, quit), Probe
+Tests/           pure logic: framing and event parsing, config, gestures, scroll maths
+scripts/         install.sh / uninstall.sh (app bundle, signing, LaunchAgent)
+```
+
+How to extend it (actions, device features, per-app scrolling) is in `AGENTS.md`. Protocol
+details come from Solaar, logiops and Mac Mouse Fix.
+
+## Development
+
+```sh
+swift build && swift test
+.build/debug/mxd probe                                  # read-only; safe alongside the agent
+launchctl bootout gui/$UID/local.mxd                    # stop the installed agent first
+.build/debug/mxd --verbose run ./config.example.json    # then run a dev build in the foreground
+./scripts/install.sh                                    # reinstall and restart the agent
+```
+
+A terminal-launched build uses the terminal's permissions, not the app's. See `AGENTS.md` for
+design invariants and the things that are easy to break.

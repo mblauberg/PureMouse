@@ -1,0 +1,20 @@
+{
+  "dpi": 1650,
+  "scrollWheel": { "inverted": true, "mode": "freespin", "smartShiftThreshold": 255 },
+  "thumbWheel": { "inverted": true },
+  "smoothScroll": { "speed": 0.7, "horizontalSpeed": 1.0, "acceleration": 1.0, "smoothingMs": 350 },
+  "buttons": {
+    "gesture": {
+      "click": "missionControl",
+      "up": "missionControl",
+      "down": "appExpose",
+      "left": "spaceLeft",
+      "right": "spaceRight"
+    },
+    "back": "navigateBack",
+    "forward": "navigateForward",
+    "top": "showDesktop",
+    "middle": "toggleScrollMode"
+  },
+  "gesture": { "distanceMm": 4, "repeatIntervalMs": 400 }
+}
