@@ -117,6 +117,24 @@ enabled in Keyboard settings.
   `smoothScroll` the wheels stay silent until launchd restarts it a few seconds later. Turning the
   mouse off and on also resets it to factory behaviour.
 
+## After a macOS upgrade
+
+A few actions rely on undocumented macOS interfaces, which a major release can change without
+notice. The log's first line on each start (`mxd <version> on macOS <version>`) shows which
+release a log comes from. To check every action, press each button, or run
+`/Applications/mxd.app/Contents/MacOS/mxd action <name>` from a terminal that has Accessibility.
+
+| Interface | Used by | If it stops working, bind instead |
+|---|---|---|
+| Dock notifications (`CoreDockSendNotification`) | `missionControl`, `appExpose`, `showDesktop`, `launchpad` | `{"keys": "ctrl+up"}`, `{"keys": "ctrl+down"}`, `{"keys": "f11"}` (the default shortcuts) |
+| Navigation-swipe event fields | `navigateBack`, `navigateForward` | `{"keys": "cmd+["}`, `{"keys": "cmd+]"}` (most apps, not all) |
+| `CVDisplayLink` (deprecated since macOS 15) | smooth-scroll frame clock | nothing: scrolling continues unsmoothed |
+
+macOS 27 stopped reading the event fields for three-finger dock swipes (Mac Mouse Fix 3.1.0 had
+to switch to attached IOHIDEvents). mxd doesn't post dock swipes, and navigation swipes were not
+reported broken on 27.0 (Mac Mouse Fix left them unchanged), so mxd should need no change for it.
+A later release could drop navigation swipes the same way; the fallback above covers that.
+
 ## Layout
 
 ```

@@ -50,6 +50,10 @@ work on it safely.
 - The installer signs with the `mxd` code-signing identity in the login keychain (self-signed,
   created once); an ad-hoc signature makes macOS drop the permission grants on every install.
   It stops the agent before replacing the binary.
+- Some actions use undocumented interfaces: `CoreDockSendNotification` (it returns 0 even for
+  unknown names, so failure is silent) and the navigation-swipe CGEvent fields. macOS 27 already
+  stopped honouring the dock-swipe fields, which mxd does not use. After an OS upgrade, check them
+  with `mxd action <name>`; README's "After a macOS upgrade" lists the keystroke fallbacks.
 - Logi Options+ fights mxd over the mouse. Its agent (`com.logi.cp-dev-mgr`) is disabled on this
   machine; re-enabling it breaks mxd.
 
