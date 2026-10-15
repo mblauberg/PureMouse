@@ -297,3 +297,48 @@ private func text(_ tree: ConfigTree) -> String { String(decoding: tree.data(), 
                                  configKeys: ["0x0053", "back", "0xC5", "1a0", "nonsense"])
     #expect(rows == ["0x00c5", "0x00d7", "1a0"])
 }
+
+// MARK: Saving
+
+private func tempConfig(_ json: String?) throws -> ConfigFile {
+    let dir = FileManager.default.temporaryDirectory.appending(path: "pm-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let url = dir.appending(path: "config.json")
+    if let json { try Data(json.utf8).write(to: url) }
+    return ConfigFile(url: url)
+}
+
+@Test func savingKeepsAHandEditMadeAfterLoading() throws {
+    let file = try tempConfig(#"{"dpi": 800}"#)
+    let loaded = try ConfigTree(data: Data(contentsOf: file.url))
+    var edited = loaded
+    edited.set(true, at: ["scrollWheel", "inverted"])
+    // Edited by hand before the app saves.
+    try Data(#"{"dpi": 1200, "buttons": {"back": "appExpose"}}"#.utf8).write(to: file.url)
+    let saved = try file.save(loaded.changes(to: edited))
+    let disk = try ConfigTree(data: Data(contentsOf: file.url))
+    #expect(disk.int(["dpi"]) == 1200)
+    #expect(disk.string(["buttons", "back"]) == "appExpose")
+    #expect(disk.bool(["scrollWheel", "inverted"]) == true)
+    #expect(saved.data == (try Data(contentsOf: file.url)))
+}
+
+@Test func savingRefusesToBuildOnABrokenFile() throws {
+    let broken = #"{"dpi": "#
+    let file = try tempConfig(broken)
+    #expect(throws: (any Error).self) { try file.save([ConfigTree.Change(path: ["dpi"], value: 800)]) }
+    #expect(String(decoding: try Data(contentsOf: file.url), as: UTF8.self) == broken)
+}
+
+@Test func savingAnInvalidValueWritesNothing() throws {
+    let file = try tempConfig(#"{"dpi": 800}"#)
+    #expect(throws: (any Error).self) { try file.save([ConfigTree.Change(path: ["dpi"], value: 999_999)]) }
+    #expect(try ConfigTree(data: Data(contentsOf: file.url)).int(["dpi"]) == 800)
+}
+
+@Test func savingWithoutAFileCreatesOne() throws {
+    let file = try tempConfig(nil)
+    let saved = try file.save([ConfigTree.Change(path: ["dpi"], value: 1600)])
+    #expect(saved.tree.int(["dpi"]) == 1600)
+    #expect(FileManager.default.fileExists(atPath: file.url.path))
+}

@@ -286,38 +286,19 @@ final class AppModel {
         guard !pendingChanges.isEmpty else { return }
         let changes = pendingChanges
         pendingChanges = []
-        // Re-read the file, so a hand edit made since it was loaded survives our change.
-        let url = Paths.config
-        let current: Data?
-        let fresh: ConfigTree
         do {
-            current = FileManager.default.fileExists(atPath: url.path) ? try Data(contentsOf: url) : nil
-            fresh = try current.map { try ConfigTree(data: $0) } ?? ConfigTree()
-            if let current { try ConfigCheck.validate(current) }
+            let saved = try ConfigFile(url: Paths.config).save(changes)
+            config = saved.tree
+            diskBytes = saved.data
+            if let data = saved.data { lastGood = data }
+            writeError = nil
+            if directoryWatch == nil { watchConfigDirectory() }
         } catch {
+            // Show the file as it is now, then say why the change did not land.
             diskBytes = nil
             reloadConfig()
-            writeError = "The config file changed and has an error, so this change was not saved."
-            return
+            writeError = describeSave(error)
         }
-        var tree = fresh
-        tree.apply(changes)
-        let data = tree.data()
-        guard data != current else {
-            diskBytes = current
-            config = tree
-            return
-        }
-        do {
-            try ConfigCheck.validate(data)
-        } catch {
-            writeError = Self.describe(error)
-            diskBytes = current
-            config = fresh
-            return
-        }
-        config = tree
-        write(data)
     }
 
     /// Replaces the whole file with `{}` (every setting back to the mouse's own).
@@ -342,17 +323,27 @@ final class AppModel {
     }
 
     private func write(_ data: Data) {
-        // Follow a symlinked config (dotfiles) and replace its target, not the link.
-        let url = Paths.config.resolvingSymlinksInPath()
         do {
-            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try data.write(to: url, options: .atomic)
+            try ConfigFile(url: Paths.config).write(data)
             diskBytes = data
             lastGood = data
             writeError = nil
             if directoryWatch == nil { watchConfigDirectory() }
         } catch {
-            writeError = "PureMouse could not save \(Format.tildePath(url.path)): \(error.localizedDescription)"
+            writeError = describeSave(error)
+        }
+    }
+
+    private func describeSave(_ error: Error) -> String {
+        switch error {
+        case ConfigFile.SaveError.fileHasError:
+            "The config file changed and has an error, so this change was not saved."
+        case ConfigFile.SaveError.rejected(let reason):
+            Self.describe(reason)
+        case ConfigFile.SaveError.writeFailed(let reason):
+            "PureMouse could not save \(Format.tildePath(Paths.config.path)): \(reason.localizedDescription)"
+        default:
+            error.localizedDescription
         }
     }
 
