@@ -2,7 +2,8 @@
 # Builds and signs .build/app/PureMouse.app, with the menu bar app nested at
 # Contents/Library/LoginItems/PureMouse Menu.app. Used by install.sh and package.sh.
 #
-#   --universal   one binary for Apple silicon and Intel (release zips); otherwise this Mac's only
+#   --universal   one stripped binary for Apple silicon and Intel (release zips); otherwise this
+#                 Mac's only, unstripped
 #
 # Signing: uses the code-signing identity named by PUREMOUSE_SIGN_IDENTITY, else one named
 # "PureMouse" if the keychain has it (scripts/make-cert.sh creates it), else ad hoc. macOS ties
@@ -41,6 +42,9 @@ if [[ ${1:-} == --universal ]]; then
     bin=.build/slices
     for product in $products; do
         lipo -create -output $bin/$product .build/slices/$product-{arm64,x86_64}
+        # Release zips drop local symbols (about half of each binary); crash reports still name
+        # public symbols, and local builds keep everything.
+        strip -x $bin/$product
     done
 else
     for product in $products; do
