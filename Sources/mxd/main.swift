@@ -2,13 +2,42 @@ import Foundation
 import HIDPP
 
 setvbuf(stdout, nil, _IOLBF, 0)
-var arguments = Array(CommandLine.arguments.dropFirst())
+
+/// Serves the main queue on the main thread until exit. `dispatchMain()` would park the main thread
+/// and drain the queue on another, which macOS 26 and earlier reject in `MainActor.assumeIsolated`.
+func runMainLoop() -> Never {
+    while true { CFRunLoopRun() }
+}
+
+// Older macOS passes a process serial number to apps opened from the Finder.
+var arguments = CommandLine.arguments.dropFirst().filter { !$0.hasPrefix("-psn_") }
 if let i = arguments.firstIndex(of: "--verbose") {
     Log.verbose = true
     arguments.remove(at: i)
 }
+if let i = arguments.firstIndex(of: "--log-to-file") {
+    // The login agent's plist lives inside the app and cannot name a path in the home folder.
+    Log.redirectToFile()
+    arguments.remove(at: i)
+}
 
 switch arguments.first {
+case nil where LoginItem.inBundle:
+    // Opened from the Finder: install the login agent, which runs the daemon.
+    do {
+        LoginItem.alert("mxd", try LoginItem.register() + """
+
+
+            macOS will ask for Accessibility and Input Monitoring; allow both in System Settings › \
+            Privacy & Security.
+
+            Settings: ~/.config/mxd/config.json
+            Log: ~/Library/Logs/mxd.log
+            """)
+    } catch {
+        LoginItem.alert("mxd could not start", "\(error)")
+        exit(1)
+    }
 case nil, "run":
     let url = arguments.count > 1 ? URL(fileURLWithPath: arguments[1]) : Config.defaultURL
     let config: Config
@@ -26,7 +55,7 @@ case nil, "run":
     Log.info("mxd \(version) on macOS \(ProcessInfo.processInfo.operatingSystemVersionString)")
     let daemon = Daemon(config: config, configURL: url)
     daemon.start()
-    withExtendedLifetime(daemon) { dispatchMain() }
+    withExtendedLifetime(daemon) { runMainLoop() }
 case "permissions":
     // The exit status is the granted set's raw value; the daemon polls it (Daemon.restartWhenGranted).
     let granted = Permissions.current
@@ -47,7 +76,21 @@ case "action" where arguments.count == 2:
         try? await Task.sleep(for: .milliseconds(200))  // let posted events drain
         exit(0)
     }
-    dispatchMain()
+    runMainLoop()
+case "register":
+    do {
+        print(try LoginItem.register())
+    } catch {
+        print("cannot register: \(error)")
+        exit(1)
+    }
+case "unregister":
+    do {
+        try LoginItem.unregister()
+    } catch {
+        print("cannot unregister: \(error)")
+        exit(1)
+    }
 case "probe":
     let monitor = HIDMonitor()
     monitor.start()
@@ -55,13 +98,16 @@ case "probe":
         await Probe.run(monitor: monitor)
         exit(0)
     }
-    withExtendedLifetime(monitor) { dispatchMain() }
+    withExtendedLifetime(monitor) { runMainLoop() }
 default:
     print("""
-    usage: mxd [--verbose] [run [config.json]]   run the daemon (default config: ~/.config/mxd/config.json)
+    usage: mxd [--verbose] [run [config.json]]   run the daemon (default config: ~/.config/mxd/config.json);
+                                                inside the app, bare `mxd` registers it instead
            mxd probe                            read-only dump of connected HID++ devices
            mxd permissions                      macOS permissions of the launching process
            mxd action <name | {"keys": ...}>    perform one action now, as a button would
+           mxd register | unregister            start (or restart) or stop the installed app's
+                                                login agent; unregister also removes it from login
     Send SIGHUP to reload the config.
     """)
     exit(64)

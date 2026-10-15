@@ -8,15 +8,20 @@ work on it safely.
 - Build and test: `swift build && swift test`. The tests cover pure logic only; anything touching
   the mouse needs a live check.
 - Live check: `.build/debug/mxd probe` is read-only and safe alongside the daemon (it uses its
-  own HID++ software IDs). To run a dev build, `launchctl bootout gui/$UID/local.mxd` first (two
-  daemons fight over the mouse), then `.build/debug/mxd --verbose run ./config.example.json`. A
-  terminal-run daemon uses the terminal's permissions and never restarts itself. Finish with
-  `./scripts/install.sh`, which rebuilds, re-signs and restarts the agent, and check
-  `~/Library/Logs/mxd.log`. (`mxd permissions` answers for whoever launches it, so from a
-  terminal it reports the terminal's permissions, not the app's.)
+  own HID++ software IDs). To run a dev build, stop the agent first (two daemons fight over the
+  mouse) with `/Applications/mxd.app/Contents/MacOS/mxd unregister`, then run
+  `.build/debug/mxd --verbose run ./config.example.json`. A terminal-run daemon uses the
+  terminal's permissions and never restarts itself. Finish with `./scripts/install.sh`, which
+  rebuilds, re-signs and restarts the agent, and check `~/Library/Logs/mxd.log`.
+  (`mxd permissions` answers for whoever launches it, so from a terminal it reports the
+  terminal's permissions, not the app's.)
 - The user's live config is `~/.config/mxd/config.json`; keep `config.example.json` in step
   with it (its test checks shape, not values). Config changes apply with
   `launchctl kill HUP gui/$UID/local.mxd`, no rebuild.
+- Other Macs: `./scripts/package.sh` builds the universal release zip. The spare Mac `workshop`
+  (macOS 26, command line tools only) is reachable as `ssh workshop-fabric`; install under
+  `~/Applications` there and drive it with `mxd register`/`unregister`. Over SSH nobody can answer
+  a Gatekeeper dialog or grant permissions, so leave those to the user.
 - When behaviour changes, update the README's field tables and this file in the same change.
 
 ## Invariants
@@ -24,7 +29,10 @@ work on it safely.
 - `Sources/HIDPP` is protocol only (framing, transport, typed feature wrappers) and must stay
   free of policy. Config, actions and scrolling live in `Sources/mxd`.
 - All HID and HID++ work runs on the main actor. IOKit and CoreVideo callbacks hop to it
-  (`MainActor.assumeIsolated` / `DispatchQueue.main`); keep it that way.
+  (`MainActor.assumeIsolated` / `DispatchQueue.main`); keep it that way. The process serves the
+  main queue with `runMainLoop()` (a `CFRunLoop` on the main thread), never `dispatchMain()`:
+  that drains the main queue off the main thread, and on macOS 26 and earlier `assumeIsolated`
+  then traps (it crashed on SIGTERM, before restoring the mouse).
 - Device settings are volatile: the mouse forgets them on every reconnect. Anything applied to
   it belongs in `Session.apply()`, which runs on adoption, reconnect, wake and reload.
 - On SIGTERM/SIGINT, `Session.restore()` returns the mouse to native behaviour (wheels first).
@@ -47,9 +55,19 @@ work on it safely.
 - Permission checks are cached per process. The launchd-run daemon polls a child
   (`mxd permissions`) and restarts itself when a grant arrives (`Daemon.restartWhenGranted`).
 - HID++ software IDs rotate per request so a late reply cannot complete a newer request.
-- The installer signs with the `mxd` code-signing identity in the login keychain (self-signed,
-  created once); an ad-hoc signature makes macOS drop the permission grants on every install.
-  It stops the agent before replacing the binary.
+- The app registers its own login agent with `SMAppService` (`LoginItem.swift`); the agent's
+  plist is generated into the bundle by `scripts/build-app.sh`, with the same label as the bundle
+  ID. Launched with no arguments from a bundle (a Finder double-click), mxd registers and shows an
+  alert instead of running the daemon. The agent passes `--log-to-file` because a plist inside the
+  app cannot name a path in the home folder.
+- Builds are signed with the `mxd` code-signing identity (self-signed, `scripts/make-cert.sh`).
+  The permission grants are keyed to identifier plus certificate, which also holds on Macs that
+  do not trust the certificate; an ad-hoc signature makes macOS drop them on every install.
+  install.sh stops the agent before replacing the binary.
+- Gatekeeper: launching a quarantined copy parks it at `_dyld_start` behind an on-screen dialog.
+  On workshop, later launches at that path stayed parked even after clearing the flag and putting
+  a fresh copy there (presumably until the dialog is answered). Clear the flag before the first
+  launch.
 - Some actions use undocumented interfaces: `CoreDockSendNotification` (it returns 0 even for
   unknown names, so failure is silent) and the navigation-swipe CGEvent fields. macOS 27 already
   stopped honouring the dock-swipe fields, which mxd does not use. After an OS upgrade, check them

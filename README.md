@@ -15,20 +15,40 @@ and turns its buttons into system actions. It can also do smooth scrolling itsel
 - Optionally takes over both wheels for smooth, accelerated pixel scrolling (`smoothScroll`).
 - Re-applies all of this whenever the mouse wakes, reconnects or switches between the receiver
   and Bluetooth, and after the Mac wakes. The mouse forgets these settings on every reconnect.
-- On quit (SIGTERM/SIGINT, including `launchctl bootout` and logout) it hands the mouse back in
+- On quit (SIGTERM/SIGINT, including `mxd unregister` and logout) it hands the mouse back in
   its native state. Nothing is stored on the mouse or receiver, so they behave normally on a
   computer without mxd.
 
 ## Install
 
+mxd needs macOS 14 or later, on Apple silicon or Intel.
+
+**From a release zip.** Unzip it and drag `mxd.app` to Applications. mxd is not notarised by
+Apple, so macOS refuses the first launch: either clear the download flag in Terminal **before**
+opening it,
+
 ```sh
-./scripts/install.sh          # build, install /Applications/mxd.app, start the login agent
-./scripts/uninstall.sh        # stop and remove (keeps your config)
+xattr -dr com.apple.quarantine /Applications/mxd.app
 ```
 
-The install registers a LaunchAgent (`~/Library/LaunchAgents/local.mxd.plist`) that starts mxd at
-login and restarts it within seconds if it ever exits. Re-running the script rebuilds and
-restarts it.
+or open it, dismiss the warning, and choose **Open Anyway** in System Settings › Privacy &
+Security. Then open mxd. It registers itself to start at login (it appears under System Settings ›
+General › Login Items, where you can switch it off), creates `~/.config/mxd/config.json` from the
+example if you have none, and starts.
+
+**From source**, with Xcode or its command line tools:
+
+```sh
+./scripts/make-cert.sh        # once per Mac: a signing identity, so permissions survive rebuilds
+./scripts/install.sh          # build, install /Applications/mxd.app, start it at login
+./scripts/uninstall.sh        # stop and remove (keeps your config)
+./scripts/package.sh          # release zip for Apple silicon and Intel, in .build/dist/
+```
+
+launchd starts mxd at login and restarts it within seconds if it ever exits. To update, replace
+`mxd.app` and open it again (or re-run the install script), which restarts it. By hand,
+`/Applications/mxd.app/Contents/MacOS/mxd register` starts or restarts the installed copy, and
+`unregister` stops it and removes it from login items until the next `register`.
 
 The first run asks for two permissions. Grant both in **System Settings › Privacy & Security**:
 
@@ -39,11 +59,11 @@ The first run asks for two permissions. Grant both in **System Settings › Priv
 macOS only applies a grant to a newly started process, so mxd checks every so often and
 restarts itself when one arrives. The log says which permissions are missing.
 
-macOS ties these grants to the app's signature. The script signs with a code-signing
-certificate named `mxd` when the keychain has one, so grants survive rebuilds; otherwise it signs
-ad hoc and they must be granted again after every install. To create the certificate once, in
-Keychain Access choose **Certificate Assistant › Create a Certificate…**, name it `mxd` and set
-the type to **Code Signing**. `MXD_SIGN_IDENTITY` overrides the name.
+macOS ties these grants to the app's signature, so they survive an update only when it is signed
+by the same identity. The build signs with the code-signing identity named `mxd` when the keychain
+has one (`scripts/make-cert.sh` creates a self-signed one; `MXD_SIGN_IDENTITY` picks another name).
+Otherwise it signs ad hoc and the grants must be given again after every install. Releases must
+all be signed with one identity: keep a backup of it.
 
 Quit Logi Options+ first: only one program can control the buttons at a time. To remove it
 entirely, use Logitech's uninstaller.
@@ -107,8 +127,9 @@ enabled in Keyboard settings.
 
 ## Troubleshooting
 
-- Log: `~/Library/Logs/mxd.log`. For button-level detail, run `mxd --verbose run` in a terminal
-  after `launchctl bootout gui/$UID/local.mxd`.
+- Log: `~/Library/Logs/mxd.log`. For button-level detail, stop the agent with
+  `/Applications/mxd.app/Contents/MacOS/mxd unregister`, run `mxd --verbose run` in a terminal,
+  and afterwards start the agent again with `register`.
 - `mxd probe` shows every HID++ device, its features and current settings. It only reads, so
   it is safe to run alongside anything else.
 - Wheels native and buttons dead: check the log for a missing permission. After granting it,
@@ -144,7 +165,8 @@ Sources/mxd/     policy: Config, Action/Keystroke/NavigationSwipe, GestureRecogn
                  ScrollEngine/ScrollModel (smooth scrolling), Session (one per mouse),
                  Daemon (discovery, reconnect, wake, reload, permissions, quit), Probe
 Tests/           pure logic: framing and event parsing, config, gestures, scroll maths
-scripts/         install.sh / uninstall.sh (app bundle, signing, LaunchAgent)
+scripts/         build-app.sh (bundle, embedded login agent, signing), install.sh, uninstall.sh,
+                 package.sh (universal release zip), make-cert.sh (self-signed identity)
 ```
 
 How to extend it (actions, device features, per-app scrolling) is in `AGENTS.md`. Protocol
@@ -155,7 +177,7 @@ details come from Solaar, logiops and Mac Mouse Fix.
 ```sh
 swift build && swift test
 .build/debug/mxd probe                                  # read-only; safe alongside the agent
-launchctl bootout gui/$UID/local.mxd                    # stop the installed agent first
+/Applications/mxd.app/Contents/MacOS/mxd unregister    # stop the installed agent first
 .build/debug/mxd --verbose run ./config.example.json    # then run a dev build in the foreground
 ./scripts/install.sh                                    # reinstall and restart the agent
 ```

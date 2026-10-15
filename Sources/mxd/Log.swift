@@ -1,8 +1,18 @@
 import Foundation
 
-/// Timestamped lines on stderr. Under launchd, stderr goes to ~/Library/Logs/mxd.log.
+/// Timestamped lines on stderr. The login agent sends stderr to ~/Library/Logs/mxd.log.
 enum Log {
     nonisolated(unsafe) static var verbose = false
+
+    /// Appends stderr to ~/Library/Logs/mxd.log.
+    static func redirectToFile() {
+        let logs = FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Logs")
+        try? FileManager.default.createDirectory(at: logs, withIntermediateDirectories: true)
+        let fd = open(logs.appending(path: "mxd.log").path, O_WRONLY | O_CREAT | O_APPEND, 0o644)
+        guard fd >= 0 else { return }
+        dup2(fd, STDERR_FILENO)
+        close(fd)
+    }
 
     static func info(_ message: @autoclosure () -> String) {
         write("info", message())
