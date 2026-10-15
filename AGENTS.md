@@ -22,6 +22,13 @@ work on it safely.
   drive the installed app with `puremouse register`/`unregister`. Over SSH nobody can answer a
   Gatekeeper dialog or grant permissions, so leave those to whoever is at the Mac. Machine-specific
   notes belong in the uncommitted `CLAUDE.local.md`.
+- Releases: tag `vX.Y.Z` on a clean `main` (the bundle version is the tag without the `v`), run
+  `./scripts/package.sh` on a Mac holding the `PureMouse` signing identity, and attach
+  `.build/dist/PureMouse-X.Y.Z.zip` to a GitHub release with its SHA-256. A release signed by any
+  other identity makes every user grant permissions again. CI (`.github/workflows/ci.yml`) builds,
+  tests and bundles ad hoc on each push.
+- The icon is drawn in `assets/AppIcon.svg`; after changing it, run `./scripts/make-icon.sh`
+  (needs `rsvg-convert`) and commit the rendered `AppIcon.icns` and `AppIcon.png`.
 - When behaviour changes, update the README's field tables and this file in the same change.
 
 ## Invariants
