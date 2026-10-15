@@ -23,8 +23,9 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
         if Paths.showsInMenuBar { statusMenu = StatusMenu(model: model, app: self) }
         // A request posted while this instance was still starting (opening the app from the
-        // Finder restarts the menu agent, then opens it) counts too.
-        if !Paths.launchedByLaunchd || statusMenu == nil || ShowRequest.consume() { showSettings() }
+        // Finder restarts the menu agent, then opens it) counts too. Consumed either way.
+        let requested = ShowRequest.consume()
+        if !Paths.launchedByLaunchd || statusMenu == nil || requested { showSettings() }
         #if DEBUG
         DevHooks.run(app: self)
         #endif
