@@ -56,6 +56,9 @@ struct PickerEntry: Identifiable, Equatable {
 struct ActionPicker: View {
     let current: ButtonAction
     let entries: [PickerEntry]
+    /// Opened from the keyboard: the search field takes focus at once. Opened with the pointer,
+    /// nothing is focused (no ring or caret) until the first keystroke, which goes to the search.
+    var focusSearch = false
     let choose: (PickerEntry) -> Void
 
     @State private var query = ""
@@ -65,7 +68,8 @@ struct ActionPicker: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            SearchField(text: $query, placeholder: "Search actions", onMove: move, onSubmit: submit)
+            SearchField(text: $query, placeholder: "Search actions", focusOnAppear: focusSearch,
+                        onMove: move, onSubmit: submit)
                 .frame(height: 22)
             ScrollViewReader { proxy in
                 ScrollView {
@@ -150,10 +154,12 @@ private struct PickerRow: View {
     }
 }
 
-/// A native `NSSearchField` that hands ↑/↓/Return to the list below it and takes focus at once.
+/// A native `NSSearchField` that hands ↑/↓/Return to the list below it. Unless told to focus at
+/// once, it takes focus on the first keystroke in its window, which it then receives.
 struct SearchField: NSViewRepresentable {
     @Binding var text: String
     let placeholder: String
+    var focusOnAppear = false
     let onMove: (Int) -> Void
     let onSubmit: () -> Void
 
@@ -163,8 +169,14 @@ struct SearchField: NSViewRepresentable {
         field.delegate = context.coordinator
         field.sendsSearchStringImmediately = true
         field.focusRingType = .none
-        DispatchQueue.main.async { field.window?.makeFirstResponder(field) }
+        let focus = focusOnAppear
+        DispatchQueue.main.async { field.window?.makeFirstResponder(focus ? field : nil) }
+        context.coordinator.watchKeys(for: field)
         return field
+    }
+
+    static func dismantleNSView(_ field: NSSearchField, coordinator: Coordinator) {
+        coordinator.stopWatching()
     }
 
     func updateNSView(_ field: NSSearchField, context: Context) {
@@ -177,7 +189,39 @@ struct SearchField: NSViewRepresentable {
     @MainActor
     final class Coordinator: NSObject, NSSearchFieldDelegate {
         var parent: SearchField
+        private var monitor: Any?
         init(parent: SearchField) { self.parent = parent }
+
+        /// Hands a keystroke to the field when nothing in its window has focus: it becomes first
+        /// responder before the event is dispatched, so the key lands in it. Escape (close) and
+        /// Tab (keyboard navigation) keep their usual meaning.
+        func watchKeys(for field: NSSearchField) {
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak field] event in
+                // Local monitors run on the main thread.
+                nonisolated(unsafe) let event = event
+                nonisolated(unsafe) var result: NSEvent? = event
+                MainActor.assumeIsolated {
+                    guard let field, let window = field.window, field.currentEditor() == nil,
+                          event.window === window || event.window === window.parent,
+                          ![48, 53].contains(event.keyCode),
+                          event.modifierFlags.isDisjoint(with: [.command, .control]) else { return }
+                    // With nothing focused the popover may not be key; the key then reached
+                    // the Settings window, so deliver it to the field here.
+                    if !window.isKeyWindow { window.makeKey() }
+                    window.makeFirstResponder(field)
+                    if event.window !== window {
+                        field.currentEditor()?.keyDown(with: event)
+                        result = nil
+                    }
+                }
+                return result
+            }
+        }
+
+        func stopWatching() {
+            if let monitor { NSEvent.removeMonitor(monitor) }
+            monitor = nil
+        }
 
         func controlTextDidChange(_ notification: Notification) {
             if let field = notification.object as? NSSearchField { parent.text = field.stringValue }
@@ -204,9 +248,11 @@ struct ActionButton: View {
     @Binding var isPresented: Bool
     let choose: (PickerEntry) -> Void
     var accessibilityName: String
+    @State private var openedFromKeyboard = false
 
     var body: some View {
         Button {
+            openedFromKeyboard = NSApp.currentEvent?.type == .keyDown
             isPresented = true
         } label: {
             HStack(spacing: 6) {
@@ -234,7 +280,8 @@ struct ActionButton: View {
         .accessibilityHint("Opens the list of actions")
         .popover(isPresented: $isPresented, arrowEdge: .bottom) {
             ActionPicker(current: action,
-                         entries: PickerEntry.all(allowsDefault: allowsDefault, allowsGesture: allowsGesture)) { entry in
+                         entries: PickerEntry.all(allowsDefault: allowsDefault, allowsGesture: allowsGesture),
+                         focusSearch: openedFromKeyboard) { entry in
                 isPresented = false
                 choose(entry)
             }

@@ -28,7 +28,8 @@ extension String {
     var nilIfEmpty: String? { isEmpty ? nil : self }
 }
 
-/// A slider with words at each end and its value on the right, e.g. Slow ——●—— Fast  1.0×.
+/// A slider with its words under each end, as System Settings draws them (Slow … Fast), and
+/// its value on the right.
 struct ValueSlider: View {
     let title: String
     var help: String?
@@ -37,30 +38,47 @@ struct ValueSlider: View {
     let low: String
     let high: String
     let format: (Double) -> String
-    var width: CGFloat = 170
+    var width: CGFloat = 220
 
     var body: some View {
         LabeledContent {
-            HStack(spacing: 8) {
-                // No `step:`: macOS would draw a tick per step. The binding snaps instead.
-                Slider(value: $value, in: range) {
-                    Text(title)
-                } minimumValueLabel: {
-                    Text(low).font(.subheadline).foregroundStyle(.secondary)
-                } maximumValueLabel: {
-                    Text(high).font(.subheadline).foregroundStyle(.secondary)
-                }
-                .labelsHidden()
-                .frame(width: width)
-                .accessibilityValue(format(value))
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                EndLabeledSlider(title: title, value: $value, range: range, low: low, high: high)
+                    .frame(width: width)
+                    .accessibilityValue(format(value))
                 Text(format(value))
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
-                    .frame(minWidth: 46, alignment: .trailing)
+                    .frame(minWidth: 40, alignment: .trailing)
                     .accessibilityHidden(true)
             }
         } label: {
             RowLabel(title, help: help)
+        }
+    }
+}
+
+/// A plain slider with small words under its ends. No `step:`: macOS would draw a tick per
+/// step, so callers snap in their binding instead.
+struct EndLabeledSlider: View {
+    let title: String
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    let low: String
+    let high: String
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Slider(value: $value, in: range) { Text(title) }
+                .labelsHidden()
+            HStack {
+                Text(low)
+                Spacer(minLength: 8)
+                Text(high)
+            }
+            .font(.system(size: 10))
+            .foregroundStyle(.secondary)
+            .accessibilityHidden(true)
         }
     }
 }

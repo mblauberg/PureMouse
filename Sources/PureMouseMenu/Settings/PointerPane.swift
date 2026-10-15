@@ -38,16 +38,11 @@ struct PointerPane: View {
                              ? "Higher moves the pointer further for the same hand movement. Mouse default."
                              : "Higher moves the pointer further for the same hand movement.")
                     }
-                    Slider(value: Binding(get: { Double(index(of: current, in: steps)) },
-                                          set: { setDPI(steps[Int($0.rounded())], debounce: true) }),
-                           in: 0...Double(max(steps.count - 1, 1))) {
-                        Text("Resolution")
-                    } minimumValueLabel: {
-                        Text(Format.number(steps.first ?? 200)).font(.subheadline).foregroundStyle(.secondary)
-                    } maximumValueLabel: {
-                        Text(Format.number(steps.last ?? 8000)).font(.subheadline).foregroundStyle(.secondary)
-                    }
-                    .labelsHidden()
+                    EndLabeledSlider(title: "Resolution",
+                                     value: Binding(get: { Double(index(of: current, in: steps)) },
+                                                    set: { setDPI(steps[Int($0.rounded())], debounce: true) }),
+                                     range: 0...Double(max(steps.count - 1, 1)),
+                                     low: Format.number(steps.first ?? 200), high: Format.number(steps.last ?? 8000))
                     .accessibilityValue(Format.dpi(current))
                     Text(model.devices.count > 1
                          ? "Steps follow \(model.primaryDevice?.name ?? "this mouse")'s sensor. Applies to all connected mice. Tracking speed in System Settings still applies on top."

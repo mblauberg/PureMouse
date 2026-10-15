@@ -126,17 +126,11 @@ struct ScrollingPane: View {
         }
         if on {
             LabeledContent("Threshold") {
-                Slider(value: Binding(get: { Double(min(threshold ?? 12, 50)) },
-                                      set: { model.set(Int($0.rounded()), at: ["scrollWheel", "smartShiftThreshold"], debounce: true) }),
-                       in: 1...50) {
-                    Text("SmartShift threshold")
-                } minimumValueLabel: {
-                    Text("Sooner").font(.subheadline).foregroundStyle(.secondary)
-                } maximumValueLabel: {
-                    Text("Later").font(.subheadline).foregroundStyle(.secondary)
-                }
-                .labelsHidden()
-                .frame(width: 170)
+                EndLabeledSlider(title: "SmartShift threshold",
+                                 value: Binding(get: { Double(min(threshold ?? 12, 50)) },
+                                                set: { model.set(Int($0.rounded()), at: ["scrollWheel", "smartShiftThreshold"], debounce: true) }),
+                                 range: 1...50, low: "Sooner", high: "Later")
+                    .frame(width: 220)
             }
             .disclosedRow()
         }

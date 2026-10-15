@@ -190,13 +190,18 @@ private struct RecorderField: View {
             .padding(.horizontal, 10)
             .frame(maxWidth: .infinity, minHeight: 36)
             .background(.background, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            // The accent ring appears once keys are held: opened with the pointer, the field
+            // says "Recording" without a focus ring.
             .overlay {
+                let keying = recorder.recording && !recorder.held.isEmpty
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .strokeBorder(recorder.recording ? Color.accentColor : Color.secondary.opacity(0.35),
-                                  lineWidth: recorder.recording ? 2 : 1)
+                    .strokeBorder(keying ? Color.accentColor : Color.secondary.opacity(0.35), lineWidth: keying ? 2 : 1)
             }
         }
         .buttonStyle(.plain)
+        // While recording, the field listens through its own monitor and draws its own state;
+        // the sheet focuses it on open, which would otherwise ring it before any key is pressed.
+        .focusEffectDisabled(recorder.recording)
         .accessibilityLabel("Shortcut")
         .accessibilityValue(recorder.spec.map(Shortcut.spoken) ?? "None")
         .accessibilityHint(recorder.recording ? "Press the shortcut now" : "Click to record a new shortcut")
