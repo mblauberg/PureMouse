@@ -7,9 +7,11 @@ public enum ReprogControls {
 
     public struct Control: Sendable {
         public let cid: UInt16
-        public let flags: UInt8           // bit 5 (0x20): divertable
+        public let flags: UInt8           // bit 5 (0x20): divertable; bit 7 (0x80): virtual
         public let additionalFlags: UInt8 // bit 0 (0x01): raw XY capable
         public var isDivertable: Bool { flags & 0x20 != 0 }
+        /// No physical button (e.g. 0x00D7, the virtual gesture button), so it is never pressed.
+        public var isVirtual: Bool { flags & 0x80 != 0 }
         public var supportsRawXY: Bool { additionalFlags & 0x01 != 0 }
     }
 
@@ -259,6 +261,71 @@ public enum ThumbWheel {
         guard function == 0, params.count >= 5 else { return nil }
         return Event(rotation: Int(Int16(bitPattern: UInt16(bigEndian: params[0], params[1]))),
                      status: Status(rawValue: params[4]))
+    }
+}
+
+/// 0x1004 UNIFIED_BATTERY: charge and charging state. Layouts follow Solaar
+/// (`decipher_battery_unified`) and Linux `hid-logitech-hidpp.c` (`hidpp20_unifiedbattery_*`).
+public enum UnifiedBattery {
+    public static let id: UInt16 = 0x1004
+
+    public enum Level: Sendable { case critical, low, good, full }
+
+    /// Charging status byte: 0 discharging, 1 charging, 2 charging slowly, 3 complete, 4 error.
+    public enum Charging: UInt8, Sendable {
+        case discharging = 0, charging, chargingSlowly, complete, error
+    }
+
+    public struct State: Equatable, Sendable {
+        /// State of charge, 1–100; nil when the device reports only a level.
+        public let percent: Int?
+        public let level: Level?
+        public let charging: Charging?
+        public let externalPower: Bool
+
+        public var isCharging: Bool { charging == .charging || charging == .chargingSlowly }
+    }
+
+    /// The level bits (8 full, 4 good, 2 low, 1 critical) a device's status reports mean
+    /// anything for. As in Linux, a device that reports a state of charge has its levels ignored.
+    public static let allLevels: UInt8 = 0x0F
+
+    /// getCapabilities: [supported level bits, flags (1 rechargeable, 2 state of charge)].
+    /// Returns the level bits to honour in status reports.
+    public static func levels(_ d: HIDPPDevice) async throws -> UInt8 {
+        guard let levels = parseCapabilities(try await d.call(id, 0)) else { throw HIDPPError.malformedResponse }
+        return levels
+    }
+
+    public static func parseCapabilities(_ params: [UInt8]) -> UInt8? {
+        guard params.count >= 2 else { return nil }
+        return params[1] & 0x02 != 0 ? 0 : params[0] & allLevels
+    }
+
+    /// getStatus, its level bits masked by `levels` (see `levels(_:)`).
+    public static func status(_ d: HIDPPDevice, levels: UInt8 = allLevels) async throws -> State {
+        guard let state = parseStatus(try await d.call(id, 1), levels: levels) else {
+            throw HIDPPError.malformedResponse
+        }
+        return state
+    }
+
+    /// The broadcast status event (function 0), sent when charge or charging changes. Same
+    /// layout as getStatus.
+    public static func parse(function: UInt8, params: [UInt8], levels: UInt8 = allLevels) -> State? {
+        function == 0 ? parseStatus(params, levels: levels) : nil
+    }
+
+    /// [state of charge %, level bits, charging status, external power]. A charge of 0 means the
+    /// device reports levels only. Level bits outside `levels` are ignored, and of the rest the
+    /// highest wins, as in Linux (hidpp20_unifiedbattery_map_level).
+    public static func parseStatus(_ params: [UInt8], levels: UInt8 = allLevels) -> State? {
+        guard params.count >= 4, params[0] <= 100 else { return nil }
+        let bits = params[1] & levels
+        let level: Level? = bits & 0x08 != 0 ? .full : bits & 0x04 != 0 ? .good
+            : bits & 0x02 != 0 ? .low : bits & 0x01 != 0 ? .critical : nil
+        return State(percent: params[0] == 0 ? nil : Int(params[0]), level: level,
+                     charging: Charging(rawValue: params[2]), externalPower: params[3] != 0)
     }
 }
 

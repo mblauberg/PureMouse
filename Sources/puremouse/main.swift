@@ -1,4 +1,5 @@
 import Foundation
+import PureMouseKit
 import HIDPP
 
 setvbuf(stdout, nil, _IOLBF, 0)
@@ -18,9 +19,14 @@ if let i = arguments.firstIndex(of: "--verbose") {
 
 switch arguments.first {
 case nil where LoginItem.inBundle:
-    // Opened from the Finder: install the login agent, which runs the daemon.
+    // Opened from the Finder: install the login agents, then show the menu bar app's Settings.
     do {
-        LoginItem.alert("PureMouse", try LoginItem.register() + """
+        let outcome = try LoginItem.register()
+        if let menu = LoginItem.menuApp, !LoginItem.menuHidden {
+            LoginItem.openMenu(menu)
+            exit(0)
+        }
+        LoginItem.alert("PureMouse", outcome + """
 
 
             macOS will ask for Accessibility and Input Monitoring; allow both in System Settings › \
@@ -35,20 +41,11 @@ case nil where LoginItem.inBundle:
     }
 case nil, "run":
     let url = arguments.count > 1 ? URL(fileURLWithPath: arguments[1]) : Config.defaultURL
-    let config: Config
-    do {
-        config = try Config.load(from: url)
-    } catch {
-        // Stay up with nothing configured rather than crash-loop under launchd; fixing the
-        // file and sending SIGHUP picks it up.
-        Log.error("cannot load \(url.path): \(error); running unconfigured until reload")
-        config = .empty
-    }
     // Private interfaces (Dock notifications, swipe event fields) can change between releases,
     // so record which macOS each log belongs to.
     let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
     Log.info("PureMouse \(version) on macOS \(ProcessInfo.processInfo.operatingSystemVersionString)")
-    let daemon = Daemon(config: config, configURL: url)
+    let daemon = Daemon(configURL: url)
     daemon.start()
     withExtendedLifetime(daemon) { runMainLoop() }
 case "permissions":
@@ -62,7 +59,7 @@ case "action" where arguments.count == 2:
     let spec = arguments[1]
     let json = spec.hasPrefix("{") ? spec : "\"\(spec)\""
     guard let action = try? JSONDecoder().decode(Action.self, from: Data(json.utf8)),
-          action != .toggleScrollMode else {
+          !action.actsOnDevice else {
         print("unknown or device-only action: \(spec)")
         exit(64)
     }
@@ -72,19 +69,41 @@ case "action" where arguments.count == 2:
         exit(0)
     }
     runMainLoop()
-case "register":
-    do {
-        print(try LoginItem.register())
-    } catch {
-        print("cannot register: \(error)")
-        exit(1)
-    }
-case "unregister":
-    do {
-        try LoginItem.unregister()
-    } catch {
-        print("cannot unregister: \(error)")
-        exit(1)
+case "register", "unregister", "stop", "menu":
+    // launchd kills a job's process group when booting it out, and the menu bar app (one of the
+    // jobs) runs these commands as its child: leave its group so the command can finish.
+    setsid()
+    switch (arguments.first, arguments.dropFirst().first) {
+    case ("register", _):
+        do {
+            print(try LoginItem.register())
+        } catch {
+            print("cannot register: \(error)")
+            exit(1)
+        }
+    case ("unregister", _):
+        do {
+            try LoginItem.unregister()
+        } catch {
+            print("cannot unregister: \(error)")
+            exit(1)
+        }
+    case ("stop", _):
+        do {
+            print(try LoginItem.stopAll())
+        } catch {
+            print("cannot stop: \(error)")
+            exit(1)
+        }
+    case ("menu", let setting?) where setting == "on" || setting == "off":
+        do {
+            print(try LoginItem.showMenu(setting == "on"))
+        } catch {
+            print("cannot change the menu bar icon: \(error)")
+            exit(1)
+        }
+    default:
+        usage()
     }
 case "probe":
     let monitor = HIDMonitor()
@@ -95,6 +114,10 @@ case "probe":
     }
     withExtendedLifetime(monitor) { runMainLoop() }
 default:
+    usage()
+}
+
+func usage() -> Never {
     print("""
     usage: puremouse [--verbose] [run [config.json]]   run the daemon (default config:
                                                       ~/.config/puremouse/config.json); inside
@@ -102,10 +125,12 @@ default:
            puremouse probe                            read-only dump of connected HID++ devices
            puremouse permissions                      macOS permissions of the launching process
            puremouse action <name | {"keys": ...}>    perform one action now, as a button would
-           puremouse register | unregister            start (or restart) or stop the installed
-                                                      app's login agent; unregister also stops
-                                                      it at login
-    Send SIGHUP to reload the config.
+           puremouse register                         start (or restart) the installed app and its
+                                                      menu bar icon, now and at login
+           puremouse unregister                       stop both and remove them from login
+           puremouse stop                             stop both until the next login
+           puremouse menu on | off                    show or hide the menu bar icon
+    The config is reloaded when its file changes, or on SIGHUP.
     """)
     exit(64)
 }
