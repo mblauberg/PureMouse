@@ -2,11 +2,13 @@ import Foundation
 import HIDPP
 
 /// User configuration, read from `~/.config/puremouse/config.json`. Every field is optional;
-/// omitted settings are left as the device has them.
+/// omitted settings are left as the device has them. Numbers outside their ranges fail the load
+/// (a reload then keeps the previous config) rather than overflowing later, mid-session.
 struct Config: Decodable {
     /// Sensor resolution, snapped to the nearest value the sensor reports it supports (the
     /// MX Master 3S accepts 200–8000 in steps of 50).
     var dpi: Int?
+    static let dpiRange = 50...25600
     var scrollWheel: ScrollWheel?
     var thumbWheel: ThumbWheel?
     /// When present, PureMouse takes both wheels over and scrolls smoothly itself.
@@ -21,7 +23,7 @@ struct Config: Decodable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        dpi = try c.decodeIfPresent(Int.self, forKey: .dpi)
+        dpi = try c.decodeIfPresent(Int.self, forKey: .dpi, in: Self.dpiRange)
         scrollWheel = try c.decodeIfPresent(ScrollWheel.self, forKey: .scrollWheel)
         thumbWheel = try c.decodeIfPresent(ThumbWheel.self, forKey: .thumbWheel)
         smoothScroll = try c.decodeIfPresent(SmoothScroll.self, forKey: .smoothScroll)
@@ -43,7 +45,15 @@ struct Config: Decodable {
         /// Wheel mode on first connect. Later toggles are kept across reconnects.
         var mode: WheelMode?
         /// SmartShift: 1–50 switches to free-spin automatically above that wheel speed; 255 disables it.
+        /// 0 is rejected: on the wire it means "unchanged".
         var smartShiftThreshold: UInt8?
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: AnyKey.self)
+            inverted = try c.decodeIfPresent(Bool.self, forKey: AnyKey("inverted"))
+            mode = try c.decodeIfPresent(WheelMode.self, forKey: AnyKey("mode"))
+            smartShiftThreshold = try c.decodeIfPresent(UInt8.self, forKey: AnyKey("smartShiftThreshold"), in: 1...255)
+        }
     }
 
     enum WheelMode: String, Decodable {
@@ -67,18 +77,23 @@ struct Config: Decodable {
         /// Shift + wheel scrolls horizontally.
         var shiftScrollsHorizontally = true
 
+        static let speedRange = 0.1...10.0
+        static let accelerationRange = 0.0...10.0
+        static let smoothingMsRange = 0.0...2000.0
+
         init() {}
 
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: AnyKey.self)
-            func value<T: Decodable>(_ key: String, _ fallback: T) throws -> T {
-                try c.decodeIfPresent(T.self, forKey: AnyKey(key)) ?? fallback
+            func value(_ key: String, _ fallback: Double, in range: ClosedRange<Double>) throws -> Double {
+                try c.decodeIfPresent(Double.self, forKey: AnyKey(key), in: range) ?? fallback
             }
-            speed = try value("speed", speed)
-            horizontalSpeed = try value("horizontalSpeed", horizontalSpeed)
-            acceleration = try value("acceleration", acceleration)
-            smoothingMs = try value("smoothingMs", smoothingMs)
-            shiftScrollsHorizontally = try value("shiftScrollsHorizontally", shiftScrollsHorizontally)
+            speed = try value("speed", speed, in: Self.speedRange)
+            horizontalSpeed = try value("horizontalSpeed", horizontalSpeed, in: Self.speedRange)
+            acceleration = try value("acceleration", acceleration, in: Self.accelerationRange)
+            smoothingMs = try value("smoothingMs", smoothingMs, in: Self.smoothingMsRange)
+            shiftScrollsHorizontally = try c.decodeIfPresent(Bool.self, forKey: AnyKey("shiftScrollsHorizontally"))
+                ?? shiftScrollsHorizontally
         }
     }
 
@@ -88,12 +103,17 @@ struct Config: Decodable {
         /// Minimum time between repeated directions within one hold (e.g. several Space switches).
         var repeatIntervalMs = 400
 
+        static let distanceMmRange = 0.5...50.0
+        static let repeatIntervalMsRange = 0...5000
+
         init() {}
 
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: AnyKey.self)
-            distanceMm = try c.decodeIfPresent(Double.self, forKey: AnyKey("distanceMm")) ?? distanceMm
-            repeatIntervalMs = try c.decodeIfPresent(Int.self, forKey: AnyKey("repeatIntervalMs")) ?? repeatIntervalMs
+            distanceMm = try c.decodeIfPresent(Double.self, forKey: AnyKey("distanceMm"), in: Self.distanceMmRange)
+                ?? distanceMm
+            repeatIntervalMs = try c.decodeIfPresent(Int.self, forKey: AnyKey("repeatIntervalMs"),
+                                                     in: Self.repeatIntervalMsRange) ?? repeatIntervalMs
         }
     }
 
@@ -175,6 +195,22 @@ struct Config: Decodable {
 
     /// No settings: devices are left exactly as they are.
     static let empty = try! JSONDecoder().decode(Config.self, from: Data("{}".utf8))
+}
+
+extension KeyedDecodingContainer {
+    /// Decodes a number that must lie within `range`. Out-of-range values (and so NaN) are a
+    /// decoding error naming the field, e.g. "smoothScroll.speed must be 0.1–10, not 1e+300".
+    func decodeIfPresent<T: Decodable & Comparable>(_ type: T.Type, forKey key: Key,
+                                                    in range: ClosedRange<T>) throws -> T? {
+        guard let value = try decodeIfPresent(type, forKey: key) else { return nil }
+        guard range.contains(value) else {
+            let field = (codingPath + [key]).map(\.stringValue).joined(separator: ".")
+            throw DecodingError.dataCorruptedError(
+                forKey: key, in: self,
+                debugDescription: "\(field) must be \(range.lowerBound)–\(range.upperBound), not \(value)")
+        }
+        return value
+    }
 }
 
 struct AnyKey: CodingKey {

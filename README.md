@@ -141,25 +141,28 @@ launchctl kill HUP gui/$UID/io.github.mblauberg.puremouse
 
 | Field | Meaning |
 |---|---|
-| `dpi` | Sensor resolution. PureMouse uses the nearest value the mouse supports (200–8000 in steps of 50 on the MX Master 3S) and logs when it differs |
+| `dpi` | Sensor resolution, 50–25600. PureMouse uses the nearest value the mouse supports (200–8000 in steps of 50 on the MX Master 3S) and logs when it differs |
 | `scrollWheel.inverted` | Invert the main wheel in hardware. With natural scrolling on, `true` gives classic wheel direction and leaves the trackpad alone |
 | `scrollWheel.mode` | `"ratchet"` or `"freespin"` on first connect. Later toggles are kept |
-| `scrollWheel.smartShiftThreshold` | 1–50 enables SmartShift's automatic free-spin; 255 disables it |
+| `scrollWheel.smartShiftThreshold` | 1–50 enables SmartShift's automatic free-spin; 255 disables it. Must be 1–255 |
 | `thumbWheel.inverted` | Invert the thumb wheel in hardware |
 | `buttons` | Button → action or gesture (see below) |
 | `smoothScroll` | If present, PureMouse scrolls both wheels itself (see below). If absent, the wheels scroll normally |
-| `gesture.distanceMm` | How far the mouse moves before a gesture fires, in millimetres. Default 4 |
-| `gesture.repeatIntervalMs` | Minimum gap between repeated gestures in one hold. Default 400 |
+| `gesture.distanceMm` | How far the mouse moves before a gesture fires, in millimetres, 0.5–50. Default 4 |
+| `gesture.repeatIntervalMs` | Minimum gap between repeated gestures in one hold, 0–5000. Default 400 |
+
+A number outside its range is an error: the config is not loaded (on reload, the previous one stays
+in effect) and the log names the field.
 
 ### Smooth scrolling
 
-| Field | Default | Meaning |
-|---|---|---|
-| `speed` | 1 | Main wheel distance; 1 is about 40 px per notch when scrolling slowly |
-| `horizontalSpeed` | 1 | Thumb wheel distance; 1 is about 360 px per turn when scrolling slowly |
-| `acceleration` | 1 | Extra distance when scrolling fast (1.5× at 5 notches/s, 3× at 17, up to 8×); 0 is linear |
-| `smoothingMs` | 125 | How long the glide lasts. Most of each movement finishes within about 100 ms anyway, so longer values give a softer landing rather than lag. 0 scrolls immediately |
-| `shiftScrollsHorizontally` | true | Shift + wheel scrolls sideways |
+| Field | Default | Range | Meaning |
+|---|---|---|---|
+| `speed` | 1 | 0.1–10 | Main wheel distance; 1 is about 40 px per notch when scrolling slowly |
+| `horizontalSpeed` | 1 | 0.1–10 | Thumb wheel distance; 1 is about 360 px per turn when scrolling slowly |
+| `acceleration` | 1 | 0–10 | Extra distance when scrolling fast (1.5× at 5 notches/s, 3× at 17, up to 8×); 0 is linear |
+| `smoothingMs` | 125 | 0–2000 | How long the glide lasts. Most of each movement finishes within about 100 ms anyway, so longer values give a softer landing rather than lag. 0 scrolls immediately |
+| `shiftScrollsHorizontally` | true | | Shift + wheel scrolls sideways |
 
 PureMouse posts plain continuous pixel scrolls without trackpad gesture phases, which would
 otherwise make browsers swipe back and forward. `scrollWheel.inverted` and `thumbWheel.inverted`

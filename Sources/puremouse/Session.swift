@@ -63,7 +63,7 @@ final class Session {
 
     private static func profile(_ s: Config.SmoothScroll, _ config: Config) -> ScrollEngine.Profile {
         ScrollEngine.Profile(speed: s.speed, horizontalSpeed: s.horizontalSpeed, acceleration: s.acceleration,
-                             smoothing: .milliseconds(max(0, s.smoothingMs)),
+                             smoothing: .milliseconds(s.smoothingMs),
                              shiftScrollsHorizontally: s.shiftScrollsHorizontally,
                              invertVertical: config.scrollWheel?.inverted ?? false,
                              invertHorizontal: config.thumbWheel?.inverted ?? false)

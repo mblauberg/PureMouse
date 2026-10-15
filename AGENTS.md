@@ -83,6 +83,10 @@ work on it safely.
 - Logi Options+ fights PureMouse over the mouse (its agent is `com.logi.cp-dev-mgr`). The daemon
   logs an error at start if it sees any of its processes (`LogiOptions`); only this user's process
   names are readable, so a root-run updater goes unseen.
+- Config numbers are range-checked when decoded (`decodeIfPresent(_:forKey:in:)` in
+  `Config.swift`); give any new numeric field a range too. An unchecked value can overflow an `Int`
+  or `Duration` conversion mid-session, and during a reload that crash comes after the old
+  session has closed, so the mouse is never restored and launchd relaunches into the same crash.
 - DPI is snapped to the sensor's own list (0x2201 getSensorDpiList), read once per session; if
   the list cannot be read, the configured value is sent unchanged.
 
