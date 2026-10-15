@@ -57,7 +57,8 @@ missing or stale file means "PureMouse Is Off".
 - `useConfiguredDPI: token`, when new, drops the DPI chosen by `cycleDPI` and sets every mouse to
   the config's `dpi`. The menu sends it after saving a DPI choice while a mouse reports another
   value: choosing the value already saved leaves the file unchanged, and a reload that leaves
-  `dpi` alone keeps the cycled one.
+  `dpi` alone keeps the cycled one. Every control write repeats the last token, so a later pause
+  or capture cannot erase it unread; the daemon acts once per token.
 
 ### Config (menu → daemon)
 

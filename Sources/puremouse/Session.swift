@@ -549,11 +549,15 @@ final class Session {
     }
 
     /// Drops the DPI chosen by `cycleDPI` and sets the config's, after any pending device action.
+    /// The override goes at once, so a session replacing this one before the write runs inherits
+    /// none and applies the config's itself; a `cycleDPI` queued earlier cannot bring it back.
     func useConfiguredDPI() {
+        guard !finished else { return }
+        liveDPI = nil
         deviceAction = Task { [previous = deviceAction] in
             await previous?.value
-            guard !finished, liveDPI != nil else { return }
             liveDPI = nil
+            guard !finished else { return }
             do {
                 if let target = config.dpi, try await device.hasFeature(AdjustableDPI.id), !finished {
                     try await AdjustableDPI.set(device, dpi: supportedDPI(near: target))

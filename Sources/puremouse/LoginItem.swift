@@ -1,4 +1,5 @@
 import Foundation
+import notify
 import PureMouseKit
 
 /// Starting PureMouse at login: launchd agents in `~/Library/LaunchAgents/<label>.plist`, one
@@ -125,7 +126,9 @@ enum LoginItem {
             process.waitUntilExit()
             if process.terminationStatus == 0 { return true }
         }
-        // launchd starts a shown menu app itself, which then reads the request.
+        // A shown menu app is launchd's to start: one already running takes the notification, one
+        // still starting reads the request.
+        notify_post(Companion.showSettingsNotification)
         return !menuHidden
     }
 

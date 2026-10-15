@@ -88,6 +88,7 @@ struct PointerPane: View {
             .disabled(model.readOnly)
         }
         .onChange(of: live) { reading.reported(live, steps: steps) }
+        .onChange(of: model.writeError) { if model.writeError != nil { reading.clear() } }
     }
 
     private func setDPI(_ dpi: Int, debounce: Bool = false) {

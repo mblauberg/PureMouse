@@ -42,6 +42,9 @@ final class AppModel {
     @ObservationIgnored private var captureTimeout: DispatchWorkItem?
     @ObservationIgnored private var requestedPaused: Bool?
     @ObservationIgnored private var wantsConfiguredDPI = false
+    /// The last `Control.useConfiguredDPI` sent, repeated in every control write so a later one
+    /// (pause, capture) cannot erase it before the daemon reads it; the daemon acts once per token.
+    @ObservationIgnored private var dpiToken: Int?
     @ObservationIgnored private var exitWatch: DispatchSourceProcess?
     @ObservationIgnored private var watchedPID: Int32 = 0
     @ObservationIgnored private var directoryWatch: DispatchSourceFileSystemObject?
@@ -217,9 +220,9 @@ final class AppModel {
 
     /// Writes the control file and rings the daemon; false (after saying why) if it could not.
     @discardableResult
-    private func writeControl(capture: Control.Capture?, useConfiguredDPI: Int? = nil) -> Bool {
+    private func writeControl(capture: Control.Capture?) -> Bool {
         let control = Control(paused: requestedPaused ?? status?.paused ?? false, capture: capture,
-                              useConfiguredDPI: useConfiguredDPI)
+                              useConfiguredDPI: dpiToken)
         do {
             try Companion.write(control, to: Companion.controlURL)
             notify_post(Companion.controlNotification)
@@ -339,8 +342,11 @@ final class AppModel {
         guard wantsConfiguredDPI else { return }
         wantsConfiguredDPI = false
         guard daemonRunning else { return }
-        writeControl(capture: captureListening ? Control.Capture(token: captureToken) : nil,
-                     useConfiguredDPI: Int.random(in: 1...Int(Int32.max)))
+        let previous = dpiToken
+        dpiToken = Int.random(in: 1...Int(Int32.max))
+        if !writeControl(capture: captureListening ? Control.Capture(token: captureToken) : nil) {
+            dpiToken = previous
+        }
     }
 
     /// Replaces the whole file with `{}` (every setting back to the mouse's own).
