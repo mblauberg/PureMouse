@@ -1,6 +1,7 @@
+import CoreGraphics
 import Foundation
 import Testing
-@testable import puremouse
+@testable import PureMouseKit
 
 @Suite struct ConfigTests {
     func decode(_ json: String) throws -> Config {
@@ -48,6 +49,8 @@ import Testing
         #"{"smoothScroll": {"smoothingMs": 1e300}}"#, #"{"smoothScroll": {"smoothingMs": -5}}"#,
         #"{"gesture": {"distanceMm": 1e20}}"#, #"{"gesture": {"distanceMm": 0}}"#,
         #"{"gesture": {"repeatIntervalMs": -1}}"#, #"{"gesture": {"repeatIntervalMs": 9223372036854775807}}"#,
+        #"{"dpiPresets": [800, 10]}"#, #"{"dpiPresets": [100000]}"#,
+        #"{"dpiPresets": [400, 800, 1200, 1600, 2000, 2400, 2800, 3200, 3600]}"#,
     ])
     func outOfRangeNumbersAreErrors(json: String) {
         // Accepting these would overflow later (converting to Int or Duration) and crash-loop.
@@ -80,10 +83,72 @@ import Testing
         #expect(high.dpi == 25600 && high.scrollWheel?.smartShiftThreshold == 255 && high.gesture.repeatIntervalMs == 5000)
     }
 
+    @Test func smoothScrollCanBeDisabledKeepingItsTuning() throws {
+        #expect(try decode(#"{"smoothScroll": {}}"#).smoothScroll?.enabled == true)
+        let off = try #require(try decode(#"{"smoothScroll": {"enabled": false, "speed": 2}}"#).smoothScroll)
+        #expect(!off.enabled && off.speed == 2)
+    }
+
+    @Test func dpiPresetsAndCycleDPI() throws {
+        let config = try decode(#"{"dpiPresets": [800, 1600, 3200], "buttons": {"top": "cycleDPI"}}"#)
+        #expect(config.dpiPresets == [800, 1600, 3200] && Action.named["cycleDPI"] == .cycleDPI)
+        guard case .action(.cycleDPI) = config.bindings[0xC4] else { Issue.record("cycleDPI"); return }
+        #expect(try decode(#"{"dpiPresets": []}"#).dpiPresets.isEmpty)
+        do {
+            _ = try decode(#"{"dpiPresets": [800, 10]}"#)
+            Issue.record("accepted")
+        } catch {
+            #expect(ConfigCheck.message(for: error) == "dpiPresets[1] must be 50–25600, not 10")
+        }
+    }
+
     @Test func keystrokeParsing() {
         #expect(Keystroke("ctrl+left") == Keystroke(key: 123, modifiers: .maskControl))
         #expect(Keystroke("f11")?.key == 103)
         #expect(Keystroke("cmd+nope") == nil)
         #expect(Keystroke("a+b") == nil)
+    }
+}
+
+@Suite struct ConfigKitTests {
+    @Test func unknownButtonsAreCollectedNotFatal() throws {
+        let config = try JSONDecoder().decode(Config.self, from: Data(#"{"buttons": {"zz": "none", "back": "none"}}"#.utf8))
+        #expect(config.unknownButtons == ["zz"] && config.bindings.keys.sorted() == [0x53])
+    }
+
+    @Test func configCheckUsesTheRealDecoder() {
+        #expect(throws: DecodingError.self) { try ConfigCheck.validate(Data(#"{"dpi": 0}"#.utf8)) }
+        #expect(throws: Never.self) { try ConfigCheck.validate(Data(#"{"dpi": 1600}"#.utf8)) }
+    }
+
+    @Test func buttonNamesByControlID() {
+        #expect(Config.Button(cid: 0x53) == .back && Config.Button(cid: 0xC3) == .gesture && Config.Button(cid: 0x99) == nil)
+    }
+
+    @Test func arrowKeysCarryKeyboardFlags() throws {
+        let flags = try #require(Keystroke("ctrl+left")).eventFlags
+        #expect(flags.contains([.maskControl, .maskSecondaryFn, .maskNumericPad]))
+        #expect(try #require(Keystroke("cmd+a")).eventFlags == .maskCommand)
+    }
+}
+
+@Suite struct ConfigMessageTests {
+    func message(_ json: String) -> String {
+        do {
+            try ConfigCheck.validate(Data(json.utf8))
+            return "accepted"
+        } catch {
+            return ConfigCheck.message(for: error)
+        }
+    }
+
+    @Test func namesTheField() {
+        #expect(message(#"{"smoothScroll": {"speed": 1e300}}"#).hasPrefix("smoothScroll.speed must be 0.1–10.0"))
+        #expect(message(#"{"buttons": {"top": "explode"}}"#).hasPrefix("buttons.top: unknown action 'explode'"))
+        #expect(message(#"{"dpi": "high"}"#) == "dpi: expected Int")
+    }
+
+    @Test func syntaxErrorsSayWhere() {
+        #expect(message(#"{"dpi": 1600"#).contains("not valid JSON"))
     }
 }

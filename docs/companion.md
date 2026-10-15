@@ -102,3 +102,35 @@ while idle, with no timers or polling. Its target is under 25 MB resident with S
 the Settings window and its view tree are created when shown and released when closed. The menu
 itself is a plain `NSMenu` built on open (`menuNeedsUpdate`). Measure both apps with
 `footprint`/`vmmap --summary` before and after each change.
+
+## Daemon decisions
+
+Choices the contract left open, as the daemon implements them:
+
+- **Status.** A write is skipped when nothing in `Status` changed. `Device.id` is
+  `<interface number>-<device index>`, the interface numbered in attach order. `dpiSteps` lists
+  every value (157 on an MX Master 3S). `controls` leaves out virtual controls (flag 0x80, e.g.
+  0x00d7), which cannot be pressed. While paused, `devices` is empty: the sessions are dropped.
+- **Battery** comes from HID++ 0x1004 (getStatus, then its broadcast events). `charging` is true
+  while charging or charging slowly, false once complete. As in Linux, the level bits are masked
+  by getCapabilities and the highest wins; a mouse that reports a percentage has its levels
+  ignored, so `level` is derived from the percentage. Mice without 0x1004 report none; the older
+  0x1000 is not read.
+- **Config watching** watches the file as well as its directory, since editors that write in place
+  leave the directory unchanged. A reload that fails leaves the previous config in effect and
+  reports `config.error` (`ConfigCheck.message`, which names the field); the next successful load
+  clears it.
+- **cycleDPI** picks the smallest preset above the current DPI, else the smallest, after snapping
+  the presets to the sensor's list. With no `dpiPresets` it does nothing and logs an error.
+- **Capture.** Only controls not already bound are diverted for it (bound ones already reach the
+  daemon). A capture still listening when the config reloads or the daemon pauses reports
+  `cancelled`. A mouse adopted during a capture joins it; one lost during it simply drops out.
+  The daemon acts on a capture token once, so rewriting `control.json` with the same token does
+  not restart it.
+- **Login.** "Hidden" is remembered by a `menu-hidden` file in `Companion.directory`, written by
+  `menu off` and removed by `menu on`; `unregister` keeps it. The CLI calls `setsid()` and boots
+  the menu agent out last, after removing its plist, because launchd kills the menu job's process
+  group (which includes the CLI it spawned). When the menu bar app itself runs `register` or
+  `menu on` and its agent is already loaded, the agent is left running (the plist is still
+  rewritten); restarting it would quit the caller. Opening the app from the Finder while the menu
+  is hidden shows the old alert, which says how to show it again.

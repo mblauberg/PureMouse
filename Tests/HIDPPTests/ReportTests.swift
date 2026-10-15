@@ -76,6 +76,42 @@ struct WheelEventTests {
     }
 }
 
+struct BatteryTests {
+    @Test func statusAsTheMXMaster3SAnswers() throws {
+        // 45 %, good, discharging, no external power.
+        let state = try #require(UnifiedBattery.parseStatus([0x2D, 0x04, 0x00, 0x00, 0, 0, 0, 0]))
+        #expect(state == UnifiedBattery.State(percent: 45, level: .good, charging: .discharging, externalPower: false))
+        #expect(!state.isCharging)
+    }
+
+    @Test func chargingAndLevelsOnly() throws {
+        let charging = try #require(UnifiedBattery.parse(function: 0, params: [0x00, 0x02, 0x02, 0x01]))
+        #expect(charging.percent == nil && charging.level == .low && charging.isCharging && charging.externalPower)
+        let full = try #require(UnifiedBattery.parseStatus([100, 0x08, 0x03, 0x01]))
+        #expect(full.level == .full && full.charging == .complete && !full.isCharging)
+        #expect(UnifiedBattery.parseStatus([10, 0x03, 0x00, 0x00])?.level == .low)  // highest bit wins
+    }
+
+    @Test func levelsAreMaskedByCapabilities() throws {
+        // Levels only, supporting critical, low and full.
+        let levels = try #require(UnifiedBattery.parseCapabilities([0x0B, 0x01]))
+        #expect(levels == 0x0B)
+        #expect(UnifiedBattery.parseStatus([0, 0x06, 0x00, 0x00], levels: levels)?.level == .low)
+        #expect(UnifiedBattery.parse(function: 0, params: [0, 0x04, 0x00, 0x00], levels: levels)?.level == nil)
+        // A state of charge: levels are ignored and the percentage stands alone.
+        #expect(UnifiedBattery.parseCapabilities([0x0F, 0x03]) == 0)
+        let soc = try #require(UnifiedBattery.parseStatus([0x2D, 0x04, 0x00, 0x00], levels: 0))
+        #expect(soc.percent == 45 && soc.level == nil)
+        #expect(UnifiedBattery.parseCapabilities([0x0F]) == nil)
+    }
+
+    @Test func rejectsOtherFunctionsAndShortOrBadReports() {
+        #expect(UnifiedBattery.parse(function: 1, params: [0x2D, 0x04, 0x00, 0x00]) == nil)
+        #expect(UnifiedBattery.parseStatus([0x2D, 0x04]) == nil)
+        #expect(UnifiedBattery.parseStatus([200, 0x04, 0x00, 0x00]) == nil)
+    }
+}
+
 struct DPIListTests {
     @Test func steppedRange() throws {
         // getSensorDpiList as the MX Master 3S answers it: sensor 0, 200, step 50, 8000, end.

@@ -83,7 +83,8 @@ PureMouse requires macOS 14 or later, on Apple silicon or Intel. It is tested on
 To update, drag the new `PureMouse.app` over the old one and open it again. To stop PureMouse, turn
 it off under System Settings › General › Login Items, or run
 `/Applications/PureMouse.app/Contents/MacOS/puremouse unregister`. The `register` command starts it
-again.
+again. `puremouse stop` stops it until the next login, and `puremouse menu off` (or `on`) hides
+(or shows) the menu bar icon; PureMouse keeps working without it.
 
 ### From source
 
@@ -134,7 +135,8 @@ leave out retains the mouse's existing settings. Here is a short example
 }
 ```
 
-Apply changes without restarting:
+PureMouse watches the file and applies changes when you save it. A file that does not load is
+reported in the log and the previous settings stay in effect. To reload by hand:
 
 ```sh
 launchctl kill HUP gui/$UID/io.github.mblauberg.puremouse
@@ -145,12 +147,13 @@ launchctl kill HUP gui/$UID/io.github.mblauberg.puremouse
 | Field | Meaning |
 |---|---|
 | `dpi` | Sensor resolution, 50–25600. PureMouse uses the nearest value the mouse supports (200–8000 in steps of 50 on the MX Master 3S) and logs when it differs |
+| `dpiPresets` | Up to 8 resolutions, each 50–25600, that the `cycleDPI` action steps through (and the menu bar app offers) |
 | `scrollWheel.inverted` | Invert the main wheel in hardware. With natural scrolling on, `true` gives classic wheel direction and leaves the trackpad alone |
 | `scrollWheel.mode` | `"ratchet"` or `"freespin"` on first connect. Later toggles are kept |
 | `scrollWheel.smartShiftThreshold` | 1–50 enables SmartShift's automatic free-spin; 255 disables it. Must be 1–255 |
 | `thumbWheel.inverted` | Invert the thumb wheel in hardware |
 | `buttons` | Button → action or gesture (see below) |
-| `smoothScroll` | If present, PureMouse scrolls both wheels itself (see below). If absent, the wheels scroll normally |
+| `smoothScroll` | If present, PureMouse scrolls both wheels itself (see below). If absent, or `enabled` is false, the wheels scroll normally |
 | `gesture.distanceMm` | How far the mouse moves before a gesture fires, in millimetres, 0.5–50. Default 4 |
 | `gesture.repeatIntervalMs` | Minimum gap between repeated gestures in one hold, 0–5000. Default 400 |
 
@@ -161,6 +164,7 @@ in effect) and the log names the field.
 
 | Field | Default | Range | Meaning |
 |---|---|---|---|
+| `enabled` | true | | false scrolls natively but keeps the settings below |
 | `speed` | 1 | 0.1–10 | Main wheel distance; 1 is about 40 px per notch when scrolling slowly |
 | `horizontalSpeed` | 1 | 0.1–10 | Thumb wheel distance; 1 is about 360 px per turn when scrolling slowly |
 | `acceleration` | 1 | 0–10 | Extra distance when scrolling fast (1.5× at 5 notches/s, 3× at 17, up to 8×); 0 is linear |
@@ -178,8 +182,11 @@ press), or any hex control ID such as `"0x00c4"`. Run `puremouse probe` to list 
 controls.
 
 **Actions:** `missionControl`, `appExpose`, `showDesktop`, `launchpad`, `spaceLeft`, `spaceRight`,
-`navigateBack`, `navigateForward`, `toggleScrollMode`, `none`, `{"keys": "cmd+shift+4"}`,
+`navigateBack`, `navigateForward`, `toggleScrollMode`, `cycleDPI`, `none`, `{"keys": "cmd+shift+4"}`,
 `{"run": "open -a Safari"}`.
+
+`cycleDPI` switches to the next of `dpiPresets` above the current resolution, wrapping to the
+lowest. The choice survives reconnects until a config change alters `dpi` or `dpiPresets`.
 
 **Gestures:** an object with any of `click`, `up`, `down`, `left` and `right`, each an action.
 While a gesture button is held, the pointer stays still.
@@ -235,8 +242,10 @@ dependencies, run by launchd from a login agent that it installs itself.
 ```
 Sources/HIDPP/       protocol only: framing, IOKit transport, request/response handling,
                      typed feature wrappers
-Sources/puremouse/   policy: config, actions, gestures, smooth scrolling, one session per mouse,
-                     the daemon (discovery, reconnects, wake, reload, permissions, quit)
+Sources/PureMouseKit/ shared with the menu bar app: config model and decoder, status/control
+                     channel (docs/companion.md)
+Sources/puremouse/   policy: applying config, actions, gestures, smooth scrolling, one session
+                     per mouse, the daemon (discovery, reconnects, wake, reload, permissions, quit)
 Tests/               pure logic: framing and event parsing, config, gestures, scroll maths
 scripts/             build, install, uninstall, package, signing identity, icon
 assets/              app icon (Icon Composer source, compiled icon, README images), menu bar glyph
