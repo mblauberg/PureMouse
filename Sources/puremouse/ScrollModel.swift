@@ -96,6 +96,21 @@ struct ScrollAnimator {
     }
 }
 
+/// Whole pixels for scrolling without smoothing: each movement posts the whole pixels owed and
+/// keeps the fraction, so slow or fractional movements add up instead of rounding away.
+/// Reversing direction drops the fraction, as it cancels a glide.
+struct PixelCarry {
+    private var carry = 0.0
+
+    mutating func take(_ pixels: Double) -> Int {
+        if pixels * carry < 0 { carry = 0 }
+        carry += pixels
+        let whole = carry.rounded(.towardZero)
+        carry -= whole
+        return Int(whole)
+    }
+}
+
 extension Duration {
     var seconds: Double {
         Double(components.seconds) + Double(components.attoseconds) / 1e18

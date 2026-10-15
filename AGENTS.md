@@ -73,7 +73,7 @@ work on it safely.
   the mice are restored (`exitReporting`).
 - Keep it light: no dependencies, and no AppKit or SwiftUI in the daemon or PureMouseKit (only
   `PureMouseMenu` may link them). Idle cost is zero CPU; the display link
-  runs only while a scroll is gliding.
+  runs only while a scroll is gliding, never with `smoothingMs` 0 (`PixelCarry` posts at once).
 
 ## Easy to break
 
