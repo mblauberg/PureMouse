@@ -127,8 +127,8 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
 - Some actions use undocumented interfaces: `CoreDockSendNotification` (it returns 0 even for
   unknown names, so failure is silent) and the navigation-swipe CGEvent fields. macOS 27 already
   stopped honouring the dock-swipe fields, which PureMouse does not use. After an OS upgrade, check
-  them with `puremouse action <name>`; `docs/troubleshooting.md` ("After a macOS upgrade") lists the keystroke
-  fallbacks.
+  them with `puremouse action <name>`; `docs/troubleshooting.md` ("After a macOS upgrade") lists
+  the keystroke fallbacks.
 - Logi Options+ fights PureMouse over the mouse (its agent is `com.logi.cp-dev-mgr`). The daemon
   logs an error at start if it sees any of its processes (`LogiOptions`); only this user's process
   names are readable, so a root-run updater goes unseen.
