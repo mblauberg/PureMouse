@@ -44,8 +44,8 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   light and dark specializations, on the system's light/dark background, so macOS 26+ renders
   light, dark, clear and tinted variants. After changing it, run `./scripts/make-icon.sh` (needs
   Xcode 26+ and `rsvg-convert`) and commit the compiled `Assets.car`, `AppIcon.icns` (macOS 14/15
-  fallback), the README PNGs and `MenuBarIcon.pdf`. `assets/MenuBarIcon.svg` is the same mouse as
-  an 18x18 pt template (alpha only; the wheel is a slot, gaps are 1-1.5 pt on the half-point grid
+  fallback), the README PNGs (also the About pane's icon) and `MenuBarIcon.pdf`.
+  `assets/MenuBarIcon.svg` is the same mouse as an 18x18 pt template (alpha only; the wheel is a slot, gaps are 1-1.5 pt on the half-point grid
   so they stay crisp at 1x and 2x); it is plain clip and even-odd paths because rsvg rasterises
   SVG masks in the PDF. The menu bar app loads `MenuBarIcon.pdf`. Keep the two in step.
 - When behaviour changes, update `docs/configuration.md`'s field tables and this file in the same
