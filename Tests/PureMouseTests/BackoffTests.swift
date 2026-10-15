@@ -4,6 +4,8 @@ import Testing
 @Suite struct BackoffTests {
     @Test func adoptionMatchesTheReceiverSlotSchedule() {
         #expect(Backoff.adoption.delays == [1, 2, 4, 8].map { .seconds($0) })
+        #expect(Backoff.bluetooth.delays.starts(with: Backoff.adoption.delays))
+        #expect(Backoff.bluetooth.delays.dropFirst(4).allSatisfy { $0 == .seconds(60) })
     }
 
     @Test func triesAfterEachDelayThenStops() async {

@@ -355,11 +355,11 @@ final class Daemon {
     }
 
     /// Adopts an endpoint. A device that does not answer, perhaps still waking, pairing or busy
-    /// with another request, is tried again on `Backoff.adoption` and then left, so idle cost
-    /// stays zero: a receiver slot announces its device when it connects, a Bluetooth mouse
-    /// attaches afresh, and resume, wake and reload try every endpoint again. Attach, those
-    /// and connection notifications share the endpoint's one retry; pause, detach and shutdown
-    /// cancel it.
+    /// with another request, is tried again on its backoff. A receiver slot is then left, so idle
+    /// cost stays zero: it announces its device when it connects. A Bluetooth mouse has no
+    /// connection notifications, so it keeps being tried once a minute (`Backoff.bluetooth`).
+    /// Resume, wake and reload try every endpoint again. Attach, those and connection
+    /// notifications share the endpoint's one retry; pause, detach and shutdown cancel it.
     private func adoptRetrying(_ device: HIDPPDevice) async {
         let key = Key(device)
         guard await adopt(device) == .noAnswer, retries[key] == nil,
@@ -367,7 +367,8 @@ final class Daemon {
         retries[key] = Task {
             // A cancelled retry was already removed, perhaps replaced by a newer one.
             defer { if !Task.isCancelled { retries[key] = nil } }
-            await Backoff.adoption.retry {
+            let backoff = device.interface.isReceiver ? Backoff.adoption : Backoff.bluetooth
+            await backoff.retry {
                 guard endpoints[key] === device, accepting else { return false }
                 return await adopt(device) == .noAnswer
             }
@@ -552,6 +553,11 @@ struct Backoff {
 
     /// 15 s in all, then left to a connection notification, attach, resume, wake or reload.
     static let adoption = Backoff(delays: [1, 2, 4, 8].map { .seconds($0) })
+
+    /// The same start, then once a minute for about 16 hours: an attached Bluetooth mouse that is
+    /// still waking or pairing announces nothing when it is ready.
+    static let bluetooth = Backoff(
+        delays: adoption.delays + Array(repeating: .seconds(60), count: 1000))
 
     /// Sleeps each delay and then calls `attempt`, until `attempt` returns false (nothing more
     /// to try), the delays run out or the task is cancelled.

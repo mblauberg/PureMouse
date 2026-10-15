@@ -101,8 +101,9 @@ work on it safely.
 - HID++ software IDs rotate per request so a late reply cannot complete a newer request.
 - An endpoint that does not answer is retried after 1, 2, 4 and 8 s (`Daemon.adoptRetrying`,
   `Backoff.adoption`), one retry per endpoint whether attach, a connection notification, resume,
-  wake or reload started it; pause, detach and shutdown cancel it. After that only those bring it
-  back (a Bluetooth mouse has no notifications; it attaches afresh), so idle cost stays zero. A slot
+  wake or reload started it; pause, detach and shutdown cancel it. After that a receiver slot is
+  left to its connection notification, so idle cost stays zero. A Bluetooth mouse has no
+  notifications, so it is then tried once a minute (`Backoff.bluetooth`) until it answers. A slot
   ignored as not a mouse is identified again when a notification carries a different wireless
   product ID (a new device paired into it).
 - `puremouse register` (and opening the app from the Finder, i.e. no arguments inside a bundle)
