@@ -12,10 +12,10 @@ struct GeneralPane: View {
         PaneForm {
             PaneBanners()
             Section {
-                Toggle(isOn: Binding(get: { startsAtLogin }, set: setStartsAtLogin)) {
+                Toggle(isOn: Binding(get: { startsAtLogin }, set: { setStartsAtLogin($0) })) {
                     RowLabel("Start PureMouse at login", help: "Off stops PureMouse now and returns the mouse to normal.")
                 }
-                Toggle(isOn: Binding(get: { showsInMenuBar }, set: setShowsInMenuBar)) {
+                Toggle(isOn: Binding(get: { showsInMenuBar }, set: { setShowsInMenuBar($0) })) {
                     RowLabel("Show in menu bar", help: "When hidden, open PureMouse from Applications to get back here.")
                 }
             }
