@@ -51,7 +51,10 @@ struct GeneralPane: View {
                     }
                 } label: {
                     Text("Config file")
-                    Text(Format.tildePath(Paths.config.path)).font(.callout.monospaced()).textSelection(.enabled)
+                    Text(Format.tildePath(Paths.config.path))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(Paths.config.path)
                 }
                 LabeledContent {
                     Button("Show Log") { showLog() }
@@ -121,11 +124,11 @@ private struct PermissionRow: View {
                     Label("Allowed", systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.green)
                 case false?:
-                    Label("Not allowed", systemImage: "xmark.circle.fill")
+                    Label("Not Allowed", systemImage: "xmark.circle.fill")
                         .foregroundStyle(.red)
                     Button("Open Settings…", action: open)
                 case nil:
-                    Text("Unknown while off").foregroundStyle(.secondary)
+                    Text("Unknown While Off").foregroundStyle(.secondary)
                 }
             }
             .labelStyle(StatusLabelStyle())

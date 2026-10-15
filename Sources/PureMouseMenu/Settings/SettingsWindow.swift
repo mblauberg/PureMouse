@@ -60,6 +60,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         window.delegate = self
         tabs.didSelect = { pane in UserDefaults.standard.set(pane.rawValue, forKey: Self.paneKey) }
         let saved = UserDefaults.standard.string(forKey: Self.paneKey).flatMap(SettingsPane.init) ?? .buttons
+        // Titled before the first pane loads, so "Untitled" never shows.
+        window.title = saved.title
         select(saved)
     }
 

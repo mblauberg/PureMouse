@@ -15,7 +15,7 @@ struct PickerEntry: Identifiable, Equatable {
     static func all(allowsDefault: Bool, allowsGesture: Bool) -> [PickerEntry] {
         var entries: [PickerEntry] = []
         if allowsDefault {
-            entries.append(PickerEntry(id: "default", label: "Default", detail: "(works as normal)", group: nil,
+            entries.append(PickerEntry(id: "default", label: "Default", detail: "(Works as Normal)", group: nil,
                                        kind: .set(.standard)))
         }
         entries.append(PickerEntry(id: "none", label: "Do Nothing", group: nil, kind: .set(.named("none"))))
@@ -28,7 +28,7 @@ struct PickerEntry: Identifiable, Equatable {
         entries.append(PickerEntry(id: "keys", label: "Keyboard Shortcut…", group: "Custom", kind: .shortcut))
         entries.append(PickerEntry(id: "run", label: "Run Shell Command…", group: "Custom", kind: .command))
         if allowsGesture {
-            entries.append(PickerEntry(id: "gesture", label: "Hold and Move", detail: "(gestures)", group: "Custom",
+            entries.append(PickerEntry(id: "gesture", label: "Hold and Move", detail: "(Gestures)", group: "Custom",
                                        kind: .gesture))
         }
         return entries

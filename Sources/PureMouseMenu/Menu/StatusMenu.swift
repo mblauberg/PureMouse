@@ -47,12 +47,15 @@ final class StatusMenu: NSObject, NSMenuDelegate {
 
         if !running {
             addHeader(title: "PureMouse Is Off", subtitle: "The mouse works as it does without PureMouse")
-            if model.statusTooNew { addAttention("Update the Menu Bar App…") { self.app.openReleases() } }
-            menu.addItem(.separator())
-            menu.addItem(item("Start PureMouse") { Lifecycle.perform(.register) })
+            if model.statusTooNew { addAttention("Update the Menu Bar App…") { [app] in app.openReleases() } }
         } else {
             if model.devices.isEmpty {
-                addHeader(title: "No Mouse Connected", subtitle: "Turn on your mouse or check the receiver")
+                // While paused the daemon drops its sessions, so it reports no devices.
+                if model.paused {
+                    addHeader(title: "PureMouse Is Paused", subtitle: "The mouse works as it does without PureMouse")
+                } else {
+                    addHeader(title: "No Mouse Connected", subtitle: "Turn on your mouse or check the receiver")
+                }
             }
             for device in model.devices {
                 let subtitle = (model.paused ? "Paused · " : "") + StatusText.subtitle(device)
@@ -74,8 +77,11 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         pointer.isEnabled = running
         menu.addItem(pointer)
 
-        if running {
-            menu.addItem(.separator())
+        // Start, Pause and Resume share one slot, so nothing below them moves between states.
+        menu.addItem(.separator())
+        if !running {
+            menu.addItem(item("Start PureMouse") { Lifecycle.perform(.register) })
+        } else {
             let paused = model.paused
             menu.addItem(item(paused ? "Resume PureMouse" : "Pause PureMouse") { [model] in model.setPaused(!paused) })
             if option {
@@ -97,19 +103,19 @@ final class StatusMenu: NSObject, NSMenuDelegate {
 
     private func addAttentionRows() {
         if model.statusTooNew {
-            addAttention("Update the Menu Bar App…") { self.app.openReleases() }
+            addAttention("Update the Menu Bar App…") { [app] in app.openReleases() }
         }
         if model.accessibilityMissing {
-            addAttention("Allow Accessibility Access…") { self.app.openPrivacy(.accessibility) }
+            addAttention("Allow Accessibility Access…") { [app] in app.openPrivacy(.accessibility) }
         }
         if model.inputMonitoringMissing, model.hasBluetoothDevice {
-            addAttention("Allow Input Monitoring…") { self.app.openPrivacy(.inputMonitoring) }
+            addAttention("Allow Input Monitoring…") { [app] in app.openPrivacy(.inputMonitoring) }
         }
         if model.configError != nil {
-            addAttention("Fix Config Error…") { self.app.showSettings(pane: .general) }
+            addAttention("Fix Config Error…") { [app] in app.showSettings(pane: .general) }
         }
         if model.logiOptionsRunning {
-            addAttention("Quit Logi Options+…") { self.app.showSettings(pane: .general) }
+            addAttention("Quit Logi Options+…") { [app] in app.showSettings(pane: .general) }
         }
     }
 

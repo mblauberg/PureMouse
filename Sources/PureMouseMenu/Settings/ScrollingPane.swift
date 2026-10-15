@@ -106,7 +106,7 @@ struct ScrollingPane: View {
         return LabeledContent {
             Picker("Wheel mode", selection: Binding<String?>(get: { mode }, set: { model.set($0, at: ["scrollWheel", "mode"]) })) {
                 Text("Ratchet").tag("ratchet" as String?)
-                Text("Free spin").tag("freespin" as String?)
+                Text("Free Spin").tag("freespin" as String?)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -117,12 +117,15 @@ struct ScrollingPane: View {
         }
     }
 
-    /// SmartShift: a switch (off writes 255) and, while on, its threshold.
-    private var smartShift: some View {
+    /// SmartShift: a switch (off writes 255) and, while on, its threshold in an indented row.
+    @ViewBuilder private var smartShift: some View {
         let threshold = model.config.int(["scrollWheel", "smartShiftThreshold"])
         let on = threshold.map { $0 < 255 } ?? true
-        return LabeledContent {
-            HStack(spacing: 8) {
+        Toggle(isOn: Binding(get: { on }, set: { model.set($0 ? 12 : 255, at: ["scrollWheel", "smartShiftThreshold"]) })) {
+            RowLabel("SmartShift", help: "Frees the wheel when you scroll fast.", mouseDefault: threshold == nil)
+        }
+        if on {
+            LabeledContent("Threshold") {
                 Slider(value: Binding(get: { Double(min(threshold ?? 12, 50)) },
                                       set: { model.set(Int($0.rounded()), at: ["scrollWheel", "smartShiftThreshold"], debounce: true) }),
                        in: 1...50) {
@@ -133,16 +136,9 @@ struct ScrollingPane: View {
                     Text("Later").font(.subheadline).foregroundStyle(.secondary)
                 }
                 .labelsHidden()
-                .frame(width: 150)
-                .disabled(!on)
-                Toggle("SmartShift", isOn: Binding(get: { on }, set: {
-                    model.set($0 ? 12 : 255, at: ["scrollWheel", "smartShiftThreshold"])
-                }))
-                .toggleStyle(.switch)
-                .labelsHidden()
+                .frame(width: 170)
             }
-        } label: {
-            RowLabel("SmartShift", help: "Frees the wheel when you scroll fast.", mouseDefault: threshold == nil)
+            .disclosedRow()
         }
     }
 }

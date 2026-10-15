@@ -105,6 +105,8 @@ struct PointerPane: View {
 }
 
 private struct PresetChip: View {
+    @Environment(\.colorScheme) private var colorScheme
+    private var dark: Bool { colorScheme == .dark }
     let dpi: Int
     let selected: Bool
     let select: () -> Void
@@ -128,7 +130,11 @@ private struct PresetChip: View {
         .padding(.leading, 10)
         .padding(.trailing, 7)
         .padding(.vertical, 3)
-        .background(Color.accentColor.opacity(selected ? 0.22 : 0.1), in: Capsule())
-        .overlay { if selected { Capsule().strokeBorder(Color.accentColor.opacity(0.5)) } }
+        // Dark mode needs a stronger tint and an edge to stand off the grouped background.
+        .background(Color.accentColor.opacity(selected ? (dark ? 0.42 : 0.22) : (dark ? 0.26 : 0.1)), in: Capsule())
+        .overlay {
+            Capsule().strokeBorder(Color.accentColor.opacity(selected ? (dark ? 0.9 : 0.5) : (dark ? 0.45 : 0)),
+                                   lineWidth: selected ? 1 : 0.5)
+        }
     }
 }

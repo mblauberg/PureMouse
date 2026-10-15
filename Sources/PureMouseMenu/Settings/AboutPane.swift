@@ -3,12 +3,13 @@ import SwiftUI
 
 struct AboutPane: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.colorScheme) private var colorScheme
 
     private var daemonVersion: String? { model.status?.version }
 
     var body: some View {
         VStack(spacing: 10) {
-            Image(nsImage: Self.icon)
+            Image(nsImage: Self.icon(dark: colorScheme == .dark))
                 .resizable()
                 .frame(width: 112, height: 112)
                 .accessibilityHidden(true)
@@ -43,11 +44,20 @@ struct AboutPane: View {
         .frame(maxWidth: .infinity)
     }
 
-    private static var icon: NSImage {
+    /// The app icon in the window's appearance: macOS 26 draws it light or dark from the same
+    /// Icon Composer file, but only when the drawing appearance says which, so draw it under one.
+    private static func icon(dark: Bool) -> NSImage {
+        var source = NSWorkspace.shared.icon(forFile: Bundle.main.bundlePath)
         #if DEBUG
         // `swift run` from the repository has no bundle icon.
-        if Bundle.main.bundleIdentifier == nil, let icon = NSImage(contentsOfFile: "assets/AppIcon.icns") { return icon }
+        if Bundle.main.bundleIdentifier == nil, let icon = NSImage(contentsOfFile: "assets/AppIcon.icns") { source = icon }
         #endif
-        return NSApp.applicationIconImage
+        let appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+        return NSImage(size: NSSize(width: 112, height: 112), flipped: false) { rect in
+            (appearance ?? NSAppearance.currentDrawing()).performAsCurrentDrawingAppearance {
+                source.draw(in: rect)
+            }
+            return true
+        }
     }
 }

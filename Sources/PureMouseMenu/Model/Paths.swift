@@ -30,10 +30,12 @@ enum Paths {
     /// Start at login: the daemon's agent exists.
     static var startsAtLogin: Bool { FileManager.default.fileExists(atPath: launchAgent(Companion.daemonLabel).path) }
 
-    /// Show in menu bar: the menu app's agent exists. A development build always shows its icon.
+    /// Show in menu bar: the daemon's `menu off` leaves a `menu-hidden` marker beside the status
+    /// file, and `menu on` removes it (docs/companion.md, "Daemon decisions"). A development build
+    /// always shows its icon.
     static var showsInMenuBar: Bool {
         environment["PUREMOUSE_DAEMON"] != nil || daemon == nil
-            || FileManager.default.fileExists(atPath: launchAgent(Companion.menuLabel).path)
+            || !FileManager.default.fileExists(atPath: Companion.directory.appending(path: "menu-hidden").path)
     }
 
     /// launchd started this process (at login, or `puremouse register`/`menu on`), rather than the
