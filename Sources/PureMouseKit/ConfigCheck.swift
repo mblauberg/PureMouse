@@ -27,15 +27,27 @@ public enum ConfigCheck {
             }
             return located(context.codingPath, text)
         case DecodingError.typeMismatch(let type, let context):
-            return located(context.codingPath, "expected \(type)")
+            return located(context.codingPath, "expected \(kind(type))")
         case DecodingError.valueNotFound(let type, let context):
-            return located(context.codingPath, "expected \(type), found null")
+            return located(context.codingPath, "expected \(kind(type)), found null")
         case DecodingError.keyNotFound(let key, let context):
             return located(context.codingPath + [key], "missing")
         case CocoaError.fileReadNoSuchFile:
             return "no such file"
         default:
             return (error as NSError).localizedDescription
+        }
+    }
+
+    /// A JSON value's kind in words, for someone editing the file rather than reading Swift.
+    private static func kind(_ type: Any.Type) -> String {
+        switch type {
+        case is Bool.Type: "true or false"
+        case is String.Type: "text"
+        case is Int.Type, is UInt8.Type, is UInt16.Type: "a whole number"
+        case is Double.Type: "a number"
+        case is [Int].Type: "a list of whole numbers"
+        default: "\(type)"
         }
     }
 }

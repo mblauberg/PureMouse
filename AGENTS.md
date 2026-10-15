@@ -87,7 +87,12 @@ work on it safely.
 - The menu bar app never opens HID devices: it edits the config file and talks to the daemon only
   through the companion channel and the daemon CLI (`docs/companion.md`). It must not poll: it
   wakes on notifications, file events and the daemon's process exit. Its Settings window and view
-  tree are built when shown and released when closed; the menu is rebuilt on open.
+  tree are built when shown (each pane on its first visit) and released when closed; the menu is
+  rebuilt on open. Shortcut specs are parsed and named by Kit's `Keystroke` only; the menu adds
+  glyphs and spoken words.
+- The DPI the menu and the Pointer pane show is the mouse's live value (a `cycleDPI` press
+  changes it without touching the config), then the configured one; a change made in the pane
+  shows until the mouse reports it (`DPIReading`).
 - The menu bar app writes only the keys a control owns (`ConfigTree`) and keeps every other key,
   including unknown ones. It records edits as the keys they set and `ConfigFile.save` replays
   them onto the file as it is when saving, so a hand edit made meanwhile survives; with no

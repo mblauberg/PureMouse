@@ -265,14 +265,13 @@ final class AppModel {
             return
         }
         diskBytes = data
+        if let tree = try? ConfigTree(data: data) { config = tree }
         do {
-            let tree = try ConfigTree(data: data)
-            config = tree
             try ConfigCheck.validate(data)
             configProblem = nil
             lastGood = data
         } catch {
-            configProblem = Self.describe(error)
+            configProblem = ConfigCheck.message(for: error)
         }
         writeError = nil
         statusChanged()
@@ -360,7 +359,7 @@ final class AppModel {
         case ConfigFile.SaveError.fileHasError:
             "The config file changed and has an error, so this change was not saved."
         case ConfigFile.SaveError.rejected(let reason):
-            Self.describe(reason)
+            ConfigCheck.message(for: reason)
         case ConfigFile.SaveError.writeFailed(let reason):
             "PureMouse could not save \(Format.tildePath(Paths.config.path)): \(reason.localizedDescription)"
         default:
@@ -389,40 +388,5 @@ final class AppModel {
         source.setCancelHandler { close(fd) }
         source.resume()
         directoryWatch = source
-    }
-
-    /// The decoder's error as one sentence that names the field.
-    static func describe(_ error: Error) -> String {
-        func path(_ context: DecodingError.Context) -> String {
-            context.codingPath.map(\.stringValue).joined(separator: ".")
-        }
-        switch error {
-        case DecodingError.dataCorrupted(let context):
-            if let underlying = context.underlyingError as NSError?,
-               let detail = underlying.userInfo[NSDebugDescriptionErrorKey] as? String {
-                return "Not valid JSON: \(detail)"
-            }
-            return context.debugDescription
-        case DecodingError.typeMismatch(let type, let context):
-            return "\(path(context)) should be \(Self.typeName(type))."
-        case DecodingError.valueNotFound(_, let context):
-            return "\(path(context)) is missing a value."
-        case DecodingError.keyNotFound(let key, let context):
-            return "\(([path(context)] + [key.stringValue]).filter { !$0.isEmpty }.joined(separator: ".")) is missing."
-        case let error as NSError where error.userInfo[NSDebugDescriptionErrorKey] != nil:
-            return "Not valid JSON: \(error.userInfo[NSDebugDescriptionErrorKey]!)"
-        default:
-            return String(describing: error)
-        }
-    }
-
-    private static func typeName(_ type: Any.Type) -> String {
-        switch type {
-        case is Bool.Type: "true or false"
-        case is String.Type: "text"
-        case is Int.Type, is UInt8.Type: "a whole number"
-        case is Double.Type: "a number"
-        default: "a different kind of value"
-        }
     }
 }

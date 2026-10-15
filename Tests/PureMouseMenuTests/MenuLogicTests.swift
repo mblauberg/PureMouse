@@ -172,6 +172,11 @@ private func text(_ tree: ConfigTree) -> String { String(decoding: tree.data(), 
     #expect(!Shortcut.isValid("cmd+a+b"))
     #expect(!Shortcut.isValid("hyper+a"))
     #expect(!Shortcut.isValid(""))
+    // The daemon's own parser decides: no padding, empty parts skipped, fn accepted.
+    #expect(!Shortcut.isValid("cmd + 4"))
+    #expect(Shortcut.display("cmd++4") == "⌘4")
+    #expect(Shortcut.display("fn+cmd+left") == "⌘←")
+    #expect(Shortcut.display("cmd+enter") == "⌘↩")
 }
 
 // MARK: Presets
@@ -284,7 +289,7 @@ private func mouse(_ id: String, online: Bool, dpi: Int?, steps: [Int] = []) -> 
 }
 
 @MainActor @Test func everyRecordableKeyPassesTheDaemonsCheck() {
-    for name in Set(Shortcut.keyNames.values) {
+    for name in Set(Keystroke.keyNames.values) {
         #expect(ShortcutCheck.isValid("cmd+" + name), "cmd+\(name)")
     }
     #expect(!ShortcutCheck.isValid("cmd+nosuchkey"))

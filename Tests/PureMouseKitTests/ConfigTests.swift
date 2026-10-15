@@ -145,7 +145,7 @@ import Testing
     @Test func namesTheField() {
         #expect(message(#"{"smoothScroll": {"speed": 1e300}}"#).hasPrefix("smoothScroll.speed must be 0.1–10.0"))
         #expect(message(#"{"buttons": {"top": "explode"}}"#).hasPrefix("buttons.top: unknown action 'explode'"))
-        #expect(message(#"{"dpi": "high"}"#) == "dpi: expected Int")
+        #expect(message(#"{"dpi": "high"}"#) == "dpi: expected a whole number")
     }
 
     @Test func syntaxErrorsSayWhere() {
