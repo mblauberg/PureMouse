@@ -15,6 +15,16 @@ work on it safely.
   rebuilds, re-signs and restarts the agent, and check `~/Library/Logs/PureMouse.log`.
   (`puremouse permissions` answers for whoever launches it, so from a terminal it reports the
   terminal's permissions, not the app's.)
+- Menu bar app (`Sources/PureMouseMenu`): run `.build/debug/PureMouseMenu` alongside the installed
+  agent, but point it away from the real files first: `PUREMOUSE_CONFIG` (config file),
+  `PUREMOUSE_DAEMON` (the binary it runs for register/stop/menu commands; a stub script is fine)
+  and `PUREMOUSE_COMPANION_DIR` (the status/control channel; a fixture `status.json` there stands
+  in for the daemon). Without them it edits the live config and drives the installed agent. Debug
+  builds also take `PUREMOUSE_DEV_PANE=<pane>`, `PUREMOUSE_DEV_MENU=1`,
+  `PUREMOUSE_DEV_APPEARANCE=light|dark`, `PUREMOUSE_DEV_PICKER=<button>` and
+  `PUREMOUSE_DEV_SHORTCUT=<button>` for screenshots (`DevHooks.swift`); `--login` launches it as
+  launchd does (no Settings window). Check its footprint with `footprint <pid>` before and after
+  opening Settings.
 - The user's live config is `~/.config/puremouse/config.json`; keep `config.example.json` in step
   with it (its test checks shape, not values). Config changes apply with
   `launchctl kill HUP gui/$UID/io.github.mblauberg.puremouse`, no rebuild.
@@ -53,8 +63,15 @@ work on it safely.
   Nothing may be persisted on the device or receiver: they must work normally without PureMouse.
 - A session that is `finished` (closed or restored) must not touch the device again; the daemon
   stops adopting once `shuttingDown`.
-- Keep it light: no AppKit, SwiftUI or dependencies. Idle cost is zero CPU; the display link
-  runs only while a scroll is gliding.
+- Keep the daemon light: no AppKit, SwiftUI or dependencies. Idle cost is zero CPU; the display
+  link runs only while a scroll is gliding.
+- The menu bar app never opens HID devices: it edits the config file and talks to the daemon only
+  through the companion channel and the daemon CLI (`docs/companion.md`). It must not poll: it
+  wakes on notifications, file events and the daemon's process exit. Its Settings window and view
+  tree are built when shown and released when closed; the menu is rebuilt on open.
+- The menu bar app writes only the keys a control owns (`ConfigTree`) and keeps every other key,
+  including unknown ones. It refuses to write while the file does not parse or validate, and
+  writes through `JSON.encode` (shortest decimals, sorted keys), never `JSONSerialization`.
 
 ## Easy to break
 
