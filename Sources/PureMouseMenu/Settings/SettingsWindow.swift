@@ -41,10 +41,13 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         tabs.tabStyle = .toolbar
         tabs.transitionOptions = [.crossfade, .allowUserInteraction]
         for pane in SettingsPane.allCases {
-            let host = NSHostingController(rootView: PaneHost(pane: pane, app: app).environment(model))
-            host.sizingOptions = .preferredContentSize
-            host.title = pane.title
-            let item = NSTabViewItem(viewController: host)
+            let lazy = LazyPane {
+                let host = NSHostingController(rootView: PaneHost(pane: pane, app: app).environment(model))
+                host.sizingOptions = .preferredContentSize
+                return host
+            }
+            lazy.title = pane.title
+            let item = NSTabViewItem(viewController: lazy)
             item.label = pane.title
             item.identifier = pane.rawValue
             item.image = NSImage(systemSymbolName: pane.symbol, accessibilityDescription: pane.title)
@@ -121,5 +124,32 @@ final class SettingsTabs: NSTabViewController {
         frame.origin.y = window.frame.maxY - frame.height
         guard frame != window.frame else { return }
         window.setFrame(frame, display: true, animate: animated)
+    }
+}
+
+/// A tab's placeholder: builds the pane's SwiftUI host the first time the tab is shown, so panes
+/// never visited cost nothing, and passes its preferred size up to the tabs.
+@MainActor
+final class LazyPane: NSViewController {
+    private let make: () -> NSViewController
+
+    init(_ make: @escaping () -> NSViewController) {
+        self.make = make
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func loadView() {
+        let content = make()
+        addChild(content)
+        view = content.view
+        preferredContentSize = content.preferredContentSize
+    }
+
+    override func preferredContentSizeDidChange(for viewController: NSViewController) {
+        super.preferredContentSizeDidChange(for: viewController)
+        preferredContentSize = viewController.preferredContentSize
     }
 }
