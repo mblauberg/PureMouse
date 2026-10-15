@@ -28,10 +28,11 @@ final class Daemon {
     /// Every endpoint we listen on, keyed by interface and device index.
     private var endpoints: [Key: HIDPPDevice] = [:]
     private var sessions: [Key: Session] = [:]
-    /// Receiver setup and Bluetooth adoption retries, cancelled when their interface goes away.
+    /// Receiver setup, cancelled when the receiver goes away.
     private var interfaceTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
-    /// Receiver slots whose device did not answer, being tried again (see `adoptSlot`).
-    private var slotRetries: [Key: Task<Void, Never>] = [:]
+    /// Endpoints whose device did not answer, being tried again: at most one retry each, however
+    /// it was started (see `adoptRetrying`).
+    private var retries: [Key: Task<Void, Never>] = [:]
     private var adopting: Set<Key> = []
     /// Endpoints found not to be a configurable mouse (e.g. a keyboard on the same receiver),
     /// skipped until the config changes, a different device connects in the slot, or PureMouse
@@ -213,6 +214,7 @@ final class Daemon {
         Log.info("paused")
         endCapture(.cancelled)
         let generation = pauseGate.pause()
+        cancelRetries()
         let all = Array(sessions.values)
         sessions = [:]
         for session in all { watch(session.device) }
@@ -292,24 +294,14 @@ final class Daemon {
                 } catch {
                     Log.error("\(interface.product): enabling connection notifications failed: \(error)")
                 }
-                // Slots still silent after adoptSlot's few retries (asleep or empty) are adopted
-                // later, when they announce a connection.
                 for slot in UInt8(1)...6 {
                     guard !Task.isCancelled else { return }
-                    await adoptSlot(listen(interface, index: slot))
+                    await adoptRetrying(listen(interface, index: slot))
                 }
             }
         } else {
             let device = listen(interface, index: directDeviceIndex)
-            interfaceTasks[id] = Task {
-                // A Bluetooth mouse has no connection notifications, so keep trying until it
-                // answers; it may still be waking or finishing pairing.
-                for delay in [0, 2, 5, 10, 30] + Array(repeating: 60, count: 1000) {
-                    try? await Task.sleep(for: .seconds(delay))
-                    guard !Task.isCancelled else { return }
-                    if await adopt(device) != .noAnswer { return }
-                }
-            }
+            Task { await adoptRetrying(device) }
         }
     }
 
@@ -317,10 +309,7 @@ final class Daemon {
         Log.info("lost \(interface.product)")
         let id = ObjectIdentifier(interface)
         interfaceTasks.removeValue(forKey: id)?.cancel()
-        for (key, retry) in slotRetries where key.interface == id {
-            retry.cancel()
-            slotRetries[key] = nil
-        }
+        cancelRetries { $0.interface == id }
         for (key, session) in sessions where key.interface == id {
             session.close()
             sessions[key] = nil
@@ -362,23 +351,33 @@ final class Daemon {
             ignored.remove(key)
         }
         guard Receiver.isLinkEstablished(report) else { return }
-        Task { await adoptSlot(device) }
+        Task { await adoptRetrying(device) }
     }
 
-    /// Adopts a receiver slot. A device that does not answer, perhaps still settling after a
-    /// wake or busy with another request, is tried again after 1, 2, 4 and 8 seconds; one that
-    /// is really away announces itself when it connects.
-    private func adoptSlot(_ device: HIDPPDevice) async {
+    /// Adopts an endpoint. A device that does not answer, perhaps still waking, pairing or busy
+    /// with another request, is tried again on `Backoff.adoption` and then left, so idle cost
+    /// stays zero: a receiver slot announces its device when it connects, a Bluetooth mouse
+    /// attaches afresh, and resume, wake and reload try every endpoint again. Attach, those
+    /// and connection notifications share the endpoint's one retry; pause, detach and shutdown
+    /// cancel it.
+    private func adoptRetrying(_ device: HIDPPDevice) async {
         let key = Key(device)
-        guard await adopt(device) == .noAnswer, slotRetries[key] == nil,
+        guard await adopt(device) == .noAnswer, retries[key] == nil,
               endpoints[key] === device, accepting else { return }
-        slotRetries[key] = Task {
-            defer { if !Task.isCancelled { slotRetries[key] = nil } }
-            for delay in [1, 2, 4, 8] {
-                try? await Task.sleep(for: .seconds(delay))
-                guard !Task.isCancelled, endpoints[key] === device, accepting else { return }
-                if await adopt(device) != .noAnswer { return }
+        retries[key] = Task {
+            // A cancelled retry was already removed, perhaps replaced by a newer one.
+            defer { if !Task.isCancelled { retries[key] = nil } }
+            await Backoff.adoption.retry {
+                guard endpoints[key] === device, accepting else { return false }
+                return await adopt(device) == .noAnswer
             }
+        }
+    }
+
+    private func cancelRetries(where matches: (Key) -> Bool = { _ in true }) {
+        for (key, retry) in retries where matches(key) {
+            retry.cancel()
+            retries[key] = nil
         }
     }
 
@@ -447,11 +446,7 @@ final class Daemon {
     /// Retries endpoints that answered nothing earlier, such as a mouse asleep at attach time.
     private func adoptStragglers() async {
         for (key, endpoint) in endpoints where sessions[key] == nil {
-            if endpoint.interface.isReceiver {
-                await adoptSlot(endpoint)
-            } else {
-                _ = await adopt(endpoint)
-            }
+            await adoptRetrying(endpoint)
         }
     }
 
@@ -491,6 +486,7 @@ final class Daemon {
         guard !shuttingDown else { return }
         shuttingDown = true
         Log.info("quitting")
+        cancelRetries()
         let all = Array(sessions.values)
         Task { [pausing] in
             await withTaskGroup(of: Void.self) { group in
@@ -546,6 +542,25 @@ final class PowerObserver {
             onWake()
         default:
             break
+        }
+    }
+}
+
+/// When to try an endpoint again after it did not answer: after each delay in turn, then never.
+struct Backoff {
+    var delays: [Duration]
+
+    /// 15 s in all, then left to a connection notification, attach, resume, wake or reload.
+    static let adoption = Backoff(delays: [1, 2, 4, 8].map { .seconds($0) })
+
+    /// Sleeps each delay and then calls `attempt`, until `attempt` returns false (nothing more
+    /// to try), the delays run out or the task is cancelled.
+    func retry(isolation: isolated (any Actor)? = #isolation,
+               sleep: (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
+               _ attempt: () async -> Bool) async {
+        for delay in delays {
+            do { try await sleep(delay) } catch { return }
+            guard !Task.isCancelled, await attempt() else { return }
         }
     }
 }
