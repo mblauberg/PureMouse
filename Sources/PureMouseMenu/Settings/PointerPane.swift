@@ -94,7 +94,7 @@ struct PointerPane: View {
         typed = nil
         guard !model.readOnly else { return }
         reading.request(dpi)
-        model.set(dpi, at: ["dpi"], debounce: debounce)
+        model.setDPI(dpi, debounce: debounce)
     }
 
     private func commitTyped(_ steps: [Int]) {

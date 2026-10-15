@@ -145,7 +145,7 @@ final class AppController: NSObject, NSApplicationDelegate {
 /// "Show Settings", from a second launch to the running instance: a notification, plus a file
 /// stamped with its time, so an instance still starting up (and not yet listening) sees it too.
 enum ShowRequest {
-    private static var file: URL { Companion.directory.appending(path: "show-settings") }
+    private static var file: URL { Companion.showSettingsURL }
 
     static func post() {
         try? FileManager.default.createDirectory(at: Companion.directory, withIntermediateDirectories: true)
@@ -166,5 +166,5 @@ enum Links {
     static let repository = URL(string: "https://github.com/mblauberg/PureMouse")!
     static let releases = URL(string: "https://github.com/mblauberg/PureMouse/releases")!
     static let licence = URL(string: "https://github.com/mblauberg/PureMouse/blob/main/LICENSE")!
-    static let logiOptions = URL(string: "https://github.com/mblauberg/PureMouse#logi-options")!
+    static let logiOptions = URL(string: "https://github.com/mblauberg/PureMouse/blob/main/docs/troubleshooting.md#logi-options")!
 }

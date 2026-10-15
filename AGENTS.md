@@ -175,7 +175,8 @@ work on it safely.
 - DPI is snapped to the sensor's own list (0x2201 getSensorDpiList), read once per mouse and
   inherited across reloads; if the list cannot be read, the configured value is sent unchanged.
   `cycleDPI` sets `Session.liveDPI`, which overrides `config.dpi` in `apply()`; `Daemon.reload`
-  clears it only when `dpi` or `dpiPresets` changed.
+  clears it only when `dpi` or `dpiPresets` changed, and `Control.useConfiguredDPI` clears it on
+  request (`AppModel.setDPI` sends it, since choosing the saved value changes nothing on disk).
 
 ## Extending
 

@@ -179,7 +179,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         let steps = model.liveDevice?.dpiSteps ?? []
         let selected = presets.first { DPIPresets.snap($0, to: steps) == current }
         for preset in presets {
-            let row = item(Format.dpi(preset)) { [model] in model.set(preset, at: ["dpi"]) }
+            let row = item(Format.dpi(preset)) { [model] in model.setDPI(preset) }
             row.state = preset == selected ? .on : .off
             row.isEnabled = !model.readOnly
             submenu.addItem(row)

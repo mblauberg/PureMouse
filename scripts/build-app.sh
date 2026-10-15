@@ -73,7 +73,7 @@ PLIST
 # The menu bar app: a login item of its own (puremouse register writes its agent).
 mkdir -p "$menu_app/Contents/"{MacOS,Resources}
 cp $bin/PureMouseMenu "$menu_app/Contents/MacOS/PureMouseMenu"
-cp assets/{Assets.car,AppIcon.icns,MenuBarIcon.pdf} "$menu_app/Contents/Resources/"
+cp assets/{Assets.car,AppIcon.icns,AppIcon.png,AppIcon-dark.png,MenuBarIcon.pdf} "$menu_app/Contents/Resources/"
 cat > "$menu_app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

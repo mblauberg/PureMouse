@@ -44,20 +44,15 @@ struct AboutPane: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// The app icon in the window's appearance: macOS 26 draws it light or dark from the same
-    /// Icon Composer file, but only when the drawing appearance says which, so draw it under one.
+    /// The app icon in the window's appearance. `NSWorkspace` hands back the light rendering of
+    /// the Icon Composer file whatever the drawing appearance, so the bundle carries both as
+    /// 256 px PNGs (the README's).
     private static func icon(dark: Bool) -> NSImage {
-        var source = NSWorkspace.shared.icon(forFile: Bundle.main.bundlePath)
+        let name = dark ? "AppIcon-dark" : "AppIcon"
         #if DEBUG
-        // `swift run` from the repository has no bundle icon.
-        if Bundle.main.bundleIdentifier == nil, let icon = NSImage(contentsOfFile: "assets/AppIcon.icns") { source = icon }
+        // `swift run` from the repository has no bundle resources.
+        if Bundle.main.bundleIdentifier == nil, let icon = NSImage(contentsOfFile: "assets/\(name).png") { return icon }
         #endif
-        let appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
-        return NSImage(size: NSSize(width: 112, height: 112), flipped: false) { rect in
-            (appearance ?? NSAppearance.currentDrawing()).performAsCurrentDrawingAppearance {
-                source.draw(in: rect)
-            }
-            return true
-        }
+        return Bundle.main.image(forResource: name) ?? NSWorkspace.shared.icon(forFile: Bundle.main.bundlePath)
     }
 }

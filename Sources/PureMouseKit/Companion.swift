@@ -22,6 +22,9 @@ public enum Companion {
     public static var statusURL: URL { directory.appending(path: "status.json") }
     /// Written by the menu bar app: `Control`.
     public static var controlURL: URL { directory.appending(path: "control.json") }
+    /// Created to ask the menu bar app to show Settings when it next starts, if within a few
+    /// seconds (opening PureMouse.app restarts the menu agent just before opening it).
+    public static var showSettingsURL: URL { directory.appending(path: "show-settings") }
 
     /// Posted by the daemon after writing `statusURL`.
     public static let statusNotification = "io.github.mblauberg.puremouse.status"
@@ -199,10 +202,14 @@ public struct Control: Codable, Equatable, Sendable {
     public var paused: Bool
     /// Present to start select-by-pressing; a new token starts a new capture, nil cancels one.
     public var capture: Capture?
+    /// A new token drops the DPI chosen by `cycleDPI` and sets every mouse to the config's `dpi`:
+    /// choosing the saved value leaves the file unchanged, so no reload would.
+    public var useConfiguredDPI: Int?
 
-    public init(paused: Bool = false, capture: Capture? = nil) {
+    public init(paused: Bool = false, capture: Capture? = nil, useConfiguredDPI: Int? = nil) {
         self.paused = paused
         self.capture = capture
+        self.useConfiguredDPI = useConfiguredDPI
     }
 
     public struct Capture: Codable, Equatable, Sendable {

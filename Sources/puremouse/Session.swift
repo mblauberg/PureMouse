@@ -548,6 +548,24 @@ final class Session {
         }
     }
 
+    /// Drops the DPI chosen by `cycleDPI` and sets the config's, after any pending device action.
+    func useConfiguredDPI() {
+        deviceAction = Task { [previous = deviceAction] in
+            await previous?.value
+            guard !finished, liveDPI != nil else { return }
+            liveDPI = nil
+            do {
+                if let target = config.dpi, try await device.hasFeature(AdjustableDPI.id), !finished {
+                    try await AdjustableDPI.set(device, dpi: supportedDPI(near: target))
+                    try await readDPI()
+                }
+            } catch {
+                Log.error("\(name): setting DPI failed: \(error)")
+            }
+            changed()
+        }
+    }
+
     private func cycleDPI() async {
         guard !finished else { return }
         guard !config.dpiPresets.isEmpty else {

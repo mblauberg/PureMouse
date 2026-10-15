@@ -41,6 +41,7 @@ final class AppModel {
     @ObservationIgnored private var captureToken = 0
     @ObservationIgnored private var captureTimeout: DispatchWorkItem?
     @ObservationIgnored private var requestedPaused: Bool?
+    @ObservationIgnored private var wantsConfiguredDPI = false
     @ObservationIgnored private var exitWatch: DispatchSourceProcess?
     @ObservationIgnored private var watchedPID: Int32 = 0
     @ObservationIgnored private var directoryWatch: DispatchSourceFileSystemObject?
@@ -216,8 +217,9 @@ final class AppModel {
 
     /// Writes the control file and rings the daemon; false (after saying why) if it could not.
     @discardableResult
-    private func writeControl(capture: Control.Capture?) -> Bool {
-        let control = Control(paused: requestedPaused ?? status?.paused ?? false, capture: capture)
+    private func writeControl(capture: Control.Capture?, useConfiguredDPI: Int? = nil) -> Bool {
+        let control = Control(paused: requestedPaused ?? status?.paused ?? false, capture: capture,
+                              useConfiguredDPI: useConfiguredDPI)
         do {
             try Companion.write(control, to: Companion.controlURL)
             notify_post(Companion.controlNotification)
@@ -303,6 +305,7 @@ final class AppModel {
     func flush() {
         pendingWrite?.cancel()
         pendingWrite = nil
+        defer { sendConfiguredDPIIfWanted() }
         guard !pendingChanges.isEmpty else { return }
         let changes = pendingChanges
         pendingChanges = []
@@ -319,6 +322,25 @@ final class AppModel {
             reloadConfig()
             writeError = describeSave(error)
         }
+    }
+
+    /// Sets the saved DPI and puts every mouse on it. A mouse on a DPI chosen by Cycle Pointer
+    /// Speed keeps it through a reload that leaves `dpi` alone, and choosing the value already
+    /// saved changes nothing on disk, so once the file is written the daemon is also asked to
+    /// drop the cycled one.
+    func setDPI(_ dpi: Int, debounce: Bool = false) {
+        guard !readOnly else { return }
+        if devices.contains(where: { $0.dpi != nil && $0.dpi != dpi }) { wantsConfiguredDPI = true }
+        set(dpi, at: ["dpi"], debounce: debounce)
+        if pendingChanges.isEmpty { flush() }  // nothing to write: ask now
+    }
+
+    private func sendConfiguredDPIIfWanted() {
+        guard wantsConfiguredDPI else { return }
+        wantsConfiguredDPI = false
+        guard daemonRunning else { return }
+        writeControl(capture: captureListening ? Control.Capture(token: captureToken) : nil,
+                     useConfiguredDPI: Int.random(in: 1...Int(Int32.max)))
     }
 
     /// Replaces the whole file with `{}` (every setting back to the mouse's own).

@@ -54,6 +54,10 @@ missing or stale file means "PureMouse Is Off".
   control of every mouse is diverted; the first press reports `{token, state: pressed, cid,
   deviceID}` and performs no action; then the normal diversion is restored. Timeout reports
   `timedOut`. Setting `capture` to nil reports `cancelled` and restores at once.
+- `useConfiguredDPI: token`, when new, drops the DPI chosen by `cycleDPI` and sets every mouse to
+  the config's `dpi`. The menu sends it after saving a DPI choice while a mouse reports another
+  value: choosing the value already saved leaves the file unchanged, and a reload that leaves
+  `dpi` alone keeps the cycled one.
 
 ### Config (menu → daemon)
 
@@ -88,15 +92,14 @@ through the daemon binary at `Bundle.main.bundleURL/../../../MacOS/puremouse`:
 | `puremouse stop` | boots out both agents but keeps their plists: **Quit PureMouse**. Both start again at login |
 | `puremouse menu on` / `off` | writes and boots, or boots out and removes, the menu agent only: **Show in menu bar** / **Hide Menu Bar Icon** |
 
-Opening PureMouse.app from the Finder runs `register`. If the menu app exists and is not hidden, it
-then opens the menu app, which shows Settings. The old alert is kept only when there is no menu
-app. The menu app keeps a single instance: a second launch touches `show-settings` in
-`Companion.directory`, posts `io.github.mblauberg.puremouse.menu.show` and exits, and the running
+Opening PureMouse.app from the Finder runs `register`, touches `show-settings` in
+`Companion.directory` and opens the menu app, which shows Settings; with the icon hidden it quits
+when Settings closes. `open` is tried twice, since it can reach the instance `register` is booting
+out and fail (`_LSOpenURLsWithCompletionHandler` error -600). The old alert is kept only when
+there is no menu app or it cannot be opened. The menu app keeps a single instance: a second launch
+touches `show-settings`, posts `io.github.mblauberg.puremouse.menu.show` and exits, and the running
 one shows Settings. An instance that starts within 5 s of that stamp (including one launchd starts)
-shows Settings too and removes it, so a request made while the agent restarts is not lost.
-`register` restarts the menu agent and then runs `open`, which can reach the instance being booted
-out and fail (`_LSOpenURLsWithCompletionHandler` error -600); touching `show-settings` before
-`register`, and opening the menu app even when hidden, makes the Finder path reliable. Reopening
+shows Settings too and removes it, so a request made while the agent restarts is not lost. Reopening
 the app (`applicationShouldHandleReopen`) also shows Settings. If the user has blocked the item
 under System Settings › Menu Bar, opening the app still reaches Settings.
 
@@ -137,5 +140,4 @@ Choices the contract left open, as the daemon implements them:
   the menu agent out last, after removing its plist, because launchd kills the menu job's process
   group (which includes the CLI it spawned). When the menu bar app itself runs `register` or
   `menu on` and its agent is already loaded, the agent is left running (the plist is still
-  rewritten); restarting it would quit the caller. Opening the app from the Finder while the menu
-  is hidden shows the old alert, which says how to show it again.
+  rewritten); restarting it would quit the caller.

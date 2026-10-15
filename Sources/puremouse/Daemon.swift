@@ -53,6 +53,7 @@ final class Daemon {
     private var captureTimeout: Task<Void, Never>?
     /// The last capture token acted on, so re-reading `control.json` does not restart it.
     private var lastCaptureToken: Int?
+    private var lastDPIToken: Int?
     static let captureDuration: Duration = .seconds(10)
     /// Whether new sessions may be created.
     private var accepting: Bool { !shuttingDown && pauseGate.allowsAdoption }
@@ -169,6 +170,10 @@ final class Daemon {
             if request.token != lastCaptureToken { startCapture(request.token) }
         } else {
             endCapture(.cancelled)
+        }
+        if let token = control.useConfiguredDPI, token != lastDPIToken {
+            lastDPIToken = token
+            sessions.values.forEach { $0.useConfiguredDPI() }
         }
     }
 

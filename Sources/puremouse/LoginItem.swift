@@ -108,16 +108,25 @@ enum LoginItem {
 
     /// Opens the menu bar app, which then shows Settings (a second launch hands over to the
     /// running one).
-    static func openMenu(_ app: URL) {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        process.arguments = [app.path]
-        do {
-            try process.run()
+    /// Shows the menu bar app's Settings. `register` has just restarted the menu agent, and
+    /// `open` can fail (-600) while launchd is starting the app, so the request is also left in
+    /// `Companion.showSettingsURL` for it to read on launch, and `open` is tried once more.
+    /// False if the app could not be reached at all.
+    static func openMenu(_ app: URL) -> Bool {
+        try? FileManager.default.createDirectory(at: Companion.directory, withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: Companion.showSettingsURL.path, contents: nil)
+        for attempt in 0..<2 {
+            if attempt > 0 { Thread.sleep(forTimeInterval: 1) }
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+            process.arguments = [app.path]
+            process.standardError = FileHandle.nullDevice
+            guard (try? process.run()) != nil else { continue }
             process.waitUntilExit()
-        } catch {
-            alert("PureMouse", "cannot open \(app.path): \(error)")
+            if process.terminationStatus == 0 { return true }
         }
+        // launchd starts a shown menu app itself, which then reads the request.
+        return !menuHidden
     }
 
     private static func identity() throws -> (label: String, executable: URL) {
