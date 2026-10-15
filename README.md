@@ -33,7 +33,8 @@
 - **Hardware:** DPI with presets, wheel direction, ratchet or free-spin, and SmartShift.
 - **Reliable:** settings come back after every reconnect and wake. Quitting returns the mouse to
   normal, and nothing is stored on it.
-- **Light:** the background process uses about 10 MB and no CPU while the mouse is idle.
+- **Light:** about 4 MB of memory for the background process and 14 MB for the menu bar app,
+  with no CPU use while the mouse is idle.
 
 Built and tested with the MX Master 3S, over Bluetooth or a Bolt or Unifying receiver. Other
 HID++ 2.0 mice should work for the features they have.
