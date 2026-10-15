@@ -14,6 +14,9 @@ final class Session {
     /// Controls a previous session diverted that this one no longer binds; released on apply.
     private var releasing: Set<UInt16>
     private let scroll: ScrollEngine?
+    /// Whether the wheels may be diverted to PureMouse, by this session or one it replaced, so
+    /// `restore` must hand them back even if this session's config never diverts them.
+    private(set) var wheelsMayBeDiverted: Bool
 
     /// Last scroll mode set by toggling; survives reconnects, overriding the configured mode.
     private var scrollMode: SmartShift.Mode?
@@ -30,7 +33,8 @@ final class Session {
     private var finished = false
 
     init(device: HIDPPDevice, name: String, controls: [ReprogControls.Control], config: Config,
-         previouslyDiverted: Set<UInt16> = [], scrollMode: SmartShift.Mode? = nil) {
+         previouslyDiverted: Set<UInt16> = [], wheelsMayBeDiverted: Bool = false,
+         scrollMode: SmartShift.Mode? = nil) {
         self.device = device
         self.name = name
         self.config = config
@@ -40,6 +44,7 @@ final class Session {
         releasing = previouslyDiverted.subtracting(bindings.keys)
         self.scrollMode = scrollMode
         scroll = config.smoothScroll.map { ScrollEngine(profile: Self.profile($0, config)) }
+        self.wheelsMayBeDiverted = wheelsMayBeDiverted || scroll != nil
         recognizer = GestureRecognizer(
             threshold: GestureRecognizer.counts(millimetres: config.gesture.distanceMm, dpi: config.dpi ?? 1000),
             repeatInterval: .milliseconds(config.gesture.repeatIntervalMs))
@@ -184,6 +189,7 @@ final class Session {
             }
             try await ThumbWheel.setReporting(device, .init(diverted: smooth, inverted: inverted))
         }
+        if !smooth { wheelsMayBeDiverted = false }
     }
 
     /// Hands the mouse back in its native state: buttons undiverted and wheels reporting as
@@ -194,8 +200,9 @@ final class Session {
         toggling?.cancel()
         scroll?.stop()
         // Wheels first: a silent wheel is worse than a diverted button. Each step stands alone,
-        // so one failure does not skip the rest.
-        if scroll != nil {
+        // so one failure does not skip the rest. A replaced session may have diverted them even
+        // if this one would not, e.g. after a reload that turned smooth scrolling off.
+        if wheelsMayBeDiverted {
             await attempt("restore wheel") {
                 if try await self.device.hasFeature(HiResWheel.id) {
                     try await HiResWheel.setMode(self.device, .init(diverted: false, highResolution: false,

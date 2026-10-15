@@ -233,7 +233,7 @@ final class Daemon {
             old.close()
             let session = Session(device: old.device, name: old.name, controls: Array(old.controls.values),
                                   config: config, previouslyDiverted: old.divertedControls,
-                                  scrollMode: old.currentScrollMode)
+                                  wheelsMayBeDiverted: old.wheelsMayBeDiverted, scrollMode: old.currentScrollMode)
             sessions[key] = session
             session.configure()
         }
