@@ -76,7 +76,7 @@ final class Session {
         wheelMode = inherited.wheelMode
         hasSmartShift = inherited.hasSmartShift
         hasThumbWheel = inherited.hasThumbWheel
-        scroll = config.smoothScroll.map { ScrollEngine(profile: Self.profile($0, config)) }
+        scroll = config.smoothScroll.flatMap { $0.enabled ? ScrollEngine(profile: Self.profile($0, config)) : nil }
         self.wheelsMayBeDiverted = inherited.wheelsMayBeDiverted || scroll != nil
         recognizer = GestureRecognizer(
             threshold: GestureRecognizer.counts(millimetres: config.gesture.distanceMm, dpi: config.dpi ?? 1000),

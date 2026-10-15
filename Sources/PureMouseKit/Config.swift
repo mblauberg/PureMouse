@@ -13,7 +13,7 @@ public struct Config: Decodable, Sendable {
     public static let dpiRange = 50...25600
     public var scrollWheel: ScrollWheel?
     public var thumbWheel: ThumbWheel?
-    /// When present, PureMouse takes both wheels over and scrolls smoothly itself.
+    /// When present and enabled, PureMouse takes both wheels over and scrolls smoothly itself.
     public var smoothScroll: SmoothScroll?
     /// Button name (see `Button`) or hex control ID (e.g. "0x00c4") → binding.
     public var buttons: [String: Binding] = [:]
@@ -71,6 +71,9 @@ public struct Config: Decodable, Sendable {
     }
 
     public struct SmoothScroll: Decodable, Sendable {
+        /// False scrolls natively (wheels not diverted) but keeps the tuning, so the menu bar app
+        /// can switch smooth scrolling off and on without losing it.
+        public var enabled = true
         /// Distance multiplier for the main wheel; 1 is about 40 pixels per notch when slow.
         public var speed = 1.0
         /// Distance multiplier for the thumb wheel; 1 is about 360 pixels per rotation when slow.
@@ -93,6 +96,7 @@ public struct Config: Decodable, Sendable {
             func value(_ key: String, _ fallback: Double, in range: ClosedRange<Double>) throws -> Double {
                 try c.decodeIfPresent(Double.self, forKey: AnyKey(key), in: range) ?? fallback
             }
+            enabled = try c.decodeIfPresent(Bool.self, forKey: AnyKey("enabled")) ?? enabled
             speed = try value("speed", speed, in: Self.speedRange)
             horizontalSpeed = try value("horizontalSpeed", horizontalSpeed, in: Self.speedRange)
             acceleration = try value("acceleration", acceleration, in: Self.accelerationRange)

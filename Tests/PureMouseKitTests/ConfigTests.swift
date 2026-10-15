@@ -81,6 +81,12 @@ import Testing
         #expect(high.dpi == 25600 && high.scrollWheel?.smartShiftThreshold == 255 && high.gesture.repeatIntervalMs == 5000)
     }
 
+    @Test func smoothScrollCanBeDisabledKeepingItsTuning() throws {
+        #expect(try decode(#"{"smoothScroll": {}}"#).smoothScroll?.enabled == true)
+        let off = try #require(try decode(#"{"smoothScroll": {"enabled": false, "speed": 2}}"#).smoothScroll)
+        #expect(!off.enabled && off.speed == 2)
+    }
+
     @Test func keystrokeParsing() {
         #expect(Keystroke("ctrl+left") == Keystroke(key: 123, modifiers: .maskControl))
         #expect(Keystroke("f11")?.key == 103)

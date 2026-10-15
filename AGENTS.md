@@ -77,8 +77,9 @@ work on it safely.
 - The wheels are only diverted when PureMouse can post events (Accessibility). Diverting without it
   silences them.
 - `restore()` decides whether to hand the wheels back from `Session.wheelsMayBeDiverted`, not
-  from the current config: after a reload that drops `smoothScroll`, the replacement session
-  inherits the flag and keeps it until its own apply has set the wheels native.
+  from the current config: after a reload that drops (or disables) `smoothScroll`, the
+  replacement session inherits the flag and keeps it until its own apply has set the wheels
+  native.
 - Permission checks are cached per process. The launchd-run daemon polls a child
   (`puremouse permissions`) and restarts itself when a grant arrives (`Daemon.restartWhenGranted`).
 - HID++ software IDs rotate per request so a late reply cannot complete a newer request.

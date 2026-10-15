@@ -151,7 +151,7 @@ launchctl kill HUP gui/$UID/io.github.mblauberg.puremouse
 | `scrollWheel.smartShiftThreshold` | 1–50 enables SmartShift's automatic free-spin; 255 disables it. Must be 1–255 |
 | `thumbWheel.inverted` | Invert the thumb wheel in hardware |
 | `buttons` | Button → action or gesture (see below) |
-| `smoothScroll` | If present, PureMouse scrolls both wheels itself (see below). If absent, the wheels scroll normally |
+| `smoothScroll` | If present, PureMouse scrolls both wheels itself (see below). If absent, or `enabled` is false, the wheels scroll normally |
 | `gesture.distanceMm` | How far the mouse moves before a gesture fires, in millimetres, 0.5–50. Default 4 |
 | `gesture.repeatIntervalMs` | Minimum gap between repeated gestures in one hold, 0–5000. Default 400 |
 
@@ -162,6 +162,7 @@ in effect) and the log names the field.
 
 | Field | Default | Range | Meaning |
 |---|---|---|---|
+| `enabled` | true | | false scrolls natively but keeps the settings below |
 | `speed` | 1 | 0.1–10 | Main wheel distance; 1 is about 40 px per notch when scrolling slowly |
 | `horizontalSpeed` | 1 | 0.1–10 | Thumb wheel distance; 1 is about 360 px per turn when scrolling slowly |
 | `acceleration` | 1 | 0–10 | Extra distance when scrolling fast (1.5× at 5 notches/s, 3× at 17, up to 8×); 0 is linear |
