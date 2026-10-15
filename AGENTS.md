@@ -16,8 +16,10 @@ work on it safely.
   (`puremouse permissions` answers for whoever launches it, so from a terminal it reports the
   terminal's permissions, not the app's.)
 - The user's live config is `~/.config/puremouse/config.json`; keep `config.example.json` in step
-  with it (its test checks shape, not values). Config changes apply with
-  `launchctl kill HUP gui/$UID/io.github.mblauberg.puremouse`, no rebuild.
+  with it (its test checks shape, not values). Config changes apply on save (`ConfigWatcher`
+  watches the file and its directory, reloading when the bytes change) or with
+  `launchctl kill HUP gui/$UID/io.github.mblauberg.puremouse`, no rebuild. Never edit the live
+  config to test: run a dev daemon against a copy.
 - Other Macs: `./scripts/package.sh` builds the universal release zip. On a test Mac over SSH,
   drive the installed app with `puremouse register`/`unregister`. Over SSH nobody can answer a
   Gatekeeper dialog or grant permissions, so leave those to whoever is at the Mac. Machine-specific

@@ -134,7 +134,8 @@ leave out retains the mouse's existing settings. Here is a short example
 }
 ```
 
-Apply changes without restarting:
+PureMouse watches the file and applies changes when you save it. A file that does not load is
+reported in the log and the previous settings stay in effect. To reload by hand:
 
 ```sh
 launchctl kill HUP gui/$UID/io.github.mblauberg.puremouse

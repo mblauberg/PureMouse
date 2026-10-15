@@ -21,6 +21,7 @@ final class Daemon {
     private let permissions = Permissions.current
     private let logiOptionsRunning = !LogiOptions.running().isEmpty
     private var channel: StatusChannel?
+    private var watcher: ConfigWatcher?
     /// Numbers interfaces in attach order, for device IDs that stay stable while the daemon runs.
     private var interfaceNumbers: [ObjectIdentifier: Int] = [:]
     private var nextInterfaceNumber = 1
@@ -107,6 +108,8 @@ final class Daemon {
             Log.info("system woke")
             self?.reconfigureAll()
         }
+        watcher = ConfigWatcher(url: configURL) { [weak self] in self?.configFileChanged() }
+        watcher?.start()
         onSignal(SIGHUP) { $0.reload() }
         onSignal(SIGTERM) { $0.shutdown() }
         onSignal(SIGINT) { $0.shutdown() }
@@ -342,6 +345,13 @@ final class Daemon {
                 _ = await adopt(endpoint)
             }
         }
+    }
+
+    /// The watched config file may have changed: reload if its bytes did.
+    private func configFileChanged() {
+        guard (try? Data(contentsOf: configURL)) != configBytes else { return }
+        Log.info("config file changed")
+        reload()
     }
 
     private func reload() {
