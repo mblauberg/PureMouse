@@ -15,11 +15,6 @@ if let i = arguments.firstIndex(of: "--verbose") {
     Log.verbose = true
     arguments.remove(at: i)
 }
-if let i = arguments.firstIndex(of: "--log-to-file") {
-    // The login agent's plist lives inside the app and cannot name a path in the home folder.
-    Log.redirectToFile()
-    arguments.remove(at: i)
-}
 
 switch arguments.first {
 case nil where LoginItem.inBundle:
@@ -107,7 +102,7 @@ default:
            mxd permissions                      macOS permissions of the launching process
            mxd action <name | {"keys": ...}>    perform one action now, as a button would
            mxd register | unregister            start (or restart) or stop the installed app's
-                                                login agent; unregister also removes it from login
+                                                login agent; unregister also stops it at login
     Send SIGHUP to reload the config.
     """)
     exit(64)

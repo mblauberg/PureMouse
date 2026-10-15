@@ -1,65 +1,89 @@
 import CoreFoundation
 import Foundation
-import ServiceManagement
 
-/// Starting mxd at login. The app carries its own launchd agent
-/// (`Contents/Library/LaunchAgents/<bundle id>.plist`) and registers it with `SMAppService`, so
-/// installing is copying the app and opening it once, and the agent shows under System Settings ›
-/// General › Login Items, where it can be switched off.
+/// Starting mxd at login: a launchd agent, `~/Library/LaunchAgents/<bundle id>.plist`, that runs
+/// this app's binary. Opening the app writes and loads it, so installing is copying the app and
+/// opening it once. macOS lists it under System Settings › General › Login Items as a background
+/// item, where it can be switched off.
+///
+/// Not `SMAppService`: without a Developer ID team, launchd pins its agents to the exact build that
+/// registered them, and after an update refuses to start the new binary (EX_CONFIG).
 enum LoginItem {
     /// Whether this process is the binary of an installed app bundle (not a `swift build` product).
     static var inBundle: Bool { Bundle.main.bundleIdentifier != nil }
 
-    private static var service: SMAppService? {
-        Bundle.main.bundleIdentifier.map { .agent(plistName: "\($0).plist") }
+    private static let logURL = FileManager.default.homeDirectoryForCurrentUser
+        .appending(path: "Library/Logs/mxd.log")
+
+    private static func plistURL(_ label: String) -> URL {
+        FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/LaunchAgents/\(label).plist")
     }
 
-    /// Registers and starts the agent, first giving the user a config to edit if they have none.
-    /// If it is already registered, restarts it, so opening a replaced app runs the new binary.
+    /// Installs and starts the agent for this copy of the app, first giving the user a config to
+    /// edit if they have none. An agent already running (an older or moved copy) is stopped first.
     /// Returns a sentence describing the outcome.
     static func register() throws -> String {
-        guard let service, let label = Bundle.main.bundleIdentifier else { throw Failure.notInBundle }
+        guard let label = Bundle.main.bundleIdentifier, let executable = Bundle.main.executableURL else {
+            throw Failure.notInBundle
+        }
         // Quarantined apps opened where they were unzipped run from a randomised read-only copy;
-        // an agent registered there would vanish.
-        guard !Bundle.main.bundlePath.contains("/AppTranslocation/") else { throw Failure.translocated }
+        // an agent pointing there would vanish.
+        guard !executable.path.contains("/AppTranslocation/") else { throw Failure.translocated }
         seedConfig()
-        if service.status == .enabled {
-            // launchd sends SIGTERM, so the old instance restores the mouse before it goes.
-            try launchctl("kickstart", "-k", "gui/\(getuid())/\(label)")
-            return "mxd restarted."
-        }
-        do {
-            try service.register()
-        } catch where service.status == .requiresApproval {
-            // Switched off under Login Items: register() refuses until the user allows it there.
-        }
-        switch service.status {
-        case .enabled:
-            return "mxd is running and will start at login."
-        case .requiresApproval:
-            SMAppService.openSystemSettingsLoginItems()
-            return "Allow mxd under System Settings › General › Login Items to start it."
-        case .notFound:
-            throw Failure.agentMissing
-        default:
-            throw Failure.notRegistered
-        }
+        let restarting = stop(label)
+        let agent: [String: Any] = [
+            "Label": label,
+            "ProgramArguments": [executable.path, "run"],
+            "RunAtLoad": true,
+            // Restarted within seconds if it exits, including when it quits to pick up a new
+            // permission (Daemon.restartWhenGranted).
+            "KeepAlive": true,
+            "ThrottleInterval": 3,
+            "ProcessType": "Interactive",
+            "StandardErrorPath": logURL.path,
+        ]
+        let plist = plistURL(label)
+        let files = FileManager.default
+        try files.createDirectory(at: plist.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try files.createDirectory(at: logURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try PropertyListSerialization.data(fromPropertyList: agent, format: .xml, options: 0).write(to: plist)
+        let (status, output) = launchctl("bootstrap", "gui/\(getuid())", plist.path)
+        guard status == 0 else { throw Failure.bootstrap(output) }
+        return restarting ? "mxd restarted." : "mxd is running and will start at login."
     }
 
     /// Stops the agent (launchd sends it SIGTERM, so it restores the mouse) and removes it from
     /// login items.
     static func unregister() throws {
-        guard let service else { throw Failure.notInBundle }
-        if service.status != .notRegistered { try service.unregister() }
+        guard let label = Bundle.main.bundleIdentifier else { throw Failure.notInBundle }
+        stop(label)
+        try? FileManager.default.removeItem(at: plistURL(label))
     }
 
-    private static func launchctl(_ arguments: String...) throws {
+    /// Unloads the agent if it is loaded, waiting up to five seconds for the old instance to finish
+    /// restoring the mouse. Returns whether it was loaded.
+    @discardableResult
+    private static func stop(_ label: String) -> Bool {
+        let target = "gui/\(getuid())/\(label)"
+        guard launchctl("print", target).status == 0 else { return false }
+        _ = launchctl("bootout", target)
+        for _ in 0..<50 where launchctl("print", target).status == 0 {
+            usleep(100_000)
+        }
+        return true
+    }
+
+    private static func launchctl(_ arguments: String...) -> (status: Int32, output: String) {
         let process = Process()
+        let pipe = Pipe()
         process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
         process.arguments = arguments
-        try process.run()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        guard (try? process.run()) != nil else { return (-1, "cannot run launchctl") }
+        let output = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
         process.waitUntilExit()
-        guard process.terminationStatus == 0 else { throw Failure.restart(process.terminationStatus) }
+        return (process.terminationStatus, output.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
     /// Copies the bundled example to `Config.defaultURL` unless a config is already there.
@@ -81,15 +105,14 @@ enum LoginItem {
     }
 
     enum Failure: Error, CustomStringConvertible {
-        case notInBundle, translocated, agentMissing, notRegistered, restart(Int32)
+        case notInBundle, translocated, bootstrap(String)
 
         var description: String {
             switch self {
             case .notInBundle: "only an installed mxd.app can register itself to start at login"
             case .translocated: "move mxd to the Applications folder, then open it again"
-            case .agentMissing: "the app's login agent is missing; reinstall mxd"
-            case .notRegistered: "macOS did not register the login agent; see System Settings › General › Login Items"
-            case .restart(let status): "launchctl could not restart mxd (exit status \(status))"
+            case .bootstrap(let output):
+                "launchd would not start mxd (\(output)); check it is allowed under System Settings › General › Login Items"
             }
         }
     }

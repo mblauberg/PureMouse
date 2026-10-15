@@ -55,11 +55,11 @@ work on it safely.
 - Permission checks are cached per process. The launchd-run daemon polls a child
   (`mxd permissions`) and restarts itself when a grant arrives (`Daemon.restartWhenGranted`).
 - HID++ software IDs rotate per request so a late reply cannot complete a newer request.
-- The app registers its own login agent with `SMAppService` (`LoginItem.swift`); the agent's
-  plist is generated into the bundle by `scripts/build-app.sh`, with the same label as the bundle
-  ID. Launched with no arguments from a bundle (a Finder double-click), mxd registers and shows an
-  alert instead of running the daemon. The agent passes `--log-to-file` because a plist inside the
-  app cannot name a path in the home folder.
+- `mxd register` (and opening the app from the Finder, i.e. no arguments inside a bundle) writes
+  `~/Library/LaunchAgents/<bundle id>.plist` pointing at its own binary and bootstraps it,
+  booting out any running instance first (`LoginItem.swift`). Not `SMAppService`: without a
+  Developer ID team, launchd pins its agents to the registering build ("needs LWCR update"), so a
+  replaced app's agent fails to spawn with EX_CONFIG, and re-registering did not reliably clear it.
 - Builds are signed with the `mxd` code-signing identity (self-signed, `scripts/make-cert.sh`).
   The permission grants are keyed to identifier plus certificate, which also holds on Macs that
   do not trust the certificate; an ad-hoc signature makes macOS drop them on every install.

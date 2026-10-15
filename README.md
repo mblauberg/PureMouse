@@ -32,9 +32,9 @@ xattr -dr com.apple.quarantine /Applications/mxd.app
 ```
 
 or open it, dismiss the warning, and choose **Open Anyway** in System Settings › Privacy &
-Security. Then open mxd. It registers itself to start at login (it appears under System Settings ›
-General › Login Items, where you can switch it off), creates `~/.config/mxd/config.json` from the
-example if you have none, and starts.
+Security. Then open mxd. It installs a login agent (`~/Library/LaunchAgents/local.mxd.plist`, listed under
+System Settings › General › Login Items, where you can switch it off), creates
+`~/.config/mxd/config.json` from the example if you have none, and starts.
 
 **From source**, with Xcode or its command line tools:
 
@@ -46,7 +46,7 @@ example if you have none, and starts.
 ```
 
 launchd starts mxd at login and restarts it within seconds if it ever exits. To update, replace
-`mxd.app` and open it again (or re-run the install script), which restarts it. By hand,
+`mxd.app` and open it again (or re-run the install script) to restart it on the new version. By hand,
 `/Applications/mxd.app/Contents/MacOS/mxd register` starts or restarts the installed copy, and
 `unregister` stops it and removes it from login items until the next `register`.
 
@@ -165,7 +165,7 @@ Sources/mxd/     policy: Config, Action/Keystroke/NavigationSwipe, GestureRecogn
                  ScrollEngine/ScrollModel (smooth scrolling), Session (one per mouse),
                  Daemon (discovery, reconnect, wake, reload, permissions, quit), Probe
 Tests/           pure logic: framing and event parsing, config, gestures, scroll maths
-scripts/         build-app.sh (bundle, embedded login agent, signing), install.sh, uninstall.sh,
+scripts/         build-app.sh (bundle, signing), install.sh, uninstall.sh,
                  package.sh (universal release zip), make-cert.sh (self-signed identity)
 ```
 

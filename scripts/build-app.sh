@@ -39,7 +39,7 @@ else
 fi
 
 rm -rf $app
-mkdir -p $app/Contents/{MacOS,Resources,Library/LaunchAgents}
+mkdir -p $app/Contents/{MacOS,Resources}
 cp $binary $app/Contents/MacOS/mxd
 cp config.example.json $app/Contents/Resources/
 cat > $app/Contents/Info.plist <<PLIST
@@ -54,21 +54,6 @@ cat > $app/Contents/Info.plist <<PLIST
   <key>LSMinimumSystemVersion</key><string>$minimum</string>
   <key>LSUIElement</key><true/>
   <key>LSBackgroundOnly</key><true/>
-</dict></plist>
-PLIST
-# The login agent, registered by the app itself (LoginItem.swift). launchd starts it at login and
-# restarts it within seconds if it exits, including when it quits to pick up a new permission.
-cat > $app/Contents/Library/LaunchAgents/$label.plist <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-  <key>Label</key><string>$label</string>
-  <key>BundleProgram</key><string>Contents/MacOS/mxd</string>
-  <key>ProgramArguments</key><array><string>mxd</string><string>--log-to-file</string><string>run</string></array>
-  <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
-  <key>ThrottleInterval</key><integer>3</integer>
-  <key>ProcessType</key><string>Interactive</string>
 </dict></plist>
 PLIST
 codesign --force --sign "$identity" --identifier $label $app
