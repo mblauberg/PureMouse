@@ -76,6 +76,29 @@ struct WheelEventTests {
     }
 }
 
+struct BatteryTests {
+    @Test func statusAsTheMXMaster3SAnswers() throws {
+        // 45 %, good, discharging, no external power.
+        let state = try #require(UnifiedBattery.parseStatus([0x2D, 0x04, 0x00, 0x00, 0, 0, 0, 0]))
+        #expect(state == UnifiedBattery.State(percent: 45, level: .good, charging: .discharging, externalPower: false))
+        #expect(!state.isCharging)
+    }
+
+    @Test func chargingAndLevelsOnly() throws {
+        let charging = try #require(UnifiedBattery.parse(function: 0, params: [0x00, 0x02, 0x02, 0x01]))
+        #expect(charging.percent == nil && charging.level == .low && charging.isCharging && charging.externalPower)
+        let full = try #require(UnifiedBattery.parseStatus([100, 0x08, 0x03, 0x01]))
+        #expect(full.level == .full && full.charging == .complete && !full.isCharging)
+        #expect(UnifiedBattery.parseStatus([10, 0x03, 0x00, 0x00])?.level == .critical)  // lowest bit wins
+    }
+
+    @Test func rejectsOtherFunctionsAndShortOrBadReports() {
+        #expect(UnifiedBattery.parse(function: 1, params: [0x2D, 0x04, 0x00, 0x00]) == nil)
+        #expect(UnifiedBattery.parseStatus([0x2D, 0x04]) == nil)
+        #expect(UnifiedBattery.parseStatus([200, 0x04, 0x00, 0x00]) == nil)
+    }
+}
+
 struct DPIListTests {
     @Test func steppedRange() throws {
         // getSensorDpiList as the MX Master 3S answers it: sensor 0, 200, step 50, 8000, end.

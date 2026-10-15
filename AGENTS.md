@@ -113,6 +113,10 @@ work on it safely.
   value can overflow an `Int` or `Duration` conversion mid-session, and during a reload that crash
   comes after the old session has closed, so the mouse is never restored and launchd relaunches
   into the same crash.
+- Events only route for features whose index is already resolved (`HIDPPDevice.feature(at:)`), so
+  `Session.apply()` resolves the event-bearing ones (0x1B04, 0x1D4B, 0x1004 battery) first.
+  Battery is read on each apply and then follows the 0x1004 broadcast events; it is
+  informational and never fails an apply.
 - DPI is snapped to the sensor's own list (0x2201 getSensorDpiList), read once per session; if
   the list cannot be read, the configured value is sent unchanged.
 

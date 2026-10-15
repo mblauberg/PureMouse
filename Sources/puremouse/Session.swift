@@ -38,6 +38,7 @@ final class Session {
     private var online: Bool
     private var dpi: Int?
     private var wheelMode: SmartShift.Mode?
+    private var battery: UnifiedBattery.State?
     private var hasSmartShift: Bool
     private var hasThumbWheel: Bool
     private var configuring: Task<Void, Never>?
@@ -55,6 +56,7 @@ final class Session {
         var online = true
         var dpi: Int?
         var wheelMode: SmartShift.Mode?
+        var battery: UnifiedBattery.State?
         var hasSmartShift = false
         var hasThumbWheel = false
     }
@@ -74,6 +76,7 @@ final class Session {
         online = inherited.online
         dpi = inherited.dpi
         wheelMode = inherited.wheelMode
+        battery = inherited.battery
         hasSmartShift = inherited.hasSmartShift
         hasThumbWheel = inherited.hasThumbWheel
         scroll = config.smoothScroll.flatMap { $0.enabled ? ScrollEngine(profile: Self.profile($0, config)) : nil }
@@ -93,17 +96,31 @@ final class Session {
     var inheritance: Inherited {
         Inherited(diverted: divertedControls, wheelsMayBeDiverted: wheelsMayBeDiverted, scrollMode: scrollMode,
                   resolutions: resolutions, online: online, dpi: dpi, wheelMode: wheelMode,
-                  hasSmartShift: hasSmartShift, hasThumbWheel: hasThumbWheel)
+                  battery: battery, hasSmartShift: hasSmartShift, hasThumbWheel: hasThumbWheel)
     }
 
     var status: Status.Device {
         Status.Device(
             id: id, name: name, connection: device.interface.isReceiver ? .receiver : .bluetooth,
-            online: online, battery: nil, dpi: dpi, dpiSteps: resolutions?.values ?? [],
+            online: online, battery: battery.flatMap(Self.status), dpi: dpi, dpiSteps: resolutions?.values ?? [],
             wheelMode: wheelMode.map { $0 == .ratchet ? .ratchet : .freespin },
             hasSmartShift: hasSmartShift, hasThumbWheel: hasThumbWheel,
-            controls: controls.values.filter(\.isDivertable).map(\.cid).sorted()
+            controls: controls.values.filter { $0.isDivertable && !$0.isVirtual }.map(\.cid).sorted()
                 .map { Status.Device.Control(cid: $0, name: Config.Button(cid: $0)?.rawValue) })
+    }
+
+    private static func status(_ battery: UnifiedBattery.State) -> Status.Device.Battery? {
+        let level: Status.Device.Battery.Level
+        switch battery.level {
+        case .critical: level = .critical
+        case .low: level = .low
+        case .good: level = .good
+        case .full: level = .full
+        case nil:
+            guard let percent = battery.percent else { return nil }
+            level = percent <= 5 ? .critical : percent <= 20 ? .low : percent < 90 ? .good : .full
+        }
+        return Status.Device.Battery(percent: battery.percent, level: level, charging: battery.isCharging)
     }
 
     private func changed() {
@@ -163,6 +180,7 @@ final class Session {
         // Resolve the event-bearing features first so their events can be routed.
         _ = try await device.hasFeature(ReprogControls.id)
         _ = try? await device.featureIndex(of: WirelessDeviceStatus.id)
+        _ = try? await device.featureIndex(of: UnifiedBattery.id)
 
         for cid in releasing {
             try await ReprogControls.setDiverted(device, cid: cid, divert: false, rawXY: false)
@@ -193,8 +211,20 @@ final class Session {
             }
             wheelMode = mode ?? current
         }
+        await readBattery()
         online = true
         changed()
+    }
+
+    /// Battery state is informational: a mouse without 0x1004, or one that fails to answer,
+    /// reports none.
+    private func readBattery() async {
+        guard (try? await device.hasFeature(UnifiedBattery.id)) == true else { return }
+        do {
+            battery = try await UnifiedBattery.status(device)
+        } catch {
+            Log.debug("\(name): reading battery failed: \(error)")
+        }
     }
 
     /// Reads the resolution in effect, for the status and the gesture distance, which is
@@ -336,6 +366,12 @@ final class Session {
             case .buttons(let cids): buttonsChanged(cids)
             case .rawXY(let dx, let dy): moved(dx: Int(dx), dy: Int(dy))
             case nil: break
+            }
+        case UnifiedBattery.id:
+            if let state = UnifiedBattery.parse(function: report.function, params: report.params), state != battery {
+                Log.debug("\(name): battery \(state.percent.map { "\($0)%" } ?? "?") \(state.isCharging ? "charging" : "")")
+                battery = state
+                changed()
             }
         case WirelessDeviceStatus.id:
             if WirelessDeviceStatus.needsReconfiguration(function: report.function, params: report.params) {
