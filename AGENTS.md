@@ -73,7 +73,7 @@ work on it safely.
   the mice are restored (`exitReporting`).
 - Keep it light: no dependencies, and no AppKit or SwiftUI in the daemon or PureMouseKit (only
   `PureMouseMenu` may link them). Idle cost is zero CPU; the display link
-  runs only while a scroll is gliding.
+  runs only while a scroll is gliding, never with `smoothingMs` 0 (`PixelCarry` posts at once).
 
 ## Easy to break
 
@@ -99,8 +99,11 @@ work on it safely.
 - Permission checks are cached per process. The launchd-run daemon polls a child
   (`puremouse permissions`) and restarts itself when a grant arrives (`Daemon.restartWhenGranted`).
 - HID++ software IDs rotate per request so a late reply cannot complete a newer request.
-- A receiver slot that does not answer is retried after 1, 2, 4 and 8 s (`Daemon.adoptSlot`);
-  after that only its connection notification brings it back, so idle cost stays zero. A slot
+- An endpoint that does not answer is retried after 1, 2, 4 and 8 s (`Daemon.adoptRetrying`,
+  `Backoff.adoption`), one retry per endpoint whether attach, a connection notification, resume,
+  wake or reload started it; pause, detach and shutdown cancel it. After that a receiver slot is
+  left to its connection notification, so idle cost stays zero. A Bluetooth mouse has no
+  notifications, so it is then tried once a minute (`Backoff.bluetooth`) until it answers. A slot
   ignored as not a mouse is identified again when a notification carries a different wireless
   product ID (a new device paired into it).
 - `puremouse register` (and opening the app from the Finder, i.e. no arguments inside a bundle)
