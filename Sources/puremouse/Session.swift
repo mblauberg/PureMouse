@@ -42,7 +42,11 @@ final class Session {
     private var hasSmartShift: Bool
     private var hasThumbWheel: Bool
     private var configuring: Task<Void, Never>?
-    private var toggling: Task<Void, Never>?
+    /// Device actions (toggle scroll mode, cycle DPI), chained so quick presses apply in order.
+    private var deviceAction: Task<Void, Never>?
+    /// Set by `cycleDPI`, overriding `config.dpi`: kept across reconnects and reloads, cleared by
+    /// a reload that changes `dpi` or `dpiPresets` (see `Daemon.reload`).
+    private var liveDPI: Int?
     /// Set by `close` and `restore`: nothing may touch the device on this session's behalf.
     private var finished = false
 
@@ -52,6 +56,7 @@ final class Session {
         var diverted: Set<UInt16> = []
         var wheelsMayBeDiverted = false
         var scrollMode: SmartShift.Mode?
+        var liveDPI: Int?
         var resolutions: AdjustableDPI.Resolutions?
         var online = true
         var dpi: Int?
@@ -72,6 +77,7 @@ final class Session {
         bindings = config.bindings.filter { controls[$0.key]?.isDivertable == true }
         releasing = inherited.diverted.subtracting(bindings.keys)
         scrollMode = inherited.scrollMode
+        liveDPI = inherited.liveDPI
         resolutions = inherited.resolutions
         online = inherited.online
         dpi = inherited.dpi
@@ -95,6 +101,7 @@ final class Session {
 
     var inheritance: Inherited {
         Inherited(diverted: divertedControls, wheelsMayBeDiverted: wheelsMayBeDiverted, scrollMode: scrollMode,
+                  liveDPI: liveDPI,
                   resolutions: resolutions, online: online, dpi: dpi, wheelMode: wheelMode,
                   battery: battery, hasSmartShift: hasSmartShift, hasThumbWheel: hasThumbWheel)
     }
@@ -130,7 +137,7 @@ final class Session {
     func close() {
         finished = true
         configuring?.cancel()
-        toggling?.cancel()
+        deviceAction?.cancel()
         scroll?.stop()
         device.onEvent = nil
     }
@@ -196,7 +203,7 @@ final class Session {
 
         if try await device.hasFeature(AdjustableDPI.id) {
             try await readResolutions()
-            if let target = config.dpi {
+            if let target = liveDPI ?? config.dpi {
                 try await AdjustableDPI.set(device, dpi: supportedDPI(near: target))
             }
             try await readDPI()
@@ -297,7 +304,7 @@ final class Session {
     func restore() async {
         finished = true
         configuring?.cancel()
-        toggling?.cancel()
+        deviceAction?.cancel()
         scroll?.stop()
         // Wheels first: a silent wheel is worse than a diverted button. Each step stands alone,
         // so one failure does not skip the rest. A replaced session may have diverted them even
@@ -419,14 +426,39 @@ final class Session {
     }
 
     private func perform(_ action: Action) {
-        if action == .toggleScrollMode {
-            // Chain toggles so quick presses each flip the mode once, in order.
-            toggling = Task { [previous = toggling] in
-                await previous?.value
+        guard action.actsOnDevice else {
+            SystemActions.perform(action)
+            return
+        }
+        // Chained so quick presses each take effect once, in order.
+        deviceAction = Task { [previous = deviceAction] in
+            await previous?.value
+            if action == .cycleDPI {
+                await cycleDPI()
+            } else {
                 await toggleScrollMode()
             }
-        } else {
-            SystemActions.perform(action)
+        }
+    }
+
+    private func cycleDPI() async {
+        guard !finished else { return }
+        guard !config.dpiPresets.isEmpty else {
+            Log.error("\(name): cycleDPI needs dpiPresets in the config")
+            return
+        }
+        do {
+            guard try await device.hasFeature(AdjustableDPI.id) else { return }
+            let current = if let dpi { dpi } else { try await AdjustableDPI.get(device) }
+            guard let next = Config.nextPreset(config.dpiPresets.map(supportedDPI(near:)), after: current),
+                  !finished else { return }
+            try await AdjustableDPI.set(device, dpi: next)
+            liveDPI = next
+            try await readDPI()
+            Log.debug("\(name): dpi \(next)")
+            changed()
+        } catch {
+            Log.error("\(name): cycle DPI failed: \(error)")
         }
     }
 

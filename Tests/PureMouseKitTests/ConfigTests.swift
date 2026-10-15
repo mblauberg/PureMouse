@@ -49,6 +49,8 @@ import Testing
         #"{"smoothScroll": {"smoothingMs": 1e300}}"#, #"{"smoothScroll": {"smoothingMs": -5}}"#,
         #"{"gesture": {"distanceMm": 1e20}}"#, #"{"gesture": {"distanceMm": 0}}"#,
         #"{"gesture": {"repeatIntervalMs": -1}}"#, #"{"gesture": {"repeatIntervalMs": 9223372036854775807}}"#,
+        #"{"dpiPresets": [800, 10]}"#, #"{"dpiPresets": [100000]}"#,
+        #"{"dpiPresets": [400, 800, 1200, 1600, 2000, 2400, 2800, 3200, 3600]}"#,
     ])
     func outOfRangeNumbersAreErrors(json: String) {
         // Accepting these would overflow later (converting to Int or Duration) and crash-loop.
@@ -85,6 +87,19 @@ import Testing
         #expect(try decode(#"{"smoothScroll": {}}"#).smoothScroll?.enabled == true)
         let off = try #require(try decode(#"{"smoothScroll": {"enabled": false, "speed": 2}}"#).smoothScroll)
         #expect(!off.enabled && off.speed == 2)
+    }
+
+    @Test func dpiPresetsAndCycleDPI() throws {
+        let config = try decode(#"{"dpiPresets": [800, 1600, 3200], "buttons": {"top": "cycleDPI"}}"#)
+        #expect(config.dpiPresets == [800, 1600, 3200] && Action.named["cycleDPI"] == .cycleDPI)
+        guard case .action(.cycleDPI) = config.bindings[0xC4] else { Issue.record("cycleDPI"); return }
+        #expect(try decode(#"{"dpiPresets": []}"#).dpiPresets.isEmpty)
+        do {
+            _ = try decode(#"{"dpiPresets": [800, 10]}"#)
+            Issue.record("accepted")
+        } catch {
+            #expect(ConfigCheck.message(for: error) == "dpiPresets[1] must be 50–25600, not 10")
+        }
     }
 
     @Test func keystrokeParsing() {

@@ -119,8 +119,10 @@ work on it safely.
   `Session.apply()` resolves the event-bearing ones (0x1B04, 0x1D4B, 0x1004 battery) first.
   Battery is read on each apply and then follows the 0x1004 broadcast events; it is
   informational and never fails an apply.
-- DPI is snapped to the sensor's own list (0x2201 getSensorDpiList), read once per session; if
-  the list cannot be read, the configured value is sent unchanged.
+- DPI is snapped to the sensor's own list (0x2201 getSensorDpiList), read once per mouse and
+  inherited across reloads; if the list cannot be read, the configured value is sent unchanged.
+  `cycleDPI` sets `Session.liveDPI`, which overrides `config.dpi` in `apply()`; `Daemon.reload`
+  clears it only when `dpi` or `dpiPresets` changed.
 
 ## Extending
 

@@ -15,6 +15,15 @@ extension Config {
     }
 }
 
+extension Config {
+    /// The preset after `current`, wrapping: the smallest preset above it, else the smallest.
+    /// `presets` should already be snapped to resolutions the sensor accepts.
+    static func nextPreset(_ presets: [Int], after current: Int) -> Int? {
+        let sorted = Set(presets).sorted()
+        return sorted.first { $0 > current } ?? sorted.first
+    }
+}
+
 extension Config.WheelMode {
     var smartShift: SmartShift.Mode { self == .ratchet ? .ratchet : .freespin }
 }

@@ -54,7 +54,7 @@ case "action" where arguments.count == 2:
     let spec = arguments[1]
     let json = spec.hasPrefix("{") ? spec : "\"\(spec)\""
     guard let action = try? JSONDecoder().decode(Action.self, from: Data(json.utf8)),
-          action != .toggleScrollMode else {
+          !action.actsOnDevice else {
         print("unknown or device-only action: \(spec)")
         exit(64)
     }

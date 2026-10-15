@@ -146,6 +146,7 @@ launchctl kill HUP gui/$UID/io.github.mblauberg.puremouse
 | Field | Meaning |
 |---|---|
 | `dpi` | Sensor resolution, 50–25600. PureMouse uses the nearest value the mouse supports (200–8000 in steps of 50 on the MX Master 3S) and logs when it differs |
+| `dpiPresets` | Up to 8 resolutions, each 50–25600, that the `cycleDPI` action steps through (and the menu bar app offers) |
 | `scrollWheel.inverted` | Invert the main wheel in hardware. With natural scrolling on, `true` gives classic wheel direction and leaves the trackpad alone |
 | `scrollWheel.mode` | `"ratchet"` or `"freespin"` on first connect. Later toggles are kept |
 | `scrollWheel.smartShiftThreshold` | 1–50 enables SmartShift's automatic free-spin; 255 disables it. Must be 1–255 |
@@ -180,8 +181,11 @@ press), or any hex control ID such as `"0x00c4"`. Run `puremouse probe` to list 
 controls.
 
 **Actions:** `missionControl`, `appExpose`, `showDesktop`, `launchpad`, `spaceLeft`, `spaceRight`,
-`navigateBack`, `navigateForward`, `toggleScrollMode`, `none`, `{"keys": "cmd+shift+4"}`,
+`navigateBack`, `navigateForward`, `toggleScrollMode`, `cycleDPI`, `none`, `{"keys": "cmd+shift+4"}`,
 `{"run": "open -a Safari"}`.
+
+`cycleDPI` switches to the next of `dpiPresets` above the current resolution, wrapping to the
+lowest. The choice survives reconnects until a config change alters `dpi` or `dpiPresets`.
 
 **Gestures:** an object with any of `click`, `up`, `down`, `left` and `right`, each an action.
 While a gesture button is held, the pointer stays still.

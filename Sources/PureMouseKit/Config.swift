@@ -11,6 +11,10 @@ public struct Config: Decodable, Sendable {
     /// MX Master 3S accepts 200–8000 in steps of 50).
     public var dpi: Int?
     public static let dpiRange = 50...25600
+    /// Resolutions the `cycleDPI` action steps through, each within `dpiRange`; the menu bar app
+    /// offers them too.
+    public var dpiPresets: [Int] = []
+    public static let dpiPresetsCount = 0...8
     public var scrollWheel: ScrollWheel?
     public var thumbWheel: ThumbWheel?
     /// When present and enabled, PureMouse takes both wheels over and scrolls smoothly itself.
@@ -24,11 +28,28 @@ public struct Config: Decodable, Sendable {
     /// logs them once, at load.
     public private(set) var unknownButtons: [String] = []
 
-    private enum CodingKeys: String, CodingKey { case dpi, scrollWheel, thumbWheel, smoothScroll, buttons, gesture }
+    private enum CodingKeys: String, CodingKey {
+        case dpi, dpiPresets, scrollWheel, thumbWheel, smoothScroll, buttons, gesture
+    }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         dpi = try c.decodeIfPresent(Int.self, forKey: .dpi, in: Self.dpiRange)
+        if c.contains(.dpiPresets) {
+            var list = try c.nestedUnkeyedContainer(forKey: .dpiPresets)
+            while !list.isAtEnd {
+                guard dpiPresets.count < Self.dpiPresetsCount.upperBound else {
+                    throw DecodingError.dataCorruptedError(forKey: .dpiPresets, in: c,
+                        debugDescription: "dpiPresets has more than \(Self.dpiPresetsCount.upperBound) entries")
+                }
+                let value = try list.decode(Int.self)
+                guard Self.dpiRange.contains(value) else {
+                    throw DecodingError.dataCorruptedError(forKey: .dpiPresets, in: c,
+                        debugDescription: "dpiPresets[\(dpiPresets.count)] must be \(Self.dpiRange.lowerBound)–\(Self.dpiRange.upperBound), not \(value)")
+                }
+                dpiPresets.append(value)
+            }
+        }
         scrollWheel = try c.decodeIfPresent(ScrollWheel.self, forKey: .scrollWheel)
         thumbWheel = try c.decodeIfPresent(ThumbWheel.self, forKey: .thumbWheel)
         smoothScroll = try c.decodeIfPresent(SmoothScroll.self, forKey: .smoothScroll)

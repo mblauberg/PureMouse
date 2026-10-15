@@ -416,16 +416,21 @@ final class Daemon {
     private func reload() {
         guard !shuttingDown else { return }
         defer { statusChanged() }
+        let previous = config
         guard loadConfig() else {
             Log.error("reload failed; keeping previous config")
             return
         }
         Log.info("config reloaded")
+        // A DPI picked by cycleDPI lasts until the configured DPI or presets change.
+        let keepLiveDPI = previous.dpi == config.dpi && previous.dpiPresets == config.dpiPresets
         ignored = []
         for (key, old) in sessions {
             old.close()
+            var inherited = old.inheritance
+            if !keepLiveDPI { inherited.liveDPI = nil }
             add(Session(device: old.device, name: old.name, id: old.id, controls: Array(old.controls.values),
-                        config: config, inheriting: old.inheritance), key)
+                        config: config, inheriting: inherited), key)
         }
         Task { await adoptStragglers() }
     }

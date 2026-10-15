@@ -7,7 +7,7 @@ import PureMouseKit
 enum SystemActions {
     static func perform(_ action: Action) {
         switch action {
-        case .none, .toggleScrollMode:
+        case .none, .toggleScrollMode, .cycleDPI:
             break
         case .missionControl:
             dock("com.apple.expose.awake", fallback: Keystroke(key: 126, modifiers: .maskControl))

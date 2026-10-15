@@ -15,6 +15,8 @@ public enum Action: Equatable, Decodable, Sendable {
     case navigateForward
     /// Flip the scroll wheel between ratchet and free-spin. Handled by the device session.
     case toggleScrollMode
+    /// Step to the next of `Config.dpiPresets`. Handled by the device session.
+    case cycleDPI
     case keys(Keystroke)
     case run(String)
 
@@ -23,8 +25,11 @@ public enum Action: Equatable, Decodable, Sendable {
         "none": .none, "missionControl": .missionControl, "appExpose": .appExpose,
         "showDesktop": .showDesktop, "launchpad": .launchpad, "spaceLeft": .spaceLeft,
         "spaceRight": .spaceRight, "navigateBack": .navigateBack, "navigateForward": .navigateForward,
-        "toggleScrollMode": .toggleScrollMode,
+        "toggleScrollMode": .toggleScrollMode, "cycleDPI": .cycleDPI,
     ]
+
+    /// Handled by the device session rather than `SystemActions`.
+    public var actsOnDevice: Bool { self == .toggleScrollMode || self == .cycleDPI }
 
     public init(from decoder: Decoder) throws {
         if let name = try? decoder.singleValueContainer().decode(String.self) {
