@@ -1,4 +1,5 @@
 import Foundation
+import PureMouseKit
 import HIDPP
 
 /// One connected mouse: applies configuration to it and turns its diverted-button and wheel

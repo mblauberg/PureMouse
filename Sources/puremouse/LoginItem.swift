@@ -1,4 +1,5 @@
 import Foundation
+import PureMouseKit
 
 /// Starting PureMouse at login: a launchd agent, `~/Library/LaunchAgents/<bundle id>.plist`, that
 /// runs this app's binary. Opening the app writes and loads it, so installing is copying the app

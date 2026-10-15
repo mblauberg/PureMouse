@@ -38,7 +38,13 @@ work on it safely.
 ## Invariants
 
 - `Sources/HIDPP` is protocol only (framing, transport, typed feature wrappers) and must stay
-  free of policy. Config, actions and scrolling live in `Sources/puremouse`.
+  free of policy. Applying config, performing actions and scrolling live in `Sources/puremouse`.
+- `Sources/PureMouseKit` is shared with the menu bar app: the config model and its decoder
+  (`Config`, `Action` and its `named` table, `Keystroke` parsing, `AnyKey`, the range-checked
+  decode helper) and the status/control channel (`Companion.swift`, contract in
+  `docs/companion.md`). Data only: no HID, no event posting, no `Log` (the decoder collects
+  problems such as `unknownButtons` and the daemon logs them). `ConfigCheck.validate` is the real
+  decoder, so the menu never writes a file the daemon would reject.
 - All HID and HID++ work runs on the main actor. IOKit and CoreVideo callbacks hop to it
   (`MainActor.assumeIsolated` / `DispatchQueue.main`); keep it that way. The process serves the
   main queue with `runMainLoop()` (a `CFRunLoop` on the main thread), never `dispatchMain()`:
@@ -50,7 +56,8 @@ work on it safely.
   Nothing may be persisted on the device or receiver: they must work normally without PureMouse.
 - A session that is `finished` (closed or restored) must not touch the device again; the daemon
   stops adopting once `shuttingDown`.
-- Keep it light: no AppKit, SwiftUI or dependencies. Idle cost is zero CPU; the display link
+- Keep it light: no dependencies, and no AppKit or SwiftUI in the daemon or PureMouseKit (only
+  `PureMouseMenu` may link them). Idle cost is zero CPU; the display link
   runs only while a scroll is gliding.
 
 ## Easy to break
@@ -95,15 +102,17 @@ work on it safely.
   logs an error at start if it sees any of its processes (`LogiOptions`); only this user's process
   names are readable, so a root-run updater goes unseen.
 - Config numbers are range-checked when decoded (`decodeIfPresent(_:forKey:in:)` in
-  `Config.swift`); give any new numeric field a range too. An unchecked value can overflow an `Int`
-  or `Duration` conversion mid-session, and during a reload that crash comes after the old
-  session has closed, so the mouse is never restored and launchd relaunches into the same crash.
+  `Sources/PureMouseKit/Config.swift`); give any new numeric field a range too. An unchecked
+  value can overflow an `Int` or `Duration` conversion mid-session, and during a reload that crash
+  comes after the old session has closed, so the mouse is never restored and launchd relaunches
+  into the same crash.
 - DPI is snapped to the sensor's own list (0x2201 getSensorDpiList), read once per session; if
   the list cannot be read, the configured value is sent unchanged.
 
 ## Extending
 
-- New action: a case in `Action`, a name in `Action.named`, handling in `SystemActions.perform`.
+- New action: a case in `Action` and a name in `Action.named` (both in PureMouseKit), handling in
+  `SystemActions.perform` (or `Session.perform` for device actions).
 - New device feature: a wrapper in `Sources/HIDPP/Features.swift`, applied in `Session.apply()`,
   with event parsing routed in `Session.handle()`, and a parse test in `Tests/HIDPPTests`.
 - Per-app scroll settings: choose a different `ScrollEngine.Profile` when a burst starts.

@@ -1,4 +1,5 @@
 import Foundation
+import PureMouseKit
 import HIDPP
 
 setvbuf(stdout, nil, _IOLBF, 0)
@@ -37,7 +38,7 @@ case nil, "run":
     let url = arguments.count > 1 ? URL(fileURLWithPath: arguments[1]) : Config.defaultURL
     let config: Config
     do {
-        config = try Config.load(from: url)
+        config = try Config.loadLogged(from: url)
     } catch {
         // Stay up with nothing configured rather than crash-loop under launchd; fixing the
         // file and sending SIGHUP picks it up.

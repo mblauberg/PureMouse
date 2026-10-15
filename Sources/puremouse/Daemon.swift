@@ -1,4 +1,5 @@
 import Foundation
+import PureMouseKit
 import HIDPP
 import IOKit.hid
 import IOKit.pwr_mgt
@@ -266,7 +267,7 @@ final class Daemon {
     private func reload() {
         guard !shuttingDown else { return }
         do {
-            config = try Config.load(from: configURL)
+            config = try Config.loadLogged(from: configURL)
         } catch {
             Log.error("reload: \(error); keeping previous config")
             return

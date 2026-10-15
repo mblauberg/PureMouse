@@ -1,6 +1,7 @@
+import CoreGraphics
 import Foundation
 import Testing
-@testable import puremouse
+@testable import PureMouseKit
 
 @Suite struct ConfigTests {
     func decode(_ json: String) throws -> Config {
@@ -85,5 +86,27 @@ import Testing
         #expect(Keystroke("f11")?.key == 103)
         #expect(Keystroke("cmd+nope") == nil)
         #expect(Keystroke("a+b") == nil)
+    }
+}
+
+@Suite struct ConfigKitTests {
+    @Test func unknownButtonsAreCollectedNotFatal() throws {
+        let config = try JSONDecoder().decode(Config.self, from: Data(#"{"buttons": {"zz": "none", "back": "none"}}"#.utf8))
+        #expect(config.unknownButtons == ["zz"] && config.bindings.keys.sorted() == [0x53])
+    }
+
+    @Test func configCheckUsesTheRealDecoder() {
+        #expect(throws: DecodingError.self) { try ConfigCheck.validate(Data(#"{"dpi": 0}"#.utf8)) }
+        #expect(throws: Never.self) { try ConfigCheck.validate(Data(#"{"dpi": 1600}"#.utf8)) }
+    }
+
+    @Test func buttonNamesByControlID() {
+        #expect(Config.Button(cid: 0x53) == .back && Config.Button(cid: 0xC3) == .gesture && Config.Button(cid: 0x99) == nil)
+    }
+
+    @Test func arrowKeysCarryKeyboardFlags() throws {
+        let flags = try #require(Keystroke("ctrl+left")).eventFlags
+        #expect(flags.contains([.maskControl, .maskSecondaryFn, .maskNumericPad]))
+        #expect(try #require(Keystroke("cmd+a")).eventFlags == .maskCommand)
     }
 }

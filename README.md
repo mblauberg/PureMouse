@@ -235,8 +235,10 @@ dependencies, run by launchd from a login agent that it installs itself.
 ```
 Sources/HIDPP/       protocol only: framing, IOKit transport, request/response handling,
                      typed feature wrappers
-Sources/puremouse/   policy: config, actions, gestures, smooth scrolling, one session per mouse,
-                     the daemon (discovery, reconnects, wake, reload, permissions, quit)
+Sources/PureMouseKit/ shared with the menu bar app: config model and decoder, status/control
+                     channel (docs/companion.md)
+Sources/puremouse/   policy: applying config, actions, gestures, smooth scrolling, one session
+                     per mouse, the daemon (discovery, reconnects, wake, reload, permissions, quit)
 Tests/               pure logic: framing and event parsing, config, gestures, scroll maths
 scripts/             build, install, uninstall, package, signing identity, icon
 assets/              app icon (Icon Composer source, compiled icon, README images), menu bar glyph
