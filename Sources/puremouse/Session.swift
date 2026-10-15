@@ -50,7 +50,8 @@ final class Session {
     private var deviceAction: Task<Void, Never>?
     /// Controls diverted only so select-by-pressing can see them; nil when not capturing.
     private var capturing: Set<UInt16>?
-    /// Capture diversion changes, chained so they reach the device in order.
+    /// Every change to which controls are diverted, by configuration or capture, chained so each
+    /// runs alone and they reach the device in the order they were asked for.
     private var diverting: Task<Void, Never>?
     /// Set by `cycleDPI`, overriding `config.dpi`: kept across reconnects and reloads, cleared by
     /// a reload that changes `dpi` or `dpiPresets` (see `Daemon.reload`).
@@ -148,7 +149,6 @@ final class Session {
         finished = true
         configuring?.cancel()
         deviceAction?.cancel()
-        diverting?.cancel()
         scroll?.stop()
         device.onEvent = nil
     }
@@ -163,10 +163,11 @@ final class Session {
             .subtracting(bindings.keys)
         capturing = extras
         releasing.subtract(extras)
-        divert { session in
-            for cid in extras {
-                guard session.capturing != nil else { return }
-                try await ReprogControls.setDiverted(session.device, cid: cid, divert: true, rawXY: false)
+        // A gesture held as capture starts must not act when it is let go.
+        gestureButton = nil
+        enqueueDiversion { session in
+            for cid in extras where session.capturing != nil {
+                try await session.setDiverted(cid, true)
             }
         }
     }
@@ -176,26 +177,65 @@ final class Session {
         guard let extras = capturing else { return }
         capturing = nil
         releasing.formUnion(extras)
-        divert { session in
-            for cid in session.releasing {
-                try await ReprogControls.setDiverted(session.device, cid: cid, divert: false, rawXY: false)
-                session.releasing.remove(cid)
+        enqueueDiversion { try await $0.releaseAll() }
+    }
+
+    /// Releases every control in `releasing`, each independently: one that fails stays there
+    /// for the next apply (or `restore`) to retry. Throws the last failure.
+    private func releaseAll() async throws {
+        var failure: Error?
+        for cid in releasing {
+            do {
+                try await setDiverted(cid, false)
+                releasing.remove(cid)
+            } catch {
+                guard !finished, !(error is CancellationError) else { throw error }
+                Log.debug("\(name): releasing 0x\(String(cid, radix: 16)) failed: \(error)")
+                failure = error
             }
+        }
+        if let failure { throw failure }
+    }
+
+    /// A diversion write on this session's behalf; refused once the session is finished.
+    private func setDiverted(_ cid: UInt16, _ divert: Bool, rawXY: Bool = false) async throws {
+        guard !finished else { throw HIDPPError.closed }
+        try await ReprogControls.setDiverted(device, cid: cid, divert: divert, rawXY: rawXY)
+    }
+
+    /// Queues `body` to run after every diversion change asked for before it and before any
+    /// asked for after. Diversion state is read when the body runs, so a later change (say
+    /// capture ending mid-apply) is made by its own body afterwards rather than raced.
+    @discardableResult
+    private func enqueueDiversion(_ body: @escaping (Session) async throws -> Void) -> Task<Void, Error> {
+        let work = Task { [previous = diverting] in
+            await previous?.value
+            try await body(self)
+        }
+        diverting = Task {
+            if case .failure(let error) = await work.result, !finished {
+                // Usually asleep: the next apply diverts or releases them.
+                Log.debug("\(name): diversion change failed: \(error)")
+            }
+        }
+        return work
+    }
+
+    /// `enqueueDiversion`, waiting for the body; cancelling the caller cancels the body.
+    private func serialised(_ body: @escaping (Session) async throws -> Void) async throws {
+        guard !finished else { throw HIDPPError.closed }
+        let work = enqueueDiversion(body)
+        try await withTaskCancellationHandler {
+            try await work.value
+        } onCancel: {
+            work.cancel()
         }
     }
 
-    private func divert(_ body: @escaping (Session) async throws -> Void) {
-        guard !finished else { return }
-        diverting = Task { [previous = diverting] in
-            await previous?.value
-            guard !finished else { return }
-            do {
-                try await body(self)
-            } catch {
-                // Usually asleep: the next apply diverts or releases them.
-                Log.debug("\(name): capture diversion failed: \(error)")
-            }
-        }
+    /// Lets every diversion change already asked for finish (each stops at its next write once
+    /// `finished` is set).
+    private func drainDiversion() async {
+        await diverting?.value
     }
 
     private static func profile(_ s: Config.SmoothScroll, _ config: Config) -> ScrollEngine.Profile {
@@ -245,17 +285,15 @@ final class Session {
         _ = try? await device.featureIndex(of: WirelessDeviceStatus.id)
         _ = try? await device.featureIndex(of: UnifiedBattery.id)
 
-        for cid in releasing {
-            try await ReprogControls.setDiverted(device, cid: cid, divert: false, rawXY: false)
-            releasing.remove(cid)
-        }
-        for (cid, binding) in bindings {
-            let isGesture = if case .gesture = binding { true } else { false }
-            try await ReprogControls.setDiverted(device, cid: cid, divert: true,
-                                                 rawXY: isGesture && controls[cid]?.supportsRawXY == true)
-        }
-        for cid in capturing ?? [] {
-            try await ReprogControls.setDiverted(device, cid: cid, divert: true, rawXY: false)
+        try await serialised { session in
+            try await session.releaseAll()
+            for (cid, binding) in session.bindings {
+                let isGesture = if case .gesture = binding { true } else { false }
+                try await session.setDiverted(cid, true, rawXY: isGesture && session.controls[cid]?.supportsRawXY == true)
+            }
+            for cid in session.capturing ?? [] {
+                try await session.setDiverted(cid, true)
+            }
         }
 
         try await applyWheels()
@@ -365,8 +403,8 @@ final class Session {
         finished = true
         configuring?.cancel()
         deviceAction?.cancel()
-        diverting?.cancel()
         scroll?.stop()
+        await drainDiversion()
         // Wheels first: a silent wheel is worse than a diverted button. Each step stands alone,
         // so one failure does not skip the rest. A replaced session may have diverted them even
         // if this one would not, e.g. after a reload that turned smooth scrolling off.

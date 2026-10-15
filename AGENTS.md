@@ -60,6 +60,9 @@ work on it safely.
   stops adopting once `shuttingDown` or `paused` (`Daemon.accepting`). Pausing from the menu
   (`Control.paused`) restores and drops every session; resuming and quitting wait for those
   restores (`Daemon.pausing`) before touching the mice again. A pause is never persisted.
+- Every change to which controls are diverted, from `apply()` or capture, runs through one chain
+  (`Session.enqueueDiversion`), one at a time and in the order asked, reading the wanted state as
+  it runs; `restore()` drains the chain before releasing, and each write checks `finished`.
 - The daemon reports to the menu bar app only through `status.json` (`StatusChannel`): call
   `statusChanged()` (Daemon) or `changed()` (Session) after anything in `Status` changes; writes
   are coalesced to one per main-queue turn. On shutdown, `running: false` is written last, after
@@ -84,8 +87,10 @@ work on it safely.
   native.
 - Select by pressing (`Control.capture`) diverts every pressable, unbound control
   (`Session.beginCapture`) for at most `Daemon.captureDuration`; the first press goes to
-  `onCapture` and performs nothing. Every way out (press, timeout, cancel, reload, pause) goes
-  through `Daemon.endCapture`, which hands the extra controls back. They count in
+  `onCapture` and performs nothing; a gesture held as capture starts is dropped, so letting it go
+  does not click. Every way out (press, timeout, cancel, reload, pause) goes
+  through `Daemon.endCapture`, which hands the extra controls back, each independently (one that
+  fails waits for the next apply). They count in
   `divertedControls` until released, so `restore()` and a replacement session release them too.
 - Permission checks are cached per process. The launchd-run daemon polls a child
   (`puremouse permissions`) and restarts itself when a grant arrives (`Daemon.restartWhenGranted`).
