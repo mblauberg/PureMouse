@@ -14,6 +14,7 @@ struct ScrollingPane: View {
                 Toggle(isOn: Binding(get: { smooth }, set: { on in model.update { $0.smoothScrollEnabled = on } })) {
                     RowLabel("Smooth scrolling", help: "PureMouse animates both wheels. Off uses standard macOS scrolling.")
                 }
+                .accessibilityLabel("Smooth scrolling")
                 Group {
                     LabeledContent {
                         Picker("Feel", selection: Binding(get: { config.feel }, set: { feel in model.update { $0.apply(feel) } })) {
@@ -26,7 +27,7 @@ struct ScrollingPane: View {
                     } label: {
                         RowLabel("Feel", help: "How long a scroll glides, and how far fast flicks go.")
                     }
-                    ValueSlider(title: "Speed", value: model.number(["smoothScroll", "speed"], default: 1, step: 0.05),
+                    ValueSlider(title: "Speed", spokenTitle: "Scrolling speed", value: model.number(["smoothScroll", "speed"], default: 1, step: 0.05),
                                 range: 0.25...3, low: "Slow", high: "Fast", format: Format.multiplier)
                     LabeledContent {
                         if !fineTune {
@@ -63,6 +64,7 @@ struct ScrollingPane: View {
                         RowLabel("Reverse direction", help: "Classic wheel direction while the trackpad stays natural.",
                                  mouseDefault: inverted == nil)
                     }
+                    .accessibilityLabel("Reverse main wheel direction")
                     if device?.hasSmartShift != false {
                         wheelMode
                         smartShift
@@ -75,7 +77,8 @@ struct ScrollingPane: View {
                     Toggle(isOn: model.toggle(["thumbWheel", "inverted"], default: false)) {
                         RowLabel("Reverse direction", mouseDefault: config.bool(["thumbWheel", "inverted"]) == nil)
                     }
-                    ValueSlider(title: "Speed", value: model.number(["smoothScroll", "horizontalSpeed"], default: 1, step: 0.05),
+                    .accessibilityLabel("Reverse thumb wheel direction")
+                    ValueSlider(title: "Speed", spokenTitle: "Thumb wheel speed", value: model.number(["smoothScroll", "horizontalSpeed"], default: 1, step: 0.05),
                                 range: 0.25...3, low: "Slow", high: "Fast", format: Format.multiplier)
                         .disabled(!smooth)
                 } header: {
@@ -124,6 +127,7 @@ struct ScrollingPane: View {
         Toggle(isOn: Binding(get: { on }, set: { model.set($0 ? 12 : 255, at: ["scrollWheel", "smartShiftThreshold"]) })) {
             RowLabel("SmartShift", help: "Frees the wheel when you scroll fast.", mouseDefault: threshold == nil)
         }
+        .accessibilityLabel("SmartShift")
         if on {
             LabeledContent("Threshold") {
                 EndLabeledSlider(title: "SmartShift threshold",

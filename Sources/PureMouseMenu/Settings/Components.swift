@@ -32,6 +32,8 @@ extension String {
 /// its value on the right.
 struct ValueSlider: View {
     let title: String
+    /// What VoiceOver calls the slider, where the title alone is ambiguous (two "Speed" rows).
+    var spokenTitle: String?
     var help: String?
     @Binding var value: Double
     let range: ClosedRange<Double>
@@ -43,7 +45,7 @@ struct ValueSlider: View {
     var body: some View {
         LabeledContent {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                EndLabeledSlider(title: title, value: $value, range: range, low: low, high: high)
+                EndLabeledSlider(title: spokenTitle ?? title, value: $value, range: range, low: low, high: high)
                     .frame(width: width)
                     .accessibilityValue(format(value))
                 Text(format(value))

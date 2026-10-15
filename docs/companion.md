@@ -107,9 +107,17 @@ under System Settings › Menu Bar, opening the app still reaches Settings.
 ## Footprint
 
 The daemon's budget is unchanged: zero CPU while idle, about 10 MB. The menu app must use zero CPU
-while idle, with no timers or polling. Its target is under 25 MB resident with Settings closed;
-the Settings window and its view tree are created when shown and released when closed. The menu
-itself is a plain `NSMenu` built on open (`menuNeedsUpdate`). Measure both apps with
+while idle, with no timers or polling. Its target is under 25 MB resident with Settings closed
+(a bare AppKit status item is about 12 MB, so idle is about 15 MB). The Settings window and its
+view tree are created when shown; once Settings has closed, the app starts over as a fresh copy
+(`Relaunch`), because AppKit and SwiftUI keep about 35 MB after the window is released. The agent's
+copy exits with 75 (EX_TEMPFAIL) and launchd restarts it (`KeepAlive` unless successful) within a
+second, in the same place in the menu bar; it waits until 11 s after its own start (launchd's
+respawn throttle), and while the menu is open or a lifecycle command runs. A copy the Finder
+started (the icon was hidden, then shown again in Settings) exits and has launchd start the agent,
+so the icon is supervised again. `exec` in place does not work: LaunchServices keeps the old
+image's registration for the pid and the new image never gets its status item. The menu itself is
+a plain `NSMenu` built on open (`menuNeedsUpdate`). Measure both apps with
 `footprint`/`vmmap --summary` before and after each change.
 
 ## Daemon decisions

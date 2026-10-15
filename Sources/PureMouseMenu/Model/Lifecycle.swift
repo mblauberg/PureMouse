@@ -17,11 +17,22 @@ enum Lifecycle {
         }
     }
 
+    private static var running = 0
+
+    /// No command is running (the menu app waits for this before it relaunches).
+    static var idle: Bool { running == 0 }
+
     /// Runs the command off the main thread and reports its output, or why it failed.
     static func run(_ command: Command, then completion: @escaping @MainActor (Result<String, LifecycleError>) -> Void) {
         guard let daemon = Paths.daemon else {
             completion(.failure(.noDaemon))
             return
+        }
+        running += 1
+        let completion: @MainActor (Result<String, LifecycleError>) -> Void = { result in
+            running -= 1
+            completion(result)
+            (NSApp.delegate as? AppController)?.relaunchIfIdle()
         }
         let process = Process()
         let pipe = Pipe()

@@ -15,9 +15,11 @@ struct GeneralPane: View {
                 Toggle(isOn: Binding(get: { startsAtLogin }, set: { setStartsAtLogin($0) })) {
                     RowLabel("Start PureMouse at login", help: "Off stops PureMouse now and returns the mouse to normal.")
                 }
+                .accessibilityLabel("Start PureMouse at login")
                 Toggle(isOn: Binding(get: { showsInMenuBar }, set: { setShowsInMenuBar($0) })) {
                     RowLabel("Show in menu bar", help: "When hidden, open PureMouse from Applications to get back here.")
                 }
+                .accessibilityLabel("Show in menu bar")
             }
             .disabled(Paths.daemon == nil)
 

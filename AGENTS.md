@@ -88,8 +88,11 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
 - The menu bar app never opens HID devices: it edits the config file and talks to the daemon only
   through the companion channel and the daemon CLI (`docs/companion.md`). It must not poll: it
   wakes on notifications, file events and the daemon's process exit. Its Settings window and view
-  tree are built when shown (each pane on its first visit) and released when closed; the menu is
-  rebuilt on open. Shortcut specs are parsed and named by Kit's `Keystroke` only; the menu adds
+  tree are built when shown (each pane on its first visit); once Settings closes the process starts
+  over (`Relaunch`): the agent's copy exits 75 for launchd to restart, since AppKit and SwiftUI keep
+  about 35 MB otherwise. Never `exec` in place (LaunchServices then withholds the status item). The
+  menu is rebuilt on open. Settings controls carry their own accessibility label where a `RowLabel`
+  (title plus caption) leaves them unnamed. Shortcut specs are parsed and named by Kit's `Keystroke` only; the menu adds
   glyphs and spoken words.
 - The DPI the menu and the Pointer pane show is the mouse's live value (a `cycleDPI` press
   changes it without touching the config), then the configured one; a change made in the pane

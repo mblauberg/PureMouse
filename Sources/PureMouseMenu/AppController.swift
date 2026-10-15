@@ -55,15 +55,32 @@ final class AppController: NSObject, NSApplicationDelegate {
         settings = nil
         model.cancelCapture()
         model.flush()
-        // Hand the freed view tree's pages back once the run loop has drained its autorelease pool.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { malloc_zone_pressure_relief(nil, 0) }
         if pendingMenuOff {
             // Removing the menu agent ends this process, so it waits until Settings closes.
             pendingMenuOff = false
             Lifecycle.run(.menuOff) { _ in NSApp.terminate(nil) }
         } else if statusMenu == nil {
             NSApp.terminate(nil)
+        } else {
+            relaunchPending = true
+            // After the window's close animation.
+            DispatchQueue.main.asyncAfter(deadline: .now() + Relaunch.delay(launchedAt: launchedAt)) { [weak self] in self?.relaunchIfIdle() }
         }
+    }
+
+    private var relaunchPending = false
+    private let launchedAt = ProcessInfo.processInfo.systemUptime
+
+    /// Settings leaves tens of MB behind in AppKit and SwiftUI caches, so once it has closed, this
+    /// process starts over as a fresh copy (`Relaunch`). It waits while Settings is open again, the
+    /// menu is open or a lifecycle command runs; whichever of those ends last tries again.
+    func relaunchIfIdle() {
+        guard relaunchPending, settings == nil, let statusMenu, !statusMenu.isOpen, Lifecycle.idle,
+              !pendingMenuOff else { return }
+        relaunchPending = false
+        model.flush()
+        Relaunch.now()
+        malloc_zone_pressure_relief(nil, 0) // a development copy, or the agent is gone
     }
 
     var settingsWindow: NSWindow? { settings?.window }
