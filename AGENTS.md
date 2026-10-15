@@ -82,6 +82,11 @@ work on it safely.
   from the current config: after a reload that drops (or disables) `smoothScroll`, the
   replacement session inherits the flag and keeps it until its own apply has set the wheels
   native.
+- Select by pressing (`Control.capture`) diverts every pressable, unbound control
+  (`Session.beginCapture`) for at most `Daemon.captureDuration`; the first press goes to
+  `onCapture` and performs nothing. Every way out (press, timeout, cancel, reload, pause) goes
+  through `Daemon.endCapture`, which hands the extra controls back. They count in
+  `divertedControls` until released, so `restore()` and a replacement session release them too.
 - Permission checks are cached per process. The launchd-run daemon polls a child
   (`puremouse permissions`) and restarts itself when a grant arrives (`Daemon.restartWhenGranted`).
 - HID++ software IDs rotate per request so a late reply cannot complete a newer request.

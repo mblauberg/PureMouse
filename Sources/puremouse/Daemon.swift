@@ -46,6 +46,12 @@ final class Daemon {
     private var paused = false
     /// Restoring the mice for a pause; resuming and quitting wait for it.
     private var pausing: Task<Void, Never>?
+    /// The current or last select-by-pressing request, as reported.
+    private var capture: Status.Capture?
+    private var captureTimeout: Task<Void, Never>?
+    /// The last capture token acted on, so re-reading `control.json` does not restart it.
+    private var lastCaptureToken: Int?
+    static let captureDuration: Duration = .seconds(10)
     /// Whether new sessions may be created.
     private var accepting: Bool { !shuttingDown && !paused }
     /// Set once the mice are restored, just before exit: the final status says not running.
@@ -134,7 +140,7 @@ final class Daemon {
             logiOptionsRunning: logiOptionsRunning,
             config: .init(path: configURL.path, error: configError),
             devices: running ? sessions.values.map(\.status).sorted { $0.id < $1.id } : [],
-            capture: nil)
+            capture: capture)
     }
 
     private func statusChanged() {
@@ -157,11 +163,54 @@ final class Daemon {
             control = Control()
         }
         if control.paused != paused { control.paused ? pause() : resume() }
+        if let request = control.capture {
+            if request.token != lastCaptureToken { startCapture(request.token) }
+        } else {
+            endCapture(.cancelled)
+        }
+    }
+
+    /// Select by pressing: for up to `captureDuration`, every control of every mouse reports its
+    /// press here instead of acting.
+    private func startCapture(_ token: Int) {
+        endCapture(.cancelled)
+        Log.info("listening for a button press")
+        lastCaptureToken = token
+        capture = Status.Capture(token: token, state: .listening, cid: nil, deviceID: nil)
+        sessions.values.forEach(beginCapture)
+        captureTimeout = Task {
+            try? await Task.sleep(for: Self.captureDuration)
+            guard !Task.isCancelled, capture?.token == token else { return }
+            endCapture(.timedOut)
+        }
+        statusChanged()
+    }
+
+    private func beginCapture(_ session: Session) {
+        session.onCapture = { [weak self, unowned session] cid in
+            Log.info("\(session.name): pressed 0x\(String(cid, radix: 16)) for selection")
+            self?.endCapture(.pressed, cid: cid, deviceID: session.id)
+        }
+        session.beginCapture()
+    }
+
+    /// Ends a capture that is listening, reporting `state`, and restores normal diversion.
+    private func endCapture(_ state: Status.Capture.State, cid: UInt16? = nil, deviceID: String? = nil) {
+        guard var current = capture, current.state == .listening else { return }
+        captureTimeout?.cancel()
+        captureTimeout = nil
+        current.state = state
+        current.cid = cid
+        current.deviceID = deviceID
+        capture = current
+        sessions.values.forEach { $0.endCapture() }
+        statusChanged()
     }
 
     /// Returns every mouse to native behaviour and stops adopting until `resume`.
     private func pause() {
         Log.info("paused")
+        endCapture(.cancelled)
         paused = true
         let all = Array(sessions.values)
         sessions = [:]
@@ -379,6 +428,7 @@ final class Daemon {
     private func add(_ session: Session, _ key: Key) {
         sessions[key] = session
         session.onChange = { [weak self] in self?.statusChanged() }
+        if capture?.state == .listening { beginCapture(session) }
         session.configure()
         statusChanged()
     }
@@ -422,6 +472,7 @@ final class Daemon {
             return
         }
         Log.info("config reloaded")
+        endCapture(.cancelled)
         // A DPI picked by cycleDPI lasts until the configured DPI or presets change.
         let keepLiveDPI = previous.dpi == config.dpi && previous.dpiPresets == config.dpiPresets
         ignored = []
