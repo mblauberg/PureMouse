@@ -53,6 +53,8 @@ import Testing
         let down = Report(bytes: [0x10, 0x02, 0x41, 0x10, 0x42, 0x34, 0xB0])!
         #expect(Receiver.isLinkEstablished(up))
         #expect(!Receiver.isLinkEstablished(down))
+        #expect(Receiver.productID(up) == 0xB034 && Receiver.productID(down) == 0xB034)  // MX Master 3S
+        #expect(Receiver.productID(Report(bytes: [0x10, 0x02, 0x41, 0x10, 0x02])!) == nil)
     }
 }
 
