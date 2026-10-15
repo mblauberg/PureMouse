@@ -16,51 +16,42 @@
           "name": "wheel",
           "image-name": "wheel.svg",
           "glass": true,
-          "fill": {
-            "linear-gradient": [
-              "display-p3:0.15,0.65,1.00,1.00",
-              "display-p3:0.04,0.45,1.00,1.00"
-            ],
-            "orientation": {
-              "start": {
-                "x": 0.5,
-                "y": 0
-              },
-              "stop": {
-                "x": 0.5,
-                "y": 1
-              }
-            }
-          }
-        }
-      ],
-      "shadow": {
-        "kind": "layer-color",
-        "opacity": 0.35
-      },
-      "translucency": {
-        "enabled": true,
-        "value": 0.3
-      },
-      "specular": true
-    },
-    {
-      "name": "Body",
-      "layers": [
-        {
-          "name": "body",
-          "image-name": "body.svg",
-          "glass": true,
           "fill-specializations": [
             {
               "value": {
-                "solid": "srgb:0.11,0.11,0.12,1.00"
+                "linear-gradient": [
+                  "srgb:0.78,0.78,0.80,1.00",
+                  "srgb:0.58,0.58,0.61,1.00"
+                ],
+                "orientation": {
+                  "start": {
+                    "x": 0.5,
+                    "y": 0
+                  },
+                  "stop": {
+                    "x": 0.5,
+                    "y": 1
+                  }
+                }
               }
             },
             {
               "appearance": "dark",
               "value": {
-                "solid": "srgb:0.96,0.96,0.97,1.00"
+                "linear-gradient": [
+                  "srgb:0.55,0.55,0.58,1.00",
+                  "srgb:0.38,0.38,0.40,1.00"
+                ],
+                "orientation": {
+                  "start": {
+                    "x": 0.5,
+                    "y": 0
+                  },
+                  "stop": {
+                    "x": 0.5,
+                    "y": 1
+                  }
+                }
               }
             }
           ]
@@ -72,7 +63,123 @@
       },
       "translucency": {
         "enabled": true,
-        "value": 0.2
+        "value": 0.25
+      },
+      "specular": true
+    },
+    {
+      "name": "Buttons",
+      "layers": [
+        {
+          "name": "buttons",
+          "image-name": "buttons.svg",
+          "glass": true,
+          "fill-specializations": [
+            {
+              "value": {
+                "linear-gradient": [
+                  "srgb:0.26,0.26,0.28,1.00",
+                  "srgb:0.10,0.10,0.11,1.00"
+                ],
+                "orientation": {
+                  "start": {
+                    "x": 0.5,
+                    "y": 0
+                  },
+                  "stop": {
+                    "x": 0.5,
+                    "y": 1
+                  }
+                }
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "linear-gradient": [
+                  "srgb:1.00,1.00,1.00,1.00",
+                  "srgb:0.90,0.90,0.92,1.00"
+                ],
+                "orientation": {
+                  "start": {
+                    "x": 0.5,
+                    "y": 0
+                  },
+                  "stop": {
+                    "x": 0.5,
+                    "y": 1
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.35
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.25
+      },
+      "specular": true
+    },
+    {
+      "name": "Palm",
+      "layers": [
+        {
+          "name": "palm",
+          "image-name": "palm.svg",
+          "glass": true,
+          "fill-specializations": [
+            {
+              "value": {
+                "linear-gradient": [
+                  "srgb:0.20,0.20,0.21,1.00",
+                  "srgb:0.04,0.04,0.05,1.00"
+                ],
+                "orientation": {
+                  "start": {
+                    "x": 0.5,
+                    "y": 0
+                  },
+                  "stop": {
+                    "x": 0.5,
+                    "y": 1
+                  }
+                }
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "linear-gradient": [
+                  "srgb:0.93,0.93,0.95,1.00",
+                  "srgb:0.80,0.80,0.83,1.00"
+                ],
+                "orientation": {
+                  "start": {
+                    "x": 0.5,
+                    "y": 0
+                  },
+                  "stop": {
+                    "x": 0.5,
+                    "y": 1
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.35
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.25
       },
       "specular": true
     }

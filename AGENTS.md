@@ -27,12 +27,15 @@ work on it safely.
   `.build/dist/PureMouse-X.Y.Z.zip` to a GitHub release with its SHA-256. A release signed by any
   other identity makes every user grant permissions again. CI (`.github/workflows/ci.yml`) builds,
   tests and bundles ad hoc on each push.
-- The icon is an Icon Composer document, `assets/AppIcon.icon` (two SVG layers: body and wheel;
-  the background is the system's light/dark fill, so macOS 26+ renders light, dark, clear and
-  tinted variants). After changing it, run `./scripts/make-icon.sh` (needs Xcode 26+) and commit
-  the compiled `Assets.car`, `AppIcon.icns` (macOS 14/15 fallback) and the README PNGs.
-  `assets/MenuBarIcon.svg` is the same glyph as a monochrome template for a menu bar item, with
-  wider gaps so it survives 16pt; keep the two in step.
+- The icon is an Icon Composer document, `assets/AppIcon.icon`: a top-down mouse in three
+  monochrome glass layers (buttons with the centre seam, palm, floating wheel), grey fills with
+  light and dark specializations, on the system's light/dark background, so macOS 26+ renders
+  light, dark, clear and tinted variants. After changing it, run `./scripts/make-icon.sh` (needs
+  Xcode 26+ and `rsvg-convert`) and commit the compiled `Assets.car`, `AppIcon.icns` (macOS 14/15
+  fallback), the README PNGs and `MenuBarIcon.pdf`. `assets/MenuBarIcon.svg` is the same mouse as
+  an 18x18 pt template (alpha only; the wheel is a slot, gaps are 1-1.5 pt on the half-point grid
+  so they stay crisp at 1x and 2x); it is plain clip and even-odd paths because rsvg rasterises
+  SVG masks in the PDF. The menu bar app loads `MenuBarIcon.pdf`. Keep the two in step.
 - When behaviour changes, update the README's field tables and this file in the same change.
 
 ## Invariants
