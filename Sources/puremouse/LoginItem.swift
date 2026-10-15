@@ -56,7 +56,11 @@ enum LoginItem {
     static func unregister() throws {
         guard let label = Bundle.main.bundleIdentifier else { throw Failure.notInBundle }
         try stop(label)
-        try? FileManager.default.removeItem(at: plistURL(label))
+        do {
+            try FileManager.default.removeItem(at: plistURL(label))
+        } catch CocoaError.fileNoSuchFile {
+            // Never registered, or already removed.
+        }
     }
 
     /// Unloads the agent if it is loaded, waiting up to five seconds for the old instance to finish

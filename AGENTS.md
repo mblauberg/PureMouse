@@ -63,9 +63,16 @@ work on it safely.
   re-reading the setting at the start of each burst.
 - The wheels are only diverted when PureMouse can post events (Accessibility). Diverting without it
   silences them.
+- `restore()` decides whether to hand the wheels back from `Session.wheelsMayBeDiverted`, not
+  from the current config: after a reload that drops `smoothScroll`, the replacement session
+  inherits the flag and keeps it until its own apply has set the wheels native.
 - Permission checks are cached per process. The launchd-run daemon polls a child
   (`puremouse permissions`) and restarts itself when a grant arrives (`Daemon.restartWhenGranted`).
 - HID++ software IDs rotate per request so a late reply cannot complete a newer request.
+- A receiver slot that does not answer is retried after 1, 2, 4 and 8 s (`Daemon.adoptSlot`);
+  after that only its connection notification brings it back, so idle cost stays zero. A slot
+  ignored as not a mouse is identified again when a notification carries a different wireless
+  product ID (a new device paired into it).
 - `puremouse register` (and opening the app from the Finder, i.e. no arguments inside a bundle)
   writes `~/Library/LaunchAgents/<bundle id>.plist` pointing at its own binary and bootstraps it,
   booting out any running instance first (`LoginItem.swift`). Not `SMAppService`: without a
@@ -87,6 +94,10 @@ work on it safely.
 - Logi Options+ fights PureMouse over the mouse (its agent is `com.logi.cp-dev-mgr`). The daemon
   logs an error at start if it sees any of its processes (`LogiOptions`); only this user's process
   names are readable, so a root-run updater goes unseen.
+- Config numbers are range-checked when decoded (`decodeIfPresent(_:forKey:in:)` in
+  `Config.swift`); give any new numeric field a range too. An unchecked value can overflow an `Int`
+  or `Duration` conversion mid-session, and during a reload that crash comes after the old
+  session has closed, so the mouse is never restored and launchd relaunches into the same crash.
 - DPI is snapped to the sensor's own list (0x2201 getSensorDpiList), read once per session; if
   the list cannot be read, the configured value is sent unchanged.
 

@@ -16,10 +16,15 @@ final class Daemon {
     private var sessions: [Key: Session] = [:]
     /// Receiver setup and Bluetooth adoption retries, cancelled when their interface goes away.
     private var interfaceTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
+    /// Receiver slots whose device did not answer, being tried again (see `adoptSlot`).
+    private var slotRetries: [Key: Task<Void, Never>] = [:]
     private var adopting: Set<Key> = []
     /// Endpoints found not to be a configurable mouse (e.g. a keyboard on the same receiver),
-    /// skipped until the config changes or PureMouse restarts.
+    /// skipped until the config changes, a different device connects in the slot, or PureMouse
+    /// restarts.
     private var ignored: Set<Key> = []
+    /// The wireless product ID last announced in each receiver slot.
+    private var slotProducts: [Key: UInt16] = [:]
     private var power: PowerObserver?
     private var signalSources: [DispatchSourceSignal] = []
     private var shuttingDown = false
@@ -115,10 +120,11 @@ final class Daemon {
                 } catch {
                     Log.error("\(interface.product): enabling connection notifications failed: \(error)")
                 }
-                // Asleep or absent slots are adopted later, when they announce a connection.
+                // Slots still silent after adoptSlot's few retries (asleep or empty) are adopted
+                // later, when they announce a connection.
                 for slot in UInt8(1)...6 {
                     guard !Task.isCancelled else { return }
-                    _ = await adopt(listen(interface, index: slot))
+                    await adoptSlot(listen(interface, index: slot))
                 }
             }
         } else {
@@ -139,6 +145,10 @@ final class Daemon {
         Log.info("lost \(interface.product)")
         let id = ObjectIdentifier(interface)
         interfaceTasks.removeValue(forKey: id)?.cancel()
+        for (key, retry) in slotRetries where key.interface == id {
+            retry.cancel()
+            slotRetries[key] = nil
+        }
         for (key, session) in sessions where key.interface == id {
             session.close()
             sessions[key] = nil
@@ -148,6 +158,7 @@ final class Daemon {
             endpoints[key] = nil
         }
         ignored = ignored.filter { $0.interface != id }
+        slotProducts = slotProducts.filter { $0.key.interface != id }
     }
 
     /// Starts listening on a device index. Until a session adopts it, a receiver slot only
@@ -156,11 +167,40 @@ final class Daemon {
         let device = HIDPPDevice(interface: interface, index: index)
         endpoints[Key(device)] = device
         device.onEvent = { [weak self, weak device] report in
-            guard let self, let device, report.featureIndex == Receiver.connectionNotification,
-                  Receiver.isLinkEstablished(report) else { return }
-            Task { _ = await self.adopt(device) }
+            guard let self, let device, report.featureIndex == Receiver.connectionNotification else { return }
+            self.slotAnnounced(device, report)
         }
         return device
+    }
+
+    /// A connection notification for a slot with no session. A different device in the slot
+    /// (say a mouse paired where a keyboard was) is identified afresh even if the slot was
+    /// ignored; the first notification after attach re-checks an ignored device once.
+    private func slotAnnounced(_ device: HIDPPDevice, _ report: Report) {
+        let key = Key(device)
+        if let product = Receiver.productID(report), slotProducts[key] != product {
+            slotProducts[key] = product
+            ignored.remove(key)
+        }
+        guard Receiver.isLinkEstablished(report) else { return }
+        Task { await adoptSlot(device) }
+    }
+
+    /// Adopts a receiver slot. A device that does not answer, perhaps still settling after a
+    /// wake or busy with another request, is tried again after 1, 2, 4 and 8 seconds; one that
+    /// is really away announces itself when it connects.
+    private func adoptSlot(_ device: HIDPPDevice) async {
+        let key = Key(device)
+        guard await adopt(device) == .noAnswer, slotRetries[key] == nil,
+              endpoints[key] === device, !shuttingDown else { return }
+        slotRetries[key] = Task {
+            defer { if !Task.isCancelled { slotRetries[key] = nil } }
+            for delay in [1, 2, 4, 8] {
+                try? await Task.sleep(for: .seconds(delay))
+                guard !Task.isCancelled, endpoints[key] === device, !shuttingDown else { return }
+                if await adopt(device) != .noAnswer { return }
+            }
+        }
     }
 
     /// Creates a session if the endpoint is an awake HID++ 2.0 device with adjustable DPI or a
@@ -215,7 +255,11 @@ final class Daemon {
     /// Retries endpoints that answered nothing earlier, such as a mouse asleep at attach time.
     private func adoptStragglers() async {
         for (key, endpoint) in endpoints where sessions[key] == nil {
-            _ = await adopt(endpoint)
+            if endpoint.interface.isReceiver {
+                await adoptSlot(endpoint)
+            } else {
+                _ = await adopt(endpoint)
+            }
         }
     }
 
@@ -233,7 +277,7 @@ final class Daemon {
             old.close()
             let session = Session(device: old.device, name: old.name, controls: Array(old.controls.values),
                                   config: config, previouslyDiverted: old.divertedControls,
-                                  scrollMode: old.currentScrollMode)
+                                  wheelsMayBeDiverted: old.wheelsMayBeDiverted, scrollMode: old.currentScrollMode)
             sessions[key] = session
             session.configure()
         }

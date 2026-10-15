@@ -40,6 +40,46 @@ import Testing
         #expect(g.up == .missionControl && g.click == Action.none)
     }
 
+    @Test(arguments: [
+        #"{"dpi": 0}"#, #"{"dpi": 100000}"#,
+        #"{"scrollWheel": {"smartShiftThreshold": 0}}"#,
+        #"{"smoothScroll": {"speed": 1e300}}"#, #"{"smoothScroll": {"speed": 0}}"#,
+        #"{"smoothScroll": {"horizontalSpeed": -1}}"#, #"{"smoothScroll": {"acceleration": -1}}"#,
+        #"{"smoothScroll": {"smoothingMs": 1e300}}"#, #"{"smoothScroll": {"smoothingMs": -5}}"#,
+        #"{"gesture": {"distanceMm": 1e20}}"#, #"{"gesture": {"distanceMm": 0}}"#,
+        #"{"gesture": {"repeatIntervalMs": -1}}"#, #"{"gesture": {"repeatIntervalMs": 9223372036854775807}}"#,
+    ])
+    func outOfRangeNumbersAreErrors(json: String) {
+        // Accepting these would overflow later (converting to Int or Duration) and crash-loop.
+        #expect(throws: DecodingError.self) { try decode(json) }
+    }
+
+    @Test func rangeErrorNamesTheField() {
+        do {
+            _ = try decode(#"{"smoothScroll": {"speed": 1e300}}"#)
+            Issue.record("accepted")
+        } catch DecodingError.dataCorrupted(let context) {
+            #expect(context.debugDescription.hasPrefix("smoothScroll.speed must be 0.1–10.0"))
+        } catch {
+            Issue.record("\(error)")
+        }
+    }
+
+    @Test func boundaryNumbersAreAccepted() throws {
+        let low = try decode("""
+            {"dpi": 50, "scrollWheel": {"smartShiftThreshold": 1},
+             "smoothScroll": {"speed": 0.1, "horizontalSpeed": 0.1, "acceleration": 0, "smoothingMs": 0},
+             "gesture": {"distanceMm": 0.5, "repeatIntervalMs": 0}}
+            """)
+        #expect(low.dpi == 50 && low.smoothScroll?.smoothingMs == 0 && low.gesture.distanceMm == 0.5)
+        let high = try decode("""
+            {"dpi": 25600, "scrollWheel": {"smartShiftThreshold": 255},
+             "smoothScroll": {"speed": 10, "horizontalSpeed": 10, "acceleration": 10, "smoothingMs": 2000},
+             "gesture": {"distanceMm": 50, "repeatIntervalMs": 5000}}
+            """)
+        #expect(high.dpi == 25600 && high.scrollWheel?.smartShiftThreshold == 255 && high.gesture.repeatIntervalMs == 5000)
+    }
+
     @Test func keystrokeParsing() {
         #expect(Keystroke("ctrl+left") == Keystroke(key: 123, modifiers: .maskControl))
         #expect(Keystroke("f11")?.key == 103)

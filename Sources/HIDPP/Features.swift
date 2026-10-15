@@ -302,6 +302,13 @@ public enum Receiver {
         return flags & 0x40 == 0
     }
 
+    /// For a 0x41 notification, the wireless product ID of the slot's device (little-endian,
+    /// `params[1...2]`), which changes when a different device is paired into the slot.
+    public static func productID(_ report: Report) -> UInt16? {
+        guard report.params.count >= 3 else { return nil }
+        return UInt16(report.params[2]) << 8 | UInt16(report.params[1])
+    }
+
     /// Enables wireless (connect/disconnect) notifications and marks HID++ software present.
     public static func enableNotifications(_ receiver: HIDPPDevice) async throws {
         // SET_REGISTER (0x80) register 0x00, 3-byte flags: wireless 0x000100 | software 0x000800.
