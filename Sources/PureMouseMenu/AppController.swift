@@ -16,10 +16,15 @@ final class AppController: NSObject, NSApplicationDelegate {
         model.startWatching()
         // A second launch (the Finder, `open`) asks this one to show Settings, then exits.
         notify_register_dispatch(Companion.showSettingsNotification, &showToken, .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.showSettings() }
+            MainActor.assumeIsolated {
+                _ = ShowRequest.consume() // answered now
+                self?.showSettings()
+            }
         }
         if Paths.showsInMenuBar { statusMenu = StatusMenu(model: model, app: self) }
-        if !Paths.launchedByLaunchd || statusMenu == nil { showSettings() }
+        // A request posted while this instance was still starting (opening the app from the
+        // Finder restarts the menu agent, then opens it) counts too.
+        if !Paths.launchedByLaunchd || statusMenu == nil || ShowRequest.consume() { showSettings() }
         #if DEBUG
         DevHooks.run(app: self)
         #endif
@@ -134,6 +139,26 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     func openReleases() {
         NSWorkspace.shared.open(Links.releases)
+    }
+}
+
+/// "Show Settings", from a second launch to the running instance: a notification, plus a file
+/// stamped with its time, so an instance still starting up (and not yet listening) sees it too.
+enum ShowRequest {
+    private static var file: URL { Companion.directory.appending(path: "show-settings") }
+
+    static func post() {
+        try? FileManager.default.createDirectory(at: Companion.directory, withIntermediateDirectories: true)
+        try? Data().write(to: file)
+        notify_post(Companion.showSettingsNotification)
+    }
+
+    /// Whether one was posted in the last few seconds; removes it either way.
+    static func consume() -> Bool {
+        guard let date = (try? FileManager.default.attributesOfItem(atPath: file.path))?[.modificationDate] as? Date
+        else { return false }
+        try? FileManager.default.removeItem(at: file)
+        return -date.timeIntervalSinceNow < 5
     }
 }
 

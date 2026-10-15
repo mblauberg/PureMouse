@@ -90,8 +90,13 @@ through the daemon binary at `Bundle.main.bundleURL/../../../MacOS/puremouse`:
 
 Opening PureMouse.app from the Finder runs `register`. If the menu app exists and is not hidden, it
 then opens the menu app, which shows Settings. The old alert is kept only when there is no menu
-app. The menu app keeps a single instance: a second launch posts
-`io.github.mblauberg.puremouse.menu.show` and exits, and the running one shows Settings. Reopening
+app. The menu app keeps a single instance: a second launch touches `show-settings` in
+`Companion.directory`, posts `io.github.mblauberg.puremouse.menu.show` and exits, and the running
+one shows Settings. An instance that starts within 5 s of that stamp (including one launchd starts)
+shows Settings too and removes it, so a request made while the agent restarts is not lost.
+`register` restarts the menu agent and then runs `open`, which can reach the instance being booted
+out and fail (`_LSOpenURLsWithCompletionHandler` error -600); touching `show-settings` before
+`register`, and opening the menu app even when hidden, makes the Finder path reliable. Reopening
 the app (`applicationShouldHandleReopen`) also shows Settings. If the user has blocked the item
 under System Settings › Menu Bar, opening the app still reaches Settings.
 

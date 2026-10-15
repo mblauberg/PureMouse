@@ -12,7 +12,7 @@ MainActor.assumeIsolated {
        let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
            .first(where: { $0.processIdentifier != getpid() }) {
         app.yieldActivation(to: running)
-        notify_post(Companion.showSettingsNotification)
+        ShowRequest.post()
         exit(0)
     }
 
