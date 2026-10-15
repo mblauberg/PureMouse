@@ -42,7 +42,7 @@ fi
 rm -rf $app
 mkdir -p $app/Contents/{MacOS,Resources}
 cp $binary $app/Contents/MacOS/puremouse
-cp config.example.json assets/AppIcon.icns $app/Contents/Resources/
+cp config.example.json assets/{Assets.car,AppIcon.icns} $app/Contents/Resources/
 cat > $app/Contents/Info.plist <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -51,6 +51,7 @@ cat > $app/Contents/Info.plist <<PLIST
   <key>CFBundleName</key><string>PureMouse</string>
   <key>CFBundleExecutable</key><string>puremouse</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
+  <key>CFBundleIconName</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$version</string>
   <key>LSMinimumSystemVersion</key><string>$minimum</string>

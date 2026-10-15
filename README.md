@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="assets/AppIcon.png" width="128" height="128" alt="PureMouse icon">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/AppIcon-dark.png">
+    <img src="assets/AppIcon.png" width="128" height="128" alt="PureMouse icon">
+  </picture>
 </p>
 
 <h1 align="center">PureMouse</h1>
@@ -11,7 +14,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/mblauberg/PureMouse/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/mblauberg/PureMouse?color=3B6CF6"></a>
+  <a href="https://github.com/mblauberg/PureMouse/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/mblauberg/PureMouse?color=0A84FF"></a>
   <a href="https://github.com/mblauberg/PureMouse/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/mblauberg/PureMouse/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="macOS 14 or later" src="https://img.shields.io/badge/macOS-14%2B-111111?logo=apple&logoColor=white">
   <img alt="Apple silicon and Intel" src="https://img.shields.io/badge/Apple%20silicon%20%7C%20Intel-universal-555555">
@@ -56,7 +59,7 @@ something does not work.
 
 ## Install
 
-PureMouse requires macOS 14 or later, on Apple silicon or Intel.
+PureMouse requires macOS 14 or later, on Apple silicon or Intel. It is tested on macOS 26 and 27.
 
 ### From a release
 
@@ -233,7 +236,7 @@ Sources/puremouse/   policy: config, actions, gestures, smooth scrolling, one se
                      the daemon (discovery, reconnects, wake, reload, permissions, quit)
 Tests/               pure logic: framing and event parsing, config, gestures, scroll maths
 scripts/             build, install, uninstall, package, signing identity, icon
-assets/              app icon (SVG source and rendered icns/png)
+assets/              app icon (Icon Composer source, compiled icon, README images), menu bar glyph
 ```
 
 ## Development
