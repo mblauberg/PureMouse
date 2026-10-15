@@ -1,5 +1,5 @@
-/// Typed wrappers for the HID++ 2.0 features mxd uses. Each wraps request/response layouts only;
-/// policy lives in the daemon. Byte layouts follow Solaar's `hidpp20.py` and logiops.
+/// Typed wrappers for the HID++ 2.0 features PureMouse uses. Each wraps request/response layouts
+/// only; policy lives in the daemon. Byte layouts follow Solaar's `hidpp20.py` and logiops.
 
 /// 0x1B04 REPROG_CONTROLS_V4: button diversion, so presses arrive over HID++ instead of as clicks.
 public enum ReprogControls {

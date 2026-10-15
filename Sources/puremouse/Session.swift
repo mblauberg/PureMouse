@@ -156,7 +156,7 @@ final class Session {
         return dpi
     }
 
-    /// With smooth scrolling, both wheels report to mxd at full resolution and direction is
+    /// With smooth scrolling, both wheels report to PureMouse at full resolution and direction is
     /// handled in software. Without it, they report as ordinary HID scrolling (Logi Options+
     /// leaves them diverted, which would leave them dead without it), inverted in hardware.
     private func applyWheels() async throws {
@@ -188,7 +188,7 @@ final class Session {
     }
 
     /// Hands the mouse back in its native state: buttons undiverted and wheels reporting as
-    /// ordinary HID scrolling, so it works without mxd. Used when mxd quits.
+    /// ordinary HID scrolling, so it works without PureMouse. Used when PureMouse quits.
     func restore() async {
         finished = true
         configuring?.cancel()

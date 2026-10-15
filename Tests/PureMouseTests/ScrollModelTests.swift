@@ -1,5 +1,5 @@
 import Testing
-@testable import mxd
+@testable import puremouse
 
 struct ScrollModelTests {
     @Test func animatorDeliversExactDistance() {

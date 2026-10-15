@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import mxd
+@testable import puremouse
 
 @Suite struct ConfigTests {
     func decode(_ json: String) throws -> Config {

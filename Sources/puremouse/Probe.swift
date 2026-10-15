@@ -1,8 +1,8 @@
 import Foundation
 import HIDPP
 
-/// `mxd probe`: read-only dump of every HID++ device and the state of the features mxd uses.
-/// Sends only get-style requests, so it is safe to run alongside other HID++ software.
+/// `puremouse probe`: read-only dump of every HID++ device and the state of the features PureMouse
+/// uses. Sends only get-style requests, so it is safe to run alongside other HID++ software.
 @MainActor
 enum Probe {
     static func run(monitor: HIDMonitor) async {

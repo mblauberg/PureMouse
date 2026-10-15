@@ -1,11 +1,11 @@
 #!/bin/zsh
-# Builds mxd, installs it as /Applications/mxd.app and (re)starts its login agent. Arguments go
-# to build-app.sh.
+# Builds PureMouse, installs it as /Applications/PureMouse.app and (re)starts its login agent.
+# Arguments go to build-app.sh.
 set -euo pipefail
 cd "${0:A:h}/.."
 
-label=local.mxd
-app=/Applications/mxd.app
+label=io.github.mblauberg.puremouse
+app=/Applications/PureMouse.app
 scripts/build-app.sh "$@"
 
 # Stop the running agent before touching its files: replacing a running binary can get it
@@ -18,6 +18,6 @@ for _ in {1..50}; do
 done
 
 rm -rf $app
-ditto .build/app/mxd.app $app
-$app/Contents/MacOS/mxd register
-echo "Log: ~/Library/Logs/mxd.log"
+ditto .build/app/PureMouse.app $app
+$app/Contents/MacOS/puremouse register
+echo "Log: ~/Library/Logs/PureMouse.log"

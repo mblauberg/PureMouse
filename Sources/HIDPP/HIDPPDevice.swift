@@ -11,7 +11,7 @@ public final class HIDPPDevice {
 
     /// Software IDs mark replies as ours (0 is reserved for events). They rotate per request so
     /// that a reply arriving after its request timed out cannot satisfy a later request, and
-    /// programs sharing a device (the daemon and `mxd probe`) use disjoint ranges.
+    /// programs sharing a device (the daemon and `puremouse probe`) use disjoint ranges.
     public nonisolated let softwareIDs: ClosedRange<UInt8>
     public static let defaultSoftwareIDs: ClosedRange<UInt8> = 0x8...0xF
     public var timeout: Duration = .milliseconds(1500)

@@ -84,7 +84,7 @@ enum SystemActions {
     // as the trackpad does, independent of the user's keyboard shortcuts.
     private typealias CoreDockSendNotification = @convention(c) (CFString, Int32) -> Int32
     private static let coreDockSend: CoreDockSendNotification? = {
-        // It lives in ApplicationServices, which mxd does not otherwise link.
+        // It lives in ApplicationServices, which PureMouse does not otherwise link.
         let framework = "/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices"
         guard let handle = dlopen(framework, RTLD_LAZY),
               let symbol = dlsym(handle, "CoreDockSendNotification") else {

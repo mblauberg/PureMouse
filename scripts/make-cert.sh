@@ -1,14 +1,14 @@
 #!/bin/zsh
-# Creates a self-signed code-signing identity named "mxd" in the login keychain, once per Mac you
-# build on. Signing every build with it keeps mxd's permission grants across rebuilds. The
+# Creates a self-signed code-signing identity named "PureMouse" in the login keychain, once per Mac
+# you build on. Signing every build with it keeps PureMouse's permission grants across rebuilds. The
 # certificate stays untrusted ("CSSMERR_TP_NOT_TRUSTED"); code signing does not need trust.
 #
 # The first build after this may ask whether codesign can use the key: choose Always Allow.
 # Back up the identity (Keychain Access › Export) if you publish releases signed with it: a new
-# one means everyone who installed mxd grants its permissions again.
+# one means everyone who installed PureMouse grants its permissions again.
 set -euo pipefail
-name=${MXD_SIGN_IDENTITY:-mxd}
-keychain=${MXD_KEYCHAIN:-login.keychain-db}
+name=${PUREMOUSE_SIGN_IDENTITY:-PureMouse}
+keychain=${PUREMOUSE_KEYCHAIN:-login.keychain-db}
 
 if security find-identity -p codesigning $keychain | grep -q "\"$name\""; then
     echo "code-signing identity \"$name\" already exists"

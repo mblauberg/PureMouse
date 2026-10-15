@@ -1,15 +1,15 @@
 import Foundation
 import HIDPP
 
-/// User configuration, read from `~/.config/mxd/config.json`. Every field is optional; omitted
-/// settings are left as the device has them.
+/// User configuration, read from `~/.config/puremouse/config.json`. Every field is optional;
+/// omitted settings are left as the device has them.
 struct Config: Decodable {
     /// Sensor resolution, snapped to the nearest value the sensor reports it supports (the
     /// MX Master 3S accepts 200–8000 in steps of 50).
     var dpi: Int?
     var scrollWheel: ScrollWheel?
     var thumbWheel: ThumbWheel?
-    /// When present, mxd takes both wheels over and scrolls smoothly itself (instead of Mos).
+    /// When present, PureMouse takes both wheels over and scrolls smoothly itself (instead of Mos).
     var smoothScroll: SmoothScroll?
     /// Button name (see `Button`) or hex control ID (e.g. "0x00c4") → binding.
     var buttons: [String: Binding] = [:]
@@ -167,7 +167,7 @@ struct Config: Decodable {
     }
 
     static let defaultURL = FileManager.default.homeDirectoryForCurrentUser
-        .appending(path: ".config/mxd/config.json")
+        .appending(path: ".config/puremouse/config.json")
 
     static func load(from url: URL) throws -> Config {
         try JSONDecoder().decode(Config.self, from: Data(contentsOf: url))

@@ -19,7 +19,7 @@ final class Daemon {
     private var interfaceTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
     private var adopting: Set<Key> = []
     /// Endpoints found not to be a configurable mouse (e.g. a keyboard on the same receiver),
-    /// skipped until the config changes or mxd restarts.
+    /// skipped until the config changes or PureMouse restarts.
     private var ignored: Set<Key> = []
     private var power: PowerObserver?
     private var signalSources: [DispatchSourceSignal] = []
@@ -73,8 +73,8 @@ final class Daemon {
         if granted != .all { restartWhenGranted(beyond: granted) }
     }
 
-    /// A fresh child process (`mxd permissions`) sees new grants that this one cannot. When one
-    /// arrives, quit cleanly and let launchd start mxd again with it. Only under launchd
+    /// A fresh child process (`puremouse permissions`) sees new grants that this one cannot. When
+    /// one arrives, quit cleanly and let launchd start PureMouse again with it. Only under launchd
     /// (parent pid 1): an instance run from a terminal would not come back.
     private func restartWhenGranted(beyond granted: Permissions) {
         guard getppid() == 1, let executable = Bundle.main.executableURL else { return }

@@ -1,10 +1,10 @@
 import CoreFoundation
 import Foundation
 
-/// Starting mxd at login: a launchd agent, `~/Library/LaunchAgents/<bundle id>.plist`, that runs
-/// this app's binary. Opening the app writes and loads it, so installing is copying the app and
-/// opening it once. macOS lists it under System Settings › General › Login Items as a background
-/// item, where it can be switched off.
+/// Starting PureMouse at login: a launchd agent, `~/Library/LaunchAgents/<bundle id>.plist`, that
+/// runs this app's binary. Opening the app writes and loads it, so installing is copying the app
+/// and opening it once. macOS lists it under System Settings › General › Login Items as a
+/// background item, where it can be switched off.
 ///
 /// Not `SMAppService`: without a Developer ID team, launchd pins its agents to the exact build that
 /// registered them, and after an update refuses to start the new binary (EX_CONFIG).
@@ -13,7 +13,7 @@ enum LoginItem {
     static var inBundle: Bool { Bundle.main.bundleIdentifier != nil }
 
     private static let logURL = FileManager.default.homeDirectoryForCurrentUser
-        .appending(path: "Library/Logs/mxd.log")
+        .appending(path: "Library/Logs/PureMouse.log")
 
     private static func plistURL(_ label: String) -> URL {
         FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/LaunchAgents/\(label).plist")
@@ -49,7 +49,7 @@ enum LoginItem {
         try PropertyListSerialization.data(fromPropertyList: agent, format: .xml, options: 0).write(to: plist)
         let (status, output) = launchctl("bootstrap", "gui/\(getuid())", plist.path)
         guard status == 0 else { throw Failure.bootstrap(output) }
-        return restarting ? "mxd restarted." : "mxd is running and will start at login."
+        return restarting ? "PureMouse restarted." : "PureMouse is running and will start at login."
     }
 
     /// Stops the agent (launchd sends it SIGTERM, so it restores the mouse) and removes it from
@@ -110,12 +110,12 @@ enum LoginItem {
 
         var description: String {
             switch self {
-            case .notInBundle: "only an installed mxd.app can register itself to start at login"
-            case .translocated: "move mxd to the Applications folder, then open it again"
+            case .notInBundle: "only an installed PureMouse.app can register itself to start at login"
+            case .translocated: "move PureMouse to the Applications folder, then open it again"
             case .stillRunning(let output):
-                "the running mxd did not stop (\(output)); try `launchctl bootout gui/$UID/local.mxd`"
+                "the running PureMouse did not stop (\(output)); try `launchctl bootout gui/$UID/io.github.mblauberg.puremouse`"
             case .bootstrap(let output):
-                "launchd would not start mxd (\(output)); check it is allowed under System Settings › General › Login Items"
+                "launchd would not start PureMouse (\(output)); check it is allowed under System Settings › General › Login Items"
             }
         }
     }

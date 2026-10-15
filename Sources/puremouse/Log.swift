@@ -1,6 +1,6 @@
 import Foundation
 
-/// Timestamped lines on stderr. The login agent sends stderr to ~/Library/Logs/mxd.log.
+/// Timestamped lines on stderr. The login agent sends stderr to ~/Library/Logs/PureMouse.log.
 enum Log {
     nonisolated(unsafe) static var verbose = false
 

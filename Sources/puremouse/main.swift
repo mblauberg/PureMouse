@@ -20,17 +20,17 @@ switch arguments.first {
 case nil where LoginItem.inBundle:
     // Opened from the Finder: install the login agent, which runs the daemon.
     do {
-        LoginItem.alert("mxd", try LoginItem.register() + """
+        LoginItem.alert("PureMouse", try LoginItem.register() + """
 
 
             macOS will ask for Accessibility and Input Monitoring; allow both in System Settings › \
             Privacy & Security.
 
-            Settings: ~/.config/mxd/config.json
-            Log: ~/Library/Logs/mxd.log
+            Settings: ~/.config/puremouse/config.json
+            Log: ~/Library/Logs/PureMouse.log
             """)
     } catch {
-        LoginItem.alert("mxd could not start", "\(error)")
+        LoginItem.alert("PureMouse could not start", "\(error)")
         exit(1)
     }
 case nil, "run":
@@ -47,7 +47,7 @@ case nil, "run":
     // Private interfaces (Dock notifications, swipe event fields) can change between releases,
     // so record which macOS each log belongs to.
     let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
-    Log.info("mxd \(version) on macOS \(ProcessInfo.processInfo.operatingSystemVersionString)")
+    Log.info("PureMouse \(version) on macOS \(ProcessInfo.processInfo.operatingSystemVersionString)")
     let daemon = Daemon(config: config, configURL: url)
     daemon.start()
     withExtendedLifetime(daemon) { runMainLoop() }
@@ -96,13 +96,15 @@ case "probe":
     withExtendedLifetime(monitor) { runMainLoop() }
 default:
     print("""
-    usage: mxd [--verbose] [run [config.json]]   run the daemon (default config: ~/.config/mxd/config.json);
-                                                inside the app, bare `mxd` registers it instead
-           mxd probe                            read-only dump of connected HID++ devices
-           mxd permissions                      macOS permissions of the launching process
-           mxd action <name | {"keys": ...}>    perform one action now, as a button would
-           mxd register | unregister            start (or restart) or stop the installed app's
-                                                login agent; unregister also stops it at login
+    usage: puremouse [--verbose] [run [config.json]]   run the daemon (default config:
+                                                      ~/.config/puremouse/config.json); inside
+                                                      the app, bare `puremouse` registers it
+           puremouse probe                            read-only dump of connected HID++ devices
+           puremouse permissions                      macOS permissions of the launching process
+           puremouse action <name | {"keys": ...}>    perform one action now, as a button would
+           puremouse register | unregister            start (or restart) or stop the installed
+                                                      app's login agent; unregister also stops
+                                                      it at login
     Send SIGHUP to reload the config.
     """)
     exit(64)

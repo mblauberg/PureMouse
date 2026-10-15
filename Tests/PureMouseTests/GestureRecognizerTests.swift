@@ -1,5 +1,5 @@
 import Testing
-@testable import mxd
+@testable import puremouse
 
 @Suite struct GestureRecognizerTests {
     let t0 = ContinuousClock.now

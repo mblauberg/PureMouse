@@ -1,5 +1,5 @@
 import Testing
-@testable import mxd
+@testable import puremouse
 
 @Suite struct LogiOptionsTests {
     @Test func matchesItsProcesses() {
@@ -12,7 +12,7 @@ import Testing
     }
 
     @Test func ignoresLookalikes() {
-        for name in ["login", "logind", "loginwindow", "mxd", "Logic Pro X", "logi_crashpad_handler"] {
+        for name in ["login", "logind", "loginwindow", "puremouse", "Logic Pro X", "logi_crashpad_handler"] {
             #expect(!LogiOptions.isLogiOptions(processName: name), "\(name)")
         }
     }

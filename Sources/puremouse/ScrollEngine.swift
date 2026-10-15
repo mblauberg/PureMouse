@@ -2,8 +2,8 @@ import CoreGraphics
 import CoreVideo
 import Foundation
 
-/// mxd's own smooth scrolling, replacing Mos: wheel movement arrives over HID++ (the wheels are
-/// diverted, so macOS never sees them) and leaves as pixel scroll events, eased over a few
+/// PureMouse's own smooth scrolling, replacing Mos: wheel movement arrives over HID++ (the wheels
+/// are diverted, so macOS never sees them) and leaves as pixel scroll events, eased over a few
 /// display frames. Idle costs nothing; the frame clock only runs while a scroll is gliding.
 @MainActor
 final class ScrollEngine {
