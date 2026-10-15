@@ -286,26 +286,44 @@ public enum UnifiedBattery {
         public var isCharging: Bool { charging == .charging || charging == .chargingSlowly }
     }
 
-    /// getStatus.
-    public static func status(_ d: HIDPPDevice) async throws -> State {
-        guard let state = parseStatus(try await d.call(id, 1)) else { throw HIDPPError.malformedResponse }
+    /// The level bits (8 full, 4 good, 2 low, 1 critical) a device's status reports mean
+    /// anything for. As in Linux, a device that reports a state of charge has its levels ignored.
+    public static let allLevels: UInt8 = 0x0F
+
+    /// getCapabilities: [supported level bits, flags (1 rechargeable, 2 state of charge)].
+    /// Returns the level bits to honour in status reports.
+    public static func levels(_ d: HIDPPDevice) async throws -> UInt8 {
+        guard let levels = parseCapabilities(try await d.call(id, 0)) else { throw HIDPPError.malformedResponse }
+        return levels
+    }
+
+    public static func parseCapabilities(_ params: [UInt8]) -> UInt8? {
+        guard params.count >= 2 else { return nil }
+        return params[1] & 0x02 != 0 ? 0 : params[0] & allLevels
+    }
+
+    /// getStatus, its level bits masked by `levels` (see `levels(_:)`).
+    public static func status(_ d: HIDPPDevice, levels: UInt8 = allLevels) async throws -> State {
+        guard let state = parseStatus(try await d.call(id, 1), levels: levels) else {
+            throw HIDPPError.malformedResponse
+        }
         return state
     }
 
     /// The broadcast status event (function 0), sent when charge or charging changes. Same
     /// layout as getStatus.
-    public static func parse(function: UInt8, params: [UInt8]) -> State? {
-        function == 0 ? parseStatus(params) : nil
+    public static func parse(function: UInt8, params: [UInt8], levels: UInt8 = allLevels) -> State? {
+        function == 0 ? parseStatus(params, levels: levels) : nil
     }
 
-    /// [state of charge %, level bits (8 full, 4 good, 2 low, 1 critical), charging status,
-    /// external power]. A charge of 0 means the device reports levels only.
-    public static func parseStatus(_ params: [UInt8]) -> State? {
+    /// [state of charge %, level bits, charging status, external power]. A charge of 0 means the
+    /// device reports levels only. Level bits outside `levels` are ignored, and of the rest the
+    /// highest wins, as in Linux (hidpp20_unifiedbattery_map_level).
+    public static func parseStatus(_ params: [UInt8], levels: UInt8 = allLevels) -> State? {
         guard params.count >= 4, params[0] <= 100 else { return nil }
-        let bits = params[1]
-        // Lowest set bit wins, as in Linux: a device may set more than one.
-        let level: Level? = bits & 0x01 != 0 ? .critical : bits & 0x02 != 0 ? .low
-            : bits & 0x04 != 0 ? .good : bits & 0x08 != 0 ? .full : nil
+        let bits = params[1] & levels
+        let level: Level? = bits & 0x08 != 0 ? .full : bits & 0x04 != 0 ? .good
+            : bits & 0x02 != 0 ? .low : bits & 0x01 != 0 ? .critical : nil
         return State(percent: params[0] == 0 ? nil : Int(params[0]), level: level,
                      charging: Charging(rawValue: params[2]), externalPower: params[3] != 0)
     }

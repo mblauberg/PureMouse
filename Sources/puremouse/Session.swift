@@ -41,6 +41,8 @@ final class Session {
     private var dpi: Int?
     private var wheelMode: SmartShift.Mode?
     private var battery: UnifiedBattery.State?
+    /// Level bits the battery's reports mean anything for (0x1004 getCapabilities), read once.
+    private var batteryLevels: UInt8?
     private var hasSmartShift: Bool
     private var hasThumbWheel: Bool
     private var configuring: Task<Void, Never>?
@@ -68,6 +70,7 @@ final class Session {
         var dpi: Int?
         var wheelMode: SmartShift.Mode?
         var battery: UnifiedBattery.State?
+        var batteryLevels: UInt8?
         var hasSmartShift = false
         var hasThumbWheel = false
     }
@@ -89,6 +92,7 @@ final class Session {
         dpi = inherited.dpi
         wheelMode = inherited.wheelMode
         battery = inherited.battery
+        batteryLevels = inherited.batteryLevels
         hasSmartShift = inherited.hasSmartShift
         hasThumbWheel = inherited.hasThumbWheel
         scroll = config.smoothScroll.flatMap { $0.enabled ? ScrollEngine(profile: Self.profile($0, config)) : nil }
@@ -109,7 +113,7 @@ final class Session {
         Inherited(diverted: divertedControls, wheelsMayBeDiverted: wheelsMayBeDiverted, scrollMode: scrollMode,
                   liveDPI: liveDPI,
                   resolutions: resolutions, online: online, dpi: dpi, wheelMode: wheelMode,
-                  battery: battery, hasSmartShift: hasSmartShift, hasThumbWheel: hasThumbWheel)
+                  battery: battery, batteryLevels: batteryLevels, hasSmartShift: hasSmartShift, hasThumbWheel: hasThumbWheel)
     }
 
     var status: Status.Device {
@@ -283,7 +287,8 @@ final class Session {
     private func readBattery() async {
         guard (try? await device.hasFeature(UnifiedBattery.id)) == true else { return }
         do {
-            battery = try await UnifiedBattery.status(device)
+            if batteryLevels == nil { batteryLevels = try await UnifiedBattery.levels(device) }
+            battery = try await UnifiedBattery.status(device, levels: batteryLevels ?? UnifiedBattery.allLevels)
         } catch {
             Log.debug("\(name): reading battery failed: \(error)")
         }
@@ -431,7 +436,9 @@ final class Session {
             case nil: break
             }
         case UnifiedBattery.id:
-            if let state = UnifiedBattery.parse(function: report.function, params: report.params), state != battery {
+            if let state = UnifiedBattery.parse(function: report.function, params: report.params,
+                                                 levels: batteryLevels ?? UnifiedBattery.allLevels),
+               state != battery {
                 Log.debug("\(name): battery \(state.percent.map { "\($0)%" } ?? "?") \(state.isCharging ? "charging" : "")")
                 battery = state
                 changed()

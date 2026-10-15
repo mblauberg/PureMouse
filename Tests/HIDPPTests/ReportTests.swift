@@ -89,7 +89,20 @@ struct BatteryTests {
         #expect(charging.percent == nil && charging.level == .low && charging.isCharging && charging.externalPower)
         let full = try #require(UnifiedBattery.parseStatus([100, 0x08, 0x03, 0x01]))
         #expect(full.level == .full && full.charging == .complete && !full.isCharging)
-        #expect(UnifiedBattery.parseStatus([10, 0x03, 0x00, 0x00])?.level == .critical)  // lowest bit wins
+        #expect(UnifiedBattery.parseStatus([10, 0x03, 0x00, 0x00])?.level == .low)  // highest bit wins
+    }
+
+    @Test func levelsAreMaskedByCapabilities() throws {
+        // Levels only, supporting critical, low and full.
+        let levels = try #require(UnifiedBattery.parseCapabilities([0x0B, 0x01]))
+        #expect(levels == 0x0B)
+        #expect(UnifiedBattery.parseStatus([0, 0x06, 0x00, 0x00], levels: levels)?.level == .low)
+        #expect(UnifiedBattery.parse(function: 0, params: [0, 0x04, 0x00, 0x00], levels: levels)?.level == nil)
+        // A state of charge: levels are ignored and the percentage stands alone.
+        #expect(UnifiedBattery.parseCapabilities([0x0F, 0x03]) == 0)
+        let soc = try #require(UnifiedBattery.parseStatus([0x2D, 0x04, 0x00, 0x00], levels: 0))
+        #expect(soc.percent == 45 && soc.level == nil)
+        #expect(UnifiedBattery.parseCapabilities([0x0F]) == nil)
     }
 
     @Test func rejectsOtherFunctionsAndShortOrBadReports() {

@@ -130,7 +130,8 @@ work on it safely.
 - Events only route for features whose index is already resolved (`HIDPPDevice.feature(at:)`), so
   `Session.apply()` resolves the event-bearing ones (0x1B04, 0x1D4B, 0x1004 battery) first.
   Battery is read on each apply and then follows the 0x1004 broadcast events; it is
-  informational and never fails an apply.
+  informational and never fails an apply. Level bits are masked by getCapabilities (cleared
+  when the mouse reports a percentage) and the highest wins, as in Linux.
 - DPI is snapped to the sensor's own list (0x2201 getSensorDpiList), read once per mouse and
   inherited across reloads; if the list cannot be read, the configured value is sent unchanged.
   `cycleDPI` sets `Session.liveDPI`, which overrides `config.dpi` in `apply()`; `Daemon.reload`

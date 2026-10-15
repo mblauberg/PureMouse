@@ -112,8 +112,10 @@ Choices the contract left open, as the daemon implements them:
   every value (157 on an MX Master 3S). `controls` leaves out virtual controls (flag 0x80, e.g.
   0x00d7), which cannot be pressed. While paused, `devices` is empty: the sessions are dropped.
 - **Battery** comes from HID++ 0x1004 (getStatus, then its broadcast events). `charging` is true
-  while charging or charging slowly, false once complete. Mice without 0x1004 report none; the
-  older 0x1000 is not read.
+  while charging or charging slowly, false once complete. As in Linux, the level bits are masked
+  by getCapabilities and the highest wins; a mouse that reports a percentage has its levels
+  ignored, so `level` is derived from the percentage. Mice without 0x1004 report none; the older
+  0x1000 is not read.
 - **Config watching** watches the file as well as its directory, since editors that write in place
   leave the directory unchanged. A reload that fails leaves the previous config in effect and
   reports `config.error` (`ConfigCheck.message`, which names the field); the next successful load
