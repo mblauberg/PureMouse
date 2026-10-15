@@ -49,6 +49,14 @@ public struct Keystroke: Equatable, Sendable {
     private static let fKeyCodes: [CGKeyCode] = [122, 120, 99, 118, 96, 97, 98, 100, 101, 109, 103, 111]
     private static let functionKeys = Set(fKeyCodes)
 
+    /// Each key code's canonical name, the one a recorded shortcut is written with ("return",
+    /// not its alias "enter").
+    public static let keyNames: [CGKeyCode: String] = keyCodes.reduce(into: [:]) { names, entry in
+        if !aliases.contains(entry.key) { names[entry.value] = entry.key }
+    }
+
+    private static let aliases: Set<String> = ["enter", "backspace", "esc"]
+
     private static let keyCodes: [String: CGKeyCode] = {
         var codes: [String: CGKeyCode] = [
             "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7, "c": 8, "v": 9,

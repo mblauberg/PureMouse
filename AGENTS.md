@@ -15,6 +15,16 @@ work on it safely.
   rebuilds, re-signs and restarts the agent, and check `~/Library/Logs/PureMouse.log`.
   (`puremouse permissions` answers for whoever launches it, so from a terminal it reports the
   terminal's permissions, not the app's.)
+- Menu bar app (`Sources/PureMouseMenu`): run `.build/debug/PureMouseMenu` alongside the installed
+  agent, but point it away from the real files first: `PUREMOUSE_CONFIG` (config file),
+  `PUREMOUSE_DAEMON` (the binary it runs for register/stop/menu commands; a stub script is fine)
+  and `PUREMOUSE_COMPANION_DIR` (the status/control channel; a fixture `status.json` there stands
+  in for the daemon). Without them it edits the live config and drives the installed agent. Debug
+  builds also take `PUREMOUSE_DEV_PANE=<pane>`, `PUREMOUSE_DEV_MENU=1`,
+  `PUREMOUSE_DEV_APPEARANCE=light|dark`, `PUREMOUSE_DEV_PICKER=<button>` and
+  `PUREMOUSE_DEV_SHORTCUT=<button>` for screenshots (`DevHooks.swift`); `--login` launches it as
+  launchd does (no Settings window). Check its footprint with `footprint <pid>` before and after
+  opening Settings.
 - The user's live config is `~/.config/puremouse/config.json`; keep `config.example.json` in step
   with it (its test checks shape, not values). Config changes apply on save (`ConfigWatcher`
   watches the file and its directory, reloading when the bytes change) or with
@@ -74,6 +84,24 @@ work on it safely.
 - Keep it light: no dependencies, and no AppKit or SwiftUI in the daemon or PureMouseKit (only
   `PureMouseMenu` may link them). Idle cost is zero CPU; the display link
   runs only while a scroll is gliding, never with `smoothingMs` 0 (`PixelCarry` posts at once).
+- The menu bar app never opens HID devices: it edits the config file and talks to the daemon only
+  through the companion channel and the daemon CLI (`docs/companion.md`). It must not poll: it
+  wakes on notifications, file events and the daemon's process exit. Its Settings window and view
+  tree are built when shown (each pane on its first visit) and released when closed; the menu is
+  rebuilt on open. Shortcut specs are parsed and named by Kit's `Keystroke` only; the menu adds
+  glyphs and spoken words.
+- The DPI the menu and the Pointer pane show is the mouse's live value (a `cycleDPI` press
+  changes it without touching the config), then the configured one; a change made in the pane
+  shows until the mouse reports it (`DPIReading`).
+- The menu bar app writes only the keys a control owns (`ConfigTree`) and keeps every other key,
+  including unknown ones. It records edits as the keys they set and `ConfigFile.save` replays
+  them onto the file as it is when saving, so a hand edit made meanwhile survives; with no
+  pending edit nothing is written. It refuses to build on a file that does not parse or
+  validate, and writes through `JSON.encode` (shortest decimals, sorted keys, whole and big
+  numbers kept digit for digit), never `JSONSerialization`.
+- Settings shows no focus ring until the keyboard is used: windows, panes, the action picker and
+  the shortcut sheet open with nothing focused (the picker's search takes the first keystroke).
+  Check with keyboard navigation (`AppleKeyboardUIMode`) both on and off.
 
 ## Easy to break
 
@@ -147,7 +175,8 @@ work on it safely.
 - DPI is snapped to the sensor's own list (0x2201 getSensorDpiList), read once per mouse and
   inherited across reloads; if the list cannot be read, the configured value is sent unchanged.
   `cycleDPI` sets `Session.liveDPI`, which overrides `config.dpi` in `apply()`; `Daemon.reload`
-  clears it only when `dpi` or `dpiPresets` changed.
+  clears it only when `dpi` or `dpiPresets` changed, and `Control.useConfiguredDPI` clears it on
+  request (`AppModel.setDPI` sends it, since choosing the saved value changes nothing on disk).
 
 ## Extending
 

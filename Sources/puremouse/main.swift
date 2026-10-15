@@ -22,10 +22,8 @@ case nil where LoginItem.inBundle:
     // Opened from the Finder: install the login agents, then show the menu bar app's Settings.
     do {
         let outcome = try LoginItem.register()
-        if let menu = LoginItem.menuApp, !LoginItem.menuHidden {
-            LoginItem.openMenu(menu)
-            exit(0)
-        }
+        // With the icon hidden, the app still opens for Settings and quits when they close.
+        if let menu = LoginItem.menuApp, LoginItem.openMenu(menu) { exit(0) }
         LoginItem.alert("PureMouse", outcome + """
 
 

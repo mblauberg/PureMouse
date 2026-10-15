@@ -15,3 +15,10 @@ import Testing
     let data = try Companion.encoder.encode(status)
     #expect(try Companion.decoder.decode(Status.self, from: data) == status)
 }
+
+@Test func controlReadsWithoutNewerKeys() throws {
+    let old = try Companion.decoder.decode(Control.self, from: Data(#"{"paused": true}"#.utf8))
+    #expect(old == Control(paused: true))
+    let control = Control(paused: false, capture: .init(token: 7), useConfiguredDPI: 9)
+    #expect(try Companion.decoder.decode(Control.self, from: Companion.encoder.encode(control)) == control)
+}

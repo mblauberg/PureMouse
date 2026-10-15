@@ -1,7 +1,12 @@
 #!/bin/zsh
-# Stops PureMouse and removes the app and its login agent. Keeps ~/.config/puremouse.
+# Stops PureMouse and removes the app and its login agents (the daemon's and the menu bar app's).
+# Keeps ~/.config/puremouse.
 set -euo pipefail
 label=io.github.mblauberg.puremouse
+menu_label=$label.menu
+launchctl bootout gui/$UID/$menu_label 2>/dev/null || true
+pkill -x PureMouseMenu 2>/dev/null || true
+rm -f ~/Library/LaunchAgents/$menu_label.plist
 launchctl bootout gui/$UID/$label 2>/dev/null || true
 for _ in {1..50}; do
     launchctl print gui/$UID/$label >/dev/null 2>&1 || break

@@ -27,9 +27,9 @@
 
 PureMouse communicates directly with Logitech mice over the HID++ 2.0 protocol, whether connected
 via a Bolt or Unifying receiver or over Bluetooth. It maps mouse buttons to macOS actions and can
-replace default system scrolling with responsive smooth scrolling. Running as a lightweight
-background agent with no window and no menu, it uses under 10 MB of memory and consumes zero CPU
-while the mouse is idle.
+replace default system scrolling with responsive smooth scrolling. The work is done by a
+lightweight background agent that uses under 10 MB of memory and consumes zero CPU while the mouse
+is idle; a small menu bar app shows the mouse's status and holds the settings.
 
 ## Features
 
@@ -47,6 +47,9 @@ while the mouse is idle.
   reconnect and after the Mac wakes.
 - **Leaves no trace.** On quit or logout, PureMouse restores the mouse to its native behaviour.
   Nothing is stored on the mouse or receiver, so they behave normally on any other computer.
+- **Menu bar and Settings.** Battery and connection at a glance, smooth scrolling and pointer
+  speed presets one click away, and a Settings window for every button, wheel and pointer option.
+  The config file stays the source of truth: edit it by hand or in Settings, whichever you prefer.
 - **Private by design.** No network access, no account, no telemetry, and no external dependencies.
 
 ## Supported mice
@@ -80,11 +83,13 @@ PureMouse requires macOS 14 or later, on Apple silicon or Intel. It is tested on
    the example if you do not have one, and starts.
 4. Grant the two [permissions](#permissions) it asks for.
 
-To update, drag the new `PureMouse.app` over the old one and open it again. To stop PureMouse, turn
-it off under System Settings › General › Login Items, or run
-`/Applications/PureMouse.app/Contents/MacOS/puremouse unregister`. The `register` command starts it
-again. `puremouse stop` stops it until the next login, and `puremouse menu off` (or `on`) hides
-(or shows) the menu bar icon; PureMouse keeps working without it.
+To update, drag the new `PureMouse.app` over the old one and open it again. **Quit PureMouse** in
+its menu stops it until the next login (as does `puremouse stop`); turning off **Start PureMouse
+at login** in Settings › General stops it for good, as does
+`/Applications/PureMouse.app/Contents/MacOS/puremouse unregister`. Opening the app (or the
+`register` command) starts it again. **Hide Menu Bar Icon** (or `puremouse menu off`) hides the
+icon; PureMouse keeps working without it, and `puremouse menu on` or Settings › General brings it
+back.
 
 ### From source
 
@@ -246,7 +251,10 @@ Sources/PureMouseKit/ shared with the menu bar app: config model and decoder, st
                      channel (docs/companion.md)
 Sources/puremouse/   policy: applying config, actions, gestures, smooth scrolling, one session
                      per mouse, the daemon (discovery, reconnects, wake, reload, permissions, quit)
-Tests/               pure logic: framing and event parsing, config, gestures, scroll maths
+Sources/PureMouseMenu/ the menu bar app (PureMouse.app/Contents/Library/LoginItems): status menu
+                     and Settings; edits the config, never touches the mouse
+Tests/               pure logic: framing and event parsing, config, gestures, scroll maths,
+                     the menu bar app's config editing
 scripts/             build, install, uninstall, package, signing identity, icon
 assets/              app icon (Icon Composer source, compiled icon, README images), menu bar glyph
 ```

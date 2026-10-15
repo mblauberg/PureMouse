@@ -24,5 +24,6 @@ let package = Package(
         .testTarget(name: "HIDPPTests", dependencies: ["HIDPP"]),
         .testTarget(name: "PureMouseTests", dependencies: ["puremouse"]),
         .testTarget(name: "PureMouseKitTests", dependencies: ["PureMouseKit"]),
+        .testTarget(name: "PureMouseMenuTests", dependencies: ["PureMouseMenu"]),
     ]
 )
