@@ -27,13 +27,22 @@ final class StatusMenu: NSObject, NSMenuDelegate {
 
     func open() { statusItem.button?.performClick(nil) }
 
+    private var shown: (dimmed: Bool, badge: StatusIcon.Badge, label: String)?
+
+    /// Redraws the glyph and relabels it only when what they show has changed.
     func updateIcon() {
         guard let button = statusItem.button else { return }
         let badge: StatusIcon.Badge = model.needsAttention ? .attention : model.lowBattery ? .battery : .none
-        button.image = StatusIcon.image(dimmed: !model.daemonRunning || model.paused, badge: badge)
+        let dimmed = !model.daemonRunning || model.paused
         let label = StatusText.accessibilityLabel(model: model)
-        button.setAccessibilityLabel(label)
-        button.toolTip = label
+        if shown?.dimmed != dimmed || shown?.badge != badge {
+            button.image = StatusIcon.image(dimmed: dimmed, badge: badge)
+        }
+        if shown?.label != label {
+            button.setAccessibilityLabel(label)
+            button.toolTip = label
+        }
+        shown = (dimmed, badge, label)
     }
 
     // MARK: Building

@@ -112,16 +112,16 @@ final class AppModel {
         let url = Companion.statusURL
         if let data = try? Data(contentsOf: url) {
             if let decoded = try? Companion.decoder.decode(Status.self, from: data) {
-                statusTooNew = decoded.schema > Status.currentSchema
-                status = decoded
+                assign(\.statusTooNew, decoded.schema > Status.currentSchema)
+                assign(\.status, decoded)
             } else {
                 let schema = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["schema"] as? Int
-                statusTooNew = (schema ?? 0) > Status.currentSchema
-                status = nil
+                assign(\.statusTooNew, (schema ?? 0) > Status.currentSchema)
+                assign(\.status, nil)
             }
         } else {
-            status = nil
-            statusTooNew = false
+            assign(\.status, nil)
+            assign(\.statusTooNew, false)
         }
         refreshLiveness()
         if let capture = status?.capture { handleCapture(capture) }
@@ -130,13 +130,19 @@ final class AppModel {
     /// Re-checks that the daemon's process exists (`running` alone survives a crash).
     func refreshLiveness() {
         let pid = status?.pid ?? 0
-        daemonRunning = status?.running == true && pid > 0 && kill(pid, 0) == 0
+        assign(\.daemonRunning, status?.running == true && pid > 0 && kill(pid, 0) == 0)
         if requestedPaused != nil, status?.paused == requestedPaused || !daemonRunning || pid != watchedPID {
             requestedPaused = nil
         }
         watchExit(of: daemonRunning ? pid : 0)
         if !daemonRunning, captureListening { endCapture() }
         statusChanged()
+    }
+
+    /// Sets an observed property only when the value differs, so an unchanged status (the daemon
+    /// rings for every capture step and battery reading) invalidates no views.
+    private func assign<Value: Equatable>(_ key: ReferenceWritableKeyPath<AppModel, Value>, _ value: Value) {
+        if self[keyPath: key] != value { self[keyPath: key] = value }
     }
 
     /// A process source tells us the moment the daemon dies, so a crash (which cannot write a
@@ -158,9 +164,11 @@ final class AppModel {
     // MARK: Control
 
     func setPaused(_ paused: Bool) {
+        let previous = requestedPaused
         requestedPaused = paused
         if captureListening { endCapture(notify: false) }
-        writeControl(capture: nil)
+        // The daemon never heard it: show what it is still doing.
+        if !writeControl(capture: nil) { requestedPaused = previous }
         statusChanged()
     }
 
@@ -169,7 +177,10 @@ final class AppModel {
         captureToken = Int.random(in: 1...Int(Int32.max))
         captureListening = true
         capturedButton = nil
-        writeControl(capture: Control.Capture(token: captureToken))
+        guard writeControl(capture: Control.Capture(token: captureToken)) else {
+            captureListening = false
+            return
+        }
         // The daemon reports timedOut after 10 s; this covers a daemon that never answers.
         let timeout = DispatchWorkItem { [weak self] in self?.cancelCapture() }
         captureTimeout = timeout
@@ -203,13 +214,17 @@ final class AppModel {
         }
     }
 
-    private func writeControl(capture: Control.Capture?) {
+    /// Writes the control file and rings the daemon; false (after saying why) if it could not.
+    @discardableResult
+    private func writeControl(capture: Control.Capture?) -> Bool {
         let control = Control(paused: requestedPaused ?? status?.paused ?? false, capture: capture)
         do {
             try Companion.write(control, to: Companion.controlURL)
             notify_post(Companion.controlNotification)
+            return true
         } catch {
             Alerts.show("PureMouse could not be reached", error.localizedDescription)
+            return false
         }
     }
 
