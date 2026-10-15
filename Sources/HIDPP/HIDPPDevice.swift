@@ -28,6 +28,8 @@ public final class HIDPPDevice {
         let token: Int
         let request: Report
         let continuation: CheckedContinuation<[UInt8], Error>
+        /// Fails the request with `.timeout`; cancelled once the request ends any other way.
+        var deadline: Task<Void, Never>?
     }
 
     public init(interface: HIDInterface, index: UInt8, softwareIDs: ClosedRange<UInt8> = defaultSoftwareIDs) {
@@ -87,8 +89,9 @@ public final class HIDPPDevice {
                 failPending(error)
                 return
             }
-            Task { [weak self, timeout] in
-                try? await Task.sleep(for: timeout)
+            guard pending?.token == token else { return }  // answered or failed during send
+            pending?.deadline = Task { [weak self, timeout] in
+                do { try await Task.sleep(for: timeout) } catch { return }  // cancelled: ended already
                 guard let self, self.pending?.token == token else { return }
                 self.failPending(HIDPPError.timeout)
             }
@@ -140,6 +143,7 @@ public final class HIDPPDevice {
         if let p = pending {
             if p.request.isAnswered(by: report) {
                 pending = nil
+                p.deadline?.cancel()
                 p.continuation.resume(returning: report.params)
                 return
             }
@@ -158,6 +162,7 @@ public final class HIDPPDevice {
     private func failPending(_ error: Error) {
         guard let p = pending else { return }
         pending = nil
+        p.deadline?.cancel()
         p.continuation.resume(throwing: error)
     }
 

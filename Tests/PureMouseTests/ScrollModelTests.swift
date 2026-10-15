@@ -92,4 +92,22 @@ struct ScrollModelTests {
         for i in 0..<20 { _ = acceleration.gain(notches: 1, at: start + .milliseconds(25 * i)) }
         #expect(acceleration.gain(notches: -1, at: start + .milliseconds(510)) == 1)
     }
+
+    @Test func unsmoothedScrollPostsWholePixelsWithoutLosingDistance() {
+        var carry = PixelCarry()
+        #expect(carry.take(40) == 40)
+        // Fractional movements add up rather than truncating or rounding away.
+        let moves = (0..<10).map { _ in carry.take(0.4) }
+        #expect(moves.reduce(0, +) == 4)
+        #expect(moves.allSatisfy { $0 == 0 || $0 == 1 })
+        #expect(carry.take(-2.5) == -2)
+        #expect(carry.take(-0.5) == -1)
+    }
+
+    @Test func unsmoothedReversalDropsTheFraction() {
+        var carry = PixelCarry()
+        #expect(carry.take(0.9) == 0)
+        #expect(carry.take(-0.9) == 0)  // the 0.9 owed upward is not taken from the downward move
+        #expect(carry.take(-0.2) == -1)
+    }
 }

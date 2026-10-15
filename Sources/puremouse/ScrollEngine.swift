@@ -31,6 +31,9 @@ final class ScrollEngine {
     private var horizontal: ScrollAnimator
     private var wheelAcceleration: ScrollAcceleration
     private var thumbAcceleration: ScrollAcceleration
+    /// Sub-pixel distance owed when scrolling unsmoothed, per axis.
+    private var verticalCarry = PixelCarry()
+    private var horizontalCarry = PixelCarry()
     private var naturalScrolling = SystemScrollSettings.naturalScrolling
     private var lastInput: ContinuousClock.Instant?
     private let clock = FrameClock()
@@ -55,11 +58,10 @@ final class ScrollEngine {
         let pixels = notches * Self.pixelsPerNotch * profile.speed
             * wheelAcceleration.gain(notches: notches, at: now)
         if profile.shiftScrollsHorizontally, CGEventSource.flagsState(.combinedSessionState).contains(.maskShift) {
-            horizontal.add(pixels)  // shift + wheel up scrolls left, as on other platforms
+            scroll(dx: pixels)  // shift + wheel up scrolls left, as on other platforms
         } else {
-            vertical.add(pixels)
+            scroll(dy: pixels)
         }
-        startGlide()
     }
 
     /// Thumb-wheel movement in device units, `perRotation` per full turn. The raw sign already
@@ -70,12 +72,20 @@ final class ScrollEngine {
         let rotations = Double(units) / Double(perRotation) * direction(inverted: profile.invertHorizontal)
         // Accelerate on the wheel's native detents so both wheels share one speed scale.
         let gain = thumbAcceleration.gain(notches: rotations * Double(nativeSteps), at: now)
-        horizontal.add(rotations * Self.pixelsPerThumbRotation * profile.horizontalSpeed * gain)
-        startGlide()
+        scroll(dx: rotations * Self.pixelsPerThumbRotation * profile.horizontalSpeed * gain)
     }
 
-    /// Without a frame clock, scrolling still works, just unsmoothed.
-    private func startGlide() {
+    /// Moves by a distance already turned for direction. Zero smoothing posts it at once, in
+    /// whole pixels with the remainder kept for the next movement, and never starts the frame
+    /// clock. Without a frame clock, scrolling still works, just unsmoothed.
+    private func scroll(dx: Double = 0, dy: Double = 0) {
+        guard profile.smoothing > .zero else {
+            let x = horizontalCarry.take(dx), y = verticalCarry.take(dy)
+            if x != 0 || y != 0 { ScrollEvent.post(dx: x, dy: y) }
+            return
+        }
+        horizontal.add(dx)
+        vertical.add(dy)
         if !clock.start() { frame(.infinity) }
     }
 
@@ -83,6 +93,8 @@ final class ScrollEngine {
     func stop() {
         vertical.stop()
         horizontal.stop()
+        verticalCarry = PixelCarry()
+        horizontalCarry = PixelCarry()
         clock.stop()
     }
 

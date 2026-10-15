@@ -12,6 +12,8 @@ final class Session {
     /// Reported in `Status.Device.id`: stable while the daemon runs.
     let id: String
     let controls: [UInt16: ReprogControls.Control]
+    /// Controls a user can press (divertable, not virtual), by CID, as reported in `status`.
+    private let pressable: [Status.Device.Control]
     /// Called after anything in `status` may have changed.
     var onChange: (() -> Void)?
     /// Called with the first control pressed while capturing; that press performs nothing.
@@ -84,6 +86,8 @@ final class Session {
         self.config = config
         let controls = Dictionary(controls.map { ($0.cid, $0) }, uniquingKeysWith: { a, _ in a })
         self.controls = controls
+        pressable = controls.values.filter { $0.isDivertable && !$0.isVirtual }.map(\.cid).sorted()
+            .map { Status.Device.Control(cid: $0, name: Config.Button(cid: $0)?.rawValue) }
         bindings = config.bindings.filter { controls[$0.key]?.isDivertable == true }
         releasing = inherited.diverted.subtracting(bindings.keys)
         scrollMode = inherited.scrollMode
@@ -123,8 +127,7 @@ final class Session {
             online: online, battery: battery.flatMap(Self.status), dpi: dpi, dpiSteps: resolutions?.values ?? [],
             wheelMode: wheelMode.map { $0 == .ratchet ? .ratchet : .freespin },
             hasSmartShift: hasSmartShift, hasThumbWheel: hasThumbWheel,
-            controls: controls.values.filter { $0.isDivertable && !$0.isVirtual }.map(\.cid).sorted()
-                .map { Status.Device.Control(cid: $0, name: Config.Button(cid: $0)?.rawValue) })
+            controls: pressable)
     }
 
     private static func status(_ battery: UnifiedBattery.State) -> Status.Device.Battery? {
@@ -159,8 +162,7 @@ final class Session {
     /// reaches `onCapture` instead of macOS or an action.
     func beginCapture() {
         guard !finished, capturing == nil else { return }
-        let extras = Set(controls.values.filter { $0.isDivertable && !$0.isVirtual }.map(\.cid))
-            .subtracting(bindings.keys)
+        let extras = Set(pressable.map(\.cid)).subtracting(bindings.keys)
         capturing = extras
         releasing.subtract(extras)
         // A gesture held as capture starts must not act when it is let go.
