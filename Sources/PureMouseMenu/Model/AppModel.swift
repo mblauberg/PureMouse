@@ -64,10 +64,16 @@ final class AppModel {
     var devices: [Status.Device] { status?.devices ?? [] }
 
     /// The mouse the menu and the Pointer pane describe: the first one online, else the last seen.
-    var primaryDevice: Status.Device? { devices.first(where: \.online) ?? devices.first }
+    var primaryDevice: Status.Device? { Self.primary(of: devices) }
 
     /// A device that is connected now and answering (live values come from it).
-    var liveDevice: Status.Device? { daemonRunning ? devices.first(where: \.online) : nil }
+    var liveDevice: Status.Device? { daemonRunning ? Self.live(of: devices) : nil }
+
+    nonisolated static func primary(of devices: [Status.Device]) -> Status.Device? {
+        live(of: devices) ?? devices.first
+    }
+
+    nonisolated static func live(of devices: [Status.Device]) -> Status.Device? { devices.first(where: \.online) }
 
     var paused: Bool { daemonRunning && (requestedPaused ?? status?.paused ?? false) }
 

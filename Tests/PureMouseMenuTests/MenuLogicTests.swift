@@ -1,4 +1,5 @@
 import Foundation
+import PureMouseKit
 import Testing
 @testable import PureMouseMenu
 
@@ -199,9 +200,58 @@ private func text(_ tree: ConfigTree) -> String { String(decoding: tree.data(), 
     #expect(DPIPresets.adding(100, to: full) == full)
     #expect(DPIPresets.removing(1600, from: [800, 1600]) == [800])
     #expect(DPIPresets.snap(1630, to: [1600, 1650, 1700]) == 1650)
-    #expect(DPIPresets.next(after: 1600, in: [800, 1600, 3200]) == 3200)
-    #expect(DPIPresets.next(after: 3200, in: [800, 1600, 3200]) == 800)
-    #expect(DPIPresets.next(after: 1000, in: []) == nil)
+}
+
+private func mouse(_ id: String, online: Bool, dpi: Int?, steps: [Int] = []) -> Status.Device {
+    Status.Device(id: id, name: id, connection: .receiver, online: online, battery: nil, dpi: dpi, dpiSteps: steps,
+                  wheelMode: nil, hasSmartShift: false, hasThumbWheel: false, controls: [])
+}
+
+@Test func dpiShowsTheLiveValueOverTheConfiguredOne() {
+    var reading = DPIReading()
+    // A Cycle Pointer Speed press moved the mouse to 3200; the config still says 1600.
+    #expect(reading.current(live: 3200, configured: 1600) == 3200)
+    #expect(reading.current(live: nil, configured: 1600) == 1600)
+    #expect(reading.current(live: nil, configured: nil) == 1000)
+
+    // A change made here shows at once, survives a stale report, and clears once confirmed.
+    let start = Date(timeIntervalSinceReferenceDate: 0)
+    reading.request(800, at: start)
+    #expect(reading.current(live: 3200, configured: 1600) == 800)
+    reading.reported(3200, steps: [800, 1600, 3200], at: start.addingTimeInterval(0.2))
+    #expect(reading.requested == 800)
+    reading.reported(800, steps: [800, 1600, 3200], at: start.addingTimeInterval(0.4))
+    #expect(reading.requested == nil)
+
+    // A request the sensor snaps is confirmed by the snapped value.
+    reading.request(830, at: start)
+    reading.reported(850, steps: [800, 850, 900], at: start.addingTimeInterval(0.2))
+    #expect(reading.requested == nil)
+
+    // A later, different report (a button press) wins.
+    reading.request(800, at: start)
+    reading.reported(1600, steps: [800, 1600], at: start.addingTimeInterval(DPIReading.settle + 1))
+    #expect(reading.current(live: 1600, configured: 800) == 1600)
+}
+
+@Test func aSensorWithOneSettingNeverIndexesOutOfRange() {
+    #expect(DPIReading.index(of: 4000, in: [1000]) == 0)
+    #expect(DPIReading.step(at: 1, in: [1000]) == 1000)
+    #expect(DPIReading.step(at: -3, in: [1000]) == 1000)
+    #expect(DPIReading.step(at: 0.4, in: []) == nil)
+    #expect(DPIReading.index(of: 1000, in: []) == 0)
+    #expect(DPIReading.step(at: 2.6, in: [400, 800, 1600]) == 1600)
+}
+
+@Test func twoMiceWithDifferentDPI() {
+    let asleep = mouse("a", online: false, dpi: 800, steps: [800])
+    let awake = mouse("b", online: true, dpi: 1600, steps: [1600, 3200])
+    // The live value and the slider's steps come from the same mouse: the first one online.
+    #expect(AppModel.live(of: [asleep, awake])?.dpi == 1600)
+    #expect(AppModel.primary(of: [asleep, awake])?.dpiSteps == [1600, 3200])
+    let other = mouse("c", online: true, dpi: 3200)
+    #expect(AppModel.live(of: [other, awake])?.dpi == 3200)
+    #expect(AppModel.live(of: [asleep]) == nil && AppModel.primary(of: [asleep])?.dpi == 800)
 }
 
 @Test func dpiPresetsKeyIsRemovedWhenEmpty() {

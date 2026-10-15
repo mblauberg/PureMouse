@@ -3,6 +3,7 @@ import SwiftUI
 struct PointerPane: View {
     @Environment(AppModel.self) private var model
     @State private var typed: Int?
+    @State private var reading = DPIReading()
 
     /// The sensor's accepted values; without a mouse, the MX Master 3S's 200–8000 in steps of 50.
     private var steps: [Int] {
@@ -11,7 +12,8 @@ struct PointerPane: View {
     }
 
     private var configured: Int? { model.config.int(["dpi"]) }
-    private var current: Int { configured ?? model.liveDevice?.dpi ?? model.primaryDevice?.dpi ?? 1000 }
+    private var live: Int? { model.liveDevice?.dpi }
+    private var current: Int { reading.current(live: live, configured: configured) }
 
     var body: some View {
         let steps = steps
@@ -39,10 +41,12 @@ struct PointerPane: View {
                              : "Higher moves the pointer further for the same hand movement.")
                     }
                     EndLabeledSlider(title: "Resolution",
-                                     value: Binding(get: { Double(index(of: current, in: steps)) },
-                                                    set: { setDPI(steps[Int($0.rounded())], debounce: true) }),
+                                     value: Binding(get: { Double(DPIReading.index(of: current, in: steps)) },
+                                                    set: { DPIReading.step(at: $0, in: steps).map { setDPI($0, debounce: true) } }),
                                      range: 0...Double(max(steps.count - 1, 1)),
                                      low: Format.number(steps.first ?? 200), high: Format.number(steps.last ?? 8000))
+                    // A sensor with a single setting has nothing to slide between.
+                    .disabled(steps.count < 2)
                     .accessibilityValue(Format.dpi(current))
                     Text(model.devices.count > 1
                          ? "Steps follow \(model.primaryDevice?.name ?? "this mouse")'s sensor. Applies to all connected mice. Tracking speed in System Settings still applies on top."
@@ -56,7 +60,7 @@ struct PointerPane: View {
                 }
                 HStack(spacing: 8) {
                     ForEach(presets, id: \.self) { preset in
-                        PresetChip(dpi: preset, selected: preset == current) {
+                        PresetChip(dpi: preset, selected: DPIPresets.snap(preset, to: steps) == current) {
                             setDPI(preset)
                         } remove: {
                             model.update { $0.dpiPresets = DPIPresets.removing(preset, from: presets) }
@@ -74,6 +78,7 @@ struct PointerPane: View {
             } footer: {
                 FooterButton("Restore Defaults") {
                     typed = nil
+                    reading.clear()
                     model.update {
                         $0.set(nil, at: ["dpi"])
                         $0.set(nil, at: ["dpiPresets"])
@@ -82,14 +87,13 @@ struct PointerPane: View {
             }
             .disabled(model.readOnly)
         }
-    }
-
-    private func index(of dpi: Int, in steps: [Int]) -> Int {
-        steps.indices.min { abs(steps[$0] - dpi) < abs(steps[$1] - dpi) } ?? 0
+        .onChange(of: live) { reading.reported(live, steps: steps) }
     }
 
     private func setDPI(_ dpi: Int, debounce: Bool = false) {
         typed = nil
+        guard !model.readOnly else { return }
+        reading.request(dpi)
         model.set(dpi, at: ["dpi"], debounce: debounce)
     }
 

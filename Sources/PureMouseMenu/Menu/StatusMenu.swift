@@ -164,14 +164,18 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         let submenu = NSMenu()
         submenu.autoenablesItems = false
         let presets = model.config.dpiPresets
-        let current = model.config.int(["dpi"]) ?? model.liveDevice?.dpi
+        // The mouse's own value first: a Cycle Pointer Speed press changes it, not the config.
+        let current = model.liveDevice?.dpi ?? model.config.int(["dpi"])
+        // A preset off the sensor's list runs at its nearest step, as the daemon snaps it.
+        let steps = model.liveDevice?.dpiSteps ?? []
+        let selected = presets.first { DPIPresets.snap($0, to: steps) == current }
         for preset in presets {
             let row = item(Format.dpi(preset)) { [model] in model.set(preset, at: ["dpi"]) }
-            row.state = preset == current ? .on : .off
+            row.state = preset == selected ? .on : .off
             row.isEnabled = !model.readOnly
             submenu.addItem(row)
         }
-        if let current, !presets.contains(current) {
+        if let current, selected == nil {
             let row = NSMenuItem(title: presets.isEmpty ? Format.dpi(current) : "Custom: \(Format.dpi(current))",
                                  action: nil, keyEquivalent: "")
             row.state = .on

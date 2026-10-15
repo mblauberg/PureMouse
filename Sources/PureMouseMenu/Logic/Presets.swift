@@ -50,11 +50,46 @@ enum DPIPresets {
     static func snap(_ dpi: Int, to steps: [Int]) -> Int {
         steps.min { abs($0 - dpi) < abs($1 - dpi) } ?? dpi
     }
+}
 
-    /// The preset after `current`, wrapping, as the `cycleDPI` action picks it.
-    static func next(after current: Int, in presets: [Int]) -> Int? {
-        guard !presets.isEmpty else { return nil }
-        return presets.first { $0 > current } ?? presets[0]
+/// The resolution the Pointer pane and the menu show. Three values stay apart: a change made here
+/// and not yet reported back, the mouse's live value (which a Cycle Pointer Speed press changes
+/// without touching the config), and the config's default.
+struct DPIReading: Equatable {
+    private(set) var requested: Int?
+    private var requestedAt = Date.distantPast
+
+    /// How long a request may wait for the mouse to report it before a different report wins.
+    static let settle: TimeInterval = 1.5
+
+    mutating func request(_ dpi: Int, at now: Date = .now) {
+        requested = dpi
+        requestedAt = now
+    }
+
+    mutating func clear() { requested = nil }
+
+    /// The mouse reported `live`. It confirms the request, or once the request has had time to
+    /// land, replaces it (a button press changed the resolution).
+    mutating func reported(_ live: Int?, steps: [Int], at now: Date = .now) {
+        guard let pending = requested, let live else { return }
+        if live == DPIPresets.snap(pending, to: steps) || now.timeIntervalSince(requestedAt) > Self.settle {
+            requested = nil
+        }
+    }
+
+    /// A pending change, else the live value, else the configured one, else the sensor's default.
+    func current(live: Int?, configured: Int?) -> Int { requested ?? live ?? configured ?? 1000 }
+
+    /// The slider position of `dpi`: its nearest step, always a valid index (0 for an empty list).
+    static func index(of dpi: Int, in steps: [Int]) -> Int {
+        steps.indices.min { abs(steps[$0] - dpi) < abs(steps[$1] - dpi) } ?? 0
+    }
+
+    /// The step at a slider position, clamped into the list.
+    static func step(at position: Double, in steps: [Int]) -> Int? {
+        guard !steps.isEmpty else { return nil }
+        return steps[min(max(Int(position.rounded()), 0), steps.count - 1)]
     }
 }
 
