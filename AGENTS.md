@@ -89,8 +89,14 @@ work on it safely.
   wakes on notifications, file events and the daemon's process exit. Its Settings window and view
   tree are built when shown and released when closed; the menu is rebuilt on open.
 - The menu bar app writes only the keys a control owns (`ConfigTree`) and keeps every other key,
-  including unknown ones. It refuses to write while the file does not parse or validate, and
-  writes through `JSON.encode` (shortest decimals, sorted keys), never `JSONSerialization`.
+  including unknown ones. It records edits as the keys they set and `ConfigFile.save` replays
+  them onto the file as it is when saving, so a hand edit made meanwhile survives; with no
+  pending edit nothing is written. It refuses to build on a file that does not parse or
+  validate, and writes through `JSON.encode` (shortest decimals, sorted keys, whole and big
+  numbers kept digit for digit), never `JSONSerialization`.
+- Settings shows no focus ring until the keyboard is used: windows, panes, the action picker and
+  the shortcut sheet open with nothing focused (the picker's search takes the first keystroke).
+  Check with keyboard navigation (`AppleKeyboardUIMode`) both on and off.
 
 ## Easy to break
 
