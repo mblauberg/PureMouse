@@ -1,7 +1,7 @@
 # PureMouse: agent notes
 
-Read `README.md` first for what PureMouse does, its config and its layout. This file covers how to
-work on it safely.
+Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for its layout and
+`docs/configuration.md` for the config. This file covers how to work on it safely.
 
 ## Workflow
 
@@ -48,7 +48,8 @@ work on it safely.
   an 18x18 pt template (alpha only; the wheel is a slot, gaps are 1-1.5 pt on the half-point grid
   so they stay crisp at 1x and 2x); it is plain clip and even-odd paths because rsvg rasterises
   SVG masks in the PDF. The menu bar app loads `MenuBarIcon.pdf`. Keep the two in step.
-- When behaviour changes, update the README's field tables and this file in the same change.
+- When behaviour changes, update `docs/configuration.md`'s field tables and this file in the same
+  change.
 
 ## Invariants
 
@@ -157,8 +158,8 @@ work on it safely.
 - Some actions use undocumented interfaces: `CoreDockSendNotification` (it returns 0 even for
   unknown names, so failure is silent) and the navigation-swipe CGEvent fields. macOS 27 already
   stopped honouring the dock-swipe fields, which PureMouse does not use. After an OS upgrade, check
-  them with `puremouse action <name>`; README's "After a macOS upgrade" lists the keystroke
-  fallbacks.
+  them with `puremouse action <name>`; `docs/troubleshooting.md` ("After a macOS upgrade") lists
+  the keystroke fallbacks.
 - Logi Options+ fights PureMouse over the mouse (its agent is `com.logi.cp-dev-mgr`). The daemon
   logs an error at start if it sees any of its processes (`LogiOptions`); only this user's process
   names are readable, so a root-run updater goes unseen.
