@@ -38,7 +38,7 @@ struct ValueSlider: View {
     let low: String
     let high: String
     let format: (Double) -> String
-    var width: CGFloat = 220
+    var width: CGFloat = 200
 
     var body: some View {
         LabeledContent {
@@ -49,7 +49,7 @@ struct ValueSlider: View {
                 Text(format(value))
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
-                    .frame(minWidth: 40, alignment: .trailing)
+                    .frame(minWidth: 52, alignment: .trailing)
                     .accessibilityHidden(true)
             }
         } label: {
@@ -150,6 +150,14 @@ struct PaneBanners: View {
                 Banner(title: "PureMouse is off", message: "The mouse works as it does without PureMouse. Changes here apply when it starts.",
                        symbol: "pause.circle.fill", tint: .secondary) {
                     Button("Start PureMouse") { Lifecycle.perform(.register) }
+                }
+            }
+        }
+        if model.paused {
+            Section {
+                Banner(title: "PureMouse is paused", message: "The mouse works as it does without PureMouse. Changes here apply when it resumes.",
+                       symbol: "pause.circle.fill", tint: .secondary) {
+                    Button("Resume") { model.setPaused(false) }
                 }
             }
         }

@@ -130,7 +130,7 @@ struct ScrollingPane: View {
                                  value: Binding(get: { Double(min(threshold ?? 12, 50)) },
                                                 set: { model.set(Int($0.rounded()), at: ["scrollWheel", "smartShiftThreshold"], debounce: true) }),
                                  range: 1...50, low: "Sooner", high: "Later")
-                    .frame(width: 220)
+                    .frame(width: 200)
             }
             .disclosedRow()
         }
