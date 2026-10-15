@@ -110,3 +110,24 @@ import Testing
         #expect(try #require(Keystroke("cmd+a")).eventFlags == .maskCommand)
     }
 }
+
+@Suite struct ConfigMessageTests {
+    func message(_ json: String) -> String {
+        do {
+            try ConfigCheck.validate(Data(json.utf8))
+            return "accepted"
+        } catch {
+            return ConfigCheck.message(for: error)
+        }
+    }
+
+    @Test func namesTheField() {
+        #expect(message(#"{"smoothScroll": {"speed": 1e300}}"#).hasPrefix("smoothScroll.speed must be 0.1–10.0"))
+        #expect(message(#"{"buttons": {"top": "explode"}}"#).hasPrefix("buttons.top: unknown action 'explode'"))
+        #expect(message(#"{"dpi": "high"}"#) == "dpi: expected Int")
+    }
+
+    @Test func syntaxErrorsSayWhere() {
+        #expect(message(#"{"dpi": 1600"#).contains("not valid JSON"))
+    }
+}

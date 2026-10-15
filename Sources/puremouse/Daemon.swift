@@ -12,6 +12,18 @@ final class Daemon {
     private let monitor = HIDMonitor()
     private var config: Config
     private let configURL: URL
+    /// Why the last load failed, while the previous (or an empty) config stays in effect.
+    private var configError: String?
+    /// The config file's bytes at the last load attempt, so a watched change that leaves them as
+    /// they were does not reload.
+    private var configBytes: Data?
+    private let startedAt = Date.now
+    private let permissions = Permissions.current
+    private let logiOptionsRunning = !LogiOptions.running().isEmpty
+    private var channel: StatusChannel?
+    /// Numbers interfaces in attach order, for device IDs that stay stable while the daemon runs.
+    private var interfaceNumbers: [ObjectIdentifier: Int] = [:]
+    private var nextInterfaceNumber = 1
     /// Every endpoint we listen on, keyed by interface and device index.
     private var endpoints: [Key: HIDPPDevice] = [:]
     private var sessions: [Key: Session] = [:]
@@ -29,6 +41,8 @@ final class Daemon {
     private var power: PowerObserver?
     private var signalSources: [DispatchSourceSignal] = []
     private var shuttingDown = false
+    /// Set once the mice are restored, just before exit: the final status says not running.
+    private var exiting = false
 
     private struct Key: Hashable {
         let interface: ObjectIdentifier
@@ -41,14 +55,48 @@ final class Daemon {
 
     private enum Adoption { case adopted, noAnswer, notAMouse }
 
-    init(config: Config, configURL: URL) {
-        self.config = config
+    init(configURL: URL) {
         self.configURL = configURL
+        config = .empty
+        if !loadConfig() {
+            // Stay up with nothing configured rather than crash-loop under launchd; fixing the
+            // file reloads it.
+            Log.error("running unconfigured until the config loads")
+        }
+    }
+
+    /// Loads the config file, keeping the current config if that fails. Returns whether it loaded.
+    @discardableResult
+    private func loadConfig() -> Bool {
+        do {
+            let data = try readConfig()
+            config = try Config.loadLogged(from: data)
+            configError = nil
+            return true
+        } catch {
+            configError = ConfigCheck.message(for: error)
+            Log.error("cannot load \(configURL.path): \(configError ?? "")")
+            return false
+        }
+    }
+
+    private func readConfig() throws -> Data {
+        do {
+            let data = try Data(contentsOf: configURL)
+            configBytes = data
+            return data
+        } catch {
+            configBytes = nil
+            throw error
+        }
     }
 
     func start() {
         requestPermissions()
         LogiOptions.warnIfRunning()
+        StatusChannel.clearControl()
+        channel = StatusChannel { [unowned self] in self.status(running: !self.exiting) }
+        channel?.writeNow()
         monitor.onAttach = { [weak self] interface in self?.attached(interface) }
         monitor.onDetach = { [weak self] interface in self?.detached(interface) }
         let status = monitor.start()
@@ -62,6 +110,24 @@ final class Daemon {
         onSignal(SIGHUP) { $0.reload() }
         onSignal(SIGTERM) { $0.shutdown() }
         onSignal(SIGINT) { $0.shutdown() }
+    }
+
+    // MARK: Status
+
+    private func status(running: Bool) -> Status {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
+        return Status(
+            pid: getpid(), startedAt: startedAt, version: version, running: running, paused: false,
+            permissions: .init(accessibility: permissions.contains(.accessibility),
+                               inputMonitoring: permissions.contains(.inputMonitoring)),
+            logiOptionsRunning: logiOptionsRunning,
+            config: .init(path: configURL.path, error: configError),
+            devices: running ? sessions.values.map(\.status).sorted { $0.id < $1.id } : [],
+            capture: nil)
+    }
+
+    private func statusChanged() {
+        channel?.setNeedsWrite()
     }
 
     private func onSignal(_ number: Int32, _ handler: @escaping (Daemon) -> Void) {
@@ -112,6 +178,8 @@ final class Daemon {
     private func attached(_ interface: HIDInterface) {
         Log.info("found \(interface.product) (\(interface.transport))")
         let id = ObjectIdentifier(interface)
+        interfaceNumbers[id] = nextInterfaceNumber
+        nextInterfaceNumber += 1
         if interface.isReceiver {
             interfaceTasks[id] = Task {
                 let receiver = HIDPPDevice(interface: interface, index: directDeviceIndex)
@@ -160,6 +228,8 @@ final class Daemon {
         }
         ignored = ignored.filter { $0.interface != id }
         slotProducts = slotProducts.filter { $0.key.interface != id }
+        interfaceNumbers[id] = nil
+        statusChanged()
     }
 
     /// Starts listening on a device index. Until a session adopts it, a receiver slot only
@@ -235,10 +305,20 @@ final class Daemon {
         // The device may have gone, or the daemon begun quitting, while we were asking.
         guard endpoints[key] === device, sessions[key] == nil, !shuttingDown else { return .noAnswer }
         Log.info("adopting \(name) on \(device.interface.product) index \(device.index)")
-        let session = Session(device: device, name: name, controls: controls, config: config)
-        sessions[key] = session
-        session.configure()
+        let session = Session(device: device, name: name, id: deviceID(key), controls: controls, config: config)
+        add(session, key)
         return .adopted
+    }
+
+    private func deviceID(_ key: Key) -> String {
+        "\(interfaceNumbers[key.interface] ?? 0)-\(key.index)"
+    }
+
+    private func add(_ session: Session, _ key: Key) {
+        sessions[key] = session
+        session.onChange = { [weak self] in self?.statusChanged() }
+        session.configure()
+        statusChanged()
     }
 
     // MARK: Reconfiguration
@@ -266,21 +346,17 @@ final class Daemon {
 
     private func reload() {
         guard !shuttingDown else { return }
-        do {
-            config = try Config.loadLogged(from: configURL)
-        } catch {
-            Log.error("reload: \(error); keeping previous config")
+        defer { statusChanged() }
+        guard loadConfig() else {
+            Log.error("reload failed; keeping previous config")
             return
         }
         Log.info("config reloaded")
         ignored = []
         for (key, old) in sessions {
             old.close()
-            let session = Session(device: old.device, name: old.name, controls: Array(old.controls.values),
-                                  config: config, previouslyDiverted: old.divertedControls,
-                                  wheelsMayBeDiverted: old.wheelsMayBeDiverted, scrollMode: old.currentScrollMode)
-            sessions[key] = session
-            session.configure()
+            add(Session(device: old.device, name: old.name, id: old.id, controls: Array(old.controls.values),
+                        config: config, inheriting: old.inheritance), key)
         }
         Task { await adoptStragglers() }
     }
@@ -296,13 +372,20 @@ final class Daemon {
             await withTaskGroup(of: Void.self) { group in
                 for session in all { group.addTask { await session.restore() } }
             }
-            exit(0)
+            exitReporting()
         }
         Task {
             try? await Task.sleep(for: .seconds(2))
             Log.error("restore timed out")
-            exit(0)
+            exitReporting()
         }
+    }
+
+    /// The final status, `running: false`, is the last thing written.
+    private func exitReporting() -> Never {
+        exiting = true
+        channel?.writeNow()
+        exit(0)
     }
 }
 

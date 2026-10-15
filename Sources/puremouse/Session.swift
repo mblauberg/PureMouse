@@ -9,7 +9,11 @@ import HIDPP
 final class Session {
     let device: HIDPPDevice
     let name: String
+    /// Reported in `Status.Device.id`: stable while the daemon runs.
+    let id: String
     let controls: [UInt16: ReprogControls.Control]
+    /// Called after anything in `status` may have changed.
+    var onChange: (() -> Void)?
     private let config: Config
     private let bindings: [UInt16: Config.Binding]
     /// Controls a previous session diverted that this one no longer binds; released on apply.
@@ -26,26 +30,54 @@ final class Session {
     private var recognizer: GestureRecognizer
     private var wheelMultiplier = 15
     private var thumbInfo = ThumbWheel.Info(nativeResolution: 18, divertedResolution: 120)
-    /// `config.dpi` snapped to the sensor's supported resolutions, once read.
-    private var resolvedDPI: Int?
+    /// The sensor's supported resolutions, read once per mouse (inherited across reloads).
+    private var resolutions: AdjustableDPI.Resolutions?
+    /// Targets already reported as snapped to a supported resolution, so each is logged once.
+    private var snapLogged: Set<Int> = []
+    /// Reported state; see `status`.
+    private var online: Bool
+    private var dpi: Int?
+    private var wheelMode: SmartShift.Mode?
+    private var hasSmartShift: Bool
+    private var hasThumbWheel: Bool
     private var configuring: Task<Void, Never>?
     private var toggling: Task<Void, Never>?
     /// Set by `close` and `restore`: nothing may touch the device on this session's behalf.
     private var finished = false
 
-    init(device: HIDPPDevice, name: String, controls: [ReprogControls.Control], config: Config,
-         previouslyDiverted: Set<UInt16> = [], wheelsMayBeDiverted: Bool = false,
-         scrollMode: SmartShift.Mode? = nil) {
+    /// What a session hands to the one replacing it on reload: device state that outlives a
+    /// config, and what the device may still have diverted.
+    struct Inherited {
+        var diverted: Set<UInt16> = []
+        var wheelsMayBeDiverted = false
+        var scrollMode: SmartShift.Mode?
+        var resolutions: AdjustableDPI.Resolutions?
+        var online = true
+        var dpi: Int?
+        var wheelMode: SmartShift.Mode?
+        var hasSmartShift = false
+        var hasThumbWheel = false
+    }
+
+    init(device: HIDPPDevice, name: String, id: String, controls: [ReprogControls.Control], config: Config,
+         inheriting inherited: Inherited = Inherited()) {
         self.device = device
         self.name = name
+        self.id = id
         self.config = config
         let controls = Dictionary(controls.map { ($0.cid, $0) }, uniquingKeysWith: { a, _ in a })
         self.controls = controls
         bindings = config.bindings.filter { controls[$0.key]?.isDivertable == true }
-        releasing = previouslyDiverted.subtracting(bindings.keys)
-        self.scrollMode = scrollMode
+        releasing = inherited.diverted.subtracting(bindings.keys)
+        scrollMode = inherited.scrollMode
+        resolutions = inherited.resolutions
+        online = inherited.online
+        dpi = inherited.dpi
+        wheelMode = inherited.wheelMode
+        hasSmartShift = inherited.hasSmartShift
+        hasThumbWheel = inherited.hasThumbWheel
         scroll = config.smoothScroll.map { ScrollEngine(profile: Self.profile($0, config)) }
-        self.wheelsMayBeDiverted = wheelsMayBeDiverted || scroll != nil
+        self.wheelsMayBeDiverted = inherited.wheelsMayBeDiverted || scroll != nil
         recognizer = GestureRecognizer(
             threshold: GestureRecognizer.counts(millimetres: config.gesture.distanceMm, dpi: config.dpi ?? 1000),
             repeatInterval: .milliseconds(config.gesture.repeatIntervalMs))
@@ -57,7 +89,26 @@ final class Session {
 
     /// Controls this session diverts or still owes a release, for handing to its replacement.
     var divertedControls: Set<UInt16> { releasing.union(bindings.keys) }
-    var currentScrollMode: SmartShift.Mode? { scrollMode }
+
+    var inheritance: Inherited {
+        Inherited(diverted: divertedControls, wheelsMayBeDiverted: wheelsMayBeDiverted, scrollMode: scrollMode,
+                  resolutions: resolutions, online: online, dpi: dpi, wheelMode: wheelMode,
+                  hasSmartShift: hasSmartShift, hasThumbWheel: hasThumbWheel)
+    }
+
+    var status: Status.Device {
+        Status.Device(
+            id: id, name: name, connection: device.interface.isReceiver ? .receiver : .bluetooth,
+            online: online, battery: nil, dpi: dpi, dpiSteps: resolutions?.values ?? [],
+            wheelMode: wheelMode.map { $0 == .ratchet ? .ratchet : .freespin },
+            hasSmartShift: hasSmartShift, hasThumbWheel: hasThumbWheel,
+            controls: controls.values.filter(\.isDivertable).map(\.cid).sorted()
+                .map { Status.Device.Control(cid: $0, name: Config.Button(cid: $0)?.rawValue) })
+    }
+
+    private func changed() {
+        onChange?()
+    }
 
     func close() {
         finished = true
@@ -102,6 +153,9 @@ final class Session {
                 // Usually the mouse is asleep; its reconnect event will also trigger a retry.
                 try? await Task.sleep(for: .seconds(5))
             }
+            guard !Task.isCancelled, !finished, online else { return }
+            online = false
+            changed()
         }
     }
 
@@ -123,26 +177,38 @@ final class Session {
         try await applyWheels()
 
         if try await device.hasFeature(AdjustableDPI.id) {
-            if let dpi = config.dpi {
-                try await AdjustableDPI.set(device, dpi: try await supportedDPI(near: dpi))
+            try await readResolutions()
+            if let target = config.dpi {
+                try await AdjustableDPI.set(device, dpi: supportedDPI(near: target))
             }
-            // Gesture distance is physical, so scale it by the resolution actually in effect.
-            let dpi = try await AdjustableDPI.get(device)
-            recognizer.threshold = GestureRecognizer.counts(millimetres: config.gesture.distanceMm, dpi: dpi)
+            try await readDPI()
         }
-        let mode = scrollMode ?? config.scrollWheel?.mode?.smartShift
-        let threshold = config.scrollWheel?.smartShiftThreshold
-        if mode != nil || threshold != nil, try await device.hasFeature(SmartShift.id) {
+        hasSmartShift = try await device.hasFeature(SmartShift.id)
+        if hasSmartShift {
+            let mode = scrollMode ?? config.scrollWheel?.mode?.smartShift
+            let threshold = config.scrollWheel?.smartShiftThreshold
             let current = try await SmartShift.get(device).mode
-            try await SmartShift.set(device, mode: mode ?? current, autoDisengage: threshold)
+            if mode != nil || threshold != nil {
+                try await SmartShift.set(device, mode: mode ?? current, autoDisengage: threshold)
+            }
+            wheelMode = mode ?? current
         }
+        online = true
+        changed()
     }
 
-    /// The configured DPI snapped to one the sensor accepts, read once per session. If the
-    /// sensor cannot list its resolutions, the configured value is sent unchanged.
-    private func supportedDPI(near configured: Int) async throws -> Int {
-        if let resolvedDPI { return resolvedDPI }
-        let resolutions: AdjustableDPI.Resolutions
+    /// Reads the resolution in effect, for the status and the gesture distance, which is
+    /// physical and so scales with it.
+    private func readDPI() async throws {
+        let current = try await AdjustableDPI.get(device)
+        dpi = current
+        recognizer.threshold = GestureRecognizer.counts(millimetres: config.gesture.distanceMm, dpi: current)
+    }
+
+    /// Reads the sensor's supported resolutions once per mouse. A failure is logged and retried
+    /// on the next apply; meanwhile DPI targets are sent unchanged.
+    private func readResolutions() async throws {
+        guard resolutions == nil else { return }
         do {
             resolutions = try await AdjustableDPI.resolutions(device)
         } catch let error as CancellationError {
@@ -150,14 +216,16 @@ final class Session {
         } catch HIDPPError.closed {
             throw HIDPPError.closed
         } catch {
-            Log.error("\(name): reading supported DPI failed: \(error); setting \(configured) as configured")
-            return configured
+            Log.error("\(name): reading supported DPI failed: \(error); DPI is set as configured")
         }
-        let dpi = resolutions.nearest(to: configured) ?? configured
-        if dpi != configured {
-            Log.info("\(name): dpi \(configured) is not supported; using \(dpi)")
+    }
+
+    /// `target` snapped to a resolution the sensor accepts, or unchanged if the list is unknown.
+    private func supportedDPI(near target: Int) -> Int {
+        let dpi = resolutions?.nearest(to: target) ?? target
+        if dpi != target, snapLogged.insert(target).inserted {
+            Log.info("\(name): dpi \(target) is not supported; using \(dpi)")
         }
-        resolvedDPI = dpi
         return dpi
     }
 
@@ -179,7 +247,8 @@ final class Session {
             }
             try await HiResWheel.setMode(device, .init(diverted: smooth, highResolution: smooth, inverted: inverted))
         }
-        if try await device.hasFeature(ThumbWheel.id) {
+        hasThumbWheel = try await device.hasFeature(ThumbWheel.id)
+        if hasThumbWheel {
             var inverted = false
             if smooth {
                 thumbInfo = try await ThumbWheel.info(device)
@@ -243,6 +312,10 @@ final class Session {
                 configure()
             } else {
                 scroll?.stop()
+                if online {
+                    online = false
+                    changed()
+                }
             }
             return
         }
@@ -329,6 +402,8 @@ final class Session {
             let next: SmartShift.Mode = current == .ratchet ? .freespin : .ratchet
             try await SmartShift.set(device, mode: next)
             scrollMode = next
+            wheelMode = next
+            changed()
             Log.debug("\(name): scroll mode \(next)")
         } catch {
             Log.error("\(name): toggle scroll mode failed: \(error)")

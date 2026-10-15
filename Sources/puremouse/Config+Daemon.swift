@@ -5,9 +5,9 @@ import PureMouseKit
 // The daemon's view of the shared config model (PureMouseKit): device mappings and logging.
 
 extension Config {
-    /// Loads `url`, logging problems that do not fail the load.
-    static func loadLogged(from url: URL) throws -> Config {
-        let config = try load(from: url)
+    /// Decodes a config file, logging problems that do not fail the load.
+    static func loadLogged(from data: Data) throws -> Config {
+        let config = try JSONDecoder().decode(Config.self, from: data)
         for name in config.unknownButtons {
             Log.error("config: unknown button '\(name)'")
         }

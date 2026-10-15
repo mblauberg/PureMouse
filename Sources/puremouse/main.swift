@@ -36,20 +36,11 @@ case nil where LoginItem.inBundle:
     }
 case nil, "run":
     let url = arguments.count > 1 ? URL(fileURLWithPath: arguments[1]) : Config.defaultURL
-    let config: Config
-    do {
-        config = try Config.loadLogged(from: url)
-    } catch {
-        // Stay up with nothing configured rather than crash-loop under launchd; fixing the
-        // file and sending SIGHUP picks it up.
-        Log.error("cannot load \(url.path): \(error); running unconfigured until reload")
-        config = .empty
-    }
     // Private interfaces (Dock notifications, swipe event fields) can change between releases,
     // so record which macOS each log belongs to.
     let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
     Log.info("PureMouse \(version) on macOS \(ProcessInfo.processInfo.operatingSystemVersionString)")
-    let daemon = Daemon(config: config, configURL: url)
+    let daemon = Daemon(configURL: url)
     daemon.start()
     withExtendedLifetime(daemon) { runMainLoop() }
 case "permissions":

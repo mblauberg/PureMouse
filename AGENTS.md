@@ -56,6 +56,10 @@ work on it safely.
   Nothing may be persisted on the device or receiver: they must work normally without PureMouse.
 - A session that is `finished` (closed or restored) must not touch the device again; the daemon
   stops adopting once `shuttingDown`.
+- The daemon reports to the menu bar app only through `status.json` (`StatusChannel`): call
+  `statusChanged()` (Daemon) or `changed()` (Session) after anything in `Status` changes; writes
+  are coalesced to one per main-queue turn. On shutdown, `running: false` is written last, after
+  the mice are restored (`exitReporting`).
 - Keep it light: no dependencies, and no AppKit or SwiftUI in the daemon or PureMouseKit (only
   `PureMouseMenu` may link them). Idle cost is zero CPU; the display link
   runs only while a scroll is gliding.
