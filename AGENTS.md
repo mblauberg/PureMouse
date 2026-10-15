@@ -73,7 +73,11 @@ work on it safely.
   stopped honouring the dock-swipe fields, which mxd does not use. After an OS upgrade, check them
   with `mxd action <name>`; README's "After a macOS upgrade" lists the keystroke fallbacks.
 - Logi Options+ fights mxd over the mouse. Its agent (`com.logi.cp-dev-mgr`) is disabled on this
-  machine; re-enabling it breaks mxd.
+  machine; re-enabling it breaks mxd. The daemon logs an error at start if it sees any of its
+  processes (`LogiOptions`); only this user's process names are readable, so a root-run updater
+  goes unseen.
+- DPI is snapped to the sensor's own list (0x2201 getSensorDpiList), read once per session; if
+  the list cannot be read, the configured value is sent unchanged.
 
 ## Extending
 

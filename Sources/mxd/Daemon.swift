@@ -43,6 +43,7 @@ final class Daemon {
 
     func start() {
         requestPermissions()
+        LogiOptions.warnIfRunning()
         monitor.onAttach = { [weak self] interface in self?.attached(interface) }
         monitor.onDetach = { [weak self] interface in self?.detached(interface) }
         let status = monitor.start()

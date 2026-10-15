@@ -69,8 +69,8 @@ has one (`scripts/make-cert.sh` creates a self-signed one; `MXD_SIGN_IDENTITY` p
 Otherwise it signs ad hoc and the grants must be given again after every install. Releases must
 all be signed with one identity: keep a backup of it.
 
-Quit Logi Options+ first: only one program can control the buttons at a time. To remove it
-entirely, use Logitech's uninstaller.
+Quit Logi Options+ first: only one program can control the buttons at a time, and mxd logs an
+error at start if it finds it running. To remove it entirely, use Logitech's uninstaller.
 
 ## Configure
 
@@ -83,7 +83,7 @@ launchctl kill HUP gui/$UID/local.mxd
 
 | Field | Meaning |
 |---|---|
-| `dpi` | Sensor resolution, 200–8000 in steps of 50 |
+| `dpi` | Sensor resolution. mxd reads the values the mouse supports (200–8000 in steps of 50 on the MX Master 3S) and uses the nearest one, logging when it differs |
 | `scrollWheel.inverted` | Invert the main wheel in hardware. With natural scrolling on, `true` gives classic wheel direction and leaves the trackpad alone |
 | `scrollWheel.mode` | `"ratchet"` or `"freespin"` on first connect. Later toggles are kept |
 | `scrollWheel.smartShiftThreshold` | 1–50 enables SmartShift's automatic free-spin; 255 disables it |
@@ -138,6 +138,8 @@ enabled in Keyboard settings.
   it is safe to run alongside anything else.
 - Wheels native and buttons dead: check the log for a missing permission. After granting it,
   mxd restarts itself; `launchctl kickstart -k gui/$UID/local.mxd` forces a restart.
+- Buttons or wheels misbehave, or settings do not stick: check the log for "Logi Options+ is
+  running". It fights mxd over the mouse; quit it, or remove it with Logitech's uninstaller.
 - If mxd is killed outright (`kill -9`, a crash) it cannot restore the mouse, so with
   `smoothScroll` the wheels stay silent until launchd restarts it a few seconds later. Turning the
   mouse off and on also resets it to factory behaviour.
@@ -167,7 +169,8 @@ Sources/HIDPP/   protocol only: framing (Report), IOKit transport (HIDInterface/
                  request/response handling (HIDPPDevice), typed feature wrappers (Features)
 Sources/mxd/     policy: Config, Action/Keystroke/NavigationSwipe, GestureRecognizer,
                  ScrollEngine/ScrollModel (smooth scrolling), Session (one per mouse),
-                 Daemon (discovery, reconnect, wake, reload, permissions, quit), Probe
+                 Daemon (discovery, reconnect, wake, reload, permissions, quit),
+                 LogiOptions (conflict check), Probe
 Tests/           pure logic: framing and event parsing, config, gestures, scroll maths
 scripts/         build-app.sh (bundle, signing), install.sh, uninstall.sh,
                  package.sh (universal release zip), make-cert.sh (self-signed identity)

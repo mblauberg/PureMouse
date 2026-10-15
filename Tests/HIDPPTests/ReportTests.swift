@@ -73,3 +73,33 @@ struct WheelEventTests {
         #expect(ThumbWheel.parse(function: 0, params: [0, 1]) == nil)
     }
 }
+
+struct DPIListTests {
+    @Test func steppedRange() throws {
+        // getSensorDpiList as the MX Master 3S answers it: sensor 0, 200, step 50, 8000, end.
+        let params: [UInt8] = [0x00, 0x00, 0xC8, 0xE0, 0x32, 0x1F, 0x40, 0x00, 0x00, 0, 0, 0, 0, 0, 0, 0]
+        let list = try #require(AdjustableDPI.parseResolutions(params))
+        #expect(list.values.count == 157 && list.values.first == 200 && list.values.last == 8000)
+        #expect(list.values.contains(1650) && !list.values.contains(1625))
+        #expect(list.nearest(to: 1000) == 1000)
+        #expect(list.nearest(to: 1630) == 1650)
+        #expect(list.nearest(to: 1625) == 1600)  // tie: lower
+        #expect(list.nearest(to: 50) == 200)
+        #expect(list.nearest(to: 12000) == 8000)
+    }
+
+    @Test func discreteValues() throws {
+        // 400, 800, 1600, 3200, end.
+        let params: [UInt8] = [0x00, 0x01, 0x90, 0x03, 0x20, 0x06, 0x40, 0x0C, 0x80, 0x00, 0x00, 0, 0, 0, 0, 0]
+        let list = try #require(AdjustableDPI.parseResolutions(params))
+        #expect(list.values == [400, 800, 1600, 3200])
+        #expect(list.nearest(to: 1000) == 800)
+        #expect(list.nearest(to: 1300) == 1600)
+    }
+
+    @Test func rejectsEmptyOrDanglingStep() {
+        #expect(AdjustableDPI.parseResolutions([0x00, 0x00, 0x00]) == nil)
+        #expect(AdjustableDPI.parseResolutions([0x00, 0xE0, 0x32, 0x1F, 0x40, 0x00, 0x00]) == nil)  // no start
+        #expect(AdjustableDPI.parseResolutions([0x00, 0x00, 0xC8, 0xE0, 0x32, 0x00, 0x00]) == nil)  // no end
+    }
+}

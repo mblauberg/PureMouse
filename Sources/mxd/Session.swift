@@ -23,6 +23,8 @@ final class Session {
     private var recognizer: GestureRecognizer
     private var wheelMultiplier = 15
     private var thumbInfo = ThumbWheel.Info(nativeResolution: 18, divertedResolution: 120)
+    /// `config.dpi` snapped to the sensor's supported resolutions, once read.
+    private var resolvedDPI: Int?
     private var configuring: Task<Void, Never>?
     private var toggling: Task<Void, Never>?
     /// Set by `close` and `restore`: nothing may touch the device on this session's behalf.
@@ -117,7 +119,7 @@ final class Session {
 
         if try await device.hasFeature(AdjustableDPI.id) {
             if let dpi = config.dpi {
-                try await AdjustableDPI.set(device, dpi: dpi)
+                try await AdjustableDPI.set(device, dpi: try await supportedDPI(near: dpi))
             }
             // Gesture distance is physical, so scale it by the resolution actually in effect.
             let dpi = try await AdjustableDPI.get(device)
@@ -129,6 +131,29 @@ final class Session {
             let current = try await SmartShift.get(device).mode
             try await SmartShift.set(device, mode: mode ?? current, autoDisengage: threshold)
         }
+    }
+
+    /// The configured DPI snapped to one the sensor accepts, read once per session. If the
+    /// sensor cannot list its resolutions, the configured value is sent unchanged.
+    private func supportedDPI(near configured: Int) async throws -> Int {
+        if let resolvedDPI { return resolvedDPI }
+        let resolutions: AdjustableDPI.Resolutions
+        do {
+            resolutions = try await AdjustableDPI.resolutions(device)
+        } catch let error as CancellationError {
+            throw error
+        } catch HIDPPError.closed {
+            throw HIDPPError.closed
+        } catch {
+            Log.error("\(name): reading supported DPI failed: \(error); setting \(configured) as configured")
+            return configured
+        }
+        let dpi = resolutions.nearest(to: configured) ?? configured
+        if dpi != configured {
+            Log.info("\(name): dpi \(configured) is not supported; using \(dpi)")
+        }
+        resolvedDPI = dpi
+        return dpi
     }
 
     /// With smooth scrolling, both wheels report to mxd at full resolution and direction is

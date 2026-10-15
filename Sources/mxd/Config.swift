@@ -4,7 +4,8 @@ import HIDPP
 /// User configuration, read from `~/.config/mxd/config.json`. Every field is optional; omitted
 /// settings are left as the device has them.
 struct Config: Decodable {
-    /// Sensor resolution. The MX Master 3S accepts 200–8000 in steps of 50.
+    /// Sensor resolution, snapped to the nearest value the sensor reports it supports (the
+    /// MX Master 3S accepts 200–8000 in steps of 50).
     var dpi: Int?
     var scrollWheel: ScrollWheel?
     var thumbWheel: ThumbWheel?

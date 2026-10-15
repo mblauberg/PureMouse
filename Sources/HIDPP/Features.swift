@@ -86,6 +86,51 @@ public enum SmartShift {
 public enum AdjustableDPI {
     public static let id: UInt16 = 0x2201
 
+    /// The resolutions a sensor accepts, ascending.
+    public struct Resolutions: Equatable, Sendable {
+        public let values: [Int]
+
+        public init(_ values: [Int]) {
+            self.values = values
+        }
+
+        /// The supported resolution closest to `dpi`; the lower one on a tie.
+        public func nearest(to dpi: Int) -> Int? {
+            values.min { abs($0 - dpi) < abs($1 - dpi) }
+        }
+    }
+
+    public static func resolutions(_ d: HIDPPDevice, sensor: UInt8 = 0) async throws -> Resolutions {
+        let r = try await d.call(id, 1, [sensor])
+        guard let resolutions = parseResolutions(r) else { throw HIDPPError.malformedResponse }
+        return resolutions
+    }
+
+    /// getSensorDpiList reply: [sensor, big-endian words…, 0x0000]. A word with its top three
+    /// bits set is a step (low 13 bits) between the values either side of it, so 200, step 50,
+    /// 8000 means 200, 250, …, 8000. Nil if the list is empty or a step has no range.
+    public static func parseResolutions(_ params: [UInt8]) -> Resolutions? {
+        let words = stride(from: 1, to: params.count - 1, by: 2)
+            .map { Int(UInt16(bigEndian: params[$0], params[$0 + 1])) }
+            .prefix { $0 != 0 }
+        var values: [Int] = []
+        var step: Int?
+        for word in words {
+            if word & 0xE000 == 0xE000 {
+                guard step == nil, values.last != nil, word & 0x1FFF > 0 else { return nil }
+                step = word & 0x1FFF
+            } else if let s = step {
+                guard let last = values.last, word > last else { return nil }
+                values += stride(from: last + s, through: word, by: s)
+                step = nil
+            } else {
+                values.append(word)
+            }
+        }
+        guard step == nil, !values.isEmpty else { return nil }
+        return Resolutions(values.sorted())
+    }
+
     public static func get(_ d: HIDPPDevice, sensor: UInt8 = 0) async throws -> Int {
         let r = try await d.call(id, 2, [sensor])
         guard r.count >= 3 else { throw HIDPPError.malformedResponse }
