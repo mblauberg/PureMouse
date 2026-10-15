@@ -32,7 +32,10 @@ xattr -dr com.apple.quarantine /Applications/mxd.app
 ```
 
 or open it, dismiss the warning, and choose **Open Anyway** in System Settings › Privacy &
-Security. Then open mxd. It installs a login agent (`~/Library/LaunchAgents/local.mxd.plist`, listed under
+Security. (Once macOS has shown that warning, it holds mxd back until the warning is answered,
+even if you clear the flag afterwards.)
+
+Then open mxd. It installs a login agent (`~/Library/LaunchAgents/local.mxd.plist`, listed under
 System Settings › General › Login Items, where you can switch it off), creates
 `~/.config/mxd/config.json` from the example if you have none, and starts.
 
@@ -46,9 +49,9 @@ System Settings › General › Login Items, where you can switch it off), creat
 ```
 
 launchd starts mxd at login and restarts it within seconds if it ever exits. To update, replace
-`mxd.app` and open it again (or re-run the install script) to restart it on the new version. By hand,
-`/Applications/mxd.app/Contents/MacOS/mxd register` starts or restarts the installed copy, and
-`unregister` stops it and removes it from login items until the next `register`.
+`mxd.app` and open it again (or re-run the install script) to restart it on the new version. By
+hand, `/Applications/mxd.app/Contents/MacOS/mxd register` starts or restarts the installed copy,
+and `unregister` stops it and removes it from login items until the next `register`.
 
 The first run asks for two permissions. Grant both in **System Settings › Privacy & Security**:
 
