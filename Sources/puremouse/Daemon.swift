@@ -42,6 +42,12 @@ final class Daemon {
     private var power: PowerObserver?
     private var signalSources: [DispatchSourceSignal] = []
     private var shuttingDown = false
+    /// Paused from the menu bar app (`Control.paused`): every mouse is native and none is adopted.
+    private var paused = false
+    /// Restoring the mice for a pause; resuming and quitting wait for it.
+    private var pausing: Task<Void, Never>?
+    /// Whether new sessions may be created.
+    private var accepting: Bool { !shuttingDown && !paused }
     /// Set once the mice are restored, just before exit: the final status says not running.
     private var exiting = false
 
@@ -54,7 +60,8 @@ final class Daemon {
         }
     }
 
-    private enum Adoption { case adopted, noAnswer, notAMouse }
+    /// `stopped`: not adopting now (paused or quitting), so do not retry.
+    private enum Adoption { case adopted, noAnswer, notAMouse, stopped }
 
     init(configURL: URL) {
         self.configURL = configURL
@@ -98,6 +105,7 @@ final class Daemon {
         StatusChannel.clearControl()
         channel = StatusChannel { [unowned self] in self.status(running: !self.exiting) }
         channel?.writeNow()
+        channel?.onControl { [weak self] in self?.controlChanged() }
         monitor.onAttach = { [weak self] interface in self?.attached(interface) }
         monitor.onDetach = { [weak self] interface in self?.detached(interface) }
         let status = monitor.start()
@@ -120,7 +128,7 @@ final class Daemon {
     private func status(running: Bool) -> Status {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
         return Status(
-            pid: getpid(), startedAt: startedAt, version: version, running: running, paused: false,
+            pid: getpid(), startedAt: startedAt, version: version, running: running, paused: paused,
             permissions: .init(accessibility: permissions.contains(.accessibility),
                                inputMonitoring: permissions.contains(.inputMonitoring)),
             logiOptionsRunning: logiOptionsRunning,
@@ -131,6 +139,50 @@ final class Daemon {
 
     private func statusChanged() {
         channel?.setNeedsWrite()
+    }
+
+    // MARK: Control
+
+    /// The menu bar app changed `control.json`. A missing file means no requests.
+    private func controlChanged() {
+        guard !shuttingDown else { return }
+        let control: Control
+        if FileManager.default.fileExists(atPath: Companion.controlURL.path) {
+            guard let read = Companion.read(Control.self, from: Companion.controlURL) else {
+                Log.error("ignoring unreadable \(Companion.controlURL.path)")
+                return
+            }
+            control = read
+        } else {
+            control = Control()
+        }
+        if control.paused != paused { control.paused ? pause() : resume() }
+    }
+
+    /// Returns every mouse to native behaviour and stops adopting until `resume`.
+    private func pause() {
+        Log.info("paused")
+        paused = true
+        let all = Array(sessions.values)
+        sessions = [:]
+        for session in all { watch(session.device) }
+        pausing = Task { [previous = pausing] in
+            await previous?.value
+            await withTaskGroup(of: Void.self) { group in
+                for session in all { group.addTask { await session.restore() } }
+            }
+        }
+        statusChanged()
+    }
+
+    private func resume() {
+        Log.info("resumed")
+        paused = false
+        statusChanged()
+        Task { [pausing] in
+            await pausing?.value
+            await adoptStragglers()
+        }
     }
 
     private func onSignal(_ number: Int32, _ handler: @escaping (Daemon) -> Void) {
@@ -240,11 +292,16 @@ final class Daemon {
     private func listen(_ interface: HIDInterface, index: UInt8) -> HIDPPDevice {
         let device = HIDPPDevice(interface: interface, index: index)
         endpoints[Key(device)] = device
+        watch(device)
+        return device
+    }
+
+    /// Routes an endpoint's events to the daemon, as when no session owns it.
+    private func watch(_ device: HIDPPDevice) {
         device.onEvent = { [weak self, weak device] report in
             guard let self, let device, report.featureIndex == Receiver.connectionNotification else { return }
             self.slotAnnounced(device, report)
         }
-        return device
     }
 
     /// A connection notification for a slot with no session. A different device in the slot
@@ -266,12 +323,12 @@ final class Daemon {
     private func adoptSlot(_ device: HIDPPDevice) async {
         let key = Key(device)
         guard await adopt(device) == .noAnswer, slotRetries[key] == nil,
-              endpoints[key] === device, !shuttingDown else { return }
+              endpoints[key] === device, accepting else { return }
         slotRetries[key] = Task {
             defer { if !Task.isCancelled { slotRetries[key] = nil } }
             for delay in [1, 2, 4, 8] {
                 try? await Task.sleep(for: .seconds(delay))
-                guard !Task.isCancelled, endpoints[key] === device, !shuttingDown else { return }
+                guard !Task.isCancelled, endpoints[key] === device, accepting else { return }
                 if await adopt(device) != .noAnswer { return }
             }
         }
@@ -283,7 +340,8 @@ final class Daemon {
         let key = Key(device)
         guard sessions[key] == nil else { return .adopted }
         guard !ignored.contains(key) else { return .notAMouse }
-        guard endpoints[key] === device, !shuttingDown, adopting.insert(key).inserted else { return .noAnswer }
+        guard accepting else { return .stopped }
+        guard endpoints[key] === device, adopting.insert(key).inserted else { return .noAnswer }
         defer { adopting.remove(key) }
         let result = await identify(device)
         if result == .notAMouse { ignored.insert(key) }
@@ -305,8 +363,9 @@ final class Daemon {
         let configured = Set(config.bindings.keys)
         guard hasDPI || controls.contains(where: { configured.contains($0.cid) }) else { return .notAMouse }
         let name = (try? await DeviceName.get(device)) ?? "device \(device.index)"
-        // The device may have gone, or the daemon begun quitting, while we were asking.
-        guard endpoints[key] === device, sessions[key] == nil, !shuttingDown else { return .noAnswer }
+        // The device may have gone, or the daemon paused or begun quitting, while we were asking.
+        guard accepting else { return .stopped }
+        guard endpoints[key] === device, sessions[key] == nil else { return .noAnswer }
         Log.info("adopting \(name) on \(device.interface.product) index \(device.index)")
         let session = Session(device: device, name: name, id: deviceID(key), controls: controls, config: config)
         add(session, key)
@@ -378,9 +437,10 @@ final class Daemon {
         shuttingDown = true
         Log.info("quitting")
         let all = Array(sessions.values)
-        Task {
+        Task { [pausing] in
             await withTaskGroup(of: Void.self) { group in
                 for session in all { group.addTask { await session.restore() } }
+                if let pausing { group.addTask { await pausing.value } }
             }
             exitReporting()
         }

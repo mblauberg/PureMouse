@@ -57,7 +57,9 @@ work on it safely.
 - On SIGTERM/SIGINT, `Session.restore()` returns the mouse to native behaviour (wheels first).
   Nothing may be persisted on the device or receiver: they must work normally without PureMouse.
 - A session that is `finished` (closed or restored) must not touch the device again; the daemon
-  stops adopting once `shuttingDown`.
+  stops adopting once `shuttingDown` or `paused` (`Daemon.accepting`). Pausing from the menu
+  (`Control.paused`) restores and drops every session; resuming and quitting wait for those
+  restores (`Daemon.pausing`) before touching the mice again. A pause is never persisted.
 - The daemon reports to the menu bar app only through `status.json` (`StatusChannel`): call
   `statusChanged()` (Daemon) or `changed()` (Session) after anything in `Status` changes; writes
   are coalesced to one per main-queue turn. On shutdown, `running: false` is written last, after
