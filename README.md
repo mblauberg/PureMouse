@@ -260,13 +260,11 @@ Builds are signed with the code-signing identity named `PureMouse` when the keyc
 an ad-hoc build needs them granted again after every install, and releases must all be signed with
 the same identity.
 
-## Acknowledgements
+## Protocol references
 
-The protocol details come from [Solaar](https://github.com/pwr-Solaar/Solaar) and
-[logiops](https://github.com/PixlOne/logiops). Both
-[Mac Mouse Fix](https://github.com/noah-nuebling/mac-mouse-fix) and
-[Mos](https://github.com/Caldis/Mos) showed how to post scroll and swipe events that macOS treats
-as real.
+Logitech does not publish HID++ 2.0, so the feature layouts here were checked against the open
+implementations in [Solaar](https://github.com/pwr-Solaar/Solaar) and
+[logiops](https://github.com/PixlOne/logiops).
 
 ## Licence
 
