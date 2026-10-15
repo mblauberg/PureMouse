@@ -99,6 +99,13 @@ work on it safely.
   booting out any running instance first (`LoginItem.swift`). Not `SMAppService`: without a
   Developer ID team, launchd pins its agents to the registering build ("needs LWCR update"), so a
   replaced app's agent fails to spawn with EX_CONFIG, and re-registering did not reliably clear it.
+- The same commands manage the menu bar app's agent (`io.github.mblauberg.puremouse.menu`) when
+  the bundle has `Contents/Library/LoginItems/PureMouse Menu.app`; dev builds without it handle
+  the daemon only. `menu off` is remembered by a `menu-hidden` file in the companion directory, so
+  `register` keeps the icon hidden. The menu app runs these commands as its child, and booting
+  out its agent kills its process group: `main` calls `setsid()` first, every command boots the
+  menu agent out last (after removing its plist), and `register`/`menu on` leave an already
+  loaded menu agent running when the menu app itself is the caller.
 - Builds are signed with the `PureMouse` code-signing identity (self-signed,
   `scripts/make-cert.sh`). The permission grants are keyed to identifier plus certificate, which
   also holds on Macs that do not trust the certificate; an ad-hoc signature makes macOS drop them on

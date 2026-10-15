@@ -83,7 +83,8 @@ PureMouse requires macOS 14 or later, on Apple silicon or Intel. It is tested on
 To update, drag the new `PureMouse.app` over the old one and open it again. To stop PureMouse, turn
 it off under System Settings › General › Login Items, or run
 `/Applications/PureMouse.app/Contents/MacOS/puremouse unregister`. The `register` command starts it
-again.
+again. `puremouse stop` stops it until the next login, and `puremouse menu off` (or `on`) hides
+(or shows) the menu bar icon; PureMouse keeps working without it.
 
 ### From source
 
