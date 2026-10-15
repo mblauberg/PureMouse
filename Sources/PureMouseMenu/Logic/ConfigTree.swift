@@ -74,13 +74,57 @@ struct ConfigTree {
     }
 
     func int(_ path: [String]) -> Int? {
-        guard let value = double(path), value.rounded() == value, abs(value) < 1e15 else { return nil }
-        return Int(value)
+        guard let value = self[path] as? NSNumber, !JSON.isBool(value) else { return nil }
+        // Whole numbers and big ones (NSDecimalNumber) read exactly from their digits.
+        if value is NSDecimalNumber || !JSON.isFloatingPoint(value) { return Int(value.stringValue) }
+        let double = value.doubleValue
+        guard double.rounded() == double, abs(double) < 1e15 else { return nil }
+        return Int(double)
     }
 
     func string(_ path: [String]) -> String? { self[path] as? String }
 
     func data() -> Data { JSON.encode(root) }
+
+    // MARK: Changes
+
+    /// One key set to a value, or removed (nil).
+    struct Change {
+        let path: [String]
+        let value: Any?
+    }
+
+    /// The keys `after` changed relative to `self`, as leaf-level changes. Replayed with `apply`
+    /// onto a newer tree, they change only those keys, so a hand edit elsewhere survives. An object
+    /// that disappeared is removed key by key (it may only have been pruned as empty), except one
+    /// that means something when empty (`keptWhenEmpty`), which is removed whole.
+    func changes(to after: ConfigTree) -> [Change] {
+        var out: [Change] = []
+        Self.diff(root, after.root, path: [], into: &out)
+        return out
+    }
+
+    mutating func apply(_ changes: [Change]) {
+        for change in changes { set(change.value, at: change.path) }
+    }
+
+    private static func diff(_ before: [String: Any], _ after: [String: Any], path: [String], into out: inout [Change]) {
+        for key in Set(before.keys).union(after.keys).sorted() {
+            let path = path + [key]
+            switch (before[key], after[key]) {
+            case let (old as [String: Any], new as [String: Any]):
+                diff(old, new, path: path, into: &out)
+            case let (old as [String: Any], nil) where !keptWhenEmpty.contains(path.joined(separator: ".")):
+                diff(old, [:], path: path, into: &out)
+            case let (old?, new) where new == nil || JSON.encode(old) != JSON.encode(new!):
+                out.append(Change(path: path, value: new))
+            case let (nil, new?):
+                out.append(Change(path: path, value: new))
+            default:
+                break
+            }
+        }
+    }
 }
 
 enum ConfigTreeError: Error, CustomStringConvertible {
@@ -100,6 +144,13 @@ enum JSON {
 
     static func isBool(_ number: NSNumber) -> Bool {
         CFGetTypeID(number as CFTypeRef) == CFBooleanGetTypeID()
+    }
+
+    /// A binary floating-point number (not a whole number, and not an exact NSDecimalNumber).
+    static func isFloatingPoint(_ number: NSNumber) -> Bool {
+        guard !(number is NSDecimalNumber) else { return false }
+        let type = String(cString: number.objCType)
+        return type == "d" || type == "f"
     }
 
     static func number(_ value: Double) -> String {
@@ -145,8 +196,10 @@ enum JSON {
         case let string as String: return quoted(string)
         case let number as NSNumber:
             if isBool(number) { return number.boolValue ? "true" : "false" }
-            let type = String(cString: number.objCType)
-            if type == "d" || type == "f" { return self.number(number.doubleValue) }
+            // Doubles get their shortest round-trip form. Integers, and numbers too big or too
+            // precise for a double (JSONSerialization reads those as NSDecimalNumber), keep
+            // their exact digits.
+            if isFloatingPoint(number) { return self.number(number.doubleValue) }
             return number.stringValue
         case is NSNull: return "null"
         case let bool as Bool: return bool ? "true" : "false"

@@ -98,18 +98,14 @@ struct ButtonsPane: View {
     private var configKeys: [String] { (model.config[["buttons"]] as? [String: Any]).map { Array($0.keys) } ?? [] }
 
     private var namedRows: [String] {
-        NamedButton.allCases.filter { button in
-            deviceCIDs.map { $0.contains(button.cid) } ?? true || configKeys.contains(button.rawValue)
+        let configCIDs = Set(configKeys.compactMap(NamedButton.cid(forKey:)))
+        return NamedButton.allCases.filter { button in
+            deviceCIDs.map { $0.contains(button.cid) } ?? true || configCIDs.contains(button.cid)
         }.map(\.rawValue)
     }
 
     private var otherRows: [String] {
-        let named = Set(NamedButton.allCases.map(\.cid))
-        var keys = Set(model.devices.flatMap(\.controls).filter { !named.contains($0.cid) }.map { NamedButton.hex($0.cid) })
-        for key in configKeys where NamedButton(rawValue: key) == nil {
-            if let cid = NamedButton.cid(forKey: key), !keys.contains(NamedButton.hex(cid)) { keys.insert(key) }
-        }
-        return keys.sorted()
+        ButtonRows.others(deviceCIDs: model.devices.flatMap(\.controls).map(\.cid), configKeys: configKeys)
     }
 
     private func title(_ key: String) -> String {
@@ -119,6 +115,8 @@ struct ButtonsPane: View {
     /// Where an "Other controls" entry lives, for its help line.
     private func caption(_ key: String) -> String? {
         guard NamedButton(rawValue: key) == nil, let cid = NamedButton.cid(forKey: key) else { return nil }
+        // No devices: none connected, or paused (the daemon then reports none).
+        guard !model.devices.isEmpty else { return nil }
         let owners = model.devices.filter { $0.controls.contains { $0.cid == cid } }.map(\.name)
         return owners.isEmpty ? "Not on the connected mouse" : owners.joined(separator: ", ")
     }

@@ -106,7 +106,10 @@ final class ShortcutRecorder {
             // Local monitors run on the main thread.
             nonisolated(unsafe) let event = event
             nonisolated(unsafe) var result: NSEvent? = event
-            MainActor.assumeIsolated { result = self?.handle(event) ?? event }
+            // handle returns nil for an event it consumed; only a released recorder passes it on.
+            MainActor.assumeIsolated {
+                if let self { result = self.handle(event) }
+            }
             return result
         }
     }

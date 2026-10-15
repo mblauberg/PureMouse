@@ -110,7 +110,7 @@ private func text(_ tree: ConfigTree) -> String { String(decoding: tree.data(), 
     #expect(ButtonAction.named("toggleScrollMode").label == "Switch Wheel Mode")
     #expect(ButtonAction.keys("cmd+w").label == "⌘W")
     #expect(ButtonAction.run("open -a Safari").label == "open -a Safari")
-    #expect(ButtonAction.gesture.label == "Hold and move")
+    #expect(ButtonAction.gesture.label == "Hold and Move")
     #expect(ButtonAction.named("futureAction").label == "futureAction")
 }
 
@@ -238,4 +238,62 @@ private func text(_ tree: ConfigTree) -> String { String(decoding: tree.data(), 
         #expect(ShortcutCheck.isValid("cmd+" + name), "cmd+\(name)")
     }
     #expect(!ShortcutCheck.isValid("cmd+nosuchkey"))
+}
+
+// MARK: Review fixes
+
+@Test func untouchedNumbersKeepTheirExactDigits() throws {
+    let config = try tree(#"{"big": 18446744073709551617, "neg": -9223372036854775809, "tenth": 0.1, "n": 5, "huge": 9007199254740993}"#)
+    let out = text(config)
+    #expect(out.contains(#""big": 18446744073709551617"#))
+    #expect(out.contains(#""neg": -9223372036854775809"#))
+    #expect(out.contains(#""tenth": 0.1"#))
+    #expect(out.contains(#""n": 5,"#) || out.contains(#""n": 5\#n"#))
+    #expect(out.contains(#""huge": 9007199254740993"#))
+    #expect(config.int(["huge"]) == 9007199254740993)
+    #expect(config.int(["big"]) == nil)
+    #expect(config.int(["n"]) == 5)
+}
+
+@Test func replayingChangesKeepsAHandEditElsewhere() throws {
+    let loaded = try tree(#"{"buttons": {"back": "missionControl"}, "dpi": 800}"#)
+    var edited = loaded
+    edited.bind("back", to: .standard)
+    edited.set(1600, at: ["dpi"])
+    let changes = loaded.changes(to: edited)
+    // Meanwhile the file gained a binding for forward and a new speed, and back was rebound.
+    var fresh = try tree(#"{"buttons": {"back": "appExpose", "forward": "showDesktop"}, "dpi": 800, "smoothScroll": {"speed": 2}}"#)
+    fresh.apply(changes)
+    #expect(fresh[["buttons", "back"]] == nil)
+    #expect(fresh.string(["buttons", "forward"]) == "showDesktop")
+    #expect(fresh.int(["dpi"]) == 1600)
+    #expect(fresh.double(["smoothScroll", "speed"]) == 2)
+}
+
+@Test func replayingAToggleSetsItsValueRatherThanFlipping() throws {
+    let loaded = try tree(#"{"smoothScroll": {}}"#)
+    var edited = loaded
+    edited.smoothScrollEnabled.toggle()
+    var fresh = try tree(#"{"smoothScroll": {"enabled": false, "speed": 2}}"#)
+    fresh.apply(loaded.changes(to: edited))
+    #expect(fresh.smoothScrollEnabled == false)
+    #expect(fresh.double(["smoothScroll", "speed"]) == 2)
+    #expect(loaded.changes(to: loaded).isEmpty)
+}
+
+@Test func hexKeysForNamedControlsAreReadAndEditedInPlace() throws {
+    var config = try tree(#"{"buttons": {"0x0053": "missionControl", "c5": "appExpose"}}"#)
+    #expect(config.binding("back") == .named("missionControl"))
+    config.bind("back", to: .named("showDesktop"))
+    #expect((config[["buttons"]] as? [String: Any])?.keys.sorted() == ["0x0053", "c5"])
+    #expect(config.string(["buttons", "0x0053"]) == "showDesktop")
+    #expect(config.binding("0x00c5") == .named("appExpose"))
+    config.bind("back", to: .standard)
+    #expect((config[["buttons"]] as? [String: Any])?.keys.sorted() == ["c5"])
+}
+
+@Test func otherControlsSkipNamedOnesAndDuplicates() {
+    let rows = ButtonRows.others(deviceCIDs: [0x0053, 0x00c5, 0x00d7],
+                                 configKeys: ["0x0053", "back", "0xC5", "1a0", "nonsense"])
+    #expect(rows == ["0x00c5", "0x00d7", "1a0"])
 }

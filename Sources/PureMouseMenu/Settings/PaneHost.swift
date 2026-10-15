@@ -32,14 +32,14 @@ extension EnvironmentValues {
     }
 }
 
-/// A grouped form that reports its full height, so the window grows instead of scrolling.
+/// A grouped form whose ideal height is its content's, so the window grows to fit it. When the
+/// screen is too short for that (`SettingsTabs.fitWindow` caps the window), the form scrolls.
 struct PaneForm<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
         Form { content }
             .formStyle(.grouped)
-            .scrollDisabled(true)
-            .fixedSize(horizontal: false, vertical: true)
+            .scrollBounceBehavior(.basedOnSize)
     }
 }

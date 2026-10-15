@@ -35,6 +35,9 @@ final class AppModel {
     @ObservationIgnored private var diskBytes: Data?
     @ObservationIgnored private var lastGood: Data?
     @ObservationIgnored private var pendingWrite: DispatchWorkItem?
+    /// Edits made here and not yet saved, as the keys they set. Saving replays them onto the file
+    /// as it is then, so a hand edit made meanwhile is kept.
+    @ObservationIgnored private var pendingChanges: [ConfigTree.Change] = []
     @ObservationIgnored private var captureToken = 0
     @ObservationIgnored private var captureTimeout: DispatchWorkItem?
     @ObservationIgnored private var requestedPaused: Bool?
@@ -216,6 +219,11 @@ final class AppModel {
     func reloadConfig() {
         let url = Paths.config
         guard FileManager.default.fileExists(atPath: url.path) else {
+            // Deleted while a change of ours waits: save it as a new file now.
+            if !pendingChanges.isEmpty {
+                if diskBytes != nil { flush() }
+                return
+            }
             // No file: the daemon runs with every default.
             if diskBytes != nil || configProblem != nil || !config.root.isEmpty {
                 config = ConfigTree()
@@ -230,9 +238,12 @@ final class AppModel {
             return
         }
         guard data != diskBytes else { return }
+        // Edited by hand while a change of ours waits: save ours on top of the new file now.
+        if !pendingChanges.isEmpty {
+            flush()
+            return
+        }
         diskBytes = data
-        pendingWrite?.cancel()
-        pendingWrite = nil
         do {
             let tree = try ConfigTree(data: data)
             config = tree
@@ -255,6 +266,7 @@ final class AppModel {
         guard !readOnly else { return }
         var tree = config
         change(&tree)
+        pendingChanges += config.changes(to: tree)
         config = tree
         if debounce {
             pendingWrite?.cancel()
@@ -266,25 +278,52 @@ final class AppModel {
         }
     }
 
-    /// Writes any pending change now (also before quitting).
+    /// Saves pending edits now (also when Settings closes and before quitting). Writes nothing
+    /// when there are none, and never builds on a file that does not load.
     func flush() {
         pendingWrite?.cancel()
         pendingWrite = nil
-        let data = config.data()
-        guard data != diskBytes else { return }
+        guard !pendingChanges.isEmpty else { return }
+        let changes = pendingChanges
+        pendingChanges = []
+        // Re-read the file, so a hand edit made since it was loaded survives our change.
+        let url = Paths.config
+        let current: Data?
+        let fresh: ConfigTree
+        do {
+            current = FileManager.default.fileExists(atPath: url.path) ? try Data(contentsOf: url) : nil
+            fresh = try current.map { try ConfigTree(data: $0) } ?? ConfigTree()
+            if let current { try ConfigCheck.validate(current) }
+        } catch {
+            diskBytes = nil
+            reloadConfig()
+            writeError = "The config file changed and has an error, so this change was not saved."
+            return
+        }
+        var tree = fresh
+        tree.apply(changes)
+        let data = tree.data()
+        guard data != current else {
+            diskBytes = current
+            config = tree
+            return
+        }
         do {
             try ConfigCheck.validate(data)
         } catch {
             writeError = Self.describe(error)
-            if let diskBytes, let tree = try? ConfigTree(data: diskBytes) { config = tree }
+            diskBytes = current
+            config = fresh
             return
         }
+        config = tree
         write(data)
     }
 
     /// Replaces the whole file with `{}` (every setting back to the mouse's own).
     func resetAll() {
         pendingWrite?.cancel()
+        pendingChanges = []
         config = ConfigTree()
         configProblem = nil
         write(config.data())
@@ -295,6 +334,8 @@ final class AppModel {
 
     func restoreLastWorking() {
         guard let lastGood, let tree = try? ConfigTree(data: lastGood) else { return }
+        pendingWrite?.cancel()
+        pendingChanges = []
         config = tree
         configProblem = nil
         write(lastGood)

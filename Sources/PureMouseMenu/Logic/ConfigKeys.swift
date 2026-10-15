@@ -33,15 +33,25 @@ extension ConfigTree {
         set(values.smoothingMs, at: ["smoothScroll", "smoothingMs"])
     }
 
-    func binding(_ button: String) -> ButtonAction { ButtonAction(json: self[["buttons", button]]) }
+    /// The key in `buttons` that holds a control's binding. The daemon accepts a name or a hex ID
+    /// for the same control ("back", "0x0053", "53"), so a hand-written hex key is read and edited
+    /// in place rather than shadowed by a second key. Without one, `button` itself.
+    func buttonKey(_ button: String) -> String {
+        guard let buttons = self[["buttons"]] as? [String: Any], buttons[button] == nil,
+              let cid = NamedButton.cid(forKey: button) else { return button }
+        return buttons.keys.sorted().first { NamedButton.cid(forKey: $0) == cid } ?? button
+    }
+
+    func binding(_ button: String) -> ButtonAction { ButtonAction(json: self[["buttons", buttonKey(button)]]) }
 
     func gestureBinding(_ button: String, _ direction: String) -> ButtonAction {
-        ButtonAction(json: self[["buttons", button, direction]])
+        ButtonAction(json: self[["buttons", buttonKey(button), direction]])
     }
 
     /// Binds a button. `.gesture` keeps an existing gesture, or starts one whose click does what
     /// the button did, so a gesture object is never empty (an empty one is not a gesture).
     mutating func bind(_ button: String, to binding: ButtonAction) {
+        let button = buttonKey(button)
         let path = ["buttons", button]
         switch binding {
         case .standard: set(nil, at: path)
@@ -58,6 +68,7 @@ extension ConfigTree {
     /// Binds one direction of a gesture button. A missing direction does nothing, so "Do Nothing"
     /// removes the key, unless it is the last one.
     mutating func bind(_ button: String, direction: String, to binding: ButtonAction) {
+        let button = buttonKey(button)
         let path = ["buttons", button, direction]
         switch binding {
         case .standard, .named("none"):

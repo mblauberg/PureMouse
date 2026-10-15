@@ -34,7 +34,7 @@ enum ButtonAction: Equatable {
         case .named(let name): ActionCatalog.label(for: name)
         case .keys(let spec): Shortcut.display(spec) ?? spec
         case .run(let command): command.isEmpty ? "Run Shell Command" : command
-        case .gesture: "Hold and move"
+        case .gesture: "Hold and Move"
         }
     }
 }
@@ -61,7 +61,7 @@ enum ActionCatalog {
 
     static let groups: [Group] = [
         Group(title: "Desktop", names: ["missionControl", "appExpose", "showDesktop", "launchpad"]),
-        Group(title: "Spaces and navigation", names: ["spaceLeft", "spaceRight", "navigateBack", "navigateForward"]),
+        Group(title: "Spaces and Navigation", names: ["spaceLeft", "spaceRight", "navigateBack", "navigateForward"]),
         Group(title: "Mouse", names: ["toggleScrollMode", "cycleDPI"]),
     ]
 
@@ -123,5 +123,21 @@ enum NamedButton: String, CaseIterable {
         if let named = NamedButton(rawValue: key) { return named.cid }
         let hex = key.lowercased().hasPrefix("0x") ? String(key.dropFirst(2)) : key
         return UInt16(hex, radix: 16)
+    }
+}
+
+/// Which controls the Buttons pane lists under "Other controls".
+enum ButtonRows {
+    /// Controls without a name: the connected mice's, as hex IDs, plus any the config binds that
+    /// they do not have. A hex key for a named control ("0x0053") shows under its name instead.
+    static func others(deviceCIDs: [UInt16], configKeys: [String]) -> [String] {
+        var seen = Set(NamedButton.allCases.map(\.cid))
+        var keys: [String] = []
+        for cid in deviceCIDs where seen.insert(cid).inserted { keys.append(NamedButton.hex(cid)) }
+        for key in configKeys.sorted() {
+            guard let cid = NamedButton.cid(forKey: key), seen.insert(cid).inserted else { continue }
+            keys.append(key)
+        }
+        return keys.sorted()
     }
 }
