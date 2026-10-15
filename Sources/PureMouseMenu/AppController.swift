@@ -5,6 +5,8 @@ import notify
 /// The app delegate: owns the model, the status item and (only while open) the Settings window.
 @MainActor
 final class AppController: NSObject, NSApplicationDelegate {
+    static var shared: AppController? { NSApp.delegate as? AppController }
+
     let model = AppModel()
     private var statusMenu: StatusMenu?
     private var settings: SettingsWindowController?
@@ -76,7 +78,14 @@ final class AppController: NSObject, NSApplicationDelegate {
     /// menu is open or a lifecycle command runs; whichever of those ends last tries again.
     func relaunchIfIdle() {
         guard relaunchPending, settings == nil, let statusMenu, !statusMenu.isOpen, Lifecycle.idle,
-              !pendingMenuOff else { return }
+              !pendingMenuOff, NSApp.modalWindow == nil else { return }
+        // However it was reached (the menu closing, a command ending), not before launchd would
+        // restart it at once.
+        let wait = Relaunch.delay(launchedAt: launchedAt)
+        if wait > 0.5 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + wait) { [weak self] in self?.relaunchIfIdle() }
+            return
+        }
         relaunchPending = false
         model.flush()
         Relaunch.now()

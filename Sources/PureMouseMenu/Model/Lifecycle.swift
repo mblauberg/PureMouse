@@ -30,9 +30,9 @@ enum Lifecycle {
         }
         running += 1
         let completion: @MainActor (Result<String, LifecycleError>) -> Void = { result in
+            completion(result) // may show an alert; still running until it is answered
             running -= 1
-            completion(result)
-            (NSApp.delegate as? AppController)?.relaunchIfIdle()
+            AppController.shared?.relaunchIfIdle()
         }
         let process = Process()
         let pipe = Pipe()
@@ -84,6 +84,7 @@ enum Alerts {
         alert.messageText = message
         alert.informativeText = info
         alert.runModal()
+        AppController.shared?.relaunchIfIdle() // it waited for this alert
     }
 
     /// A confirmation with a destructive default; returns true to go ahead.
@@ -95,6 +96,8 @@ enum Alerts {
         let button = alert.addButton(withTitle: action)
         button.hasDestructiveAction = true
         alert.addButton(withTitle: "Cancel")
-        return alert.runModal() == .alertFirstButtonReturn
+        let confirmed = alert.runModal() == .alertFirstButtonReturn
+        AppController.shared?.relaunchIfIdle()
+        return confirmed
     }
 }

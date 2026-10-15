@@ -10,7 +10,9 @@ MainActor.assumeIsolated {
     // Single instance: a second launch hands over to the running one, which shows Settings.
     if let bundleID = Bundle.main.bundleIdentifier,
        let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
-           .first(where: { $0.processIdentifier != getpid() }) {
+           // LaunchServices learns of an exit late: a predecessor that just quit to relaunch
+           // (`Relaunch`) may still be listed.
+           .first(where: { $0.processIdentifier != getpid() && !$0.isTerminated && kill($0.processIdentifier, 0) == 0 }) {
         app.yieldActivation(to: running)
         ShowRequest.post()
         exit(0)
