@@ -2,9 +2,9 @@ import CoreGraphics
 import CoreVideo
 import Foundation
 
-/// PureMouse's own smooth scrolling, replacing Mos: wheel movement arrives over HID++ (the wheels
-/// are diverted, so macOS never sees them) and leaves as pixel scroll events, eased over a few
-/// display frames. Idle costs nothing; the frame clock only runs while a scroll is gliding.
+/// PureMouse's own smooth scrolling: wheel movement arrives over HID++ (the wheels are diverted,
+/// so macOS never sees them) and leaves as pixel scroll events, eased over a few display frames.
+/// Idle costs nothing; the frame clock only runs while a scroll is gliding.
 @MainActor
 final class ScrollEngine {
     /// How scrolling feels. One profile applies everywhere; per-app profiles would only need
@@ -119,7 +119,7 @@ enum SystemScrollSettings {
 enum ScrollEvent {
     /// Posts a continuous (trackpad-style) pixel scroll at the HID level, as a real device
     /// would, carrying the current modifier keys so cmd-zoom and similar shortcuts work. No
-    /// gesture phases, like Mos: phased horizontal scrolls trigger browser swipe navigation.
+    /// gesture phases: phased horizontal scrolls trigger browser swipe navigation.
     static func post(dx: Int, dy: Int) {
         guard let event = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2,
                                   wheel1: Int32(clamping: dy), wheel2: Int32(clamping: dx),

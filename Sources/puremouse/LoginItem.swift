@@ -1,4 +1,3 @@
-import CoreFoundation
 import Foundation
 
 /// Starting PureMouse at login: a launchd agent, `~/Library/LaunchAgents/<bundle id>.plist`, that
@@ -71,7 +70,7 @@ enum LoginItem {
             if launchctl("print", target).status != 0 { return true }
             usleep(100_000)
         }
-        throw Failure.stillRunning(output)
+        throw Failure.stillRunning(target: target, output: output)
     }
 
     private static func launchctl(_ arguments: String...) -> (status: Int32, output: String) {
@@ -106,14 +105,14 @@ enum LoginItem {
     }
 
     enum Failure: Error, CustomStringConvertible {
-        case notInBundle, translocated, bootstrap(String), stillRunning(String)
+        case notInBundle, translocated, bootstrap(String), stillRunning(target: String, output: String)
 
         var description: String {
             switch self {
             case .notInBundle: "only an installed PureMouse.app can register itself to start at login"
             case .translocated: "move PureMouse to the Applications folder, then open it again"
-            case .stillRunning(let output):
-                "the running PureMouse did not stop (\(output)); try `launchctl bootout gui/$UID/io.github.mblauberg.puremouse`"
+            case .stillRunning(let target, let output):
+                "the running PureMouse did not stop (\(output)); try `launchctl bootout \(target)`"
             case .bootstrap(let output):
                 "launchd would not start PureMouse (\(output)); check it is allowed under System Settings › General › Login Items"
             }

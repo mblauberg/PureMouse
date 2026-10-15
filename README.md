@@ -75,7 +75,7 @@ error at start if it finds it running. To remove it entirely, use Logitech's uni
 
 ## Configure
 
-Config lives at `~/.config/puremouse/config.json`; `config.example.json` is a full example. Every
+Config lives at `~/.config/puremouse/config.json`; `config.example.json` is a worked example. Every
 field is optional, and anything you leave out stays as the device has it. Reload without restarting:
 
 ```sh

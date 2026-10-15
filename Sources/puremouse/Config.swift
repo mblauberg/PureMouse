@@ -9,7 +9,7 @@ struct Config: Decodable {
     var dpi: Int?
     var scrollWheel: ScrollWheel?
     var thumbWheel: ThumbWheel?
-    /// When present, PureMouse takes both wheels over and scrolls smoothly itself (instead of Mos).
+    /// When present, PureMouse takes both wheels over and scrolls smoothly itself.
     var smoothScroll: SmoothScroll?
     /// Button name (see `Button`) or hex control ID (e.g. "0x00c4") → binding.
     var buttons: [String: Binding] = [:]

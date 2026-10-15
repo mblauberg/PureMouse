@@ -5,3 +5,4 @@
 .claude/
 .agent-run/
 CLAUDE.local.md
+.DS_Store

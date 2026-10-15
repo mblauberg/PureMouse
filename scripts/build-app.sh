@@ -14,6 +14,7 @@ label=io.github.mblauberg.puremouse
 app=.build/app/PureMouse.app
 minimum=14.0
 version=$(git describe --tags --always --dirty 2>/dev/null || echo dev)
+version=${version#v}  # tags are v1.2.3; bundle versions are 1.2.3
 if [[ -n ${PUREMOUSE_SIGN_IDENTITY:-} ]]; then
     identity=$PUREMOUSE_SIGN_IDENTITY
 elif security find-identity -p codesigning | grep -q '"PureMouse"'; then
@@ -41,7 +42,7 @@ fi
 rm -rf $app
 mkdir -p $app/Contents/{MacOS,Resources}
 cp $binary $app/Contents/MacOS/puremouse
-cp config.example.json $app/Contents/Resources/
+cp config.example.json assets/AppIcon.icns $app/Contents/Resources/
 cat > $app/Contents/Info.plist <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -49,6 +50,7 @@ cat > $app/Contents/Info.plist <<PLIST
   <key>CFBundleIdentifier</key><string>$label</string>
   <key>CFBundleName</key><string>PureMouse</string>
   <key>CFBundleExecutable</key><string>puremouse</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$version</string>
   <key>LSMinimumSystemVersion</key><string>$minimum</string>
