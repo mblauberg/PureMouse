@@ -1,3 +1,7 @@
 .build/
 .swiftpm/
 *.xcodeproj
+# Local agent state and machine-specific notes
+.claude/
+.agent-run/
+CLAUDE.local.md

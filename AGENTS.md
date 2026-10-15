@@ -18,10 +18,10 @@ work on it safely.
 - The user's live config is `~/.config/mxd/config.json`; keep `config.example.json` in step
   with it (its test checks shape, not values). Config changes apply with
   `launchctl kill HUP gui/$UID/local.mxd`, no rebuild.
-- Other Macs: `./scripts/package.sh` builds the universal release zip. The spare Mac `workshop`
-  (macOS 26, command line tools only) is reachable as `ssh workshop-fabric`; install under
-  `~/Applications` there and drive it with `mxd register`/`unregister`. Over SSH nobody can answer
-  a Gatekeeper dialog or grant permissions, so leave those to the user.
+- Other Macs: `./scripts/package.sh` builds the universal release zip. On a test Mac over SSH,
+  drive the installed app with `mxd register`/`unregister`. Over SSH nobody can answer a
+  Gatekeeper dialog or grant permissions, so leave those to whoever is at the Mac. Machine-specific
+  notes belong in the uncommitted `CLAUDE.local.md`.
 - When behaviour changes, update the README's field tables and this file in the same change.
 
 ## Invariants
@@ -65,15 +65,14 @@ work on it safely.
   do not trust the certificate; an ad-hoc signature makes macOS drop them on every install.
   install.sh stops the agent before replacing the binary.
 - Gatekeeper: launching a quarantined copy parks it at `_dyld_start` behind an on-screen dialog.
-  On workshop, later launches at that path stayed parked even after clearing the flag and putting
+  On a test Mac, later launches at that path stayed parked even after clearing the flag and putting
   a fresh copy there (presumably until the dialog is answered). Clear the flag before the first
   launch.
 - Some actions use undocumented interfaces: `CoreDockSendNotification` (it returns 0 even for
   unknown names, so failure is silent) and the navigation-swipe CGEvent fields. macOS 27 already
   stopped honouring the dock-swipe fields, which mxd does not use. After an OS upgrade, check them
   with `mxd action <name>`; README's "After a macOS upgrade" lists the keystroke fallbacks.
-- Logi Options+ fights mxd over the mouse. Its agent (`com.logi.cp-dev-mgr`) is disabled on this
-  machine; re-enabling it breaks mxd. The daemon logs an error at start if it sees any of its
+- Logi Options+ fights mxd over the mouse (its agent is `com.logi.cp-dev-mgr`). The daemon logs an error at start if it sees any of its
   processes (`LogiOptions`); only this user's process names are readable, so a root-run updater
   goes unseen.
 - DPI is snapped to the sensor's own list (0x2201 getSensorDpiList), read once per session; if
