@@ -30,7 +30,7 @@ enum LoginItem {
         // an agent pointing there would vanish.
         guard !executable.path.contains("/AppTranslocation/") else { throw Failure.translocated }
         seedConfig()
-        let restarting = stop(label)
+        let restarting = try stop(label)
         let agent: [String: Any] = [
             "Label": label,
             "ProgramArguments": [executable.path, "run"],
@@ -56,21 +56,22 @@ enum LoginItem {
     /// login items.
     static func unregister() throws {
         guard let label = Bundle.main.bundleIdentifier else { throw Failure.notInBundle }
-        stop(label)
+        try stop(label)
         try? FileManager.default.removeItem(at: plistURL(label))
     }
 
     /// Unloads the agent if it is loaded, waiting up to five seconds for the old instance to finish
     /// restoring the mouse. Returns whether it was loaded.
     @discardableResult
-    private static func stop(_ label: String) -> Bool {
+    private static func stop(_ label: String) throws -> Bool {
         let target = "gui/\(getuid())/\(label)"
         guard launchctl("print", target).status == 0 else { return false }
-        _ = launchctl("bootout", target)
-        for _ in 0..<50 where launchctl("print", target).status == 0 {
+        let (_, output) = launchctl("bootout", target)
+        for _ in 0..<50 {
+            if launchctl("print", target).status != 0 { return true }
             usleep(100_000)
         }
-        return true
+        throw Failure.stillRunning(output)
     }
 
     private static func launchctl(_ arguments: String...) -> (status: Int32, output: String) {
@@ -105,12 +106,14 @@ enum LoginItem {
     }
 
     enum Failure: Error, CustomStringConvertible {
-        case notInBundle, translocated, bootstrap(String)
+        case notInBundle, translocated, bootstrap(String), stillRunning(String)
 
         var description: String {
             switch self {
             case .notInBundle: "only an installed mxd.app can register itself to start at login"
             case .translocated: "move mxd to the Applications folder, then open it again"
+            case .stillRunning(let output):
+                "the running mxd did not stop (\(output)); try `launchctl bootout gui/$UID/local.mxd`"
             case .bootstrap(let output):
                 "launchd would not start mxd (\(output)); check it is allowed under System Settings › General › Login Items"
             }
