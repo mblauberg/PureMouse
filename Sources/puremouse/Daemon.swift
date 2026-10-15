@@ -43,7 +43,8 @@ final class Daemon {
     private var signalSources: [DispatchSourceSignal] = []
     private var shuttingDown = false
     /// Paused from the menu bar app (`Control.paused`): every mouse is native and none is adopted.
-    private var paused = false
+    private var pauseGate = PauseGate()
+    private var paused: Bool { pauseGate.paused }
     /// Restoring the mice for a pause; resuming and quitting wait for it.
     private var pausing: Task<Void, Never>?
     /// The current or last select-by-pressing request, as reported.
@@ -53,7 +54,7 @@ final class Daemon {
     private var lastCaptureToken: Int?
     static let captureDuration: Duration = .seconds(10)
     /// Whether new sessions may be created.
-    private var accepting: Bool { !shuttingDown && !paused }
+    private var accepting: Bool { !shuttingDown && pauseGate.allowsAdoption }
     /// Set once the mice are restored, just before exit: the final status says not running.
     private var exiting = false
 
@@ -211,7 +212,7 @@ final class Daemon {
     private func pause() {
         Log.info("paused")
         endCapture(.cancelled)
-        paused = true
+        let generation = pauseGate.pause()
         let all = Array(sessions.values)
         sessions = [:]
         for session in all { watch(session.device) }
@@ -220,18 +221,16 @@ final class Daemon {
             await withTaskGroup(of: Void.self) { group in
                 for session in all { group.addTask { await session.restore() } }
             }
+            if pauseGate.restored(generation), !shuttingDown { await adoptStragglers() }
         }
         statusChanged()
     }
 
     private func resume() {
         Log.info("resumed")
-        paused = false
+        let adoptNow = pauseGate.resume()
         statusChanged()
-        Task { [pausing] in
-            await pausing?.value
-            await adoptStragglers()
-        }
+        if adoptNow { Task { await adoptStragglers() } }
     }
 
     private func onSignal(_ number: Int32, _ handler: @escaping (Daemon) -> Void) {
@@ -548,5 +547,39 @@ final class PowerObserver {
         default:
             break
         }
+    }
+}
+
+/// Pausing from the menu bar app. No mouse is adopted while paused, nor until the restore a pause
+/// began has finished, even if resumed meanwhile: a new session must not configure a mouse that
+/// is still being handed back.
+struct PauseGate {
+    private(set) var paused = false
+    private var restoring = false
+    private var generation = 0
+
+    var allowsAdoption: Bool { !paused && !restoring }
+
+    /// Returns the pause's generation, for `restored`.
+    mutating func pause() -> Int {
+        paused = true
+        restoring = true
+        generation += 1
+        return generation
+    }
+
+    /// The restore for pause `generation` finished. True when the mice should be adopted now;
+    /// false if paused again since (that pause's restore decides).
+    mutating func restored(_ generation: Int) -> Bool {
+        guard generation == self.generation else { return false }
+        restoring = false
+        return !paused
+    }
+
+    /// True when the mice should be adopted now; false while a restore is still running (its
+    /// `restored` adopts them).
+    mutating func resume() -> Bool {
+        paused = false
+        return !restoring
     }
 }

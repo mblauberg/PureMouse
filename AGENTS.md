@@ -58,8 +58,9 @@ work on it safely.
   Nothing may be persisted on the device or receiver: they must work normally without PureMouse.
 - A session that is `finished` (closed or restored) must not touch the device again; the daemon
   stops adopting once `shuttingDown` or `paused` (`Daemon.accepting`). Pausing from the menu
-  (`Control.paused`) restores and drops every session; resuming and quitting wait for those
-  restores (`Daemon.pausing`) before touching the mice again. A pause is never persisted.
+  (`Control.paused`) restores and drops every session; nothing is adopted until those restores
+  finish, even after a resume (`PauseGate`), and quitting waits for them (`Daemon.pausing`). A
+  pause is never persisted.
 - Every change to which controls are diverted, from `apply()` or capture, runs through one chain
   (`Session.enqueueDiversion`), one at a time and in the order asked, reading the wanted state as
   it runs; `restore()` drains the chain before releasing, and each write checks `finished`.
