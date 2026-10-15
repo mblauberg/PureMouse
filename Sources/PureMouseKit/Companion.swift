@@ -10,9 +10,13 @@ public enum Companion {
     public static let daemonLabel = "io.github.mblauberg.puremouse"
     public static let menuLabel = "io.github.mblauberg.puremouse.menu"
 
-    /// `~/Library/Application Support/PureMouse`.
+    /// `~/Library/Application Support/PureMouse`, or `PUREMOUSE_COMPANION_DIR` when set (tests and
+    /// development, so a fixture never collides with an installed daemon).
     public static var directory: URL {
-        FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Application Support/PureMouse")
+        if let dir = ProcessInfo.processInfo.environment["PUREMOUSE_COMPANION_DIR"] {
+            return URL(fileURLWithPath: dir, isDirectory: true)
+        }
+        return FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Application Support/PureMouse")
     }
     /// Written by the daemon: `Status`.
     public static var statusURL: URL { directory.appending(path: "status.json") }
