@@ -25,7 +25,12 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         NSStatusBar.system.removeStatusItem(statusItem)
     }
 
-    func open() { statusItem.button?.performClick(nil) }
+    #if DEBUG
+    func open(appearance: NSAppearance?) {
+        menu.appearance = appearance
+        statusItem.button?.performClick(nil)
+    }
+    #endif
 
     private(set) var isOpen = false
 

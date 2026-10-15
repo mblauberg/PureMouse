@@ -23,7 +23,10 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   builds also take `PUREMOUSE_DEV_PANE=<pane>`, `PUREMOUSE_DEV_MENU=1`,
   `PUREMOUSE_DEV_APPEARANCE=light|dark`, `PUREMOUSE_DEV_PICKER=<button>` and
   `PUREMOUSE_DEV_SHORTCUT=<button>` for screenshots (`DevHooks.swift`); `--login` launches it as
-  launchd does (no Settings window). Check its footprint with `footprint <pid>` before and after
+  launchd does (no Settings window). `PUREMOUSE_DEV_MENU=1` puts a plain backdrop under the menu,
+  since its glass shows whatever is behind it. A window capture (`screencapture -l`) leaves out
+  that blur, so the README's menu shots take the shape and shadow from one and the body from a
+  screen capture of the same rect. Check its footprint with `footprint <pid>` before and after
   opening Settings.
 - The user's live config is `~/.config/puremouse/config.json`; keep `config.example.json` in step
   with it (its test checks shape, not values). Config changes apply on save (`ConfigWatcher`

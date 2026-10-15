@@ -122,7 +122,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     var showsStatusItem: Bool { statusMenu != nil }
 
     #if DEBUG
-    func openMenuForTesting() { statusMenu?.open() }
+    func openMenuForTesting(appearance: NSAppearance?) { statusMenu?.open(appearance: appearance) }
     #endif
 
     private var pendingMenuOff = false

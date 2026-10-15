@@ -21,7 +21,10 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/menu.png" alt="The PureMouse menu: mouse, battery, smooth scrolling, pointer speed and pause">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/menu-dark.png">
+    <img src="docs/images/menu-light.png" alt="The PureMouse menu: mouse, battery, smooth scrolling, pointer speed and pause">
+  </picture>
 </p>
 
 ## Features

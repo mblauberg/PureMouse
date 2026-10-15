@@ -21,8 +21,24 @@ enum DevHooks {
             NSApp.activate(ignoringOtherApps: true)
         }
         if environment["PUREMOUSE_DEV_MENU"] != nil {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { app.openMenuForTesting() }
+            // The menu's glass shows what is under it: a plain desktop, not whatever is on screen.
+            backdrop = plainBackdrop()
+            // A status menu follows the menu bar's appearance, not the app's.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { app.openMenuForTesting(appearance: NSApp.appearance) }
         }
+    }
+
+    private static var backdrop: NSWindow?
+
+    private static func plainBackdrop() -> NSWindow? {
+        guard let screen = NSScreen.main else { return nil }
+        let window = NSWindow(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
+        let dark = (NSApp.appearance ?? NSApp.effectiveAppearance).bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        window.backgroundColor = dark ? NSColor(white: 0.11, alpha: 1) : NSColor(white: 0.96, alpha: 1)
+        window.level = .floating
+        window.ignoresMouseEvents = true
+        window.orderFrontRegardless()
+        return window
     }
 }
 #endif
