@@ -48,8 +48,8 @@ System Settings › General › Login Items, where you can switch it off), creat
 ./scripts/package.sh          # release zip for Apple silicon and Intel, in .build/dist/
 ```
 
-launchd starts mxd at login and restarts it within seconds if it ever exits. To update, drag the new
-`mxd.app` over the old one in the Finder and open it again (or re-run the install script) to
+launchd starts mxd at login and restarts it within seconds if it ever exits. To update, drag the
+new `mxd.app` over the old one in the Finder and open it again (or re-run the install script) to
 restart it on the new version. By
 hand, `/Applications/mxd.app/Contents/MacOS/mxd register` starts or restarts the installed copy,
 and `unregister` stops it and removes it from login items until the next `register`.
