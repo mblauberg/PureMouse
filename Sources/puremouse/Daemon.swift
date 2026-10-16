@@ -288,7 +288,11 @@ final class Daemon {
                 for session in all { group.addTask { await session.restore() } }
             }
             pauseRestoreSteps[generation] = nil
-            if pauseGate.restored(generation), !shuttingDown { await adoptStragglers() }
+            if pauseGate.restored(generation), !shuttingDown {
+                // A resume during these restores could not retry notifications (not yet accepting).
+                retryMissingNotifications()
+                await adoptStragglers()
+            }
         }
         statusChanged()
     }
