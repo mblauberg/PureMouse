@@ -2,7 +2,7 @@ import CoreGraphics
 import IOKit.hid
 
 /// The privacy permissions PureMouse needs. macOS caches the answers for the life of a process, so
-/// a grant only takes effect in a new one (see `Daemon.restartWhenGranted`).
+/// a grant only takes effect in a new one (see `Daemon.pollPermissions`).
 struct Permissions: OptionSet {
     let rawValue: Int32
     /// Post scroll, key and swipe events. Without it the wheels stay native.

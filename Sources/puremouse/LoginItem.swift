@@ -54,7 +54,7 @@ enum LoginItem {
             "ProgramArguments": [executable.path, "run"],
             "RunAtLoad": true,
             // Restarted within seconds if it exits, including when it quits to pick up a new
-            // permission (Daemon.restartWhenGranted).
+            // permission (Daemon.pollPermissions).
             "KeepAlive": true,
             "ThrottleInterval": 3,
             "ProcessType": "Interactive",
