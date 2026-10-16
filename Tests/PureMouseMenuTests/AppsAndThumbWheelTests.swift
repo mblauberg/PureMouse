@@ -11,6 +11,7 @@ private struct Resolved: Equatable {
     var left: Action?
     var right: Action?
     var step: Int
+    var reversed = false
 }
 
 private func kit(_ action: ButtonAction) -> Action? {
@@ -24,13 +25,14 @@ private func kit(_ action: ButtonAction) -> Action? {
 }
 
 private func resolved(_ state: ThumbWheelState) -> Resolved {
-    Resolved(left: state.pair.flatMap { kit($0.left) }, right: state.pair.flatMap { kit($0.right) }, step: state.step)
+    Resolved(left: state.pair.flatMap { kit($0.left) }, right: state.pair.flatMap { kit($0.right) }, step: state.step,
+             reversed: state.reversed)
 }
 
 private func resolved(_ wheel: Config.ThumbWheel) -> Resolved {
     switch wheel.mode {
-    case .scroll: Resolved(left: nil, right: nil, step: wheel.step)
-    case .actions(let left, let right): Resolved(left: left, right: right, step: wheel.step)
+    case .scroll: Resolved(left: nil, right: nil, step: wheel.step, reversed: wheel.reversed)
+    case .actions(let left, let right): Resolved(left: left, right: right, step: wheel.step, reversed: wheel.reversed)
     }
 }
 
@@ -129,10 +131,12 @@ private func resolved(_ wheel: Config.ThumbWheel) -> Resolved {
         #"{}"#, #"{"action": "scroll"}"#, #"{"action": "zoom"}"#, #"{"action": "volume", "step": 5}"#,
         #"{"left": "mute"}"#, #"{"action": "tabs", "right": {"keys": "cmd+]"}}"#, #"{"step": 7}"#,
         #"{"action": "spaces", "left": "none", "right": "showDesktop", "step": 1}"#,
+        #"{"action": "tabs", "reversed": true}"#, #"{"inverted": true, "reversed": false}"#, #"{"reversed": true}"#,
     ]
     let apps = [
         #"{}"#, #"{"action": "scroll"}"#, #"{"action": "volume"}"#, #"{"right": "zoomIn"}"#,
         #"{"step": 12}"#, #"{"action": "tabs", "left": "mute"}"#, #"{"action": "spaces", "step": 2}"#,
+        #"{"reversed": false}"#, #"{"action": "tabs", "reversed": true}"#,
     ]
     for global in globals {
         for app in apps {
@@ -145,6 +149,48 @@ private func resolved(_ wheel: Config.ThumbWheel) -> Resolved {
             #expect(resolved(appState) == resolved(decoder.settings(forApp: "x.y")!.thumbWheel), "\(global) + app \(app)")
         }
     }
+}
+
+// MARK: Reverse direction
+
+@Test func reversingGloballyWritesOnlyTrue() throws {
+    var config = try tree(#"{"thumbWheel": {"inverted": true, "action": "tabs"}}"#)
+    config.setThumbWheelReversed(true, at: ["thumbWheel"])
+    #expect(config[["thumbWheel"]] as? NSDictionary == ["inverted": true, "action": "tabs", "reversed": true])
+    #expect(config.thumbWheel(at: ["thumbWheel"]).reversed)
+    #expect(try decoded(config).thumbWheel?.reversed == true)
+    config.setThumbWheelReversed(false, at: ["thumbWheel"])
+    #expect(config[["thumbWheel"]] as? NSDictionary == ["inverted": true, "action": "tabs"])
+}
+
+@Test func anAppsReverseIsSameAsEverywhereUntilSet() throws {
+    var config = try tree(#"{"thumbWheel": {"action": "volume", "reversed": true}, "apps": {"a.b": {"thumbWheel": {"action": "tabs"}}}}"#)
+    let path = ["apps", "a.b", "thumbWheel"]
+    let base = config.thumbWheel(at: ["thumbWheel"])
+    #expect(config.thumbWheelReversed(at: path) == nil && config.thumbWheel(at: path, base: base).reversed)
+    // Normal in the app overrides the reversed global, so false is written.
+    config.setThumbWheelReversed(false, at: path)
+    #expect(config.thumbWheelReversed(at: path) == false)
+    #expect(try decoded(config).settings(forApp: "a.b")?.thumbWheel.reversed == false)
+    config.setThumbWheelReversed(nil, at: path)
+    #expect(config[path] as? NSDictionary == ["action": "tabs"])
+    // Choosing an action keeps the app's own direction.
+    config.setThumbWheelReversed(true, at: path)
+    config.chooseThumbWheel(.preset("zoom"), at: path, base: base)
+    #expect(config.thumbWheelReversed(at: path) == true)
+}
+
+@Test func reversedRowsSetTheOtherKey() {
+    #expect(ConfigTree.thumbWheelKey(turning: "left", reversed: false) == "left")
+    #expect(ConfigTree.thumbWheelKey(turning: "left", reversed: true) == "right")
+    #expect(ConfigTree.thumbWheelKey(turning: "right", reversed: true) == "left")
+}
+
+@Test func invertedMattersWhereSomeAppScrolls() throws {
+    #expect(try !tree(#"{"thumbWheel": {"action": "tabs"}}"#).someAppScrollsThumbWheel)
+    #expect(try !tree(#"{"thumbWheel": {"action": "tabs"}, "apps": {"a": {"thumbWheel": {"step": 2}}}}"#).someAppScrollsThumbWheel)
+    #expect(try tree(#"{"thumbWheel": {"action": "tabs"}, "apps": {"a": {"thumbWheel": {"action": "scroll"}}}}"#).someAppScrollsThumbWheel)
+    #expect(try tree(#"{"apps": {"a": {"buttons": {"back": "mute"}}}}"#).someAppScrollsThumbWheel)
 }
 
 // MARK: Thumb wheel per app

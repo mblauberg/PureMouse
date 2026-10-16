@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// What turning the thumb wheel does: a pop-up of choices and, for Custom, an action per
-/// direction, plus the turn per action. Shared by the Scrolling pane (`["thumbWheel"]`) and an
+/// direction, plus whether the pair is reversed and the turn per action. Shared by the Scrolling pane (`["thumbWheel"]`) and an
 /// app in the Apps pane (`["apps", key, "thumbWheel"]`, with "Same as Everywhere").
 struct ThumbWheelRows: View {
     @Environment(AppModel.self) private var model
@@ -34,7 +34,7 @@ struct ThumbWheelRows: View {
             .labelsHidden()
             .fixedSize()
         } label: {
-            RowLabel("Action", help: help(choice))
+            RowLabel("Action", help: help(choice, reversed: state.reversed))
         }
         // Custom and the turn per action add rows.
         .onChange(of: choice) { app?.refitSettings() }
@@ -45,8 +45,12 @@ struct ThumbWheelRows: View {
             }
         }
         if choice == .custom, let pair = state.pair {
-            direction("left", pair.left)
-            direction("right", pair.right)
+            // Rows name the way the wheel turns; reversed, each shows the other key's action.
+            direction("left", state.reversed ? pair.right : pair.left, reversed: state.reversed)
+            direction("right", state.reversed ? pair.left : pair.right, reversed: state.reversed)
+        }
+        if !state.scrolls {
+            reverse(state)
         }
         if !state.scrolls, choice != .inherit {
             LabeledContent {
@@ -68,22 +72,56 @@ struct ThumbWheelRows: View {
         }
     }
 
-    private func help(_ choice: ThumbWheelChoice) -> String {
+    /// Reverse direction: a switch globally; in an app a pop-up, since an app without the key
+    /// follows the global setting.
+    @ViewBuilder private func reverse(_ state: ThumbWheelState) -> some View {
+        let path = path
+        if inherited == nil {
+            Toggle(isOn: Binding(get: { state.reversed },
+                                 set: { on in model.update { $0.setThumbWheelReversed(on, at: path) } })) {
+                RowLabel("Reverse direction", help: "Swaps the actions. Scrolling keeps its own direction.")
+            }
+            .accessibilityLabel("Reverse thumb wheel actions")
+        } else {
+            let own = model.config.thumbWheelReversed(at: path)
+            LabeledContent {
+                Picker("Reverse thumb wheel actions\(spokenSuffix)",
+                       selection: Binding(get: { own },
+                                          set: { new in model.update { $0.setThumbWheelReversed(new, at: path) } })) {
+                    Text("Same as Everywhere").tag(nil as Bool?)
+                    Divider()
+                    Text("Normal").tag(false as Bool?)
+                    Text("Reversed").tag(true as Bool?)
+                }
+                .labelsHidden()
+                .fixedSize()
+            } label: {
+                RowLabel("Reverse direction",
+                         help: own == nil ? "Everywhere: \(base.reversed ? "Reversed" : "Normal")." : "Swaps the actions.")
+            }
+        }
+    }
+
+    private func help(_ choice: ThumbWheelChoice, reversed: Bool) -> String {
         switch choice {
         case .inherit: "Everywhere: \(inherited ?? ThumbWheelChoice.scroll.label)."
         case .scroll: "Scrolls sideways, as without PureMouse."
-        case .preset("zoom"): "Turn left to zoom out, right to zoom in."
-        case .preset("volume"): "Turn left for quieter, right for louder."
-        case .preset("tabs"): "Turn left for the previous tab, right for the next."
+        case .preset("zoom"): reversed ? "Turn left to zoom in, right to zoom out." : "Turn left to zoom out, right to zoom in."
+        case .preset("volume"): reversed ? "Turn left for louder, right for quieter." : "Turn left for quieter, right for louder."
+        case .preset("tabs"):
+            reversed ? "Turn left for the next tab, right for the previous." : "Turn left for the previous tab, right for the next."
         case .preset("spaces"): "Turn left or right to move between Spaces."
         case .preset: ""
         case .custom: "Choose what each direction does."
         }
     }
 
-    private func direction(_ direction: String, _ action: ButtonAction) -> some View {
+    /// The row for turning the wheel one way (`direction`), which sets the key that way's
+    /// action is in: the other one while reversed.
+    private func direction(_ direction: String, _ action: ButtonAction, reversed: Bool) -> some View {
         let title = direction == "left" ? "Turn left" : "Turn right"
-        let target = BindingTarget(button: "thumbWheel", direction: direction,
+        let key = ConfigTree.thumbWheelKey(turning: direction, reversed: reversed)
+        let target = BindingTarget(button: "thumbWheel", direction: key,
                                    label: "turning the thumb wheel \(direction)")
         return LabeledContent(title) {
             ActionButton(action: action == .standard ? .named("none") : action,

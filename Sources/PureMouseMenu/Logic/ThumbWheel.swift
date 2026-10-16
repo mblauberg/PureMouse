@@ -2,7 +2,7 @@ import Foundation
 import PureMouseKit
 
 /// What the thumb wheel's pop-up offers, read from and written to `thumbWheel.action`, `left`,
-/// `right` and `step` (docs/configuration.md, "Thumb wheel"). The same keys under
+/// `right` and `step` (docs/configuration.md, "Thumb wheel"); `reversed` has its own row. The same keys under
 /// `apps.<id>.thumbWheel` apply on top of the global ones, so an app also has `inherit`.
 enum ThumbWheelChoice: Hashable, Identifiable {
     /// Per app only: the app sets none of `action`, `left` and `right`.
@@ -34,7 +34,8 @@ enum ThumbWheelChoice: Hashable, Identifiable {
         }
     }
 
-    /// The keys this choice owns; anything else under `thumbWheel` (`inverted`, unknown keys) stays.
+    /// The keys this choice owns; anything else under `thumbWheel` (`inverted`, `reversed`,
+    /// unknown keys) stays.
     static let keys = ["action", "left", "right", "step"]
 
     /// The choice the keys in `object` make. Outside an app no key means the default, scrolling.
@@ -51,7 +52,7 @@ enum ThumbWheelChoice: Hashable, Identifiable {
 }
 
 /// What the thumb wheel does once a set of keys is applied: scroll (no pair) or an action pair,
-/// and the step. Mirrors `Config.ThumbWheel.init(_:base:)`, so an app's keys resolve on top of
+/// the step and whether the pair is reversed. Mirrors `Config.ThumbWheel.init(_:base:)`, so an app's keys resolve on top of
 /// the global state exactly as the daemon resolves them.
 struct ThumbWheelState: Equatable {
     struct Pair: Equatable {
@@ -62,6 +63,8 @@ struct ThumbWheelState: Equatable {
     /// nil: the wheel scrolls.
     var pair: Pair?
     var step: Int
+    /// Swaps which action each direction performs.
+    var reversed = false
 
     /// No keys at all: scrolling, with Kit's default step.
     static let initial = ThumbWheelState(pair: nil, step: Config.ThumbWheel.defaultStep)
@@ -92,6 +95,9 @@ struct ThumbWheelState: Equatable {
         if let step = (object["step"] as? NSNumber).flatMap({ JSON.isBool($0) ? nil : $0.intValue }),
            Config.ThumbWheel.stepRange.contains(step) {
             state.step = step
+        }
+        if let reversed = object["reversed"] as? NSNumber, JSON.isBool(reversed) {
+            state.reversed = reversed.boolValue
         }
         return state
     }
@@ -129,6 +135,14 @@ extension ConfigTree {
         base.applying(self[path] as? [String: Any])
     }
 
+    /// Whether the thumb wheel scrolls in some app (by its own keys or the global ones), where
+    /// `inverted` matters even while it has actions everywhere else.
+    var someAppScrollsThumbWheel: Bool {
+        let global = thumbWheel(at: ["thumbWheel"])
+        let apps = self[["apps"]] as? [String: Any] ?? [:]
+        return apps.keys.contains { thumbWheel(at: ["apps", $0, "thumbWheel"], base: global).scrolls }
+    }
+
     func thumbWheelChoice(at path: [String]) -> ThumbWheelChoice {
         ThumbWheelChoice.read(self[path] as? [String: Any], inApp: path.first == "apps")
     }
@@ -159,6 +173,23 @@ extension ConfigTree {
                 set(current.step, at: path + ["step"])
             }
         }
+    }
+
+    /// The `reversed` key at `path`: nil when absent (an app then follows the global one).
+    func thumbWheelReversed(at path: [String]) -> Bool? {
+        bool(path + ["reversed"])
+    }
+
+    /// Sets `reversed`. Globally false is the default, so it removes the key; in an app nil
+    /// removes it (Same as Everywhere) and false is kept, overriding a reversed global.
+    mutating func setThumbWheelReversed(_ reversed: Bool?, at path: [String]) {
+        let inApp = path.first == "apps"
+        set(inApp ? reversed : (reversed == true ? true : nil), at: path + ["reversed"])
+    }
+
+    /// The config key that holds what turning the wheel one way ("left" or "right") does.
+    static func thumbWheelKey(turning direction: String, reversed: Bool) -> String {
+        reversed ? (direction == "left" ? "right" : "left") : direction
     }
 
     /// Sets what turning one way does ("left" or "right").

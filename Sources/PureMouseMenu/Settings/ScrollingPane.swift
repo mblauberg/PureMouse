@@ -74,11 +74,17 @@ struct ScrollingPane: View {
 
             if device?.hasThumbWheel != false || config.contains(["thumbWheel"]) {
                 Section {
+                    let scrolls = config.thumbWheel(at: ["thumbWheel"]).scrolls
                     ThumbWheelRows(path: ["thumbWheel"])
-                    Toggle(isOn: model.toggle(["thumbWheel", "inverted"], default: false)) {
-                        RowLabel("Reverse direction", mouseDefault: config.bool(["thumbWheel", "inverted"]) == nil)
+                    // `inverted` is scrolling only: shown while the wheel scrolls here or in some app.
+                    if scrolls || config.someAppScrollsThumbWheel {
+                        Toggle(isOn: model.toggle(["thumbWheel", "inverted"], default: false)) {
+                            RowLabel(scrolls ? "Reverse direction" : "Reverse scrolling",
+                                     help: scrolls ? nil : "In apps where the thumb wheel scrolls sideways.",
+                                     mouseDefault: config.bool(["thumbWheel", "inverted"]) == nil)
+                        }
+                        .accessibilityLabel("Reverse thumb wheel scrolling")
                     }
-                    .accessibilityLabel("Reverse thumb wheel direction")
                     ValueSlider(title: "Speed", spokenTitle: "Thumb wheel speed", value: model.number(["smoothScroll", "horizontalSpeed"], default: 1, step: 0.05),
                                 range: 0.25...3, low: "Slow", high: "Fast", format: Format.multiplier)
                         // Scrolling speed: nothing to tune while the wheel performs actions.
@@ -102,7 +108,7 @@ struct ScrollingPane: View {
                 $0.set([String: Any](), at: ["smoothScroll"])
                 $0.set(nil, at: ["scrollWheel"])
                 // Only the keys this pane shows; any others under thumbWheel stay.
-                for key in ["inverted"] + ThumbWheelChoice.keys { $0.set(nil, at: ["thumbWheel", key]) }
+                for key in ["inverted", "reversed"] + ThumbWheelChoice.keys { $0.set(nil, at: ["thumbWheel", key]) }
             }
         }
     }
