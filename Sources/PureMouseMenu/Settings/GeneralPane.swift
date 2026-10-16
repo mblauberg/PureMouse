@@ -7,6 +7,7 @@ struct GeneralPane: View {
     @State private var startsAtLogin = Paths.startsAtLogin
     @State private var showsInMenuBar = true
     @State private var confirmingReset = false
+    @State private var notificationsDenied = false
 
     var body: some View {
         PaneForm {
@@ -22,6 +23,17 @@ struct GeneralPane: View {
                 .accessibilityLabel("Show in menu bar")
             }
             .disabled(Paths.daemon == nil)
+
+            Section {
+                Toggle(isOn: Binding(get: { model.config.bool(["notifications", "lowBattery"]) ?? true },
+                                     set: { setLowBatteryNotifications($0) })) {
+                    RowLabel("Low battery notification",
+                             help: notificationsDenied
+                                ? "Notifications for PureMouse are off in System Settings. Needs the menu bar icon shown."
+                                : "Tells you when the battery falls to 20% and 5%. Needs the menu bar icon shown.")
+                }
+                .accessibilityLabel("Low battery notification")
+            }
 
             Section("Permissions") {
                 PermissionRow(title: "Accessibility", help: "Lets PureMouse scroll, press shortcuts and swipe for you.",
@@ -72,6 +84,7 @@ struct GeneralPane: View {
         .onAppear {
             startsAtLogin = Paths.startsAtLogin
             showsInMenuBar = app.showsStatusItem
+            Task { notificationsDenied = await Notifier.isAllowed() == false }
         }
         .confirmationDialog("Reset all settings?", isPresented: $confirmingReset) {
             Button("Reset All Settings", role: .destructive) { model.resetAll() }
@@ -88,6 +101,16 @@ struct GeneralPane: View {
                                  action: "Stop PureMouse") {
             model.flush()
             Lifecycle.perform(.unregister) { startsAtLogin = Paths.startsAtLogin }
+        }
+    }
+
+    /// Turning it on asks macOS for permission now, while the user is here to answer.
+    private func setLowBatteryNotifications(_ on: Bool) {
+        model.set(on ? nil : false, at: ["notifications", "lowBattery"])
+        guard on else { return }
+        Task {
+            await Notifier.requestIfNeeded()
+            notificationsDenied = await Notifier.isAllowed() == false
         }
     }
 

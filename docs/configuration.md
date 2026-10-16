@@ -39,6 +39,7 @@ launchctl kill HUP gui/$UID/io.github.mblauberg.puremouse
 | `smoothScroll` | If present, PureMouse scrolls both wheels itself ([below](#smooth-scrolling)). If absent, or `enabled` is false, the wheels scroll normally |
 | `gesture.distanceMm` | How far the mouse moves before a gesture fires, in millimetres, 0.5–50. Default 4 |
 | `gesture.repeatIntervalMs` | Minimum gap between repeated gestures in one hold, 0–5000. Default 400 |
+| `notifications.lowBattery` | Default true. The menu bar app posts a macOS notification when a mouse's battery falls through 20% and again through 5% (level-only mice: when they report low and critical). Needs the menu bar icon shown; the daemon ignores it. Settings › General switches it; macOS asks for permission the first time |
 
 A number outside its range is an error: the config is not loaded (on reload, the previous one stays
 in effect) and the log names the field.

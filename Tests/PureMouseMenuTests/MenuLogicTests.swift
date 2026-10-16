@@ -397,3 +397,88 @@ private func tempConfig(_ json: String?) throws -> ConfigFile {
     #expect(saved.tree.int(["dpi"]) == 1600)
     #expect(FileManager.default.fileExists(atPath: file.url.path))
 }
+
+// MARK: Low battery alerts
+
+private func battery(_ percent: Int?, level: Status.Device.Battery.Level = .good, charging: Bool = false) -> Status.Device.Battery {
+    .init(percent: percent, level: level, charging: charging)
+}
+
+@Test func firstReadingNeverNotifies() {
+    #expect(BatteryAlert.evaluate(previous: nil, battery: battery(3)) == (nil, .critical))
+    #expect(BatteryAlert.evaluate(previous: nil, battery: battery(18)).alert == nil)
+}
+
+@Test func notifiesOncePerDownwardCrossing() {
+    var state = BatteryAlert.Band.none
+    var alerts: [BatteryAlert.Band] = []
+    for percent in [30, 21, 20, 19, 18, 10, 6, 5, 4, 4, 3] {
+        let result = BatteryAlert.evaluate(previous: state, battery: battery(percent))
+        state = result.state
+        if let alert = result.alert { alerts.append(alert) }
+    }
+    #expect(alerts == [.low, .critical])
+}
+
+@Test func rearmsOnlyAboveTheBandPlusHysteresis() {
+    var result = BatteryAlert.evaluate(previous: .low, battery: battery(23))
+    #expect(result.alert == nil && result.state == .low)  // 23 is inside the hysteresis
+    result = BatteryAlert.evaluate(previous: result.state, battery: battery(19))
+    #expect(result.alert == nil)                           // no repeat on a dip
+    result = BatteryAlert.evaluate(previous: .low, battery: battery(25))
+    #expect(result.state == .none)
+    #expect(BatteryAlert.evaluate(previous: result.state, battery: battery(20)).alert == .low)
+}
+
+@Test func chargingRearms() {
+    let result = BatteryAlert.evaluate(previous: .critical, battery: battery(4, charging: true))
+    #expect(result.alert == nil && result.state == .none)
+}
+
+@Test func criticalToLowRisesAtTenPercent() {
+    #expect(BatteryAlert.evaluate(previous: .critical, battery: battery(10)).state == .low)
+    #expect(BatteryAlert.evaluate(previous: .critical, battery: battery(9)).state == .critical)
+}
+
+@Test func levelOnlyMiceUseTheirLevels() {
+    #expect(BatteryAlert.evaluate(previous: BatteryAlert.Band.none, battery: battery(nil, level: .low)).alert == .low)
+    #expect(BatteryAlert.evaluate(previous: .low, battery: battery(nil, level: .critical)).alert == .critical)
+    #expect(BatteryAlert.evaluate(previous: .low, battery: battery(nil, level: .good)).state == .none)
+}
+
+@Test func storeKeepsStateAcrossProcesses() throws {
+    let url = FileManager.default.temporaryDirectory.appending(path: "alerts-\(UUID().uuidString).json")
+    defer { try? FileManager.default.removeItem(at: url) }
+    var store = BatteryAlertStore(url: url)
+    #expect(store.process(device: "MX", battery: battery(40)) == nil)
+    #expect(store.process(device: "MX", battery: battery(19)) == .low)
+    var restarted = BatteryAlertStore(url: url)
+    #expect(restarted.process(device: "MX", battery: battery(18)) == nil)
+}
+
+// MARK: Update check
+
+@Test func versionsCompareNumerically() throws {
+    #expect(try #require(UpdateCheck.Version("v0.10.0")) > #require(UpdateCheck.Version("0.9.9")))
+    #expect(try #require(UpdateCheck.Version("1.2")) == #require(UpdateCheck.Version("v1.2.0")))
+    #expect(UpdateCheck.Version("1.2.3-beta")?.parts == [1, 2, 3])
+    #expect(UpdateCheck.Version("latest") == nil)
+    #expect(UpdateCheck.Version("v") == nil)
+}
+
+@Test func updateOutcomes() {
+    func body(_ tag: String) -> Data {
+        Data(#"{"tag_name": "\#(tag)", "html_url": "https://github.com/mblauberg/PureMouse/releases/tag/\#(tag)"}"#.utf8)
+    }
+    #expect(UpdateCheck.outcome(current: "0.4.0", data: body("v0.4.0")) == .upToDate)
+    #expect(UpdateCheck.outcome(current: "0.5.0", data: body("v0.4.0")) == .upToDate)
+    if case .available(let release) = UpdateCheck.outcome(current: "0.4.0", data: body("v0.10.0")) {
+        #expect(release.version.parts == [0, 10, 0])
+        #expect(release.page.absoluteString.hasSuffix("v0.10.0"))
+    } else {
+        Issue.record("expected an update")
+    }
+    #expect(UpdateCheck.outcome(current: "0.4.0", data: Data("{}".utf8)) == .failed)
+    #expect(UpdateCheck.outcome(current: "0.4.0", data: Data("nope".utf8)) == .failed)
+    #expect(UpdateCheck.outcome(current: "0.4.0", data: Data(#"{"tag_name":"v1","html_url":"http://x"}"#.utf8)) == .failed)
+}

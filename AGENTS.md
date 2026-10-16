@@ -97,6 +97,14 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   menu is rebuilt on open. Settings controls carry their own accessibility label where a `RowLabel`
   (title plus caption) leaves them unnamed. Shortcut specs are parsed and named by Kit's `Keystroke` only; the menu adds
   glyphs and spoken words.
+- Notifications and the update check live in the menu app only (the daemon stays free of
+  UserNotifications and the network). The low-battery notification (`BatteryAlert`,
+  `Notifier`) is decided on each status the daemon writes, from the band already announced per
+  mouse, kept in `battery-alerts.json` in the companion directory so a relaunch cannot repeat it;
+  the first reading of a mouse only records. It does not run while the icon is hidden. Permission
+  is requested lazily (toggle on, or first notification); `UNUserNotificationCenter` needs a
+  bundle, so a bare dev run posts nothing. "Check for Updates" (About pane, `UpdateCheck`) makes
+  one GET of the latest GitHub release per press: no background checks.
 - The DPI the menu and the Pointer pane show is the mouse's live value (a `cycleDPI` press
   changes it without touching the config), then the configured one; a change made in the pane
   shows until the mouse reports it (`DPIReading`).

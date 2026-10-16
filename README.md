@@ -9,7 +9,7 @@
 
 <p align="center">
   Button mapping, gestures, DPI and smooth scrolling for Logitech mice on macOS.<br>
-  Offline, with no account, no telemetry and no dependencies.
+  No account, no telemetry and no dependencies; the network is used only when you press Check for Updates.
 </p>
 
 <p align="center">

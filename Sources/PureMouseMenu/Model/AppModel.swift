@@ -49,6 +49,7 @@ final class AppModel {
     @ObservationIgnored private var watchedPID: Int32 = 0
     @ObservationIgnored private var directoryWatch: DispatchSourceFileSystemObject?
     @ObservationIgnored private var statusToken: Int32 = -1
+    @ObservationIgnored private var batteryAlerts = BatteryAlertStore(url: Companion.directory.appending(path: "battery-alerts.json"))
 
     init() {
         reloadStatus()
@@ -129,6 +130,21 @@ final class AppModel {
         }
         refreshLiveness()
         if let capture = status?.capture { handleCapture(capture) }
+        announceLowBattery()
+    }
+
+    /// Posts a notification when a live mouse's battery falls through 20% or 5% (`BatteryAlert`).
+    /// Runs on each status the daemon writes, with no timer.
+    private func announceLowBattery() {
+        guard daemonRunning else { return }
+        let wanted = config.bool(["notifications", "lowBattery"]) ?? true
+        for device in devices where device.online {
+            guard let battery = device.battery else { continue }
+            // Always evaluated, so the state stays current while the setting is off.
+            guard let band = batteryAlerts.process(device: device.name, battery: battery), wanted else { continue }
+            let text = BatteryAlert.message(for: band, device: device.name, battery: battery)
+            Notifier.post(id: "battery.\(device.name).\(band.rawValue)", title: text.title, body: text.body)
+        }
     }
 
     /// Re-checks that the daemon's process exists (`running` alone survives a crash).
