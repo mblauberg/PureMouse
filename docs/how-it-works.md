@@ -67,3 +67,12 @@ assets/                 app icon (Icon Composer source, compiled icon, README im
 Logitech does not publish HID++ 2.0, so the feature layouts here were checked against the open
 implementations in [Solaar](https://github.com/pwr-Solaar/Solaar) and
 [logiops](https://github.com/PixlOne/logiops).
+
+SmartShift Enhanced and haptic layouts follow Solaar's
+[`SmartShiftEnhanced`, `ScrollRatchetTorque` and `PlayHapticWaveForm`](https://github.com/pwr-Solaar/Solaar/blob/master/lib/logitech_receiver/settings_templates.py).
+Legacy battery status follows
+[`decipher_battery_status`](https://github.com/pwr-Solaar/Solaar/blob/master/lib/logitech_receiver/hidpp20.py)
+and its function-0 broadcast handler. SmartShift parse tests use response parameters from
+[OpenLogi's MX Master 4 and Anywhere 3S fixtures](https://github.com/AprilNEA/OpenLogi/tree/master/fixtures/devices),
+available under its [MIT licence](https://github.com/AprilNEA/OpenLogi/blob/master/LICENSE-MIT).
+These layouts have not been tested on those mice by this project.

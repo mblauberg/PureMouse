@@ -35,6 +35,27 @@ import Testing
         #expect(throws: DecodingError.self) { try decode(#"{"buttons": {"top": "explode"}}"#) }
     }
 
+    @Test func hapticActionAndThumbPanelDecode() throws {
+        let config = try decode(#"{"buttons": {"thumbPanel": {"haptic": "sharpStateChange"}}}"#)
+        #expect(config.unknownButtons.isEmpty)
+        guard case .action(let action) = config.bindings[0x01A0] else { Issue.record("haptic"); return }
+        #expect(action == .haptic(.sharpStateChange) && action.actsOnDevice)
+        #expect(Config.Button(cid: 0x01A0) == .thumbPanel)
+    }
+
+    @Test func allHapticWaveformsDecodeAndUnknownOnesFail() throws {
+        for waveform in HapticWaveform.allCases {
+            let action = try JSONDecoder().decode(Action.self, from: Data("{\"haptic\":\"\(waveform.rawValue)\"}".utf8))
+            #expect(action == .haptic(waveform) && action.actsOnDevice)
+        }
+        #expect(HapticWaveform.allCases.map(\.id) == Array(UInt8(0)...14) + [0x1B])
+        #expect(throws: DecodingError.self) { try decode(#"{"buttons": {"top": {"haptic": "unknown"}}}"#) }
+        #expect(throws: DecodingError.self) { try decode(#"{"buttons": {"top": {"haptic": 27}}}"#) }
+        let gesture = try decode(#"{"buttons": {"thumbPanel": {"click": {"haptic": "completed"}}}}"#)
+        guard case .gesture(let binding) = gesture.bindings[0x01A0] else { Issue.record("gesture"); return }
+        #expect(binding.click == .haptic(.completed))
+    }
+
     @Test func partialGestureDefaultsToNone() throws {
         let b = try decode(#"{"buttons": {"gesture": {"up": "missionControl"}}}"#).bindings
         guard case .gesture(let g) = b[0x00C3] else { Issue.record("gesture"); return }

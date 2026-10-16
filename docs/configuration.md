@@ -32,11 +32,11 @@ launchctl kill HUP gui/$UID/io.github.mblauberg.puremouse
 | `dpi` | Sensor resolution, 50–25600. PureMouse uses the nearest value the mouse supports (200–8000 in steps of 50 on the MX Master 3S) and logs when it differs |
 | `dpiPresets` | Up to 8 resolutions, each 50–25600, that the `cycleDPI` action steps through and the menu offers |
 | `scrollWheel.inverted` | Invert the main wheel in hardware. With natural scrolling on, `true` gives classic wheel direction and leaves the trackpad alone |
-| `scrollWheel.mode` | `"ratchet"` or `"freespin"` on first connect. Later toggles are kept |
-| `scrollWheel.smartShiftThreshold` | 1–50 enables SmartShift's automatic free-spin; 255 disables it. Must be 1–255 |
+| `scrollWheel.mode` | `"ratchet"` or `"freespin"` on first connect. Later toggles are kept. Requires SmartShift (0x2110 or Enhanced 0x2111); ratchet torque is left unchanged |
+| `scrollWheel.smartShiftThreshold` | 1–50 enables SmartShift's automatic free-spin; 255 disables it. Must be 1–255. Requires 0x2110 or 0x2111 |
 | `thumbWheel.inverted` | Invert the thumb wheel: in hardware, or in software while PureMouse handles the wheel |
 | `thumbWheel.action`, `left`, `right`, `step` | What turning the thumb wheel does ([below](#thumb-wheel)) |
-| `buttons` | Button → action or gesture ([below](#buttons-actions-and-gestures)) |
+| `buttons` | Button → action or gesture, including play-only haptics ([below](#buttons-actions-and-gestures)) |
 | `smoothScroll` | If present, PureMouse scrolls both wheels itself ([below](#smooth-scrolling)). If absent, or `enabled` is false, the wheels scroll normally |
 | `gesture.distanceMm` | How far the mouse moves before a gesture fires, in millimetres, 0.5–50. Default 4 |
 | `gesture.repeatIntervalMs` | Minimum gap between repeated gestures in one hold, 0–5000. Default 400 |
@@ -128,13 +128,14 @@ are skipped and reported in the log; a bad value fails the load as anywhere else
 ## Buttons, actions and gestures
 
 **Buttons:** `gesture` (thumb), `back`, `forward`, `top` (behind the wheel), `middle` (wheel
-press), or any hex control ID such as `"0x00c4"`. **Select by Pressing** in Settings › Buttons, or
+press), `thumbPanel` (MX Master 4 haptic/Actions Ring panel, 0x01A0), or any hex control ID such
+as `"0x00c4"`. Names apply only when the mouse has that control. **Select by Pressing** in Settings › Buttons, or
 `puremouse probe`, finds a control's ID.
 
 **Actions:** `missionControl`, `appExpose`, `showDesktop`, `launchpad`, `spaceLeft`, `spaceRight`,
 `navigateBack`, `navigateForward`, `toggleScrollMode`, `cycleDPI`, `volumeUp`, `volumeDown`, `mute`,
 `brightnessUp`, `brightnessDown`, `nextTab`, `previousTab`, `zoomIn`, `zoomOut`, `none`,
-`{"keys": "cmd+shift+4"}`, `{"run": "open -a Safari"}`.
+`{"keys": "cmd+shift+4"}`, `{"run": "open -a Safari"}`, `{"haptic": "sharpStateChange"}`.
 
 `spaceLeft` and `spaceRight` send your own "Move left/right a space" shortcuts from System
 Settings › Keyboard › Keyboard Shortcuts › Mission Control, or Ctrl+Left/Right if those are off.
@@ -143,6 +144,19 @@ which most apps share; use `{"keys": ...}` for an app that differs.
 
 `cycleDPI` switches to the next of `dpiPresets` above the current resolution, wrapping to the
 lowest. The choice survives reconnects until a config change alters `dpi` or `dpiPresets`.
+
+**Haptics (MX Master 4, untested):** configure an action in JSON, for example
+`"thumbPanel": {"haptic": "sharpStateChange"}`. It plays only if the mouse reports the haptic
+feature and supports that waveform; otherwise it is ignored with a log message once per session.
+It does not change strength, enable haptics or write any haptic configuration. If haptics are
+disabled on the mouse, playing an effect may produce no feedback.
+
+| Action field | Values |
+|---|---|
+| `haptic` | `sharpStateChange`, `dampStateChange`, `sharpCollision`, `dampCollision`, `subtleCollision`, `happyAlert`, `angryAlert`, `completed`, `square`, `wave`, `firework`, `mad`, `knock`, `jingle`, `ringing`, `whisperCollision` |
+
+Haptic actions also work for gesture directions. Automatic feedback on DPI changes is not
+implemented.
 
 **Gestures:** an object with any of `click`, `up`, `down`, `left` and `right`, each an action.
 While a gesture button is held, the pointer stays still.

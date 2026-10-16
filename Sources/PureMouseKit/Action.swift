@@ -1,7 +1,7 @@
 import Foundation
 
 /// Something a button or gesture direction does. In config JSON an action is either a name
-/// (`"missionControl"`) or an object: `{"keys": "cmd+shift+4"}` or `{"run": "open -a Safari"}`.
+/// (`"missionControl"`) or an object with keys, run or haptic.
 /// Data only: the daemon performs actions (`SystemActions`).
 public enum Action: Equatable, Decodable, Sendable {
     case none
@@ -28,6 +28,8 @@ public enum Action: Equatable, Decodable, Sendable {
     /// Cmd+= and Cmd+-, the zoom shortcuts most apps share.
     case zoomIn
     case zoomOut
+    /// Play an effect on a supporting mouse, without changing its haptic configuration.
+    case haptic(HapticWaveform)
     case keys(Keystroke)
     case run(String)
 
@@ -43,7 +45,12 @@ public enum Action: Equatable, Decodable, Sendable {
     ]
 
     /// Handled by the device session rather than `SystemActions`.
-    public var actsOnDevice: Bool { self == .toggleScrollMode || self == .cycleDPI }
+    public var actsOnDevice: Bool {
+        switch self {
+        case .toggleScrollMode, .cycleDPI, .haptic: true
+        default: false
+        }
+    }
 
     public init(from decoder: Decoder) throws {
         if let name = try? decoder.singleValueContainer().decode(String.self) {
@@ -63,9 +70,39 @@ public enum Action: Equatable, Decodable, Sendable {
             self = .keys(keystroke)
         } else if let command = try c.decodeIfPresent(String.self, forKey: AnyKey("run")) {
             self = .run(command)
+        } else if let waveform = try c.decodeIfPresent(HapticWaveform.self, forKey: AnyKey("haptic")) {
+            self = .haptic(waveform)
         } else {
             throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath,
-                debugDescription: "expected an action name, {\"keys\": ...} or {\"run\": ...}"))
+                debugDescription: "expected an action name, {\"keys\": ...}, {\"run\": ...} or {\"haptic\": ...}"))
+        }
+    }
+}
+
+/// Solaar's HapticWaveForms table. Names are config values; IDs are device protocol data.
+public enum HapticWaveform: String, CaseIterable, Decodable, Sendable {
+    case sharpStateChange, dampStateChange, sharpCollision, dampCollision, subtleCollision
+    case happyAlert, angryAlert, completed, square, wave, firework, mad, knock, jingle, ringing
+    case whisperCollision
+
+    public var id: UInt8 {
+        switch self {
+        case .sharpStateChange: 0x00
+        case .dampStateChange: 0x01
+        case .sharpCollision: 0x02
+        case .dampCollision: 0x03
+        case .subtleCollision: 0x04
+        case .happyAlert: 0x05
+        case .angryAlert: 0x06
+        case .completed: 0x07
+        case .square: 0x08
+        case .wave: 0x09
+        case .firework: 0x0A
+        case .mad: 0x0B
+        case .knock: 0x0C
+        case .jingle: 0x0D
+        case .ringing: 0x0E
+        case .whisperCollision: 0x1B
         }
     }
 }

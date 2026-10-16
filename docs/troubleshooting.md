@@ -63,6 +63,11 @@ clear the flag afterwards.
 
 `puremouse probe` lists every HID++ device with its features and current settings. It only reads,
 so it is safe to run at any time. Please attach its output to an issue if a mouse does not work.
+For an untested mouse, include the model, connection type (Bluetooth, Bolt or Unifying), and
+the adoption line from the log. That line includes the mouse's product ID and the features
+PureMouse uses (`?` means a feature query failed); the probe includes the complete feature table,
+SmartShift Enhanced state, legacy battery state and haptic capabilities. Move the mouse first
+so it is awake. The command does not play effects or change settings.
 
 For button-level detail, stop the agent with `puremouse unregister`, run
 `puremouse --verbose run` in a terminal, then start the agent again with `puremouse register`. A

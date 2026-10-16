@@ -280,7 +280,7 @@ public struct Config: Decodable, Sendable {
 
     /// Friendly names for MX Master control IDs. Hex IDs work for anything else.
     public enum Button: String, CaseIterable, Sendable {
-        case middle, back, forward, gesture, top
+        case middle, back, forward, gesture, top, thumbPanel
 
         public var cid: UInt16 {
             switch self {
@@ -289,6 +289,7 @@ public struct Config: Decodable, Sendable {
             case .forward: 0x0056
             case .gesture: 0x00C3  // thumb button
             case .top: 0x00C4      // mode-shift button behind the wheel
+            case .thumbPanel: 0x01A0 // MX Master 4 haptic / Actions Ring panel
             }
         }
 

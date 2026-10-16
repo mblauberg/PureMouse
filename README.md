@@ -42,8 +42,22 @@
 - **Light:** about 4 MB of memory for the background process and 14 MB for the menu bar app,
   with no CPU use while the mouse is idle.
 
-Built and tested with the MX Master 3S, over Bluetooth or a Bolt or Unifying receiver. Other
-HID++ 2.0 mice should work for the features they have.
+## Supported mice
+
+Only the **MX Master 3S** has been tested by this project. Support follows the features a mouse
+reports, rather than a product-ID list; other models below are **untested**.
+
+| Mouse | Support |
+|---|---|
+| MX Master 3S | Tested: buttons, gestures, DPI, both wheels and SmartShift |
+| MX Master 3 / 3 for Business | Expected to work, including older firmware's battery reporting |
+| MX Master 4 | Expected to work; play-only haptic actions available through JSON config |
+| MX Anywhere 3 / 3S | Partial: buttons, DPI, main-wheel smooth scrolling and SmartShift expected; no thumb wheel or dedicated gesture button |
+| MX Vertical / Lift | Partial: buttons, DPI and battery expected; native scrolling only, no SmartShift, thumb wheel or dedicated gesture button |
+
+Bluetooth and Bolt/Unifying receivers are discovered automatically, where the mouse supports
+that connection. Owners of other mice can help by attaching
+[`puremouse probe` output](docs/troubleshooting.md#inspecting-a-mouse) to an issue.
 
 ## Install
 

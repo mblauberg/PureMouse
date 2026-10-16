@@ -64,6 +64,10 @@ final class Session {
     private var battery: UnifiedBattery.State?
     /// Level bits the battery's reports mean anything for (0x1004 getCapabilities), read once.
     private var batteryLevels: UInt8?
+    private var legacyBatterySelected = false
+    private var hapticCapabilities: Haptic.Capabilities?
+    private var hapticMissingLogged = false
+    private var unsupportedHaptics: Set<HapticWaveform> = []
     private var hasSmartShift: Bool
     private var hasThumbWheel: Bool
     private var configuring: Task<Void, Never>?
@@ -368,19 +372,53 @@ final class Session {
                 try await SmartShift.set(device, mode: mode ?? current, autoDisengage: threshold)
             }
             wheelMode = mode ?? current
+        } else {
+            // Keep the 0x2110 path above unchanged. Enhanced-only mice are untested; failure
+            // here must not prevent battery/status reporting or mark an otherwise working mouse offline.
+            do {
+                guard !finished else { throw HIDPPError.closed }
+                hasSmartShift = try await device.hasFeature(SmartShiftEnhanced.id)
+                if hasSmartShift {
+                    guard !finished else { throw HIDPPError.closed }
+                    let mode = scrollMode ?? config.scrollWheel?.mode?.smartShift
+                    let threshold = config.scrollWheel?.smartShiftThreshold
+                    let current = try await SmartShiftEnhanced.getRatchetControlMode(device).mode
+                    guard !finished else { throw HIDPPError.closed }
+                    if mode != nil || threshold != nil {
+                        try await SmartShiftEnhanced.setRatchetControlMode(device, mode: mode ?? current,
+                                                                          autoDisengage: threshold)
+                    }
+                    wheelMode = mode ?? current
+                }
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch HIDPPError.closed {
+                throw HIDPPError.closed
+            } catch {
+                Log.error("\(name): SmartShift Enhanced failed (untested mouse): \(error)")
+            }
         }
         await readBattery()
         online = true
         changed()
     }
 
-    /// Battery state is informational: a mouse without 0x1004, or one that fails to answer,
-    /// reports none.
+    /// Battery state is informational. Prefer 0x1004; only its absence selects legacy 0x1000.
     private func readBattery() async {
-        guard (try? await device.hasFeature(UnifiedBattery.id)) == true else { return }
         do {
-            if batteryLevels == nil { batteryLevels = try await UnifiedBattery.levels(device) }
-            battery = try await UnifiedBattery.status(device, levels: batteryLevels ?? UnifiedBattery.allLevels)
+            guard !finished else { return }
+            if try await device.hasFeature(UnifiedBattery.id) {
+                guard !finished else { return }
+                if batteryLevels == nil { batteryLevels = try await UnifiedBattery.levels(device) }
+                guard !finished else { return }
+                battery = try await UnifiedBattery.status(device, levels: batteryLevels ?? UnifiedBattery.allLevels)
+            } else {
+                guard !finished else { return }
+                if try await device.hasFeature(LegacyBattery.id), !finished {
+                    legacyBatterySelected = true
+                    battery = try await LegacyBattery.status(device)
+                }
+            }
         } catch {
             Log.debug("\(name): reading battery failed: \(error)")
         }
@@ -537,6 +575,13 @@ final class Session {
                 battery = state
                 changed()
             }
+        case LegacyBattery.id:
+            // If both features exist, only 0x1004 is authoritative.
+            if legacyBatterySelected, let state = LegacyBattery.parse(function: report.function, params: report.params),
+               state != battery {
+                battery = state
+                changed()
+            }
         case WirelessDeviceStatus.id:
             if WirelessDeviceStatus.needsReconfiguration(function: report.function, params: report.params) {
                 Log.info("\(name): reconnected")
@@ -642,13 +687,54 @@ final class Session {
             return
         }
         // Chained so quick presses each take effect once, in order.
-        deviceAction = Task { [previous = deviceAction] in
-            await previous?.value
-            if action == .cycleDPI {
-                await cycleDPI()
-            } else {
-                await toggleScrollMode()
+        deviceAction = Self.chainedAction(after: deviceAction) { [self] in
+            guard !finished, !Task.isCancelled else { return }
+            switch action {
+            case .cycleDPI: await cycleDPI()
+            case .toggleScrollMode: await toggleScrollMode()
+            case .haptic(let waveform): await playHaptic(waveform)
+            default: break
             }
+        }
+    }
+
+    /// Cancelling the tail must reach predecessors too: one may be waiting for the endpoint
+    /// inside `HIDPPDevice.acquire()`, which checks cancellation before sending its request.
+    static func chainedAction(after previous: Task<Void, Never>?,
+                              _ body: @escaping @MainActor () async -> Void) -> Task<Void, Never> {
+        Task {
+            await withTaskCancellationHandler {
+                await previous?.value
+                guard !Task.isCancelled else { return }
+                await body()
+            } onCancel: {
+                previous?.cancel()
+            }
+        }
+    }
+
+    private func playHaptic(_ waveform: HapticWaveform) async {
+        guard !finished else { return }
+        do {
+            guard try await device.hasFeature(Haptic.id) else {
+                if !hapticMissingLogged {
+                    Log.info("\(name): haptic action ignored; no 0x19B0 feature")
+                    hapticMissingLogged = true
+                }
+                return
+            }
+            guard !finished else { return }
+            if hapticCapabilities == nil { hapticCapabilities = try await Haptic.getCapabilities(device) }
+            guard !finished else { return }
+            guard hapticCapabilities?.supports(waveform.id) == true else {
+                if unsupportedHaptics.insert(waveform).inserted {
+                    Log.info("\(name): haptic \(waveform.rawValue) ignored; waveform not supported")
+                }
+                return
+            }
+            try await Haptic.playWaveform(device, waveform: waveform.id)
+        } catch {
+            Log.error("\(name): haptic \(waveform.rawValue) failed: \(error)")
         }
     }
 
@@ -658,8 +744,7 @@ final class Session {
     func useConfiguredDPI() {
         guard !finished else { return }
         liveDPI = nil
-        deviceAction = Task { [previous = deviceAction] in
-            await previous?.value
+        deviceAction = Self.chainedAction(after: deviceAction) { [self] in
             liveDPI = nil
             guard !finished else { return }
             do {
@@ -698,10 +783,20 @@ final class Session {
     private func toggleScrollMode() async {
         guard !finished else { return }
         do {
-            let current = try await SmartShift.get(device).mode
+            let legacy = try await device.hasFeature(SmartShift.id)
+            guard !finished else { return }
+            let current = if legacy {
+                try await SmartShift.get(device).mode
+            } else {
+                try await SmartShiftEnhanced.getRatchetControlMode(device).mode
+            }
             guard !finished else { return }
             let next: SmartShift.Mode = current == .ratchet ? .freespin : .ratchet
-            try await SmartShift.set(device, mode: next)
+            if legacy {
+                try await SmartShift.set(device, mode: next)
+            } else {
+                try await SmartShiftEnhanced.setRatchetControlMode(device, mode: next)
+            }
             scrollMode = next
             wheelMode = next
             changed()

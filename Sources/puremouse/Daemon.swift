@@ -416,10 +416,26 @@ final class Daemon {
         let configured = config.boundControls
         guard hasDPI || controls.contains(where: { configured.contains($0.cid) }) else { return .notAMouse }
         let name = (try? await DeviceName.get(device)) ?? "device \(device.index)"
+        let ids = (try? await DeviceIdentity.transportIDs(device)) ?? [:]
+        let pid: UInt16? = device.interface.isReceiver
+            ? slotProducts[key] ?? ids[.wireless] ?? ids[.bluetoothLE] ?? ids[.bluetooth]
+            : UInt16(exactly: device.interface.productID)
+        let pidLabel = pid.map { String(format: "0x%04x", $0) } ?? "unknown"
+        // Summarise the features PureMouse uses; probe retains the complete feature table.
+        var features: [String] = []
+        for feature in [LegacyBattery.id, UnifiedBattery.id, Haptic.id, ReprogControls.id,
+                        WirelessDeviceStatus.id, SmartShift.id, SmartShiftEnhanced.id,
+                        HiResWheel.id, ThumbWheel.id, AdjustableDPI.id] {
+            do {
+                if try await device.hasFeature(feature) { features.append(String(format: "%04x", feature)) }
+            } catch {
+                features.append(String(format: "%04x?", feature))
+            }
+        }
         // The device may have gone, or the daemon paused or begun quitting, while we were asking.
         guard accepting else { return .stopped }
         guard endpoints[key] === device, sessions[key] == nil else { return .noAnswer }
-        Log.info("adopting \(name) on \(device.interface.product) index \(device.index)")
+        Log.info("adopting \(name) pid=\(pidLabel) on \(device.interface.product) index \(device.index); features(PureMouse)=\(features.joined(separator: " "))")
         let session = Session(device: device, name: name, id: deviceID(key), controls: controls, config: config)
         add(session, key)
         return .adopted

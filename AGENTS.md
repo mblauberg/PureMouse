@@ -71,6 +71,10 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   then traps (it crashed on SIGTERM, before restoring the mouse).
 - Device settings are volatile: the mouse forgets them on every reconnect. Anything applied to
   it belongs in `Session.apply()`, which runs on adoption, reconnect, wake and reload.
+- Prefer SmartShift 0x2110 whenever present (the tested 3S path); only its absence selects
+  Enhanced 0x2111. Enhanced writes always include mode, with torque 0 to leave torque unchanged.
+  Haptic 0x19B0 is play-only, gated by its waveform capability mask: never write strength,
+  enable flags or configuration (persistence is unknown). Other mice remain labelled untested.
 - On SIGTERM/SIGINT, `Session.restore()` returns the mouse to native behaviour (wheels first).
   Nothing may be persisted on the device or receiver: they must work normally without PureMouse.
 - A session that is `finished` (closed or restored) must not touch the device again; the daemon
@@ -78,6 +82,8 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   (`Control.paused`) restores and drops every session; nothing is adopted until those restores
   finish, even after a resume (`PauseGate`), and quitting waits for them (`Daemon.pausing`). A
   pause is never persisted.
+- Device-action chains propagate tail cancellation through predecessors (`Session.chainedAction`),
+  so an earlier action waiting for transport ownership cannot send after close/restore.
 - Every change to which controls are diverted, from `apply()` or capture, runs through one chain
   (`Session.enqueueDiversion`), one at a time and in the order asked, reading the wanted state as
   it runs; `restore()` drains the chain before releasing, and each write checks `finished`.
@@ -202,7 +208,8 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   into the same crash.
 - Events only route for features whose index is already resolved (`HIDPPDevice.feature(at:)`), so
   `Session.apply()` resolves the event-bearing ones (0x1B04, 0x1D4B, 0x1004 battery) first.
-  Battery is read on each apply and then follows the 0x1004 broadcast events; it is
+  Battery is read on each apply and then follows broadcast events; 0x1000 is read only
+  as a fallback when 0x1004 is absent, and only the selected fallback's broadcasts are used. It is
   informational and never fails an apply. Level bits are masked by getCapabilities (cleared
   when the mouse reports a percentage) and the highest wins, as in Linux.
 - DPI is snapped to the sensor's own list (0x2201 getSensorDpiList), read once per mouse and
