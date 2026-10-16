@@ -42,8 +42,8 @@
   natively.
 - **Reliable:** settings come back after every reconnect and wake. Quitting returns the mouse to
   normal, and nothing is stored on it.
-- **Light:** about 4 MB of memory for the background process and 14 MB for the menu bar app,
-  with no CPU use while the mouse is idle.
+- **Light:** about 4.6 MB of memory for the background process and 15 MB for the menu bar app
+  (idle, Settings closed), with no CPU use while the mouse is idle.
 
 ## Supported mice
 

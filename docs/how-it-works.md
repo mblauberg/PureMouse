@@ -44,7 +44,9 @@ diverts them again. `universalControl.handOff: false` turns this off.
 
 With smooth scrolling on, the wheels report raw movement to PureMouse, which accelerates it and
 spreads it across display frames. A display link runs only while a scroll is gliding, so an idle
-mouse costs no CPU.
+mouse costs no CPU. Thumb-wheel actions (volume, zoom, tabs and the rest) take over the thumb wheel
+alone, even with smooth scrolling off; where the thumb wheel scrolls, it then scrolls without the
+glide.
 
 PureMouse posts plain continuous pixel scrolls without trackpad gesture phases, which would make
 browsers swipe back and forward. Synthetic scrolls skip the system's natural-scrolling flip, so
@@ -55,8 +57,7 @@ PureMouse applies it itself, reading the setting at the start of each scroll.
 Buttons, the thumb wheel and smooth scrolling can differ per app. Nothing watches app switches:
 PureMouse asks which app is frontmost when a button some app binds is pressed, and which is under
 the pointer when a scroll or a thumb-wheel movement starts, and only when some app has settings of
-that kind. Each answer costs
-microseconds to a millisecond, and an idle mouse still costs nothing.
+that kind. Each answer costs microseconds to a millisecond, and an idle mouse still costs nothing.
 
 ## Source layout
 

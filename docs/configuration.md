@@ -76,9 +76,9 @@ By default the thumb wheel scrolls sideways. `action` picks something else:
 Or give any two actions as `left` and `right`; with `action` too, each replaces that direction of
 the pair (one left out stays as `action` has it, or does nothing). `step` is how far the wheel turns
 per action, in its own steps, 1–36 (18 make a full turn on the MX Master 3S; default 3). Turning
-faster gives several actions: media keys as fast as you turn, tab switching and other shortcuts at
-most one per 50 ms, zoom one per 40 ms, and Spaces, Mission Control and the other animated actions
-one per 300 ms (turning in between is ignored).
+faster gives several actions: media keys as fast as you turn (at most 4 for each report the mouse
+sends), tab switching and other shortcuts at most one per 50 ms, zoom one per 40 ms, and Spaces,
+Mission Control and the other animated actions one per 300 ms (turning in between is ignored).
 
 ```json
 "thumbWheel": { "action": "volume" }
@@ -133,8 +133,9 @@ holds the pointer still while pressed in every app. An app may turn on smooth sc
 globally, or the reverse; while any app scrolls smoothly, PureMouse scrolls everywhere, and where
 smooth scrolling is off it scrolls without the glide at the given `speed`.
 
-A per-app key that cannot be per-app (such as `dpi`), an unknown button and a repeated bundle ID
-are skipped and reported in the log; a bad value fails the load as anywhere else.
+A per-app key that cannot be per-app (such as `dpi`) and an unknown button are skipped and
+reported in the log; a bad value fails the load as anywhere else. Bundle IDs that differ only in
+case name the same app: the log warns, and the entry last in sorted key order applies.
 
 ## Buttons, actions and gestures
 

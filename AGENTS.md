@@ -42,7 +42,7 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   `./scripts/package.sh` on a Mac holding the `PureMouse` signing identity, and attach
   `.build/dist/PureMouse-X.Y.Z.zip` to a GitHub release with its SHA-256. A release signed by any
   other identity makes every user grant permissions again. CI (`.github/workflows/ci.yml`) builds,
-  tests and bundles ad hoc on each push.
+  tests and bundles ad hoc on each push to `main` and each pull request.
 - The icon is an Icon Composer document, `assets/AppIcon.icon`: a top-down mouse in three
   monochrome glass layers (buttons with the centre seam, palm, floating wheel), grey fills with
   light and dark specializations, on the system's light/dark background, so macOS 26+ renders
@@ -267,8 +267,9 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   `Session.apply()` resolves the event-bearing ones (0x1B04, 0x1D4B, 0x1004 battery) first.
   Battery is read on each apply and then follows broadcast events; 0x1000 is read only
   as a fallback when 0x1004 is absent; resolve/select it before configuration writes and inherit
-  that selection across reloads. Only the selected fallback's broadcasts are used. It is
-  informational and never fails an apply. Level bits are masked by getCapabilities (cleared
+  that selection across reloads. Only the selected source's broadcasts are used (0x1004 events,
+  or legacy 0x1000 broadcast events when it was selected). It is informational and never fails
+  an apply. Level bits are masked by getCapabilities (cleared
   when the mouse reports a percentage) and the highest wins, as in Linux.
 - DPI is snapped to the sensor's own list (0x2201 getSensorDpiList), read once per mouse and
   inherited across reloads; if the list cannot be read, the configured value is sent unchanged.
