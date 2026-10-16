@@ -84,6 +84,85 @@ public enum SmartShift {
     }
 }
 
+/// 0x2111 SMART_SHIFT_ENHANCED: MX Master 4 / Anywhere 3 family clutch.
+/// Function numbers and layouts follow Solaar's SmartShiftEnhanced and ScrollRatchetTorque.
+public enum SmartShiftEnhanced {
+    public static let id: UInt16 = 0x2111
+
+    public struct Capabilities: Equatable, Sendable {
+        public let tunableTorque: Bool
+    }
+
+    public struct State: Equatable, Sendable {
+        public let mode: SmartShift.Mode
+        public let autoDisengage: UInt8
+        public let torque: UInt8
+    }
+
+    public static func getCapabilities(_ d: HIDPPDevice) async throws -> Capabilities {
+        guard let caps = parseCapabilities(try await d.call(id, 0)) else { throw HIDPPError.malformedResponse }
+        return caps
+    }
+
+    public static func parseCapabilities(_ params: [UInt8]) -> Capabilities? {
+        guard let flags = params.first else { return nil }
+        return Capabilities(tunableTorque: flags & 1 != 0)
+    }
+
+    public static func getRatchetControlMode(_ d: HIDPPDevice) async throws -> State {
+        guard let state = parseRatchetControlMode(try await d.call(id, 1)) else {
+            throw HIDPPError.malformedResponse
+        }
+        return state
+    }
+
+    public static func parseRatchetControlMode(_ params: [UInt8]) -> State? {
+        guard params.count >= 3, let mode = SmartShift.Mode(rawValue: params[0]) else { return nil }
+        return State(mode: mode, autoDisengage: params[1], torque: params[2])
+    }
+
+    /// Zero leaves threshold/torque unchanged. Always supply mode: on MX4 a torque change
+    /// takes effect only when the ratchet mode is written with it (Solaar's MX4 quirk).
+    public static func setRatchetControlMode(_ d: HIDPPDevice, mode: SmartShift.Mode,
+                                             autoDisengage: UInt8? = nil, torque: UInt8? = nil) async throws {
+        _ = try await d.call(id, 2, parameters(mode: mode, autoDisengage: autoDisengage, torque: torque))
+    }
+
+    static func parameters(mode: SmartShift.Mode, autoDisengage: UInt8?, torque: UInt8?) -> [UInt8] {
+        [mode.rawValue, autoDisengage ?? 0, torque ?? 0]
+    }
+}
+
+/// 0x19B0 HAPTIC: host-triggered effects on the MX Master 4. Play only: deliberately exposes
+/// no strength/enable/configuration write, whose persistence is not established.
+public enum Haptic {
+    public static let id: UInt16 = 0x19B0
+
+    public struct Capabilities: Equatable, Sendable {
+        /// Solaar PlayHapticWaveForm: bytes 4–7, big endian; bit N permits waveform N.
+        public let supportedWaveforms: UInt32
+
+        public func supports(_ waveform: UInt8) -> Bool {
+            waveform < 32 && supportedWaveforms & (UInt32(1) << waveform) != 0
+        }
+    }
+
+    public static func getCapabilities(_ d: HIDPPDevice) async throws -> Capabilities {
+        guard let caps = parseCapabilities(try await d.call(id, 0)) else { throw HIDPPError.malformedResponse }
+        return caps
+    }
+
+    public static func parseCapabilities(_ params: [UInt8]) -> Capabilities? {
+        guard params.count >= 8 else { return nil }
+        let mask = params[4..<8].reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
+        return Capabilities(supportedWaveforms: mask)
+    }
+
+    public static func playWaveform(_ d: HIDPPDevice, waveform: UInt8) async throws {
+        _ = try await d.call(id, 4, [waveform])
+    }
+}
+
 /// 0x2201 ADJUSTABLE_DPI: sensor resolution.
 public enum AdjustableDPI {
     public static let id: UInt16 = 0x2201
@@ -329,6 +408,43 @@ public enum UnifiedBattery {
     }
 }
 
+/// 0x1000 BATTERY_LEVEL_STATUS: older firmware's read-only battery reporting.
+/// Solaar `decipher_battery_status` / `common.BatteryStatus`; function 0 is both get and event.
+public enum LegacyBattery {
+    public static let id: UInt16 = 0x1000
+
+    public static func status(_ d: HIDPPDevice) async throws -> UnifiedBattery.State {
+        guard let state = parseStatus(try await d.call(id, 0)) else { throw HIDPPError.malformedResponse }
+        return state
+    }
+
+    public static func parse(function: UInt8, params: [UInt8]) -> UnifiedBattery.State? {
+        function == 0 ? parseStatus(params) : nil
+    }
+
+    /// [percent, next threshold percent, status]. Zero percent is unknown, not empty.
+    /// Status 2 is almost full (still charging), 4 slow recharge, 5/6 battery/thermal error;
+    /// these differ from 0x1004. Never substitute the next threshold for the current charge.
+    public static func parseStatus(_ params: [UInt8]) -> UnifiedBattery.State? {
+        guard params.count >= 3, params[0] <= 100 else { return nil }
+        let charging: UnifiedBattery.Charging?
+        switch params[2] {
+        case 0: charging = .discharging
+        case 1, 2: charging = .charging
+        case 3: charging = .complete
+        case 4: charging = .chargingSlowly
+        case 5, 6: charging = .error
+        default: charging = nil
+        }
+        // As in Solaar, infer a level from charging state only when percentage is unavailable.
+        let level: UnifiedBattery.Level? = params[0] != 0 ? nil
+            : params[2] == 3 ? .full : params[2] == 1 || params[2] == 2 ? .good
+            : params[2] == 4 ? .low : nil
+        return UnifiedBattery.State(percent: params[0] == 0 ? nil : Int(params[0]), level: level,
+                                    charging: charging, externalPower: (1...4).contains(params[2]))
+    }
+}
+
 /// 0x0005 DEVICE_NAME: the marketing name, e.g. "MX Master 3S".
 public enum DeviceName {
     public static let id: UInt16 = 0x0005
@@ -342,6 +458,33 @@ public enum DeviceName {
             bytes += chunk.prefix(Int(length) - bytes.count)
         }
         return String(decoding: bytes, as: UTF8.self)
+    }
+}
+
+/// 0x0003 DEVICE_FW_VERSION getDeviceInfo: product IDs for the device's transports.
+/// Solaar Hidpp20.get_ids: transport flags at byte 6, up to three IDs at bytes 7–12.
+public enum DeviceIdentity {
+    public static let id: UInt16 = 0x0003
+
+    public enum Transport: UInt8, CaseIterable, Sendable {
+        case bluetooth = 1, bluetoothLE = 2, wireless = 4, usb = 8
+    }
+
+    public static func transportIDs(_ d: HIDPPDevice) async throws -> [Transport: UInt16] {
+        guard let ids = parseTransportIDs(try await d.call(id, 0)) else { throw HIDPPError.malformedResponse }
+        return ids
+    }
+
+    public static func parseTransportIDs(_ params: [UInt8]) -> [Transport: UInt16]? {
+        guard params.count >= 13 else { return nil }
+        var ids: [Transport: UInt16] = [:]
+        var offset = 7
+        for transport in Transport.allCases where params[6] & transport.rawValue != 0 {
+            guard offset + 1 < 13 else { return nil }
+            ids[transport] = UInt16(bigEndian: params[offset], params[offset + 1])
+            offset += 2
+        }
+        return ids
     }
 }
 

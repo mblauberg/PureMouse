@@ -37,6 +37,15 @@ import Testing
 }
 
 @Suite struct FeatureParsingTests {
+    @Test func deviceTransportIDsDoNotConfuseReceiverAndMouse() {
+        // Solaar get_ids layout: flags 0x06 = BLE then Unifying wireless, not fixed slots.
+        let ids = DeviceIdentity.parseTransportIDs([4, 0, 0, 0, 0, 0, 6, 0xB0, 0x23, 0x40, 0x82, 0, 0])
+        #expect(ids?[.bluetoothLE] == 0xB023 && ids?[.wireless] == 0x4082 && ids?[.usb] == nil)
+        #expect(DeviceIdentity.parseTransportIDs([4, 0, 0, 0, 0, 0, 2, 0xB0, 0x42, 0, 0, 0, 0])?[.bluetoothLE] == 0xB042)
+        #expect(DeviceIdentity.parseTransportIDs([4, 0, 0, 0, 0, 0, 15, 0, 0, 0, 0, 0, 0]) == nil)
+        #expect(DeviceIdentity.parseTransportIDs([4, 0, 0, 0, 0, 0, 2, 0xB0, 0x42]) == nil)
+    }
+
     @Test func parsesDivertedButtons() {
         let event = ReprogControls.parse(function: 0, params: [0x00, 0xC3, 0x00, 0x53, 0, 0, 0, 0, 0, 0])
         #expect(event == .buttons([0xC3, 0x53]))
@@ -77,6 +86,29 @@ struct WheelEventTests {
 }
 
 struct BatteryTests {
+    @Test func legacyStatusUsesItsOwnChargingCodes() throws {
+        // Solaar hidpp20.decipher_battery_status: percent, next threshold, status.
+        let discharging = try #require(LegacyBattery.parseStatus([45, 20, 0]))
+        #expect(discharging.percent == 45 && !discharging.isCharging && !discharging.externalPower)
+        #expect(LegacyBattery.parseStatus([45, 20, 2])?.charging == .charging) // almost full
+        #expect(LegacyBattery.parseStatus([45, 20, 4])?.charging == .chargingSlowly)
+        #expect(LegacyBattery.parseStatus([45, 20, 5])?.charging == .error)
+        #expect(LegacyBattery.parseStatus([45, 20, 6])?.charging == .error)
+        #expect(LegacyBattery.parseStatus([45, 20, 0xFF])?.charging == nil)
+    }
+
+    @Test func legacyUnknownChargeAndBroadcasts() throws {
+        let unknown = try #require(LegacyBattery.parse(function: 0, params: [0, 20, 0]))
+        #expect(unknown.percent == nil && unknown.level == nil)
+        let full = try #require(LegacyBattery.parseStatus([0, 0, 3]))
+        #expect(full.percent == nil && full.level == .full && full.charging == .complete)
+        #expect(LegacyBattery.parseStatus([0, 0, 1])?.level == .good)
+        #expect(LegacyBattery.parseStatus([0, 0, 4])?.level == .low)
+        #expect(LegacyBattery.parse(function: 1, params: [45, 20, 0]) == nil)
+        #expect(LegacyBattery.parseStatus([45, 20]) == nil)
+        #expect(LegacyBattery.parseStatus([101, 20, 0]) == nil)
+    }
+
     @Test func statusAsTheMXMaster3SAnswers() throws {
         // 45 %, good, discharging, no external power.
         let state = try #require(UnifiedBattery.parseStatus([0x2D, 0x04, 0x00, 0x00, 0, 0, 0, 0]))
@@ -109,6 +141,44 @@ struct BatteryTests {
         #expect(UnifiedBattery.parse(function: 1, params: [0x2D, 0x04, 0x00, 0x00]) == nil)
         #expect(UnifiedBattery.parseStatus([0x2D, 0x04]) == nil)
         #expect(UnifiedBattery.parseStatus([200, 0x04, 0x00, 0x00]) == nil)
+    }
+}
+
+struct EnhancedSmartShiftTests {
+    @Test func statusFromOpenLogiHardwareFixtures() throws {
+        // AprilNEA/OpenLogi fixtures/devices/{mx-master-4-001,mx-anywhere-3s-001}/
+        // cases/smartshift-status.json (MIT), response parameters of function 1.
+        let master = try #require(SmartShiftEnhanced.parseRatchetControlMode([0x02, 0xFF, 0x4B, 0, 0]))
+        #expect(master.mode == .ratchet && master.autoDisengage == 255 && master.torque == 75)
+        let anywhere = try #require(SmartShiftEnhanced.parseRatchetControlMode([0x02, 0x0C, 0x32, 0]))
+        #expect(anywhere.mode == .ratchet && anywhere.autoDisengage == 12 && anywhere.torque == 50)
+        #expect(SmartShiftEnhanced.parseRatchetControlMode([1, 10, 50])?.mode == .freespin)
+        #expect(SmartShiftEnhanced.parseRatchetControlMode([0, 10, 50]) == nil)
+        #expect(SmartShiftEnhanced.parseRatchetControlMode([2, 10]) == nil)
+    }
+
+    @Test func torqueCapabilitiesAndWritePreservation() {
+        // Solaar ScrollRatchetTorque: capabilities bit 0; write [mode, threshold, torque].
+        #expect(SmartShiftEnhanced.parseCapabilities([0x81])?.tunableTorque == true)
+        #expect(SmartShiftEnhanced.parseCapabilities([0x80])?.tunableTorque == false)
+        #expect(SmartShiftEnhanced.parseCapabilities([]) == nil)
+        #expect(SmartShiftEnhanced.parameters(mode: .ratchet, autoDisengage: 12, torque: nil) == [2, 12, 0])
+        #expect(SmartShiftEnhanced.parameters(mode: .freespin, autoDisengage: nil, torque: nil) == [1, 0, 0])
+        // MX4 requires an explicit mode with a torque write.
+        #expect(SmartShiftEnhanced.parameters(mode: .ratchet, autoDisengage: nil, torque: 75) == [2, 0, 75])
+    }
+}
+
+struct HapticTests {
+    @Test func waveformMaskIsBigEndianAtOffsetFour() throws {
+        // Layout from Solaar PlayHapticWaveForm.validator_class.build. Constructed mask:
+        // 0x08007FFF supports 0...14 and 27, not a captured capabilities response.
+        let caps = try #require(Haptic.parseCapabilities([0xFF, 0xFF, 0xFF, 60, 0x08, 0x00, 0x7F, 0xFF, 0]))
+        #expect(caps.supportedWaveforms == 0x08007FFF)
+        #expect(caps.supports(0) && caps.supports(14) && caps.supports(27))
+        #expect(!caps.supports(15) && !caps.supports(31) && !caps.supports(32) && !caps.supports(255))
+        #expect(Haptic.parseCapabilities([0, 0, 0, 60, 0, 0, 0, 0])?.supports(0) == false)
+        #expect(Haptic.parseCapabilities([0, 0, 0, 60, 0, 0, 0]) == nil)
     }
 }
 
