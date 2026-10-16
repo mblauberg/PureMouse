@@ -48,6 +48,7 @@ final class AppModel {
     @ObservationIgnored private var exitWatch: DispatchSourceProcess?
     @ObservationIgnored private var watchedPID: Int32 = 0
     @ObservationIgnored private var directoryWatch: DispatchSourceFileSystemObject?
+    @ObservationIgnored private var fileWatch: DispatchSourceFileSystemObject?
     @ObservationIgnored private var statusToken: Int32 = -1
     @ObservationIgnored private var batteryAlerts = BatteryAlertStore(url: Companion.directory.appending(path: "battery-alerts.json"))
 
@@ -411,26 +412,47 @@ final class AppModel {
         }
     }
 
-    /// The file is replaced atomically, so its own descriptor goes stale: watch the directory.
+    /// Saving usually replaces the file (a new inode, leaving a descriptor on the old one stale), so
+    /// watch the directory; some editors write in place, which leaves the directory untouched, so
+    /// watch the file too, following each new one. `reloadConfig` compares bytes, so a save seen
+    /// by both costs one read.
     private func watchConfigDirectory() {
         directoryWatch?.cancel()
         directoryWatch = nil
         let directory = Paths.config.resolvingSymlinksInPath().deletingLastPathComponent()
-        let fd = open(directory.path, O_EVTONLY)
-        guard fd >= 0 else { return }
-        let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: fd, eventMask: [.write, .delete, .rename],
-                                                               queue: .main)
-        source.setEventHandler { [weak self] in
+        directoryWatch = watch(directory.path, [.write, .delete, .rename]) { model, events in
+            if !events.isDisjoint(with: [.delete, .rename]) { model.watchConfigDirectory() }
+            model.configChanged()
+        }
+        watchConfigFile()
+    }
+
+    private func watchConfigFile() {
+        fileWatch?.cancel()
+        fileWatch = watch(Paths.config.resolvingSymlinksInPath().path, [.write, .extend, .delete, .rename]) { model, _ in
+            model.configChanged()
+        }
+    }
+
+    private func configChanged() {
+        watchConfigFile()  // the file may have been replaced; follow the new one
+        reloadConfig()
+    }
+
+    private func watch(_ path: String, _ events: DispatchSource.FileSystemEvent,
+                       _ handler: @escaping @MainActor (AppModel, DispatchSource.FileSystemEvent) -> Void)
+        -> DispatchSourceFileSystemObject? {
+        let fd = open(path, O_EVTONLY)
+        guard fd >= 0 else { return nil }
+        let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: fd, eventMask: events, queue: .main)
+        source.setEventHandler { [weak self, weak source] in
             MainActor.assumeIsolated {
-                guard let self, let source = self.directoryWatch else { return }
-                if !source.data.isDisjoint(with: [.delete, .rename]) {
-                    self.watchConfigDirectory()
-                }
-                self.reloadConfig()
+                guard let self, let source else { return }
+                handler(self, source.data)
             }
         }
         source.setCancelHandler { close(fd) }
         source.resume()
-        directoryWatch = source
+        return source
     }
 }
