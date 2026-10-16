@@ -33,7 +33,14 @@ struct GeneralPane: View {
                                 : "Tells you when the battery falls to 20% and 5%. Needs the menu bar icon shown.")
                 }
                 .accessibilityLabel("Low battery notification")
+                Toggle(isOn: Binding(get: { model.config.universalControlHandOff },
+                                     set: { on in model.update { $0.universalControlHandOff = on } })) {
+                    RowLabel("Work with Universal Control",
+                             help: "While the pointer is on another Mac, the mouse scrolls and clicks there as it does without PureMouse.")
+                }
+                .accessibilityLabel("Work with Universal Control")
             }
+            .disabled(model.readOnly)
 
             Section("Permissions") {
                 PermissionRow(title: "Accessibility", help: "Lets PureMouse scroll, press shortcuts and swipe for you.",

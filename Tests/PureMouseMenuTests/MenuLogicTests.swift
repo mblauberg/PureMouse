@@ -267,6 +267,20 @@ private func mouse(_ id: String, online: Bool, dpi: Int?, steps: [Int] = []) -> 
     #expect(!config.contains(["dpiPresets"]))
 }
 
+@Test func universalControlToggleWritesOnlyTheOff() throws {
+    var config = ConfigTree()
+    #expect(config.universalControlHandOff)
+    config.universalControlHandOff = false
+    #expect(config.bool(["universalControl", "handOff"]) == false)
+    config.universalControlHandOff = true
+    #expect(!config.contains(["universalControl"]))  // the default leaves no key behind
+
+    config = try tree(#"{"universalControl": {"handOff": false, "future": 1}}"#)
+    config.universalControlHandOff = true
+    #expect(!config.contains(["universalControl", "handOff"]))
+    #expect(config.contains(["universalControl", "future"]))
+}
+
 @Test func smoothScrollToggleKeepsTuning() throws {
     var config = ConfigTree()
     #expect(!config.smoothScrollEnabled)

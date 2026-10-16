@@ -37,6 +37,7 @@ The daemon rewrites `status.json` when anything in it changes:
 - permission grant (the restart then writes a fresh one);
 - config load or failure;
 - pause or resume;
+- the pointer moving to another Mac or back, when that hands the mice back (`away`);
 - capture progress;
 - shutdown, which sets `running: false` as its last act after restoring the mice.
 
@@ -139,6 +140,10 @@ Choices the contract left open, as the daemon implements them:
   clears it.
 - **cycleDPI** picks the smallest preset above the current DPI, else the smallest, after snapping
   the presets to the sensor's list. With no `dpiPresets` it does nothing and logs an error.
+- **Universal Control.** `away` is true while the pointer is on another Mac and
+  `universalControl.handOff` is on: each session keeps its settings but leaves the wheels and
+  controls native (`Session.setAway`). Going away cancels a listening capture. The menu shows "On
+  another Mac" in the device line. Older daemons omit the key.
 - **Capture.** Only controls not already bound are diverted for it (bound ones already reach the
   daemon). A capture still listening when the config reloads or the daemon pauses reports
   `cancelled`. A mouse adopted during a capture joins it; one lost during it simply drops out.

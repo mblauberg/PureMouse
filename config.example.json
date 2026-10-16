@@ -16,5 +16,6 @@
     "top": "showDesktop",
     "middle": "toggleScrollMode"
   },
-  "gesture": { "distanceMm": 4, "repeatIntervalMs": 400 }
+  "gesture": { "distanceMm": 4, "repeatIntervalMs": 400 },
+  "universalControl": { "handOff": true }
 }

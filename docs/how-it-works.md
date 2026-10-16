@@ -30,6 +30,16 @@ and on each config reload.
 On quit or logout it hands the wheels and buttons back to the mouse first. Nothing is stored on
 the mouse or receiver, so they behave normally on any other computer.
 
+## Universal Control
+
+Universal Control forwards only native mouse input to another Mac, so scrolls and button presses
+PureMouse diverts would not reach it. When the pointer crosses to another Mac, macOS posts an
+undocumented per-user Darwin notification (`user.uid.<uid>.com.apple.universalcontrol.inputstate`);
+its state has bit 0x2 set while the pointer is away and 0x1 while the keyboard is. PureMouse
+watches it (`UniversalControlWatcher`, no polling) and, while the pointer is away, hands the wheels
+and diverted buttons back to macOS, keeping DPI and the other settings. When the pointer returns it
+diverts them again. `universalControl.handOff: false` turns this off.
+
 ## Smooth scrolling
 
 With smooth scrolling on, the wheels report raw movement to PureMouse, which accelerates it and

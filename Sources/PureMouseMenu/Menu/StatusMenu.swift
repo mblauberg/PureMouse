@@ -82,7 +82,8 @@ final class StatusMenu: NSObject, NSMenuDelegate {
                 }
             }
             for device in model.devices {
-                let subtitle = (model.paused ? "Paused · " : "") + StatusText.subtitle(device)
+                let state = model.paused ? "Paused · " : model.status?.away == true ? "On another Mac · " : ""
+                let subtitle = state + StatusText.subtitle(device)
                 addHeader(title: device.name, subtitle: subtitle,
                           detail: StatusText.detail(device, version: model.status?.version ?? "dev"))
             }

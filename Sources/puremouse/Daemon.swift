@@ -59,6 +59,13 @@ final class Daemon {
     private var accepting: Bool { !shuttingDown && pauseGate.allowsAdoption }
     /// Set once the mice are restored, just before exit: the final status says not running.
     private var exiting = false
+    private var universalControl: UniversalControlWatcher?
+    /// The pointer is on another Mac (Universal Control), as last announced.
+    private var pointerAway = false
+    /// Whether the mice are handed back to macOS for Universal Control; see `Session.setAway`.
+    private var handingOff: Bool {
+        Handoff.handingOff(pointerAway: pointerAway, enabled: config.universalControl.handOff)
+    }
 
     private struct Key: Hashable {
         let interface: ObjectIdentifier
@@ -115,6 +122,9 @@ final class Daemon {
         channel = StatusChannel { [unowned self] in self.status(running: !self.exiting) }
         channel?.writeNow()
         channel?.onControl { [weak self] in self?.controlChanged() }
+        // Before any mouse is adopted, so a session starts handed back if the pointer is away.
+        universalControl = UniversalControlWatcher { [weak self] in self?.pointerMoved($0) }
+        universalControl?.start()
         monitor.onAttach = { [weak self] interface in self?.attached(interface) }
         monitor.onDetach = { [weak self] interface in self?.detached(interface) }
         let status = monitor.start()
@@ -143,7 +153,7 @@ final class Daemon {
             logiOptionsRunning: logiOptionsRunning,
             config: .init(path: configURL.path, error: configError),
             devices: running ? sessions.values.map(\.status).sorted { $0.id < $1.id } : [],
-            capture: capture)
+            capture: capture, away: running && handingOff)
     }
 
     private func statusChanged() {
@@ -211,6 +221,32 @@ final class Daemon {
         current.deviceID = deviceID
         capture = current
         sessions.values.forEach { $0.endCapture() }
+        statusChanged()
+    }
+
+    // MARK: Universal Control
+
+    /// The pointer moved to another Mac or came back.
+    private func pointerMoved(_ state: UniversalControlState) {
+        guard !shuttingDown else { return }
+        let wasHandingOff = handingOff
+        pointerAway = state.pointerAway
+        Log.debug("Universal Control input state 0x\(String(state.raw, radix: 16))")
+        handOffChanged(from: wasHandingOff)
+    }
+
+    /// Hands every mouse back, or takes them again, when `handingOff` has changed.
+    private func handOffChanged(from wasHandingOff: Bool) {
+        let away = handingOff
+        guard away != wasHandingOff else { return }
+        if away {
+            Log.info("pointer moved to another Mac: handing the mouse back")
+            // A press made over there must not land here as a selection.
+            endCapture(.cancelled)
+        } else {
+            Log.info("pointer is back: taking the mouse again")
+        }
+        sessions.values.forEach { $0.setAway(away) }
         statusChanged()
     }
 
@@ -423,7 +459,8 @@ final class Daemon {
         guard accepting else { return .stopped }
         guard endpoints[key] === device, sessions[key] == nil else { return .noAnswer }
         Log.info("adopting \(name) pid=\(pidLabel) on \(device.interface.product) index \(device.index)")
-        let session = Session(device: device, name: name, id: deviceID(key), controls: controls, config: config)
+        let session = Session(device: device, name: name, id: deviceID(key), controls: controls, config: config,
+                              inheriting: Session.Inherited(away: handingOff))
         add(session, key)
         return .adopted
     }
@@ -470,6 +507,7 @@ final class Daemon {
         guard !shuttingDown else { return }
         defer { statusChanged() }
         let previous = config
+        let wasHandingOff = handingOff
         guard loadConfig() else {
             Log.error("reload failed; keeping previous config")
             return
@@ -483,8 +521,14 @@ final class Daemon {
             old.close()
             var inherited = old.inheritance
             if !keepLiveDPI { inherited.liveDPI = nil }
+            inherited.away = handingOff
+            inherited.diversionAfter = old.diversionEnd
             add(Session(device: old.device, name: old.name, id: old.id, controls: Array(old.controls.values),
                         config: config, inheriting: inherited), key)
+        }
+        if handingOff != wasHandingOff {
+            // The replacements already start in the new state; this only logs it.
+            handOffChanged(from: wasHandingOff)
         }
         Task { await adoptStragglers() }
     }
@@ -495,6 +539,7 @@ final class Daemon {
         guard !shuttingDown else { return }
         shuttingDown = true
         Log.info("quitting")
+        universalControl?.stop()
         cancelRetries()
         let all = Array(sessions.values)
         Task { [pausing] in

@@ -16,6 +16,13 @@ extension ConfigTree {
         }
     }
 
+    /// Handing the mouse back while the pointer is on another Mac; on unless `universalControl.handOff`
+    /// is false. On removes the key, since it is the default.
+    var universalControlHandOff: Bool {
+        get { bool(["universalControl", "handOff"]) != false }
+        set { set(newValue ? nil : false, at: ["universalControl", "handOff"]) }
+    }
+
     var dpiPresets: [Int] {
         get { (self[["dpiPresets"]] as? [Any])?.compactMap { ($0 as? NSNumber)?.intValue } ?? [] }
         set { set(newValue.isEmpty ? nil : newValue, at: ["dpiPresets"]) }

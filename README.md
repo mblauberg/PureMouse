@@ -37,6 +37,8 @@
 - **Per app:** buttons, thumb wheel and smooth scrolling can differ in each app.
 - **Smooth scrolling:** pixel-precise and accelerated on both wheels, in step with the display.
 - **Hardware:** DPI with presets, wheel direction, ratchet or free-spin, and SmartShift.
+- **Universal Control:** while the pointer is on another Mac, the wheels and buttons work there
+  natively.
 - **Reliable:** settings come back after every reconnect and wake. Quitting returns the mouse to
   normal, and nothing is stored on it.
 - **Light:** about 4 MB of memory for the background process and 14 MB for the menu bar app,

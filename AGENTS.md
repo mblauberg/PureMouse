@@ -87,9 +87,15 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   pause is never persisted.
 - Device-action chains propagate tail cancellation through predecessors (`Session.chainedAction`),
   so an earlier action waiting for transport ownership cannot send after close/restore.
-- Every change to which controls are diverted, from `apply()` or capture, runs through one chain
-  (`Session.enqueueDiversion`), one at a time and in the order asked, reading the wanted state as
-  it runs; `restore()` drains the chain before releasing, and each write checks `finished`.
+- Every change to which controls are diverted, and the wheels' diversion, from `apply()`, capture
+  or a Universal Control handoff, runs through one chain (`Session.enqueueDiversion`), one at a
+  time and in the order asked, reading the wanted state (`Handoff`, including `away`) as it runs
+  (`SerialChain`). Each write checks `finished` right before it goes out, not only when the body
+  starts; `close()` cancels the chain, and a replacement session's chain starts after the old
+  one's end (`Inherited.diversionAfter`), so no retired write lands after a replacement's.
+  `restore()` drains the chain before releasing. Handing inputs back tries each wheel and control
+  on its own (`Independently.each`); one that fails stays counted (`wheelsMayBeDiverted`,
+  `divertedControls`) for the next apply or `restore()`.
 - The daemon reports to the menu bar app only through `status.json` (`StatusChannel`): call
   `statusChanged()` (Daemon) or `changed()` (Session) after anything in `Status` changes; writes
   are coalesced to one per main-queue turn. On shutdown, `running: false` is written last, after
@@ -161,6 +167,16 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   through `Daemon.endCapture`, which hands the extra controls back, each independently (one that
   fails waits for the next apply). They count in
   `divertedControls` until released, so `restore()` and a replacement session release them too.
+- Universal Control: while the pointer is on another Mac, `Session.away` leaves the wheels and
+  every diverted control native (DPI, SmartShift and the rest stay applied), so macOS forwards them;
+  apply, capture and new or replacement sessions all honour it (`Daemon.handingOff`, passed in
+  `Session.Inherited.away`). The signal is undocumented: the Darwin notification
+  `user.uid.<uid>.com.apple.universalcontrol.inputstate` (found in Logi Options+'s agent), whose
+  state was observed on macOS 27 as 0x2 pointer away, 0x3 keyboard followed, 0x1 pointer back with
+  the keyboard still remote, 0x0 home (`UniversalControlState`). Verify after OS upgrades: register
+  with `notify_register_dispatch` and print `notify_get_state` on each post while crossing (a
+  ten-line Swift script, `import notify`), and check the log's "pointer moved to another Mac" lines.
+  Going away also stops any glide and drops held gesture state, and ends a capture.
 - Permission checks are cached per process. The launchd-run daemon polls a child
   (`puremouse permissions`) and restarts itself when a grant arrives (`Daemon.restartWhenGranted`).
 - HID++ software IDs rotate per request so a late reply cannot complete a newer request.

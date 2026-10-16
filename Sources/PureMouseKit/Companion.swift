@@ -81,10 +81,13 @@ public struct Status: Codable, Equatable, Sendable {
     public var devices: [Device]
     /// The current or most recent select-by-pressing request.
     public var capture: Capture?
+    /// True while the pointer is on another Mac (Universal Control) and the mice are handed back
+    /// to macOS for it. Absent from older daemons.
+    public var away: Bool?
 
     public init(pid: Int32, startedAt: Date, version: String, running: Bool, paused: Bool,
                 permissions: Permissions, logiOptionsRunning: Bool, config: ConfigState,
-                devices: [Device], capture: Capture?) {
+                devices: [Device], capture: Capture?, away: Bool? = nil) {
         self.pid = pid
         self.startedAt = startedAt
         self.version = version
@@ -95,6 +98,7 @@ public struct Status: Codable, Equatable, Sendable {
         self.config = config
         self.devices = devices
         self.capture = capture
+        self.away = away
     }
 
     public struct Permissions: Codable, Equatable, Sendable {

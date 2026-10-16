@@ -47,7 +47,11 @@ enum StatusText {
             } else if let percent = device.battery?.percent {
                 parts.append("battery \(percent) percent")
             }
-            if model.paused { parts.append("paused") }
+            if model.paused {
+                parts.append("paused")
+            } else if model.status?.away == true {
+                parts.append("on another Mac")
+            }
         } else {
             parts.append("no mouse connected")
         }

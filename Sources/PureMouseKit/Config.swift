@@ -22,6 +22,7 @@ public struct Config: Decodable, Sendable {
     /// Button name (see `Button`) or hex control ID (e.g. "0x00c4") → binding.
     public var buttons: [String: Binding] = [:]
     public var gesture = GestureSettings()
+    public var universalControl = UniversalControl()
     /// `buttons` keyed by control ID.
     public private(set) var bindings: [UInt16: Binding] = [:]
     /// Names in `buttons` that are neither a `Button` nor a hex control ID; skipped. The daemon
@@ -36,6 +37,7 @@ public struct Config: Decodable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case dpi, dpiPresets, scrollWheel, thumbWheel, smoothScroll, buttons, gesture, apps
+        case universalControl
     }
 
     public init(from decoder: Decoder) throws {
@@ -61,6 +63,7 @@ public struct Config: Decodable, Sendable {
         smoothScroll = try c.decodeIfPresent(SmoothScroll.self, forKey: .smoothScroll)
         buttons = try c.decodeIfPresent([String: Binding].self, forKey: .buttons) ?? [:]
         gesture = try c.decodeIfPresent(GestureSettings.self, forKey: .gesture) ?? GestureSettings()
+        universalControl = try c.decodeIfPresent(UniversalControl.self, forKey: .universalControl) ?? UniversalControl()
         for (name, binding) in buttons {
             guard let cid = Button.cid(for: name) else {
                 unknownButtons.append(name)
@@ -217,6 +220,19 @@ public struct Config: Decodable, Sendable {
                 ?? distanceMm
             repeatIntervalMs = try c.decodeIfPresent(Int.self, forKey: AnyKey("repeatIntervalMs"),
                                                      in: Self.repeatIntervalMsRange) ?? repeatIntervalMs
+        }
+    }
+
+    public struct UniversalControl: Decodable, Sendable {
+        /// While the pointer is on another Mac, hand the wheels and buttons back to macOS so
+        /// Universal Control forwards them; take them again when it returns.
+        public var handOff = true
+
+        public init() {}
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: AnyKey.self)
+            handOff = try c.decodeIfPresent(Bool.self, forKey: AnyKey("handOff")) ?? handOff
         }
     }
 

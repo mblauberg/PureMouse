@@ -14,6 +14,13 @@ the examples below call it `puremouse`.
 - **Wheels silent after a crash:** if PureMouse is killed outright it cannot restore the mouse, so
   with smooth scrolling on the wheels stay silent until it restarts a few seconds later. Turning
   the mouse off and on also resets it.
+- **Scrolling and buttons do nothing on another Mac (Universal Control):** PureMouse hands the
+  mouse back to macOS while the pointer is on another Mac, so it works there as it does without
+  PureMouse; the log says "pointer moved to another Mac" at each crossing and the menu shows "On
+  another Mac". If neither happens, check that `universalControl.handOff` is not false. After a
+  macOS upgrade the notification it relies on may have changed: see
+  [After a macOS upgrade](#after-a-macos-upgrade). Actions bound to buttons (back and forward in
+  Safari, for example) do not apply on the other Mac; it gets the buttons' native behaviour.
 - **A setting has no effect:** check the menu for a config error. A file that does not load leaves
   the previous settings in effect, and the error names the field.
 
@@ -87,6 +94,7 @@ that has Accessibility.
 | `IOHIDPostEvent` (deprecated since macOS 11) | `volumeUp`, `volumeDown`, `mute`, `brightnessUp`, `brightnessDown` | `{"run": "osascript -e 'set volume output volume (output volume of (get volume settings) + 6)'"}` and similar |
 | Symbolic hot key lookup | `spaceLeft`, `spaceRight` (your own shortcut) | Falls back to Ctrl+Left/Right by itself |
 | Front process lookup | Per-app button settings | Falls back to the app owning the frontmost window by itself |
+| Universal Control input-state notification | Handing the mouse back while the pointer is on another Mac | Pause PureMouse from the menu while using the other Mac |
 
 macOS 27 stopped honouring the event fields for three-finger Dock swipes. PureMouse does not use
 them, and navigation swipes still work on macOS 27.

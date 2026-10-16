@@ -23,6 +23,13 @@ import Testing
         #expect(config.buttons.isEmpty && config.dpi == nil && config.gesture.distanceMm == 4)
     }
 
+    @Test func universalControlHandOffDefaultsOn() throws {
+        #expect(try decode("{}").universalControl.handOff)
+        #expect(try decode(#"{"universalControl": {}}"#).universalControl.handOff)
+        #expect(try !decode(#"{"universalControl": {"handOff": false}}"#).universalControl.handOff)
+        #expect(throws: DecodingError.self) { try decode(#"{"universalControl": {"handOff": 1}}"#) }
+    }
+
     @Test func actionObjectsAndHexButtons() throws {
         let config = try decode(#"{"buttons": {"0x00c4": {"keys": "cmd+shift+4"}, "back": {"run": "true"}}}"#)
         let b = config.bindings
