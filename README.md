@@ -40,9 +40,10 @@
 - **Hardware:** DPI with presets, wheel direction, ratchet or free-spin, and SmartShift.
 - **Universal Control:** while the pointer is on another Mac, the wheels and buttons work there
   natively.
+- **Battery:** shown in the menu, with a notification at 20% and 5%.
 - **Reliable:** settings come back after every reconnect and wake. Quitting returns the mouse to
   normal, and nothing is stored on it.
-- **Light:** about 4.6 MB of memory for the background process and 15 MB for the menu bar app
+- **Light:** about 4 MB of memory for the background process and 15 MB for the menu bar app
   (idle, Settings closed), with no CPU use while the mouse is idle.
 
 ## Supported mice
