@@ -13,6 +13,7 @@ struct PaneHost: View {
             case .buttons: ButtonsPane()
             case .scrolling: ScrollingPane()
             case .pointer: PointerPane()
+            case .apps: AppsPane()
             case .about: AboutPane()
             }
         }

@@ -21,8 +21,9 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   and `PUREMOUSE_COMPANION_DIR` (the status/control channel; a fixture `status.json` there stands
   in for the daemon). Without them it edits the live config and drives the installed agent. Debug
   builds also take `PUREMOUSE_DEV_PANE=<pane>`, `PUREMOUSE_DEV_MENU=1`,
-  `PUREMOUSE_DEV_APPEARANCE=light|dark`, `PUREMOUSE_DEV_PICKER=<button>` and
-  `PUREMOUSE_DEV_SHORTCUT=<button>` for screenshots (`DevHooks.swift`); `--login` launches it as
+  `PUREMOUSE_DEV_APPEARANCE=light|dark`, `PUREMOUSE_DEV_PICKER=<button>`,
+  `PUREMOUSE_DEV_SHORTCUT=<button>` (Buttons pane) and `PUREMOUSE_DEV_APP=<bundle id>` (Apps pane;
+  adds the app without writing) for screenshots (`DevHooks.swift`); `--login` launches it as
   launchd does (no Settings window). `PUREMOUSE_DEV_MENU=1` puts a plain backdrop under the menu,
   since its glass shows whatever is behind it. A window capture (`screencapture -l`) leaves out
   that blur, so the README's menu shots take the shape and shadow from one and the body from a
@@ -129,6 +130,13 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   pending edit nothing is written. It refuses to build on a file that does not parse or
   validate, and writes through `JSON.encode` (shortest decimals, sorted keys, whole and big
   numbers kept digit for digit), never `JSONSerialization`.
+- The Apps pane writes only `apps.<id>` keys (`AppSettings.swift`): each control's own key, removed
+  for "Same as Everywhere" (an emptied app entry is pruned); an added app is not written until a
+  setting is chosen. App icons and names load only for rows on screen (`AppIdentities`), and
+  Applications is never listed (adding goes through an open panel or the running apps). A pane
+  whose height changes while shown calls `AppController.refitSettings()`: a nested
+  `NSHostingController` updates its `preferredContentSize` without telling the tab controller, so
+  `SettingsTabs.refit()` copies it across.
 - Settings shows no focus ring until the keyboard is used: windows, panes, the action picker and
   the shortcut sheet open with nothing focused (the picker's search takes the first keystroke).
   Check with keyboard navigation (`AppleKeyboardUIMode`) both on and off.
@@ -251,6 +259,10 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   rotation into steps (remainder kept, reset at each movement's start), paced per action
   (`ThumbStepper.pacing`: media keys free, shortcuts 50 ms, zoom 40 ms, animated actions 300 ms
   with the turns between discarded).
+- Thumb wheel presets in Settings: `ThumbWheelChoice` (`Logic/ThumbWheel.swift`) lists Kit's
+  presets in `presetOrder`, with a label each; `ThumbWheelState` mirrors Kit's
+  `Config.ThumbWheel.init(_:base:)` and a test checks it against the decoder. App suggestions are
+  `AppSuggestion.table`.
 - Scroll feel: `ScrollAcceleration` (curve) and `ScrollAnimator` (two-part easing) in
   `ScrollModel.swift`, covered by `ScrollModelTests`.
 - Protocol references: Solaar (`hidpp20.py`), logiops, Mac Mouse Fix. `puremouse probe` dumps the

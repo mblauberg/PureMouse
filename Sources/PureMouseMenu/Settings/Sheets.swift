@@ -6,8 +6,13 @@ import SwiftUI
 struct BindingTarget: Hashable {
     let button: String
     var direction: String?
+    /// The app whose binding this is (`apps.<key>`), or nil for the global one.
+    var app: String?
+    /// What the sheet calls the control, where it is not a button ("the thumb wheel turned left").
+    var label: String?
 
     var title: String {
+        if let label { return label }
         let name = NamedButton(rawValue: button)?.label ?? "Control \(button)"
         guard let direction else { return name }
         return "\(name), \(Gesture.label(direction).lowercased())"
@@ -19,7 +24,7 @@ struct SheetRequest: Identifiable {
     let kind: Kind
     let target: BindingTarget
     let initial: String
-    var id: String { "\(kind)\(target.button)\(target.direction ?? "")" }
+    var id: String { "\(kind)\(target.app ?? "")\(target.button)\(target.direction ?? "")" }
 }
 
 /// Records a keyboard shortcut: press it, or type it as the config spells it.

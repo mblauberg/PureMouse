@@ -92,6 +92,9 @@ Thumb-wheel actions need the Accessibility permission, as smooth scrolling does.
 the thumb wheel over even without `smoothScroll`; where it still scrolls, it scrolls without
 smoothing.
 
+Settings › Scrolling › Thumb wheel sets `action`, or **Custom** for `left` and `right` (also shown
+for a pair written by hand), and `step`; `inverted` and the speed stay their own rows.
+
 ## Per-app settings
 
 `apps` maps an app's bundle ID to the settings that differ in that app. Only `buttons`,
@@ -116,6 +119,12 @@ that is not installed is fine. `puremouse app` prints the bundle IDs PureMouse s
 
 - A button press follows the frontmost app.
 - Scrolling and the thumb wheel follow the app under the pointer, chosen when a scroll starts.
+
+Settings › Apps lists the apps in `apps` and adds one from Applications or the running apps (it is
+written only once a setting is chosen). For each app it sets the buttons, the thumb wheel and an own
+scrolling `speed` and `smoothingMs`; **Same as Everywhere** removes the app's key, and removing the
+last one removes the app. Browsers, Zoom, Teams, Word, PowerPoint, Preview and Excel get a suggested
+thumb wheel action. Keys it does not show, unknown ones included, stay as written.
 
 A button bound only in some apps is still taken over everywhere. Elsewhere the wheel press, back
 and forward buttons click as usual; other controls do nothing. A button that is a gesture anywhere

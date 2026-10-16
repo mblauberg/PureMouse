@@ -74,13 +74,15 @@ struct ScrollingPane: View {
 
             if device?.hasThumbWheel != false || config.contains(["thumbWheel"]) {
                 Section {
+                    ThumbWheelRows(path: ["thumbWheel"])
                     Toggle(isOn: model.toggle(["thumbWheel", "inverted"], default: false)) {
                         RowLabel("Reverse direction", mouseDefault: config.bool(["thumbWheel", "inverted"]) == nil)
                     }
                     .accessibilityLabel("Reverse thumb wheel direction")
                     ValueSlider(title: "Speed", spokenTitle: "Thumb wheel speed", value: model.number(["smoothScroll", "horizontalSpeed"], default: 1, step: 0.05),
                                 range: 0.25...3, low: "Slow", high: "Fast", format: Format.multiplier)
-                        .disabled(!smooth)
+                        // Scrolling speed: nothing to tune while the wheel performs actions.
+                        .disabled(!smooth || !config.thumbWheel(at: ["thumbWheel"]).scrolls)
                 } header: {
                     Text("Thumb wheel")
                 } footer: {
@@ -99,8 +101,8 @@ struct ScrollingPane: View {
                 // Smooth scrolling on, with every tuning at its default.
                 $0.set([String: Any](), at: ["smoothScroll"])
                 $0.set(nil, at: ["scrollWheel"])
-                // Only the key this pane shows: what the thumb wheel does is set elsewhere.
-                $0.set(nil, at: ["thumbWheel", "inverted"])
+                // Only the keys this pane shows; any others under thumbWheel stay.
+                for key in ["inverted"] + ThumbWheelChoice.keys { $0.set(nil, at: ["thumbWheel", key]) }
             }
         }
     }

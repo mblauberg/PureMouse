@@ -42,24 +42,27 @@ extension ConfigTree {
 
     /// The key in `buttons` that holds a control's binding. The daemon accepts a name or a hex ID
     /// for the same control ("back", "0x0053", "53"), so a hand-written hex key is read and edited
-    /// in place rather than shadowed by a second key. Without one, `button` itself.
-    func buttonKey(_ button: String) -> String {
-        guard let buttons = self[["buttons"]] as? [String: Any], buttons[button] == nil,
+    /// in place rather than shadowed by a second key. Without one, `button` itself. `scope` is
+    /// where `buttons` lives: the top level, or an app (`["apps", id]`).
+    func buttonKey(_ button: String, in scope: [String] = []) -> String {
+        guard let buttons = self[scope + ["buttons"]] as? [String: Any], buttons[button] == nil,
               let cid = NamedButton.cid(forKey: button) else { return button }
         return buttons.keys.sorted().first { NamedButton.cid(forKey: $0) == cid } ?? button
     }
 
-    func binding(_ button: String) -> ButtonAction { ButtonAction(json: self[["buttons", buttonKey(button)]]) }
+    func binding(_ button: String, in scope: [String] = []) -> ButtonAction {
+        ButtonAction(json: self[scope + ["buttons", buttonKey(button, in: scope)]])
+    }
 
-    func gestureBinding(_ button: String, _ direction: String) -> ButtonAction {
-        ButtonAction(json: self[["buttons", buttonKey(button), direction]])
+    func gestureBinding(_ button: String, _ direction: String, in scope: [String] = []) -> ButtonAction {
+        ButtonAction(json: self[scope + ["buttons", buttonKey(button, in: scope), direction]])
     }
 
     /// Binds a button. `.gesture` keeps an existing gesture, or starts one whose click does what
     /// the button did, so a gesture object is never empty (an empty one is not a gesture).
-    mutating func bind(_ button: String, to binding: ButtonAction) {
-        let button = buttonKey(button)
-        let path = ["buttons", button]
+    mutating func bind(_ button: String, to binding: ButtonAction, in scope: [String] = []) {
+        let button = buttonKey(button, in: scope)
+        let path = scope + ["buttons", button]
         switch binding {
         case .standard: set(nil, at: path)
         case .named(let name): set(name, at: path)
@@ -67,7 +70,7 @@ extension ConfigTree {
         case .run(let command): set(["run": command], at: path)
         case .haptic(let waveform): set(["haptic": waveform], at: path)
         case .gesture:
-            if case .gesture = self.binding(button) { return }
+            if case .gesture = self.binding(button, in: scope) { return }
             let click: Any = self[path].flatMap { $0 is String || $0 is [String: Any] ? $0 : nil } ?? "none"
             set(["click": click], at: path)
         }
@@ -75,12 +78,12 @@ extension ConfigTree {
 
     /// Binds one direction of a gesture button. A missing direction does nothing, so "Do Nothing"
     /// removes the key, unless it is the last one.
-    mutating func bind(_ button: String, direction: String, to binding: ButtonAction) {
-        let button = buttonKey(button)
-        let path = ["buttons", button, direction]
+    mutating func bind(_ button: String, direction: String, to binding: ButtonAction, in scope: [String] = []) {
+        let button = buttonKey(button, in: scope)
+        let path = scope + ["buttons", button, direction]
         switch binding {
         case .standard, .named("none"):
-            let others = (self[["buttons", button]] as? [String: Any])?.keys.filter { $0 != direction } ?? []
+            let others = (self[scope + ["buttons", button]] as? [String: Any])?.keys.filter { $0 != direction } ?? []
             set(others.isEmpty ? "none" : nil, at: path)
         case .named(let name): set(name, at: path)
         case .keys(let spec): set(["keys": spec], at: path)

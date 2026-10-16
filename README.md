@@ -34,7 +34,8 @@
 - **Gestures:** hold the thumb button and move the mouse for four more actions.
 - **Thumb wheel:** scroll sideways, or zoom, change the volume, switch tabs or Spaces, or run any
   two actions.
-- **Per app:** buttons, thumb wheel and smooth scrolling can differ in each app.
+- **Per app:** buttons, thumb wheel and smooth scrolling can differ in each app, set in Settings ›
+  Apps with suggestions for common apps.
 - **Smooth scrolling:** pixel-precise and accelerated on both wheels, in step with the display.
 - **Hardware:** DPI with presets, wheel direction, ratchet or free-spin, and SmartShift.
 - **Universal Control:** while the pointer is on another Mac, the wheels and buttons work there

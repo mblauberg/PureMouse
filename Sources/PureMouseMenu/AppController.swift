@@ -94,6 +94,13 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     var settingsWindow: NSWindow? { settings?.window }
 
+    /// Fits Settings to its pane once a change in the pane's height has laid out (`SettingsTabs.refit`).
+    func refitSettings() {
+        DispatchQueue.main.async { [weak self] in
+            (self?.settingsWindow?.contentViewController as? SettingsTabs)?.refit()
+        }
+    }
+
     // MARK: Lifecycle
 
     /// Quit PureMouse: stops the daemon (which restores the mouse) and this app. Both start again

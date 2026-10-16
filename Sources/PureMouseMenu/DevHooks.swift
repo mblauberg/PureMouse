@@ -5,7 +5,8 @@ import AppKit
 /// `PUREMOUSE_DEV_MENU=1` opens the menu, so screenshots can be taken without clicking.
 /// `PUREMOUSE_DEV_APPEARANCE=light|dark` overrides the system appearance.
 /// On the Buttons pane, `PUREMOUSE_DEV_PICKER=<button>` opens a button's action picker and
-/// `PUREMOUSE_DEV_SHORTCUT=<button>` its shortcut sheet.
+/// `PUREMOUSE_DEV_SHORTCUT=<button>` its shortcut sheet. On the Apps pane,
+/// `PUREMOUSE_DEV_APP=<bundle id>` opens (or adds) that app's settings.
 @MainActor
 enum DevHooks {
     static func run(app: AppController) {

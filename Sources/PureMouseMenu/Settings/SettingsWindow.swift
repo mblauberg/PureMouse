@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 enum SettingsPane: String, CaseIterable {
-    case general, buttons, scrolling, pointer, about
+    case general, buttons, scrolling, pointer, apps, about
 
     var title: String {
         switch self {
@@ -10,6 +10,7 @@ enum SettingsPane: String, CaseIterable {
         case .buttons: "Buttons"
         case .scrolling: "Scrolling"
         case .pointer: "Pointer"
+        case .apps: "Apps"
         case .about: "About"
         }
     }
@@ -21,6 +22,7 @@ enum SettingsPane: String, CaseIterable {
         case .buttons: "computermouse"
         case .scrolling: "arrow.up.and.down"
         case .pointer: "cursorarrow"
+        case .apps: "square.grid.2x2"
         case .about: "info.circle"
         }
     }
@@ -109,6 +111,15 @@ final class SettingsTabs: NSTabViewController {
         super.preferredContentSizeDidChange(for: viewController)
         guard viewController === tabViewItems[selectedTabViewItemIndex].viewController else { return }
         fitWindow(animated: view.window?.isVisible == true)
+    }
+
+    /// Fits the window to the current pane after its content changed height. The nested hosting
+    /// controller's size follows its content, but it never tells its parent, so this passes it
+    /// up (the Apps pane calls it when it opens an app or goes back).
+    func refit() {
+        guard let pane = tabViewItems[selectedTabViewItemIndex].viewController,
+              let host = pane.children.first else { return }
+        pane.preferredContentSize = host.preferredContentSize
     }
 
     private func fitWindow(animated: Bool) {
