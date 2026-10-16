@@ -11,6 +11,9 @@ extension Config {
         for name in config.unknownButtons {
             Log.error("config: unknown button '\(name)'")
         }
+        for warning in config.warnings {
+            Log.error("config: \(warning)")
+        }
         return config
     }
 }

@@ -67,6 +67,16 @@ case "action" where arguments.count == 2:
         exit(0)
     }
     runMainLoop()
+case "app":
+    // Which app per-app settings would use now, and how long each lookup took.
+    MainActor.assumeIsolated {
+        let lookup = ForegroundApp.shared
+        for (label, find) in [("frontmost", lookup.frontmost), ("under pointer", lookup.underPointer)] {
+            let start = ContinuousClock.now
+            let app = find()
+            print("\(label): \(app ?? "unknown") (\(start.duration(to: .now)))")
+        }
+    }
 case "register", "unregister", "stop", "menu":
     // launchd kills a job's process group when booting it out, and the menu bar app (one of the
     // jobs) runs these commands as its child: leave its group so the command can finish.
@@ -123,6 +133,8 @@ func usage() -> Never {
            puremouse probe                            read-only dump of connected HID++ devices
            puremouse permissions                      macOS permissions of the launching process
            puremouse action <name | {"keys": ...}>    perform one action now, as a button would
+           puremouse app                              the frontmost app and the app under the pointer,
+                                                      as per-app settings see them
            puremouse register                         start (or restart) the installed app and its
                                                       menu bar icon, now and at login
            puremouse unregister                       stop both and remove them from login

@@ -99,7 +99,8 @@ struct ScrollingPane: View {
                 // Smooth scrolling on, with every tuning at its default.
                 $0.set([String: Any](), at: ["smoothScroll"])
                 $0.set(nil, at: ["scrollWheel"])
-                $0.set(nil, at: ["thumbWheel"])
+                // Only the key this pane shows: what the thumb wheel does is set elsewhere.
+                $0.set(nil, at: ["thumbWheel", "inverted"])
             }
         }
     }

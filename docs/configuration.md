@@ -34,12 +34,14 @@ launchctl kill HUP gui/$UID/io.github.mblauberg.puremouse
 | `scrollWheel.inverted` | Invert the main wheel in hardware. With natural scrolling on, `true` gives classic wheel direction and leaves the trackpad alone |
 | `scrollWheel.mode` | `"ratchet"` or `"freespin"` on first connect. Later toggles are kept |
 | `scrollWheel.smartShiftThreshold` | 1–50 enables SmartShift's automatic free-spin; 255 disables it. Must be 1–255 |
-| `thumbWheel.inverted` | Invert the thumb wheel in hardware |
+| `thumbWheel.inverted` | Invert the thumb wheel: in hardware, or in software while PureMouse handles the wheel |
+| `thumbWheel.action`, `left`, `right`, `step` | What turning the thumb wheel does ([below](#thumb-wheel)) |
 | `buttons` | Button → action or gesture ([below](#buttons-actions-and-gestures)) |
 | `smoothScroll` | If present, PureMouse scrolls both wheels itself ([below](#smooth-scrolling)). If absent, or `enabled` is false, the wheels scroll normally |
 | `gesture.distanceMm` | How far the mouse moves before a gesture fires, in millimetres, 0.5–50. Default 4 |
 | `gesture.repeatIntervalMs` | Minimum gap between repeated gestures in one hold, 0–5000. Default 400 |
 | `notifications.lowBattery` | Default true. The menu bar app posts a macOS notification when a mouse's battery falls through 20% and again through 5% (level-only mice: when they report low and critical). Needs the menu bar icon shown; the daemon ignores it. Settings › General switches it; macOS asks for permission the first time |
+| `apps` | Buttons, thumb wheel and smooth scrolling for particular apps ([below](#per-app-settings)) |
 
 A number outside its range is an error: the config is not loaded (on reload, the previous one stays
 in effect) and the log names the field.
@@ -58,6 +60,67 @@ in effect) and the log names the field.
 `scrollWheel.inverted` and `thumbWheel.inverted` keep their meaning relative to the system's
 natural-scrolling setting.
 
+## Thumb wheel
+
+By default the thumb wheel scrolls sideways. `action` picks something else:
+
+| `action` | Turning left / right | Default `step` |
+|---|---|---|
+| `"scroll"` | Scrolls sideways (the default) | |
+| `"zoom"` | `zoomOut` / `zoomIn` (Cmd+- / Cmd+=) | 3 |
+| `"volume"` | `volumeDown` / `volumeUp` | 2 |
+| `"tabs"` | `previousTab` / `nextTab` (Ctrl+Shift+Tab / Ctrl+Tab) | 3 |
+| `"spaces"` | `spaceLeft` / `spaceRight` | 4 |
+
+Or give any two actions as `left` and `right` (one may be left out); they take precedence over
+`action`. `step` is how far the wheel turns per action, in its own steps, 1–36 (18 make a full turn
+on the MX Master 3S; default 3). Turning faster gives several actions; Spaces, Mission Control and
+the other animated actions fire at most one per 400 ms.
+
+```json
+"thumbWheel": { "action": "volume" }
+"thumbWheel": { "left": { "keys": "cmd+shift+[" }, "right": { "keys": "cmd+shift+]" }, "step": 4 }
+```
+
+Left and right are the directions that scroll left and right with natural scrolling off;
+`inverted` swaps them. Natural scrolling does not affect actions.
+
+Thumb-wheel actions need the Accessibility permission, as smooth scrolling does. Choosing one takes
+the thumb wheel over even without `smoothScroll`; where it still scrolls, it scrolls without
+smoothing.
+
+## Per-app settings
+
+`apps` maps an app's bundle ID to the settings that differ in that app. Only `buttons`,
+`thumbWheel` (not `inverted`) and `smoothScroll` can differ; the rest write to the mouse and stay
+global.
+
+```json
+"apps": {
+  "com.apple.Safari": { "buttons": { "gesture": { "left": "previousTab", "right": "nextTab" } } },
+  "com.apple.Music": { "thumbWheel": { "action": "volume" } },
+  "com.microsoft.Excel": { "smoothScroll": { "speed": 2, "smoothingMs": 0 } }
+}
+```
+
+Each app entry changes only what it names, on top of the global settings: the buttons it lists,
+a gesture's directions it lists (the others stay as the global gesture has them), and the
+`thumbWheel` and `smoothScroll` keys it sets. Bundle IDs match regardless of case; one for an app
+that is not installed is fine. `puremouse app` prints the bundle IDs PureMouse sees, or run
+`osascript -e 'id of app "Safari"'`.
+
+- A button press follows the frontmost app.
+- Scrolling and the thumb wheel follow the app under the pointer, chosen when a scroll starts.
+
+A button bound only in some apps is still taken over everywhere. Elsewhere the wheel press, back
+and forward buttons click as usual; other controls do nothing. A button that is a gesture anywhere
+holds the pointer still while pressed in every app. An app may turn on smooth scrolling that is off
+globally, or the reverse; while any app scrolls smoothly, PureMouse scrolls everywhere, and where
+smooth scrolling is off it scrolls without the glide at the given `speed`.
+
+A per-app key that cannot be per-app (such as `dpi`), an unknown button and a repeated bundle ID
+are skipped and reported in the log; a bad value fails the load as anywhere else.
+
 ## Buttons, actions and gestures
 
 **Buttons:** `gesture` (thumb), `back`, `forward`, `top` (behind the wheel), `middle` (wheel
@@ -65,8 +128,14 @@ press), or any hex control ID such as `"0x00c4"`. **Select by Pressing** in Sett
 `puremouse probe`, finds a control's ID.
 
 **Actions:** `missionControl`, `appExpose`, `showDesktop`, `launchpad`, `spaceLeft`, `spaceRight`,
-`navigateBack`, `navigateForward`, `toggleScrollMode`, `cycleDPI`, `none`, `{"keys": "cmd+shift+4"}`,
-`{"run": "open -a Safari"}`.
+`navigateBack`, `navigateForward`, `toggleScrollMode`, `cycleDPI`, `volumeUp`, `volumeDown`, `mute`,
+`brightnessUp`, `brightnessDown`, `nextTab`, `previousTab`, `zoomIn`, `zoomOut`, `none`,
+`{"keys": "cmd+shift+4"}`, `{"run": "open -a Safari"}`.
+
+`spaceLeft` and `spaceRight` send your own "Move left/right a space" shortcuts from System
+Settings › Keyboard › Keyboard Shortcuts › Mission Control, or Ctrl+Left/Right if those are off.
+`nextTab`/`previousTab` send Ctrl+Tab and Ctrl+Shift+Tab, and `zoomIn`/`zoomOut` Cmd+= and Cmd+-,
+which most apps share; use `{"keys": ...}` for an app that differs.
 
 `cycleDPI` switches to the next of `dpiPresets` above the current resolution, wrapping to the
 lowest. The choice survives reconnects until a config change alters `dpi` or `dpiPresets`.

@@ -17,6 +17,17 @@ public enum Action: Equatable, Decodable, Sendable {
     case toggleScrollMode
     /// Step to the next of `Config.dpiPresets`. Handled by the device session.
     case cycleDPI
+    case volumeUp
+    case volumeDown
+    case mute
+    case brightnessUp
+    case brightnessDown
+    /// Ctrl+Tab and Ctrl+Shift+Tab, which most tabbed apps take as next and previous tab.
+    case nextTab
+    case previousTab
+    /// Cmd+= and Cmd+-, the zoom shortcuts most apps share.
+    case zoomIn
+    case zoomOut
     case keys(Keystroke)
     case run(String)
 
@@ -26,6 +37,9 @@ public enum Action: Equatable, Decodable, Sendable {
         "showDesktop": .showDesktop, "launchpad": .launchpad, "spaceLeft": .spaceLeft,
         "spaceRight": .spaceRight, "navigateBack": .navigateBack, "navigateForward": .navigateForward,
         "toggleScrollMode": .toggleScrollMode, "cycleDPI": .cycleDPI,
+        "volumeUp": .volumeUp, "volumeDown": .volumeDown, "mute": .mute,
+        "brightnessUp": .brightnessUp, "brightnessDown": .brightnessDown,
+        "nextTab": .nextTab, "previousTab": .previousTab, "zoomIn": .zoomIn, "zoomOut": .zoomOut,
     ]
 
     /// Handled by the device session rather than `SystemActions`.

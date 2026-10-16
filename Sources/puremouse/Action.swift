@@ -18,13 +18,31 @@ enum SystemActions {
         case .launchpad:
             dock("com.apple.launchpad.toggle", fallback: nil)
         case .spaceLeft:
-            Keystroke(key: 123, modifiers: .maskControl).post()
+            (SymbolicHotKey.keystroke(SymbolicHotKey.spaceLeft) ?? Keystroke(key: 123, modifiers: .maskControl)).post()
         case .spaceRight:
-            Keystroke(key: 124, modifiers: .maskControl).post()
+            (SymbolicHotKey.keystroke(SymbolicHotKey.spaceRight) ?? Keystroke(key: 124, modifiers: .maskControl)).post()
         case .navigateBack:
             NavigationSwipe.post(back: true)
         case .navigateForward:
             NavigationSwipe.post(back: false)
+        case .volumeUp:
+            AuxKey.press(AuxKey.soundUp)
+        case .volumeDown:
+            AuxKey.press(AuxKey.soundDown)
+        case .mute:
+            AuxKey.press(AuxKey.mute)
+        case .brightnessUp:
+            AuxKey.press(AuxKey.brightnessUp)
+        case .brightnessDown:
+            AuxKey.press(AuxKey.brightnessDown)
+        case .nextTab:
+            Keystroke(key: 48, modifiers: .maskControl).post()
+        case .previousTab:
+            Keystroke(key: 48, modifiers: [.maskControl, .maskShift]).post()
+        case .zoomIn:
+            Keystroke(key: 24, modifiers: .maskCommand).post()  // cmd+=
+        case .zoomOut:
+            Keystroke(key: 27, modifiers: .maskCommand).post()  // cmd+-
         case .keys(let keystroke):
             keystroke.post()
         case .run(let command):

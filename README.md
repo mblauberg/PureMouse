@@ -30,8 +30,11 @@
 ## Features
 
 - **Buttons:** Mission Control, App Exposé, Show Desktop, Launchpad, Spaces, back and forward,
-  any keyboard shortcut or a shell command.
+  volume, brightness, tabs, zoom, any keyboard shortcut or a shell command.
 - **Gestures:** hold the thumb button and move the mouse for four more actions.
+- **Thumb wheel:** scroll sideways, or zoom, change the volume, switch tabs or Spaces, or run any
+  two actions.
+- **Per app:** buttons, thumb wheel and smooth scrolling can differ in each app.
 - **Smooth scrolling:** pixel-precise and accelerated on both wheels, in step with the display.
 - **Hardware:** DPI with presets, wheel direction, ratchet or free-spin, and SmartShift.
 - **Reliable:** settings come back after every reconnect and wake. Quitting returns the mouse to

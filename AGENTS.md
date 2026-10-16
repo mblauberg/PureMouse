@@ -127,7 +127,17 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
 - Synthetic scrolls skip the system's natural-scrolling flip, so `ScrollEngine` applies it,
   re-reading the setting at the start of each burst.
 - The wheels are only diverted when PureMouse can post events (Accessibility). Diverting without it
-  silences them.
+  silences them. Both are diverted when any scope (global or an app) scrolls smoothly; the thumb
+  wheel alone when any scope gives it actions (`Session.applyWheels`). Where the scope in effect
+  does not scroll smoothly, the diverted wheel still scrolls, with zero smoothing.
+- Per-app settings (`apps`) are merged onto the global ones by the Kit decoder (`Config+Apps.swift`,
+  `Config.AppSettings`); only `buttons`, `thumbWheel` (not `inverted`) and `smoothScroll` are
+  per-app. The app is looked up only when some app sets that section (`Session.appButtons`,
+  `appThumbWheel`, `appProfiles`): the frontmost app at each press, the app under the pointer when a
+  scroll burst (`ScrollEngine.profileForBurst`) or thumb-wheel movement starts. `ForegroundApp`
+  does the lookups, AppKit-free and on demand; the Universal Control work reuses it. Every control
+  bound in any scope is diverted; pressed where nothing binds it, the wheel press, back and
+  forward post their ordinary click (`NativeButton`), released in kind and on reconfigure/close.
 - `restore()` decides whether to hand the wheels back from `Session.wheelsMayBeDiverted`, not
   from the current config: after a reload that drops (or disables) `smoothScroll`, the
   replacement session inherits the flag and keeps it until its own apply has set the wheels
@@ -170,7 +180,12 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   a fresh copy there (presumably until the dialog is answered). Clear the flag before the first
   launch.
 - Some actions use undocumented interfaces: `CoreDockSendNotification` (it returns 0 even for
-  unknown names, so failure is silent) and the navigation-swipe CGEvent fields. macOS 27 already
+  unknown names, so failure is silent), the navigation-swipe CGEvent fields,
+  `CGSGetSymbolicHotKeyValue` (the user's Spaces shortcuts, read only; Ctrl+arrow when off) and
+  `IOHIDPostEvent` for media keys (deprecated, so looked up with `dlsym`; `AuxKey`).
+  `ForegroundApp.frontmost` uses SkyLight's `_SLPSGetFrontProcess` with `GetProcessPID`, falling
+  back to the frontmost window's owner; the Accessibility focused-application attribute was 8-40 ms
+  or failed outright, so it is not used. macOS 27 already
   stopped honouring the dock-swipe fields, which PureMouse does not use. After an OS upgrade, check
   them with `puremouse action <name>`; `docs/troubleshooting.md` ("After a macOS upgrade") lists
   the keystroke fallbacks.
@@ -199,7 +214,11 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   `SystemActions.perform` (or `Session.perform` for device actions).
 - New device feature: a wrapper in `Sources/HIDPP/Features.swift`, applied in `Session.apply()`,
   with event parsing routed in `Session.handle()`, and a parse test in `Tests/HIDPPTests`.
-- Per-app scroll settings: choose a different `ScrollEngine.Profile` when a burst starts.
+- Per-app settings: a new per-app section needs a case in `Config.appSections`, decoding on top of
+  the global value in `Config.decodeApps`, a `sets…` flag, and its lookup at the moment it applies.
+- Thumb-wheel actions: `Config.ThumbWheel.presets` (Kit) names action pairs; `ThumbStepper` counts
+  rotation into steps (remainder kept, reset at each movement's start, a cooldown for animated
+  actions, `ThumbStepper.cooldown`).
 - Scroll feel: `ScrollAcceleration` (curve) and `ScrollAnimator` (two-part easing) in
   `ScrollModel.swift`, covered by `ScrollModelTests`.
 - Protocol references: Solaar (`hidpp20.py`), logiops, Mac Mouse Fix. `puremouse probe` dumps the

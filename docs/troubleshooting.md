@@ -79,6 +79,9 @@ that has Accessibility.
 | Dock notifications | `missionControl`, `appExpose`, `showDesktop`, `launchpad` | `{"keys": "ctrl+up"}`, `{"keys": "ctrl+down"}`, `{"keys": "f11"}` (the default shortcuts) |
 | Navigation-swipe event fields | `navigateBack`, `navigateForward` | `{"keys": "cmd+["}`, `{"keys": "cmd+]"}` (most apps) |
 | `CVDisplayLink` (deprecated since macOS 15) | Smooth-scroll frame timing | Nothing: scrolling continues, unsmoothed |
+| `IOHIDPostEvent` (deprecated since macOS 11) | `volumeUp`, `volumeDown`, `mute`, `brightnessUp`, `brightnessDown` | `{"run": "osascript -e 'set volume output volume (output volume of (get volume settings) + 6)'"}` and similar |
+| Symbolic hot key lookup | `spaceLeft`, `spaceRight` (your own shortcut) | Falls back to Ctrl+Left/Right by itself |
+| Front process lookup | Per-app button settings | Falls back to the app owning the frontmost window by itself |
 
 macOS 27 stopped honouring the event fields for three-finger Dock swipes. PureMouse does not use
 them, and navigation swipes still work on macOS 27.

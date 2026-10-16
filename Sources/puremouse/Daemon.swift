@@ -413,7 +413,7 @@ final class Daemon {
         } catch {
             return .noAnswer
         }
-        let configured = Set(config.bindings.keys)
+        let configured = config.boundControls
         guard hasDPI || controls.contains(where: { configured.contains($0.cid) }) else { return .notAMouse }
         let name = (try? await DeviceName.get(device)) ?? "device \(device.index)"
         // The device may have gone, or the daemon paused or begun quitting, while we were asking.

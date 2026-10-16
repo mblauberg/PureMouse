@@ -7,8 +7,8 @@ import Foundation
 /// Idle costs nothing; the frame clock only runs while a scroll is gliding.
 @MainActor
 final class ScrollEngine {
-    /// How scrolling feels. One profile applies everywhere; per-app profiles would only need
-    /// to pick a different one when a burst starts (see `beginBurstIfIdle`).
+    /// How scrolling feels. Per-app settings pick a profile when a burst starts
+    /// (`profileForBurst`).
     struct Profile {
         var speed = 1.0
         var horizontalSpeed = 1.0
@@ -27,6 +27,9 @@ final class ScrollEngine {
     private static let burstGap: Duration = .milliseconds(500)
 
     private(set) var profile: Profile
+    /// When set, asked for the profile at the start of each burst, e.g. for the app under the
+    /// pointer. Nil keeps one profile and asks nothing.
+    var profileForBurst: (() -> Profile)?
     private var vertical: ScrollAnimator
     private var horizontal: ScrollAnimator
     private var wheelAcceleration: ScrollAcceleration
@@ -102,7 +105,18 @@ final class ScrollEngine {
         defer { lastInput = now }
         guard lastInput.map({ now - $0 >= Self.burstGap }) ?? true else { return }
         naturalScrolling = SystemScrollSettings.naturalScrolling
+        if let profileForBurst { use(profileForBurst()) }
         Log.debug("scroll: new burst (natural scrolling \(naturalScrolling ? "on" : "off"))")
+    }
+
+    /// Switches profile; a glide still running carries on at the new pace.
+    private func use(_ new: Profile) {
+        profile = new
+        let tau = new.smoothing.seconds / 3
+        vertical.timeConstant = tau
+        horizontal.timeConstant = tau
+        wheelAcceleration.strength = new.acceleration
+        thumbAcceleration.strength = new.acceleration
     }
 
     /// Synthetic events skip the system's natural-scrolling flip, so apply it here, the same

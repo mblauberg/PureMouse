@@ -19,10 +19,23 @@ final class Session {
     /// Called with the first control pressed while capturing; that press performs nothing.
     var onCapture: ((UInt16) -> Void)?
     private let config: Config
-    private let bindings: [UInt16: Config.Binding]
+    /// What applies where no app entry matches.
+    private let global: Config.AppSettings
+    /// Controls bound globally or in any app, all diverted; true for those diverted with raw
+    /// motion because some scope binds them to a gesture.
+    private let bound: [UInt16: Bool]
+    /// Whether any app sets buttons, thumb wheel or smooth scrolling: only then is the app
+    /// looked up, at a press, a thumb-wheel movement or a scroll burst.
+    private let appButtons: Bool
+    private let appThumbWheel: Bool
+    /// Smooth scrolling profiles of the apps that set it, by lowercased bundle ID.
+    private let appProfiles: [String: ScrollEngine.Profile]
+    private let globalProfile: ScrollEngine.Profile
     /// Controls a previous session diverted that this one no longer binds; released on apply.
     private var releasing: Set<UInt16>
     private let scroll: ScrollEngine?
+    /// Whether any scope scrolls smoothly, so the main wheel is diverted too.
+    private let smoothAnywhere: Bool
     /// Whether the wheels may be diverted to PureMouse, by this session or one it replaced, so
     /// `restore` must hand them back even if this session's config never diverts them.
     private(set) var wheelsMayBeDiverted: Bool
@@ -31,6 +44,16 @@ final class Session {
     private var scrollMode: SmartShift.Mode?
     private var held: [UInt16] = []
     private var gestureButton: UInt16?
+    /// The gesture `gestureButton` was bound to when pressed, kept for the hold.
+    private var heldGesture: Config.Binding.Gesture?
+    /// Buttons pressed where nothing binds them, whose click was posted; released in kind.
+    private var nativeHeld: Set<UInt16> = []
+    /// The thumb wheel settings of the current movement and its step counter.
+    private var thumbSettings = Config.ThumbWheel()
+    private var thumbStepper = ThumbStepper(threshold: 1)
+    private var thumbLast: ContinuousClock.Instant?
+    /// A pause this long ends a thumb-wheel movement, like the wheel's own stop report.
+    private static let thumbGap: Duration = .milliseconds(500)
     private var recognizer: GestureRecognizer
     private var wheelMultiplier = 15
     private var thumbInfo = ThumbWheel.Info(nativeResolution: 18, divertedResolution: 120)
@@ -88,8 +111,23 @@ final class Session {
         self.controls = controls
         pressable = controls.values.filter { $0.isDivertable && !$0.isVirtual }.map(\.cid).sorted()
             .map { Status.Device.Control(cid: $0, name: Config.Button(cid: $0)?.rawValue) }
-        bindings = config.bindings.filter { controls[$0.key]?.isDivertable == true }
-        releasing = inherited.diverted.subtracting(bindings.keys)
+        let global = config.global
+        self.global = global
+        let scopes = [global] + Array(config.apps.values)
+        var bound: [UInt16: Bool] = [:]
+        for scope in scopes {
+            for (cid, binding) in scope.bindings where controls[cid]?.isDivertable == true {
+                let isGesture = if case .gesture = binding { true } else { false }
+                bound[cid] = (bound[cid] ?? false) || (isGesture && controls[cid]?.supportsRawXY == true)
+            }
+        }
+        self.bound = bound
+        appButtons = config.apps.values.contains { $0.setsButtons }
+        appThumbWheel = config.apps.values.contains { $0.setsThumbWheel }
+        globalProfile = Self.profile(global, config)
+        appProfiles = config.apps.filter { $0.value.setsSmoothScroll }.mapValues { Self.profile($0, config) }
+        thumbSettings = global.thumbWheel
+        releasing = inherited.diverted.subtracting(bound.keys)
         scrollMode = inherited.scrollMode
         liveDPI = inherited.liveDPI
         resolutions = inherited.resolutions
@@ -100,19 +138,26 @@ final class Session {
         batteryLevels = inherited.batteryLevels
         hasSmartShift = inherited.hasSmartShift
         hasThumbWheel = inherited.hasThumbWheel
-        scroll = config.smoothScroll.flatMap { $0.enabled ? ScrollEngine(profile: Self.profile($0, config)) : nil }
+        // The wheels come to PureMouse when any scope scrolls smoothly; the thumb wheel alone
+        // when any scope gives it actions. Either way scrolling then runs here.
+        smoothAnywhere = scopes.contains { $0.smoothScroll?.enabled == true }
+        let thumbActions = scopes.contains { $0.thumbWheel.mode != .scroll }
+        scroll = smoothAnywhere || thumbActions ? ScrollEngine(profile: globalProfile) : nil
         self.wheelsMayBeDiverted = inherited.wheelsMayBeDiverted || scroll != nil
         recognizer = GestureRecognizer(
             threshold: GestureRecognizer.counts(millimetres: config.gesture.distanceMm, dpi: config.dpi ?? 1000),
             repeatInterval: .milliseconds(config.gesture.repeatIntervalMs))
         device.onEvent = { [weak self] in self?.handle($0) }
-        for cid in config.bindings.keys where controls[cid]?.isDivertable != true {
+        if !appProfiles.isEmpty {
+            scroll?.profileForBurst = { [weak self] in self?.profileUnderPointer() ?? ScrollEngine.Profile() }
+        }
+        for cid in config.boundControls.sorted() where controls[cid]?.isDivertable != true {
             Log.error("\(name): control 0x\(String(cid, radix: 16)) is missing or not divertable; skipped")
         }
     }
 
     /// Controls this session diverts or still owes a release, for handing to its replacement.
-    var divertedControls: Set<UInt16> { releasing.union(bindings.keys).union(capturing ?? []) }
+    var divertedControls: Set<UInt16> { releasing.union(bound.keys).union(capturing ?? []) }
 
     var inheritance: Inherited {
         Inherited(diverted: divertedControls, wheelsMayBeDiverted: wheelsMayBeDiverted, scrollMode: scrollMode,
@@ -153,6 +198,7 @@ final class Session {
         configuring?.cancel()
         deviceAction?.cancel()
         scroll?.stop()
+        releaseNativeButtons()
         device.onEvent = nil
     }
 
@@ -162,11 +208,12 @@ final class Session {
     /// reaches `onCapture` instead of macOS or an action.
     func beginCapture() {
         guard !finished, capturing == nil else { return }
-        let extras = Set(pressable.map(\.cid)).subtracting(bindings.keys)
+        let extras = Set(pressable.map(\.cid)).subtracting(bound.keys)
         capturing = extras
         releasing.subtract(extras)
         // A gesture held as capture starts must not act when it is let go.
         gestureButton = nil
+        heldGesture = nil
         enqueueDiversion { session in
             for cid in extras where session.capturing != nil {
                 try await session.setDiverted(cid, true)
@@ -240,12 +287,24 @@ final class Session {
         await diverting?.value
     }
 
-    private static func profile(_ s: Config.SmoothScroll, _ config: Config) -> ScrollEngine.Profile {
-        ScrollEngine.Profile(speed: s.speed, horizontalSpeed: s.horizontalSpeed, acceleration: s.acceleration,
-                             smoothing: .milliseconds(s.smoothingMs),
-                             shiftScrollsHorizontally: s.shiftScrollsHorizontally,
-                             invertVertical: config.scrollWheel?.inverted ?? false,
-                             invertHorizontal: config.thumbWheel?.inverted ?? false)
+    /// A scope's scrolling. Where it does not scroll smoothly but the wheels are PureMouse's
+    /// anyway (another app does, or the thumb wheel has actions), it scrolls without the glide.
+    private static func profile(_ settings: Config.AppSettings, _ config: Config) -> ScrollEngine.Profile {
+        let s = settings.smoothScroll ?? Config.SmoothScroll()
+        let smooth = settings.smoothScroll?.enabled == true
+        return ScrollEngine.Profile(speed: s.speed, horizontalSpeed: s.horizontalSpeed, acceleration: s.acceleration,
+                                    smoothing: smooth ? .milliseconds(s.smoothingMs) : .zero,
+                                    shiftScrollsHorizontally: s.shiftScrollsHorizontally,
+                                    invertVertical: config.scrollWheel?.inverted ?? false,
+                                    invertHorizontal: config.thumbWheel?.inverted ?? false)
+    }
+
+    private func profileUnderPointer() -> ScrollEngine.Profile {
+        guard let app = ForegroundApp.shared.underPointer(), let profile = appProfiles[app.lowercased()] else {
+            return globalProfile
+        }
+        Log.debug("\(name): scrolling with \(app)'s settings")
+        return profile
     }
 
     // MARK: Configuration
@@ -257,6 +316,8 @@ final class Session {
         configuring?.cancel()
         held = []
         gestureButton = nil
+        heldGesture = nil
+        releaseNativeButtons()
         configuring = Task {
             try? await Task.sleep(for: delay)
             for attempt in 1...3 {
@@ -289,9 +350,8 @@ final class Session {
 
         try await serialised { session in
             try await session.releaseAll()
-            for (cid, binding) in session.bindings {
-                let isGesture = if case .gesture = binding { true } else { false }
-                try await session.setDiverted(cid, true, rawXY: isGesture && session.controls[cid]?.supportsRawXY == true)
+            for (cid, rawXY) in session.bound {
+                try await session.setDiverted(cid, true, rawXY: rawXY)
             }
             for cid in session.capturing ?? [] {
                 try await session.setDiverted(cid, true)
@@ -367,12 +427,14 @@ final class Session {
     }
 
     /// With smooth scrolling, both wheels report to PureMouse at full resolution and direction is
-    /// handled in software. Without it, they report as ordinary HID scrolling (Logi Options+
-    /// leaves them diverted, which would leave them dead without it), inverted in hardware.
+    /// handled in software; thumb-wheel actions take the thumb wheel alone. Otherwise they report
+    /// as ordinary HID scrolling (Logi Options+ leaves them diverted, which would leave them dead
+    /// without it), inverted in hardware.
     private func applyWheels() async throws {
         // Taking the wheels over without permission to post scroll events would silence them.
-        let smooth = scroll != nil && Permissions.current.contains(.accessibility)
-        if scroll != nil && !smooth { Log.error("\(name): no Accessibility permission; leaving the wheels native") }
+        let takeOver = scroll != nil && Permissions.current.contains(.accessibility)
+        if scroll != nil && !takeOver { Log.error("\(name): no Accessibility permission; leaving the wheels native") }
+        let smooth = takeOver && smoothAnywhere
         if try await device.hasFeature(HiResWheel.id) {
             var inverted = false
             if smooth {
@@ -387,16 +449,16 @@ final class Session {
         hasThumbWheel = try await device.hasFeature(ThumbWheel.id)
         if hasThumbWheel {
             var inverted = false
-            if smooth {
+            if takeOver {
                 thumbInfo = try await ThumbWheel.info(device)
             } else if let configured = config.thumbWheel?.inverted {
                 inverted = configured
             } else {
                 inverted = try await ThumbWheel.reporting(device).inverted
             }
-            try await ThumbWheel.setReporting(device, .init(diverted: smooth, inverted: inverted))
+            try await ThumbWheel.setReporting(device, .init(diverted: takeOver, inverted: inverted))
         }
-        if !smooth { wheelsMayBeDiverted = false }
+        if !takeOver { wheelsMayBeDiverted = false }
     }
 
     /// Hands the mouse back in its native state: buttons undiverted and wheels reporting as
@@ -406,6 +468,7 @@ final class Session {
         configuring?.cancel()
         deviceAction?.cancel()
         scroll?.stop()
+        releaseNativeButtons()
         await drainDiversion()
         // Wheels first: a silent wheel is worse than a diverted button. Each step stands alone,
         // so one failure does not skip the rest. A replaced session may have diverted them even
@@ -465,10 +528,7 @@ final class Session {
             case nil: break
             }
         case ThumbWheel.id:
-            if let event = ThumbWheel.parse(function: report.function, params: report.params), event.rotation != 0 {
-                scroll?.thumb(event.rotation, perRotation: thumbInfo.divertedResolution,
-                              nativeSteps: thumbInfo.nativeResolution)
-            }
+            if let event = ThumbWheel.parse(function: report.function, params: report.params) { thumbMoved(event) }
         case ReprogControls.id:
             switch ReprogControls.parse(function: report.function, params: report.params) {
             case .buttons(let cids): buttonsChanged(cids)
@@ -505,28 +565,87 @@ final class Session {
         pressed.forEach(press)
     }
 
+    /// Thumb-wheel rotation: scrolling, or actions counted out in steps. Which, and the app it
+    /// is for (the one under the pointer), is settled when a movement starts.
+    private func thumbMoved(_ event: ThumbWheel.Event) {
+        let now = ContinuousClock.now
+        if event.status == .start || thumbLast.map({ now - $0 >= Self.thumbGap }) ?? true {
+            beginThumbMovement()
+        }
+        thumbLast = now
+        guard event.rotation != 0 else { return }
+        switch thumbSettings.mode {
+        case .scroll:
+            scroll?.thumb(event.rotation, perRotation: thumbInfo.divertedResolution,
+                          nativeSteps: thumbInfo.nativeResolution)
+        case .actions(let left, let right):
+            // Raw positive rotation scrolls left with natural scrolling off; actions ignore that
+            // setting but follow `inverted`.
+            let units = config.thumbWheel?.inverted == true ? -event.rotation : event.rotation
+            let steps = thumbStepper.add(units, at: now)
+            for _ in 0..<abs(steps) { perform(steps > 0 ? left : right) }
+        }
+    }
+
+    private func beginThumbMovement() {
+        var settings = global.thumbWheel
+        if appThumbWheel, let app = ForegroundApp.shared.underPointer(), let scoped = config.settings(forApp: app) {
+            settings = scoped.thumbWheel
+            Log.debug("\(name): thumb wheel with \(app)'s settings")
+        }
+        thumbSettings = settings
+        thumbStepper.reset()
+        if case .actions(let left, let right) = settings.mode {
+            thumbStepper.threshold = ThumbStepper.threshold(step: settings.step, native: thumbInfo.nativeResolution,
+                                                            diverted: thumbInfo.divertedResolution)
+            thumbStepper.cooldown = ThumbStepper.cooldown(left: left, right: right)
+        }
+    }
+
+    /// The binding for a press: the frontmost app's when an app entry names it, else the global one.
+    private func binding(for cid: UInt16) -> Config.Binding? {
+        if appButtons, let app = ForegroundApp.shared.frontmost(), let scoped = config.settings(forApp: app) {
+            Log.debug("\(name): buttons with \(app)'s settings")
+            return scoped.bindings[cid]
+        }
+        return global.bindings[cid]
+    }
+
     private func press(_ cid: UInt16) {
         Log.debug("\(name): press 0x\(String(cid, radix: 16))")
-        switch bindings[cid] {
+        switch binding(for: cid) {
         case .action(let action):
             perform(action)
-        case .gesture:
+        case .gesture(let gesture):
             guard gestureButton == nil else { return }
             gestureButton = cid
+            heldGesture = gesture
             recognizer.begin()
         case nil:
-            break
+            // Bound only in other apps: click as the mouse would without PureMouse.
+            if NativeButton.post(cid, down: true) { nativeHeld.insert(cid) }
         }
     }
 
     private func release(_ cid: UInt16) {
-        guard cid == gestureButton, case .gesture(let gesture) = bindings[cid] else { return }
+        if nativeHeld.remove(cid) != nil {
+            NativeButton.post(cid, down: false)
+            return
+        }
+        guard cid == gestureButton, let gesture = heldGesture else { return }
         gestureButton = nil
+        heldGesture = nil
         if recognizer.end() { perform(gesture.click) }
     }
 
+    /// Lets go of clicks posted for unbound buttons, so none stays held.
+    private func releaseNativeButtons() {
+        for cid in nativeHeld { NativeButton.post(cid, down: false) }
+        nativeHeld = []
+    }
+
     private func moved(dx: Int, dy: Int) {
-        guard let cid = gestureButton, case .gesture(let gesture) = bindings[cid],
+        guard gestureButton != nil, let gesture = heldGesture,
               let direction = recognizer.move(dx: dx, dy: dy) else { return }
         Log.debug("\(name): gesture \(direction)")
         perform(gesture.action(for: direction))

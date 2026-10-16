@@ -27,9 +27,15 @@ public struct Config: Decodable, Sendable {
     /// Names in `buttons` that are neither a `Button` nor a hex control ID; skipped. The daemon
     /// logs them once, at load.
     public private(set) var unknownButtons: [String] = []
+    /// Per-app settings by lowercased bundle ID, each already merged onto the global ones
+    /// (`Config+Apps.swift`).
+    public internal(set) var apps: [String: AppSettings] = [:]
+    /// Problems that do not fail the load, such as a per-app key that is global only, worded
+    /// for the log. The daemon logs them once, at load.
+    public internal(set) var warnings: [String] = []
 
     private enum CodingKeys: String, CodingKey {
-        case dpi, dpiPresets, scrollWheel, thumbWheel, smoothScroll, buttons, gesture
+        case dpi, dpiPresets, scrollWheel, thumbWheel, smoothScroll, buttons, gesture, apps
     }
 
     public init(from decoder: Decoder) throws {
@@ -63,6 +69,9 @@ public struct Config: Decodable, Sendable {
             bindings[cid] = binding
         }
         unknownButtons.sort()
+        if c.contains(.apps) {
+            try decodeApps(try c.nestedContainer(keyedBy: AnyKey.self, forKey: .apps))
+        }
     }
 
     public struct ScrollWheel: Decodable, Sendable {
@@ -88,7 +97,62 @@ public struct Config: Decodable, Sendable {
     }
 
     public struct ThumbWheel: Decodable, Sendable {
+        /// Inverts the thumb wheel: in hardware when it reports natively, in software when
+        /// PureMouse handles it. Global only.
         public var inverted: Bool?
+        /// What turning the wheel does.
+        public var mode: Mode = .scroll
+        /// The wheel's own steps per action (18 per turn on the MX Master 3S).
+        public var step = Self.defaultStep
+
+        public enum Mode: Equatable, Sendable {
+            /// Horizontal scrolling, as without PureMouse.
+            case scroll
+            /// One action per `step`: `left` for turns that scroll left with natural scrolling
+            /// off, `right` for the other way (both flipped by `inverted`).
+            case actions(left: Action, right: Action)
+        }
+
+        public static let stepRange = 1...36
+        public static let defaultStep = 3
+        /// The `action` names besides "scroll": an action pair and its default step.
+        public static let presets: [String: (left: Action, right: Action, step: Int)] = [
+            "zoom": (.zoomOut, .zoomIn, 3),
+            "volume": (.volumeDown, .volumeUp, 2),
+            "tabs": (.previousTab, .nextTab, 3),
+            "spaces": (.spaceLeft, .spaceRight, 4),
+        ]
+
+        public init() {}
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: AnyKey.self)
+            try self.init(c, base: ThumbWheel())
+            inverted = try c.decodeIfPresent(Bool.self, forKey: AnyKey("inverted"))
+        }
+
+        /// The choice of what the wheel does, on top of `base`: `left`/`right` win over
+        /// `action`, and either replaces the base's choice and step; `step` alone keeps it.
+        init(_ c: KeyedDecodingContainer<AnyKey>, base: ThumbWheel) throws {
+            self = base
+            let left = try c.decodeIfPresent(Action.self, forKey: AnyKey("left"))
+            let right = try c.decodeIfPresent(Action.self, forKey: AnyKey("right"))
+            if left != nil || right != nil {
+                mode = .actions(left: left ?? .none, right: right ?? .none)
+                step = Self.defaultStep
+            } else if let name = try c.decodeIfPresent(String.self, forKey: AnyKey("action")) {
+                if name == "scroll" {
+                    mode = .scroll
+                } else if let preset = Self.presets[name] {
+                    mode = .actions(left: preset.left, right: preset.right)
+                    step = preset.step
+                } else {
+                    throw DecodingError.dataCorruptedError(forKey: AnyKey("action"), in: c,
+                        debugDescription: "unknown thumb wheel action '\(name)'; known: scroll, \(Self.presets.keys.sorted().joined(separator: ", ")), or left and right actions")
+                }
+            }
+            step = try c.decodeIfPresent(Int.self, forKey: AnyKey("step"), in: Self.stepRange) ?? step
+        }
     }
 
     public struct SmoothScroll: Decodable, Sendable {
@@ -113,7 +177,12 @@ public struct Config: Decodable, Sendable {
         public init() {}
 
         public init(from decoder: Decoder) throws {
-            let c = try decoder.container(keyedBy: AnyKey.self)
+            try self.init(decoder.container(keyedBy: AnyKey.self), base: SmoothScroll())
+        }
+
+        /// The keys `c` names, on top of `base`.
+        init(_ c: KeyedDecodingContainer<AnyKey>, base: SmoothScroll) throws {
+            self = base
             func value(_ key: String, _ fallback: Double, in range: ClosedRange<Double>) throws -> Double {
                 try c.decodeIfPresent(Double.self, forKey: AnyKey(key), in: range) ?? fallback
             }
@@ -159,15 +228,20 @@ public struct Config: Decodable, Sendable {
             public var right: Action = .none
 
             public init(from decoder: Decoder) throws {
-                let c = try decoder.container(keyedBy: AnyKey.self)
-                func action(_ key: String) throws -> Action {
-                    try c.decodeIfPresent(Action.self, forKey: AnyKey(key)) ?? .none
+                try self.init(decoder.container(keyedBy: AnyKey.self), base: nil)
+            }
+
+            /// The directions `c` names, the rest from `base` (or none).
+            init(_ c: KeyedDecodingContainer<AnyKey>, base: Gesture?) throws {
+                if let base { self = base }
+                func action(_ key: String, _ fallback: Action) throws -> Action {
+                    try c.decodeIfPresent(Action.self, forKey: AnyKey(key)) ?? fallback
                 }
-                click = try action("click")
-                up = try action("up")
-                down = try action("down")
-                left = try action("left")
-                right = try action("right")
+                click = try action("click", click)
+                up = try action("up", up)
+                down = try action("down", down)
+                left = try action("left", left)
+                right = try action("right", right)
             }
         }
 
@@ -179,8 +253,22 @@ public struct Config: Decodable, Sendable {
             }
         }
 
+        /// The binding at `key`; a gesture takes the directions it leaves out from `base`, when
+        /// that is a gesture too.
+        static func decode(_ c: KeyedDecodingContainer<AnyKey>, forKey key: AnyKey, base: Binding?) throws -> Binding {
+            if let object = try? c.nestedContainer(keyedBy: AnyKey.self, forKey: key), isGesture(object.allKeys) {
+                let baseGesture: Gesture? = if case .gesture(let g) = base { g } else { nil }
+                return .gesture(try Gesture(object, base: baseGesture))
+            }
+            return .action(try c.decode(Action.self, forKey: key))
+        }
+
         private static func looksLikeGesture(_ decoder: Decoder) -> Bool {
             guard let keys = try? decoder.container(keyedBy: AnyKey.self).allKeys else { return false }
+            return isGesture(keys)
+        }
+
+        private static func isGesture(_ keys: [AnyKey]) -> Bool {
             let gestureKeys: Set = ["click", "up", "down", "left", "right"]
             return !keys.isEmpty && keys.allSatisfy { gestureKeys.contains($0.stringValue) }
         }
