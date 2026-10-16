@@ -211,14 +211,16 @@ private struct RunningApp: Identifiable {
 }
 
 /// An app's icon, loaded when it first scrolls into view. A grouped form builds every row to
-/// size the window, so `onAppear` alone would load the icons of rows below the fold too.
+/// size the window, so `onAppear` alone would load the icons of rows below the fold too; this
+/// checks the icon's frame against the scroll view's visible bounds instead (macOS 14 has no
+/// `onScrollVisibilityChange`, so every version takes this one path).
 private struct AppIcon: View {
     let identity: AppIdentities.Identity
     let size: CGFloat
     @State private var image: NSImage?
 
     var body: some View {
-        let frame = Group {
+        Group {
             if let image {
                 Image(nsImage: image).resizable()
             } else {
@@ -227,15 +229,16 @@ private struct AppIcon: View {
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
-        if #available(macOS 15, *) {
-            frame.onScrollVisibilityChange(threshold: 0.01) { visible in if visible { load() } }
-        } else {
-            frame.onAppear(perform: load)
+        .onGeometryChange(for: Bool.self, of: Self.isVisible) { visible in
+            if visible, image == nil { image = identity.loadIcon() }
         }
     }
 
-    private func load() {
-        if image == nil { image = identity.loadIcon() }
+    /// Whether any of the view is inside its scroll view's visible bounds (or there is no scroll
+    /// view, so it shows).
+    nonisolated static func isVisible(_ proxy: GeometryProxy) -> Bool {
+        guard let visible = proxy.bounds(of: .scrollView) else { return true }
+        return visible.intersects(CGRect(origin: .zero, size: proxy.size))
     }
 }
 

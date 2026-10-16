@@ -35,9 +35,10 @@ struct ConfigTree {
 
     /// Sets the value at `path`, or removes it when `value` is nil. Intermediate values that are
     /// not objects are replaced by objects. Objects left empty by a removal are pruned, except
-    /// those in `keptWhenEmpty`.
+    /// those in `keptWhenEmpty`. Removing a key that is not there changes nothing, so it cannot
+    /// prune an empty object it passes through (which `changes(to:)` would then record).
     mutating func set(_ value: Any?, at path: [String]) {
-        guard !path.isEmpty else { return }
+        guard !path.isEmpty, value != nil || contains(path) else { return }
         root = Self.setting(value, at: path[...], in: root, prefix: [])
     }
 

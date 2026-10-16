@@ -391,3 +391,29 @@ private func resolved(_ wheel: Config.ThumbWheel) -> Resolved {
     #expect(!onDisk.hasApp("a.b"))
     #expect(onDisk.string(["apps", "c.d", "buttons", "back"]) == "mute")
 }
+
+@Test func removingAnUnsavedAppChangesNothing() throws {
+    let loaded = try tree(#"{"apps": {}}"#)
+    var edited = loaded
+    // Added in the pane (nothing written), then removed.
+    edited.removeApp("a.b")
+    #expect(edited.contains(["apps"]))
+    let changes = loaded.changes(to: edited)
+    #expect(changes.isEmpty)
+    var onDisk = try tree(#"{"apps": {"c.d": {"buttons": {"back": "mute"}}}}"#)
+    onDisk.apply(changes)
+    #expect(onDisk.string(["apps", "c.d", "buttons", "back"]) == "mute")
+}
+
+@Test func removingTheLastKeyRecordsOnlyThatKey() throws {
+    let loaded = try tree(#"{"apps": {"a.b": {"buttons": {"back": "mute"}}}}"#)
+    var edited = loaded
+    edited.bindInApp("a.b", button: "back", to: .standard)
+    #expect(!edited.contains(["apps"]))
+    let changes = loaded.changes(to: edited)
+    #expect(changes.map(\.path) == [["apps", "a.b", "buttons", "back"]])
+    var onDisk = try tree(#"{"apps": {"a.b": {"buttons": {"back": "mute"}}, "c.d": {"thumbWheel": {"action": "zoom"}}}}"#)
+    onDisk.apply(changes)
+    #expect(!onDisk.hasApp("a.b"))
+    #expect(onDisk.string(["apps", "c.d", "thumbWheel", "action"]) == "zoom")
+}
