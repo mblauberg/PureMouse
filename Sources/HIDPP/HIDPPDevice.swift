@@ -6,7 +6,7 @@ import Foundation
 public final class HIDPPDevice {
     public nonisolated let interface: HIDInterface
     public nonisolated let index: UInt8
-    /// Unsolicited reports: HID++ 2.0 events (software ID 0) and HID++ 1.0 notifications.
+    /// Unsolicited reports: HID++ 2.0 events and HID++ 1.0 notifications (`Report.isEvent`).
     public var onEvent: ((Report) -> Void)?
 
     /// Software IDs mark replies as ours (0 is reserved for events). They rotate per request so
@@ -81,19 +81,29 @@ public final class HIDPPDevice {
         if rotatingSoftwareID { request.softwareID = takeSoftwareID() }
         nextToken += 1
         let token = nextToken
-        return try await withCheckedThrowingContinuation { continuation in
-            pending = Pending(token: token, request: request, continuation: continuation)
-            do {
-                try interface.send(request)
-            } catch {
-                failPending(error)
-                return
+        // A caller that gives up (say a session closing) fails its request at once rather than
+        // holding the endpoint until the timeout, so whatever is queued behind it goes out sooner.
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                pending = Pending(token: token, request: request, continuation: continuation)
+                do {
+                    try interface.send(request)
+                } catch {
+                    failPending(error)
+                    return
+                }
+                guard pending?.token == token else { return }  // answered or failed during send
+                pending?.deadline = Task { [weak self, timeout] in
+                    do { try await Task.sleep(for: timeout) } catch { return }  // cancelled: ended already
+                    guard let self, self.pending?.token == token else { return }
+                    self.failPending(HIDPPError.timeout)
+                }
             }
-            guard pending?.token == token else { return }  // answered or failed during send
-            pending?.deadline = Task { [weak self, timeout] in
-                do { try await Task.sleep(for: timeout) } catch { return }  // cancelled: ended already
+        } onCancel: {
+            // Runs wherever the canceller is, perhaps before the request is pending: hop and look.
+            Task { @MainActor [weak self] in
                 guard let self, self.pending?.token == token else { return }
-                self.failPending(HIDPPError.timeout)
+                self.failPending(CancellationError())
             }
         }
     }
@@ -152,11 +162,7 @@ public final class HIDPPDevice {
                 return
             }
         }
-        // Replies to other software carry their software ID; drop them. HID++ 1.0 notifications
-        // (sub-ID < 0x80) put arbitrary data in byte 3, so pass those through regardless.
-        if report.softwareID == 0 || (report.featureIndex >= 0x40 && report.featureIndex < 0x80) {
-            onEvent?(report)
-        }
+        if report.isEvent { onEvent?(report) }
     }
 
     private func failPending(_ error: Error) {

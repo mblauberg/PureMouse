@@ -56,6 +56,14 @@ public struct Report: Equatable, Sendable, CustomStringConvertible {
             && other.function == function && other.softwareID == softwareID
     }
 
+    /// Whether an unsolicited report is an event: a HID++ 2.0 event (software ID 0) or a short
+    /// HID++ 1.0 notification (sub-ID 0x40-0x7F, such as 0x41 connection), which puts arbitrary
+    /// data in byte 3. Anything else is a reply to another program (`puremouse probe`, Solaar),
+    /// marked by its software ID, even a long one at a feature index in 0x40-0x7F.
+    var isEvent: Bool {
+        softwareID == 0 || (reportID == .short && (0x40..<0x80).contains(featureIndex))
+    }
+
     /// The HID++ error this report carries for `request`, if any.
     func error(for request: Report) -> HIDPPError? {
         // Error layout: [id, dev, 0xFF|0x8F, failedFeatureIndex, failedFn<<4|sw, code], so the

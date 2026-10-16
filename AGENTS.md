@@ -196,7 +196,10 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   Going away also stops any glide and drops held gesture state, and ends a capture.
 - Permission checks are cached per process. The launchd-run daemon polls a child
   (`puremouse permissions`) and restarts itself when a grant arrives (`Daemon.restartWhenGranted`).
-- HID++ software IDs rotate per request so a late reply cannot complete a newer request.
+- HID++ software IDs rotate per request so a late reply cannot complete a newer request. A
+  cancelled request fails at once instead of holding the endpoint until its timeout. Only events
+  reach `onEvent` (`Report.isEvent`): software ID 0, or a short HID++ 1.0 notification (sub-ID
+  0x40-0x7F); a long report at those indices with another software ID is another program's reply.
 - An endpoint that does not answer is retried after 1, 2, 4 and 8 s (`Daemon.adoptRetrying`,
   `Backoff.adoption`), one retry per endpoint whether attach, a connection notification, resume,
   wake or reload started it; pause, detach and shutdown cancel it. After that a receiver slot is

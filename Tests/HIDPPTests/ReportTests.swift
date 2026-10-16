@@ -29,6 +29,21 @@ import Testing
         #expect(otherSoftware.error(for: req) == nil)
     }
 
+    /// Only events reach a session: another program's reply must not, even at a feature index
+    /// in the HID++ 1.0 notification range.
+    @Test func eventsAreTwoPointZeroEventsOrShortNotifications() {
+        let otherReply = Report(bytes: [0x11, 0x02, 0x41, 0x02, 0x01, 0x02, 0x03])!  // swid 2
+        #expect(!otherReply.isEvent)
+        let unifyingConnection = Report(bytes: [0x10, 0x02, 0x41, 0x04, 0x02, 0x34, 0xB0])!  // byte 3: 0x04
+        #expect(unifyingConnection.isEvent)
+        let boltConnection = Report(bytes: [0x10, 0x02, 0x41, 0x10, 0x02, 0x34, 0xB0])!
+        #expect(boltConnection.isEvent)
+        let buttons = Report(bytes: [0x11, 0x02, 0x08, 0x00, 0x00, 0xC3])!  // swid 0
+        #expect(buttons.isEvent)
+        #expect(!Report(bytes: [0x11, 0x02, 0x08, 0x0A, 0x00, 0xC3])!.isEvent)  // a reply, swid 0xA
+        #expect(!Report(bytes: [0x10, 0x02, 0x08, 0x13, 0x00, 0xC3])!.isEvent)
+    }
+
     @Test func matchesError10() {
         let req = Report(reportID: .short, deviceIndex: 0xFF, featureIndex: 0x80, function: 0, softwareID: 0, params: [0, 9, 0])
         let err = Report(bytes: [0x10, 0xFF, 0x8F, 0x80, 0x00, 0x03, 0x00])!

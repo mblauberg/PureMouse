@@ -102,7 +102,10 @@ public final class HIDMonitor {
             MainActor.assumeIsolated { HIDMonitor.from(ctx).detached(device) }
         }, context)
         IOHIDManagerRegisterInputReportCallback(manager, { ctx, _, sender, _, _, bytes, length in
-            guard let sender, let report = Report(bytes: UnsafeBufferPointer(start: bytes, count: length))
+            // Bluetooth mice share the interface with their pointer and key reports: skip those
+            // before building (and allocating) a `Report`.
+            guard let sender, length >= 4, bytes[0] == ReportID.short.rawValue || bytes[0] == ReportID.long.rawValue,
+                  let report = Report(bytes: UnsafeBufferPointer(start: bytes, count: length))
             else { return }
             let device = Unmanaged<IOHIDDevice>.fromOpaque(sender).takeUnretainedValue()
             MainActor.assumeIsolated { HIDMonitor.from(ctx).received(report, from: device) }
