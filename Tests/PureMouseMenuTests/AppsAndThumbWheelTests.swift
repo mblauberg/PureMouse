@@ -355,3 +355,39 @@ private func resolved(_ wheel: Config.ThumbWheel) -> Resolved {
     #expect(ButtonRows.named(deviceCIDs: withoutPanel, configKeys: ["thumbPanel"]).contains(.thumbPanel))
     #expect(ButtonRows.named(deviceCIDs: nil, configKeys: ["0x01A0"]).contains(.thumbPanel))
 }
+
+// MARK: Replaying app edits
+
+@Test func aFirstAppSettingMergesIntoAppsAddedByHand() throws {
+    let file = try tree("{}")
+    var edited = file
+    edited.bindInApp("a.b", button: "back", to: .named("previousTab"))
+    let changes = file.changes(to: edited)
+    #expect(changes.map(\.path) == [["apps", "a.b", "buttons", "back"]])
+    var onDisk = try tree(#"{"apps": {"c.d": {"thumbWheel": {"action": "volume"}}}}"#)
+    onDisk.apply(changes)
+    #expect(onDisk.string(["apps", "a.b", "buttons", "back"]) == "previousTab")
+    #expect(onDisk.string(["apps", "c.d", "thumbWheel", "action"]) == "volume")
+}
+
+@Test func aNewEmptyObjectIsStillSet() throws {
+    let loaded = try tree("{}")
+    var edited = loaded
+    edited.set([String: Any](), at: ["smoothScroll"])
+    var onDisk = try tree(#"{"dpi": 800}"#)
+    onDisk.apply(loaded.changes(to: edited))
+    #expect(onDisk.contains(["smoothScroll"]))
+    #expect(onDisk.int(["dpi"]) == 800)
+}
+
+@Test func removingAnEmptyAppIsSaved() throws {
+    let loaded = try tree(#"{"apps": {"a.b": {}, "c.d": {"buttons": {"back": "mute"}}}}"#)
+    var edited = loaded
+    edited.removeApp("a.b")
+    let changes = loaded.changes(to: edited)
+    #expect(!changes.isEmpty)
+    var onDisk = loaded
+    onDisk.apply(changes)
+    #expect(!onDisk.hasApp("a.b"))
+    #expect(onDisk.string(["apps", "c.d", "buttons", "back"]) == "mute")
+}

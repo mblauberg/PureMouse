@@ -95,9 +95,11 @@ struct ConfigTree {
     }
 
     /// The keys `after` changed relative to `self`, as leaf-level changes. Replayed with `apply`
-    /// onto a newer tree, they change only those keys, so a hand edit elsewhere survives. An object
-    /// that disappeared is removed key by key (it may only have been pruned as empty), except one
-    /// that means something when empty (`keptWhenEmpty`), which is removed whole.
+    /// onto a newer tree, they change only those keys, so a hand edit elsewhere survives. A new
+    /// object is added key by key too, so it merges into one a hand edit added meanwhile (an empty
+    /// one is set whole). An object that disappeared is removed key by key (it may only have been
+    /// pruned as empty), except one that means something when empty (`keptWhenEmpty`) or that was
+    /// empty, which is removed whole.
     func changes(to after: ConfigTree) -> [Change] {
         var out: [Change] = []
         Self.diff(root, after.root, path: [], into: &out)
@@ -114,8 +116,10 @@ struct ConfigTree {
             switch (before[key], after[key]) {
             case let (old as [String: Any], new as [String: Any]):
                 diff(old, new, path: path, into: &out)
-            case let (old as [String: Any], nil) where !keptWhenEmpty.contains(path.joined(separator: ".")):
+            case let (old as [String: Any], nil) where !old.isEmpty && !keptWhenEmpty.contains(path.joined(separator: ".")):
                 diff(old, [:], path: path, into: &out)
+            case let (nil, new as [String: Any]) where !new.isEmpty:
+                diff([:], new, path: path, into: &out)
             case let (old?, new) where new == nil || JSON.encode(old) != JSON.encode(new!):
                 out.append(Change(path: path, value: new))
             case let (nil, new?):

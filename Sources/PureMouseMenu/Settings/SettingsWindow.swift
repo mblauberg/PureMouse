@@ -119,7 +119,7 @@ final class SettingsTabs: NSTabViewController {
     func refit() {
         guard let pane = tabViewItems[selectedTabViewItemIndex].viewController,
               let host = pane.children.first else { return }
-        pane.preferredContentSize = host.preferredContentSize
+        pane.preferredContentSize = LazyPane.fitted(host.preferredContentSize)
     }
 
     private func fitWindow(animated: Bool) {
@@ -156,11 +156,18 @@ final class LazyPane: NSViewController {
         let content = make()
         addChild(content)
         view = content.view
-        preferredContentSize = content.preferredContentSize
+        preferredContentSize = Self.fitted(content.preferredContentSize)
     }
 
     override func preferredContentSizeDidChange(for viewController: NSViewController) {
         super.preferredContentSizeDidChange(for: viewController)
-        preferredContentSize = viewController.preferredContentSize
+        preferredContentSize = Self.fitted(viewController.preferredContentSize)
+    }
+
+    /// A pane's size, no taller than the screen allows (a long Apps list scrolls instead). The tab
+    /// controller sizes the window from this itself, so capping only in `fitWindow` is not enough.
+    static func fitted(_ size: NSSize) -> NSSize {
+        let maxHeight = (NSScreen.main?.visibleFrame.height ?? 900) - 80
+        return NSSize(width: size.width, height: min(size.height, maxHeight))
     }
 }

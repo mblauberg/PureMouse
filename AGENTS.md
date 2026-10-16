@@ -126,7 +126,8 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   shows until the mouse reports it (`DPIReading`).
 - The menu bar app writes only the keys a control owns (`ConfigTree`) and keeps every other key,
   including unknown ones. It records edits as the keys they set and `ConfigFile.save` replays
-  them onto the file as it is when saving, so a hand edit made meanwhile survives; with no
+  them onto the file as it is when saving, so a hand edit made meanwhile survives (a new object is
+  recorded key by key so it merges with one added by hand; an emptied one is removed whole); with no
   pending edit nothing is written. It refuses to build on a file that does not parse or
   validate, and writes through `JSON.encode` (shortest decimals, sorted keys, whole and big
   numbers kept digit for digit), never `JSONSerialization`.
@@ -136,8 +137,10 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   only words them (`ActionCatalog.hapticLabel`).
 - The Apps pane writes only `apps.<id>` keys (`AppSettings.swift`): each control's own key, removed
   for "Same as Everywhere" (an emptied app entry is pruned); an added app is not written until a
-  setting is chosen. App icons and names load only for rows on screen (`AppIdentities`), and
-  Applications is never listed (adding goes through an open panel or the running apps). A pane
+  setting is chosen (its row says so until Settings closes). Names are looked up without icons
+  (`AppIdentities`); an icon loads when its row scrolls into view (`AppIcon`; a grouped form builds
+  every row, so `onAppear` is not enough), and Applications is never listed (adding goes through an
+  open panel or the running apps). A pane is no taller than the screen (`LazyPane.fitted`). A pane
   whose height changes while shown calls `AppController.refitSettings()`: a nested
   `NSHostingController` updates its `preferredContentSize` without telling the tab controller, so
   `SettingsTabs.refit()` copies it across.

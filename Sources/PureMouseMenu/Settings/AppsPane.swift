@@ -50,6 +50,11 @@ struct AppsPane: View {
         }
     }
 
+    /// An app added here stays listed until Settings closes, but is saved only with a setting.
+    private func summary(_ id: String) -> String {
+        model.config.hasApp(id) ? model.config.appSummary(id) : "No settings yet, so not saved"
+    }
+
     private var list: some View {
         PaneForm {
             PaneBanners(needsAccessibility: true)
@@ -71,7 +76,7 @@ struct AppsPane: View {
                     .accessibilityElement(children: .combine)
                 } else {
                     ForEach(apps, id: \.self) { id in
-                        AppRow(identity: identities.identity(id), summary: model.config.appSummary(id)) {
+                        AppRow(identity: identities.identity(id), summary: summary(id)) {
                             selected = id
                         }
                         .contextMenu {
@@ -151,14 +156,21 @@ struct AppsPane: View {
     }
 }
 
-/// An app's name and icon, looked up when its row or page first shows and kept for the
-/// pane's life (which ends when Settings closes).
+/// An app's name and where it is installed, looked up when the list first needs it and kept for
+/// the pane's life (which ends when Settings closes). Icons are not: `AppIcon` loads one when it
+/// appears on screen and lets it go with its row.
 @MainActor
 final class AppIdentities {
     struct Identity {
         let name: String
-        let icon: NSImage
-        let installed: Bool
+        let url: URL?
+        var installed: Bool { url != nil }
+
+        /// The app's icon, or the generic one when it is not installed.
+        @MainActor
+        func loadIcon() -> NSImage {
+            url.map { NSWorkspace.shared.icon(forFile: $0.path) } ?? NSWorkspace.shared.icon(for: .application)
+        }
     }
 
     private var cache: [String: Identity] = [:]
@@ -170,10 +182,9 @@ final class AppIdentities {
         if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
             var name = FileManager.default.displayName(atPath: url.path)
             if name.hasSuffix(".app") { name.removeLast(4) }
-            identity = Identity(name: name, icon: NSWorkspace.shared.icon(forFile: url.path), installed: true)
+            identity = Identity(name: name, url: url)
         } else {
-            identity = Identity(name: AppSuggestion.forApp(bundleID)?.name ?? bundleID,
-                                icon: NSWorkspace.shared.icon(for: .application), installed: false)
+            identity = Identity(name: AppSuggestion.forApp(bundleID)?.name ?? bundleID, url: nil)
         }
         cache[key] = identity
         return identity
@@ -199,6 +210,35 @@ private struct RunningApp: Identifiable {
     }
 }
 
+/// An app's icon, loaded when it first scrolls into view. A grouped form builds every row to
+/// size the window, so `onAppear` alone would load the icons of rows below the fold too.
+private struct AppIcon: View {
+    let identity: AppIdentities.Identity
+    let size: CGFloat
+    @State private var image: NSImage?
+
+    var body: some View {
+        let frame = Group {
+            if let image {
+                Image(nsImage: image).resizable()
+            } else {
+                Color.clear
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+        if #available(macOS 15, *) {
+            frame.onScrollVisibilityChange(threshold: 0.01) { visible in if visible { load() } }
+        } else {
+            frame.onAppear(perform: load)
+        }
+    }
+
+    private func load() {
+        if image == nil { image = identity.loadIcon() }
+    }
+}
+
 private struct AppRow: View {
     let identity: AppIdentities.Identity
     let summary: String
@@ -207,10 +247,7 @@ private struct AppRow: View {
     var body: some View {
         Button(action: open) {
             HStack(spacing: 10) {
-                Image(nsImage: identity.icon)
-                    .resizable()
-                    .frame(width: 32, height: 32)
-                    .accessibilityHidden(true)
+                AppIcon(identity: identity, size: 32)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(identity.name)
                     Text(summary)
@@ -259,10 +296,7 @@ private struct AppDetail: View {
             PaneBanners(needsAccessibility: true)
             Section {
                 HStack(spacing: 12) {
-                    Image(nsImage: identity.icon)
-                        .resizable()
-                        .frame(width: 48, height: 48)
-                        .accessibilityHidden(true)
+                    AppIcon(identity: identity, size: 48)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(identity.name).font(.title3.weight(.semibold))
                         Text(identity.installed ? key : "\(key) (not installed)")
