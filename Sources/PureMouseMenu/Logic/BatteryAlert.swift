@@ -62,10 +62,27 @@ enum BatteryAlert {
 }
 
 /// The announced bands, kept in the companion directory so they outlive this process (it starts
-/// over after Settings closes, and a restart must not announce the same crossing again).
+/// over after Settings closes, and a restart must not announce the same crossing again). Keyed by
+/// the daemon's device id (interface plus index), so two mice with one name stay apart.
 struct BatteryAlertStore {
+    struct Reading {
+        var id: String
+        var name: String
+        var battery: Status.Device.Battery
+    }
+
+    struct Alert: Equatable {
+        var id: String
+        var name: String
+        var band: BatteryAlert.Band
+        var battery: Status.Device.Battery
+    }
+
     var url: URL
     private(set) var bands: [String: BatteryAlert.Band]
+    /// Mice seen live in the previous status. One not in it has just connected (or this process
+    /// just started): its first reading only records, however far it moved while away.
+    private var live: Set<String> = []
 
     init(url: URL) {
         self.url = url
@@ -73,14 +90,25 @@ struct BatteryAlertStore {
         bands = data.flatMap { try? JSONDecoder().decode([String: BatteryAlert.Band].self, from: $0) } ?? [:]
     }
 
-    /// Evaluates one reading; saves only when the state changed.
-    mutating func process(device: String, battery: Status.Device.Battery) -> BatteryAlert.Band? {
-        let result = BatteryAlert.evaluate(previous: bands[device], battery: battery)
-        if bands[device] != result.state {
-            bands[device] = result.state
-            save()
+    /// Evaluates the live mice of one status (none when the daemon is off); saves only when a
+    /// state changed. With `enabled` false the state still advances, so turning it on later does
+    /// not announce an old crossing.
+    mutating func process(_ readings: [Reading], enabled: Bool = true) -> [Alert] {
+        var alerts: [Alert] = []
+        var changed = false
+        for reading in readings {
+            let result = BatteryAlert.evaluate(previous: bands[reading.id], battery: reading.battery)
+            if bands[reading.id] != result.state {
+                bands[reading.id] = result.state
+                changed = true
+            }
+            if enabled, live.contains(reading.id), let band = result.alert {
+                alerts.append(Alert(id: reading.id, name: reading.name, band: band, battery: reading.battery))
+            }
         }
-        return result.alert
+        live = Set(readings.map(\.id))
+        if changed { save() }
+        return alerts
     }
 
     private func save() {

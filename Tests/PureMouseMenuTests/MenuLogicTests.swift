@@ -446,14 +446,56 @@ private func battery(_ percent: Int?, level: Status.Device.Battery.Level = .good
     #expect(BatteryAlert.evaluate(previous: .low, battery: battery(nil, level: .good)).state == .none)
 }
 
-@Test func storeKeepsStateAcrossProcesses() throws {
+private func reading(_ id: String, _ percent: Int, name: String = "MX") -> BatteryAlertStore.Reading {
+    .init(id: id, name: name, battery: battery(percent))
+}
+
+private func scratchStore() -> (BatteryAlertStore, URL) {
     let url = FileManager.default.temporaryDirectory.appending(path: "alerts-\(UUID().uuidString).json")
+    return (BatteryAlertStore(url: url), url)
+}
+
+@Test func storeKeepsStateAcrossProcesses() {
+    let (first, url) = scratchStore()
     defer { try? FileManager.default.removeItem(at: url) }
-    var store = BatteryAlertStore(url: url)
-    #expect(store.process(device: "MX", battery: battery(40)) == nil)
-    #expect(store.process(device: "MX", battery: battery(19)) == .low)
+    var store = first
+    _ = store.process([reading("a", 40)])
+    #expect(store.process([reading("a", 19)]).map(\.band) == [.low])
     var restarted = BatteryAlertStore(url: url)
-    #expect(restarted.process(device: "MX", battery: battery(18)) == nil)
+    #expect(restarted.process([reading("a", 18)]).isEmpty)
+}
+
+@Test func identicallyNamedMiceKeepSeparateState() {
+    let (first, url) = scratchStore()
+    defer { try? FileManager.default.removeItem(at: url) }
+    var store = first
+    _ = store.process([reading("r1:1", 80), reading("r2:1", 19)])
+    for _ in 0..<3 {
+        #expect(store.process([reading("r1:1", 80), reading("r2:1", 19)]).isEmpty)
+    }
+    #expect(store.process([reading("r1:1", 19), reading("r2:1", 19)]).map(\.id) == ["r1:1"])
+}
+
+@Test func firstReadingAfterReconnectOnlyRecords() {
+    let (first, url) = scratchStore()
+    defer { try? FileManager.default.removeItem(at: url) }
+    var store = first
+    _ = store.process([reading("a", 21)])
+    _ = store.process([])                                    // asleep or daemon off
+    #expect(store.process([reading("a", 19)]).isEmpty)       // back below 20: silent
+    #expect(store.process([reading("a", 4)]).map(\.band) == [.critical])
+}
+
+@Test func disabledSettingNeverNotifiesButKeepsState() {
+    let (first, url) = scratchStore()
+    defer { try? FileManager.default.removeItem(at: url) }
+    var store = first
+    _ = store.process([reading("a", 30)], enabled: false)
+    #expect(store.process([reading("a", 19)], enabled: false).isEmpty)
+    #expect(store.process([reading("a", 18)], enabled: true).isEmpty)  // already recorded as low
+    // A persisted state with the mouse live at startup: silent whatever the setting.
+    var restarted = BatteryAlertStore(url: url)
+    #expect(restarted.process([reading("a", 19)], enabled: true).isEmpty)
 }
 
 // MARK: Update check

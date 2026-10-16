@@ -52,8 +52,9 @@ final class AppModel {
     @ObservationIgnored private var batteryAlerts = BatteryAlertStore(url: Companion.directory.appending(path: "battery-alerts.json"))
 
     init() {
-        reloadStatus()
+        // Config first: the status pass reads `notifications.lowBattery`.
         reloadConfig()
+        reloadStatus()
     }
 
     /// Starts listening for the daemon's doorbell and for config edits.
@@ -136,14 +137,13 @@ final class AppModel {
     /// Posts a notification when a live mouse's battery falls through 20% or 5% (`BatteryAlert`).
     /// Runs on each status the daemon writes, with no timer.
     private func announceLowBattery() {
-        guard daemonRunning else { return }
+        let readings = !daemonRunning ? [] : devices.filter(\.online).compactMap { device in
+            device.battery.map { BatteryAlertStore.Reading(id: device.id, name: device.name, battery: $0) }
+        }
         let wanted = config.bool(["notifications", "lowBattery"]) ?? true
-        for device in devices where device.online {
-            guard let battery = device.battery else { continue }
-            // Always evaluated, so the state stays current while the setting is off.
-            guard let band = batteryAlerts.process(device: device.name, battery: battery), wanted else { continue }
-            let text = BatteryAlert.message(for: band, device: device.name, battery: battery)
-            Notifier.post(id: "battery.\(device.name).\(band.rawValue)", title: text.title, body: text.body)
+        for alert in batteryAlerts.process(readings, enabled: wanted) {
+            let text = BatteryAlert.message(for: alert.band, device: alert.name, battery: alert.battery)
+            Notifier.post(id: "battery.\(alert.id).\(alert.band.rawValue)", title: text.title, body: text.body)
         }
     }
 

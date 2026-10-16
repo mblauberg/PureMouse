@@ -100,8 +100,8 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
 - Notifications and the update check live in the menu app only (the daemon stays free of
   UserNotifications and the network). The low-battery notification (`BatteryAlert`,
   `Notifier`) is decided on each status the daemon writes, from the band already announced per
-  mouse, kept in `battery-alerts.json` in the companion directory so a relaunch cannot repeat it;
-  the first reading of a mouse only records. It does not run while the icon is hidden. Permission
+  mouse (keyed by status device id), kept in `battery-alerts.json` in the companion directory so a relaunch cannot repeat it;
+  the first reading of a mouse after it connects (or this process starts) only records. It does not run while the icon is hidden. Permission
   is requested lazily (toggle on, or first notification); `UNUserNotificationCenter` needs a
   bundle, so a bare dev run posts nothing. "Check for Updates" (About pane, `UpdateCheck`) makes
   one GET of the latest GitHub release per press: no background checks.
