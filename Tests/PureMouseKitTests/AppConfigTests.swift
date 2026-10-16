@@ -13,6 +13,15 @@ import Testing
         #expect(Config.empty.global.thumbWheel.mode == .scroll)
     }
 
+    @Test func reversedIsItsOwnKeyApartFromInverted() throws {
+        #expect(try thumb(#"{"action": "tabs"}"#).reversed == false)
+        let t = try thumb(#"{"action": "tabs", "reversed": true, "inverted": false}"#)
+        #expect(t.reversed && t.inverted == false && t.mode == .actions(left: .previousTab, right: .nextTab))
+        // Inverting the scrolling leaves the actions' direction alone.
+        #expect(try thumb(#"{"action": "tabs", "inverted": true}"#).reversed == false)
+        #expect(throws: DecodingError.self) { try thumb(#"{"reversed": 1}"#) }
+    }
+
     @Test func presetsAreActionPairsWithTheirStep() throws {
         #expect(try thumb(#"{"action": "volume"}"#).mode == .actions(left: .volumeDown, right: .volumeUp))
         #expect(try thumb(#"{"action": "volume"}"#).step == 2)
@@ -151,6 +160,24 @@ import Testing
         let config = try decode(#"{"apps": {"com.Apple.Safari": {"buttons": {"back": "none"}}}}"#)
         #expect(config.settings(forApp: "com.apple.safari") != nil && config.settings(forApp: "COM.APPLE.SAFARI") != nil)
         #expect(config.settings(forApp: "com.apple.Finder") == nil)
+    }
+
+    @Test func anAppInheritsReversedAndMayOverrideIt() throws {
+        let config = try decode("""
+            {"thumbWheel": {"inverted": true, "action": "volume", "reversed": true}, "apps": {
+              "a": {"thumbWheel": {"action": "tabs"}},
+              "b": {"thumbWheel": {"action": "tabs", "reversed": false}},
+              "c": {"buttons": {"back": "none"}}}}
+            """)
+        #expect(config.global.thumbWheel.reversed && config.warnings.isEmpty)
+        #expect(try #require(config.settings(forApp: "a")).thumbWheel.reversed)
+        #expect(try #require(config.settings(forApp: "b")).thumbWheel.reversed == false)
+        #expect(try #require(config.settings(forApp: "c")).thumbWheel.reversed)
+
+        // The report: inverted scrolling everywhere, Safari's tabs reversed on their own.
+        let plain = try decode(#"{"thumbWheel": {"inverted": true}, "apps": {"com.apple.Safari": {"thumbWheel": {"action": "tabs", "reversed": true}}}}"#)
+        #expect(try #require(plain.settings(forApp: "com.apple.Safari")).thumbWheel.reversed)
+        #expect(!plain.global.thumbWheel.reversed)
     }
 
     @Test func globalOnlyKeysInAnAppAreWarnings() throws {

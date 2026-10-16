@@ -103,8 +103,8 @@ extension Session {
                           nativeSteps: thumbInfo.nativeResolution)
         case .actions(let left, let right):
             // Raw positive rotation scrolls left with natural scrolling off; actions ignore that
-            // setting but follow `inverted`.
-            let units = config.thumbWheel?.inverted == true ? -event.rotation : event.rotation
+            // setting and `inverted` (scrolling only), and follow the scope's `reversed`.
+            let units = thumbSettings.reversed ? -event.rotation : event.rotation
             let steps = thumbStepper.add(units, at: now)
             for _ in 0..<abs(steps) { perform(steps > 0 ? left : right) }
         }

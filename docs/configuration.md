@@ -34,8 +34,8 @@ launchctl kill HUP gui/$UID/io.github.mblauberg.puremouse
 | `scrollWheel.inverted` | Invert the main wheel in hardware. With natural scrolling on, `true` gives classic wheel direction and leaves the trackpad alone |
 | `scrollWheel.mode` | `"ratchet"` or `"freespin"` on first connect. Later toggles are kept. Requires SmartShift (0x2110 or Enhanced 0x2111); ratchet torque is left unchanged |
 | `scrollWheel.smartShiftThreshold` | 1–50 enables SmartShift's automatic free-spin; 255 disables it. Must be 1–255. Requires 0x2110 or 0x2111 |
-| `thumbWheel.inverted` | Invert the thumb wheel: in hardware, or in software while PureMouse handles the wheel |
-| `thumbWheel.action`, `left`, `right`, `step` | What turning the thumb wheel does ([below](#thumb-wheel)) |
+| `thumbWheel.inverted` | Invert the thumb wheel's scrolling: in hardware, or in software while PureMouse handles the wheel. Scrolling only: actions follow `reversed`. Global only |
+| `thumbWheel.action`, `left`, `right`, `step`, `reversed` | What turning the thumb wheel does, and which way ([below](#thumb-wheel)) |
 | `buttons` | Button → action or gesture, including play-only haptics ([below](#buttons-actions-and-gestures)) |
 | `smoothScroll` | If present, PureMouse scrolls both wheels itself ([below](#smooth-scrolling)). If absent, or `enabled` is false, the wheels scroll normally |
 | `gesture.distanceMm` | How far the mouse moves before a gesture fires, in millimetres, 0.5–50. Default 4 |
@@ -85,21 +85,31 @@ Mission Control and the other animated actions one per 300 ms (turning in betwee
 "thumbWheel": { "left": { "keys": "cmd+shift+[" }, "right": { "keys": "cmd+shift+]" }, "step": 4 }
 ```
 
-Left and right are the directions that scroll left and right with natural scrolling off;
-`inverted` swaps them. Natural scrolling does not affect actions.
+Left and right are the directions that scroll left and right with natural scrolling off.
+`"reversed": true` swaps which action each direction performs (default false); it applies to
+actions only, as `inverted` applies to scrolling only, so either can be set without the other.
+Natural scrolling does not affect actions.
+
+```json
+"thumbWheel": { "inverted": true, "action": "tabs", "reversed": true }
+```
 
 Thumb-wheel actions need the Accessibility permission, as smooth scrolling does. Choosing one takes
 the thumb wheel over even without `smoothScroll`; where it still scrolls, it scrolls without
 smoothing.
 
 Settings › Scrolling › Thumb wheel sets `action`, or **Custom** for `left` and `right` (also shown
-for a pair written by hand), and `step`; `inverted` and the speed stay their own rows.
+for a pair written by hand), and `step`. **Reverse direction** sets `reversed` while the wheel has
+actions and `inverted` while it scrolls (shown as **Reverse scrolling** when it scrolls only in some
+app); the speed is its own row. Custom's rows name the way the wheel turns, so with `reversed` the
+**Turn left** row sets `right`.
 
 ## Per-app settings
 
 `apps` maps an app's bundle ID to the settings that differ in that app. Only `buttons`,
-`thumbWheel` (not `inverted`) and `smoothScroll` can differ; the rest write to the mouse and stay
-global.
+`thumbWheel` (`action`, `left`, `right`, `step` and `reversed`; not `inverted`) and `smoothScroll`
+can differ; the rest write to the mouse and stay global. An app's `reversed` defaults to the global
+one; Settings › Apps shows it as **Same as Everywhere**, **Normal** or **Reversed**.
 
 ```json
 "apps": {

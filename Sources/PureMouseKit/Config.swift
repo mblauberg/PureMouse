@@ -100,9 +100,11 @@ public struct Config: Decodable, Sendable {
     }
 
     public struct ThumbWheel: Decodable, Sendable {
-        /// Inverts the thumb wheel: in hardware when it reports natively, in software when
-        /// PureMouse handles it. Global only.
+        /// Inverts the thumb wheel's scrolling: in hardware when it reports natively, in software
+        /// when PureMouse handles it. Global only; actions follow `reversed` instead.
         public var inverted: Bool?
+        /// Swaps which action each direction performs (actions mode only). Per app too.
+        public var reversed = false
         /// What turning the wheel does.
         public var mode: Mode = .scroll
         /// The wheel's own steps per action (18 per turn on the MX Master 3S).
@@ -112,7 +114,8 @@ public struct Config: Decodable, Sendable {
             /// Horizontal scrolling, as without PureMouse.
             case scroll
             /// One action per `step`: `left` for turns that scroll left with natural scrolling
-            /// off, `right` for the other way (both flipped by `inverted`).
+            /// off, `right` for the other way (swapped by `reversed`; `inverted` and natural
+            /// scrolling do not affect them).
             case actions(left: Action, right: Action)
         }
 
@@ -136,7 +139,7 @@ public struct Config: Decodable, Sendable {
 
         /// The keys `c` names, on top of `base`. `action` picks a pair and, if that changes the
         /// pair, its default step; `left` and `right` then replace one direction each, keeping the
-        /// other and the step; `step` sets the step.
+        /// other and the step; `step` sets the step and `reversed` the direction.
         init(_ c: KeyedDecodingContainer<AnyKey>, base: ThumbWheel) throws {
             self = base
             if let name = try c.decodeIfPresent(String.self, forKey: AnyKey("action")) {
@@ -159,6 +162,7 @@ public struct Config: Decodable, Sendable {
                 mode = .actions(left: left ?? pair.left, right: right ?? pair.right)
             }
             step = try c.decodeIfPresent(Int.self, forKey: AnyKey("step"), in: Self.stepRange) ?? step
+            reversed = try c.decodeIfPresent(Bool.self, forKey: AnyKey("reversed")) ?? reversed
         }
     }
 

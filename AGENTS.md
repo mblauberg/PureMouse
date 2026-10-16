@@ -172,8 +172,8 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   wheel alone when any scope gives it actions (`Session.applyWheels`). Where the scope in effect
   does not scroll smoothly, the diverted wheel still scrolls, with zero smoothing.
 - Per-app settings (`apps`) are merged onto the global ones by the Kit decoder (`Config+Apps.swift`,
-  `Config.AppSettings`); only `buttons`, `thumbWheel` (not `inverted`) and `smoothScroll` are
-  per-app. The app is looked up only when some app sets that section (`Session.appButtons`,
+  `Config.AppSettings`); only `buttons`, `thumbWheel` (including `reversed`, not `inverted`) and
+  `smoothScroll` are per-app. The app is looked up only when some app sets that section (`Session.appButtons`,
   `appThumbWheel`, `appProfiles`): the frontmost app at each press of a control some app names
   (`AppSettings.buttons`), the app under the pointer when a
   scroll burst (`ScrollEngine.profileForBurst`) or thumb-wheel movement starts. `ForegroundApp`
@@ -182,7 +182,9 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   forward post their ordinary click (`NativeButton`), released in kind. Held buttons
   (`HeldButtons`) are dropped, native clicks released, whenever the mouse's own release may not
   come: link down, reconnect, reload, pause and quit (`Session.dropHeld`). A per-app `thumbWheel`
-  keeps the global direction and step it leaves out.
+  keeps the global `reversed` and step it leaves out. The thumb wheel's `inverted` (global) flips
+  its scrolling only; actions follow `reversed` of the scope settled at movement start
+  (`Session.thumbSettings`), never `inverted` or natural scrolling.
 - `restore()` decides whether to hand the wheels back from `Session.wheelsMayBeDiverted`, not
   from the current config: after a reload that drops (or disables) `smoothScroll`, the
   replacement session inherits the flag and keeps it until its own apply has set the wheels
