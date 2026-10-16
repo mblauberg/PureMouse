@@ -10,26 +10,37 @@ struct PickerEntry: Identifiable, Equatable {
     var detail: String?
     let group: String?
     let kind: Kind
+    /// An SF Symbol shown before the label.
+    var symbol: String?
 
     /// The picker's entries, in order. Gesture directions get neither Default nor Hold and Move.
-    static func all(allowsDefault: Bool, allowsGesture: Bool) -> [PickerEntry] {
+    /// In an app, `sameAsEverywhere` (what applies elsewhere) adds the entry that removes the
+    /// app's own binding.
+    static func all(allowsDefault: Bool, allowsGesture: Bool, sameAsEverywhere: String? = nil) -> [PickerEntry] {
         var entries: [PickerEntry] = []
+        if let inherited = sameAsEverywhere {
+            entries.append(PickerEntry(id: "inherit", label: "Same as Everywhere", detail: "(\(inherited))", group: nil,
+                                       kind: .set(.standard), symbol: "globe"))
+        }
         if allowsDefault {
             entries.append(PickerEntry(id: "default", label: "Default", detail: "(Works as Normal)", group: nil,
                                        kind: .set(.standard)))
         }
-        entries.append(PickerEntry(id: "none", label: "Do Nothing", group: nil, kind: .set(.named("none"))))
+        entries.append(PickerEntry(id: "none", label: "Do Nothing", group: nil, kind: .set(.named("none")),
+                                   symbol: ActionCatalog.symbol(for: "none")))
         for group in ActionCatalog.groups {
             for name in group.names {
                 entries.append(PickerEntry(id: name, label: ActionCatalog.label(for: name), group: group.title,
-                                           kind: .set(.named(name))))
+                                           kind: .set(.named(name)), symbol: ActionCatalog.symbol(for: name)))
             }
         }
-        entries.append(PickerEntry(id: "keys", label: "Keyboard Shortcut…", group: "Custom", kind: .shortcut))
-        entries.append(PickerEntry(id: "run", label: "Run Shell Command…", group: "Custom", kind: .command))
+        entries.append(PickerEntry(id: "keys", label: "Keyboard Shortcut…", group: "Custom", kind: .shortcut,
+                                   symbol: "keyboard"))
+        entries.append(PickerEntry(id: "run", label: "Run Shell Command…", group: "Custom", kind: .command,
+                                   symbol: "terminal"))
         if allowsGesture {
             entries.append(PickerEntry(id: "gesture", label: "Hold and Move", detail: "(Gestures)", group: "Custom",
-                                       kind: .gesture))
+                                       kind: .gesture, symbol: "arrow.up.and.down.and.arrow.left.and.right"))
         }
         return entries
     }
@@ -132,6 +143,12 @@ private struct PickerRow: View {
                 .font(.caption.weight(.semibold))
                 .opacity(checked ? 1 : 0)
                 .frame(width: 14)
+                .accessibilityHidden(true)
+            Image(systemName: entry.symbol ?? "circle")
+                .font(.system(size: 12))
+                .foregroundStyle(highlighted ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
+                .frame(width: 20)
+                .opacity(entry.symbol == nil ? 0 : 1)
                 .accessibilityHidden(true)
             Text(entry.label)
             if let detail = entry.detail {
@@ -248,7 +265,13 @@ struct ActionButton: View {
     @Binding var isPresented: Bool
     let choose: (PickerEntry) -> Void
     var accessibilityName: String
+    /// In an app: what applies elsewhere. `.standard` then reads "Same as Everywhere".
+    var sameAsEverywhere: String?
     @State private var openedFromKeyboard = false
+
+    private var label: String {
+        action == .standard && sameAsEverywhere != nil ? "Same as Everywhere" : action.label
+    }
 
     var body: some View {
         Button {
@@ -256,7 +279,7 @@ struct ActionButton: View {
             isPresented = true
         } label: {
             HStack(spacing: 6) {
-                Text(action.label)
+                Text(label)
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .foregroundStyle(action == .standard ? .secondary : .primary)
@@ -276,11 +299,12 @@ struct ActionButton: View {
         }
         .help(helpText)
         .accessibilityLabel(accessibilityName)
-        .accessibilityValue(action == .standard ? "Default" : action.label)
+        .accessibilityValue(action == .standard && sameAsEverywhere == nil ? "Default" : label)
         .accessibilityHint("Opens the list of actions")
         .popover(isPresented: $isPresented, arrowEdge: .bottom) {
             ActionPicker(current: action,
-                         entries: PickerEntry.all(allowsDefault: allowsDefault, allowsGesture: allowsGesture),
+                         entries: PickerEntry.all(allowsDefault: allowsDefault, allowsGesture: allowsGesture,
+                                                  sameAsEverywhere: sameAsEverywhere),
                          focusSearch: openedFromKeyboard) { entry in
                 isPresented = false
                 choose(entry)

@@ -67,6 +67,9 @@ enum ActionCatalog {
         Group(title: "Desktop", names: ["missionControl", "appExpose", "showDesktop", "launchpad"]),
         Group(title: "Spaces and Navigation", names: ["spaceLeft", "spaceRight", "navigateBack", "navigateForward"]),
         Group(title: "Mouse", names: ["toggleScrollMode", "cycleDPI"]),
+        Group(title: "Media", names: ["volumeUp", "volumeDown", "mute"]),
+        Group(title: "Display", names: ["brightnessUp", "brightnessDown"]),
+        Group(title: "Tabs and Zoom", names: ["nextTab", "previousTab", "zoomIn", "zoomOut"]),
     ]
 
     static func label(for name: String) -> String {
@@ -82,7 +85,43 @@ enum ActionCatalog {
         case "navigateForward": "Forward"
         case "toggleScrollMode": "Switch Wheel Mode"
         case "cycleDPI": "Cycle Pointer Speed"
+        case "volumeUp": "Volume Up"
+        case "volumeDown": "Volume Down"
+        case "mute": "Mute"
+        case "brightnessUp": "Brightness Up"
+        case "brightnessDown": "Brightness Down"
+        case "nextTab": "Next Tab"
+        case "previousTab": "Previous Tab"
+        case "zoomIn": "Zoom In"
+        case "zoomOut": "Zoom Out"
         default: name
+        }
+    }
+
+    /// The SF Symbol (available on macOS 14) beside a named action in the picker.
+    static func symbol(for name: String) -> String? {
+        switch name {
+        case "none": "nosign"
+        case "missionControl": "rectangle.3.group"
+        case "appExpose": "rectangle.stack"
+        case "showDesktop": "menubar.dock.rectangle"
+        case "launchpad": "square.grid.3x3"
+        case "spaceLeft": "arrow.left.square"
+        case "spaceRight": "arrow.right.square"
+        case "navigateBack": "chevron.backward"
+        case "navigateForward": "chevron.forward"
+        case "toggleScrollMode": "arrow.triangle.2.circlepath"
+        case "cycleDPI": "cursorarrow.motionlines"
+        case "volumeUp": "speaker.wave.3"
+        case "volumeDown": "speaker.wave.1"
+        case "mute": "speaker.slash"
+        case "brightnessUp": "sun.max"
+        case "brightnessDown": "sun.min"
+        case "nextTab": "arrow.right.to.line"
+        case "previousTab": "arrow.left.to.line"
+        case "zoomIn": "plus.magnifyingglass"
+        case "zoomOut": "minus.magnifyingglass"
+        default: nil
         }
     }
 
