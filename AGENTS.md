@@ -78,7 +78,9 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   enable flags or configuration (persistence is unknown). Cache haptic absence per session.
   Enhanced SmartShift may skip malformed/feature-error replies only; timeouts and transport
   failures must reach configure's retry handling. Feature summaries use already resolved
-  indices after a successful apply, never extra adoption queries. Other mice remain labelled untested.
+  indices after a successful apply, never extra adoption queries. The MX Master 3S is the
+  development mouse; the README lists the others by the features they report, and the logs still
+  call Enhanced-only mice untested.
 - On SIGTERM/SIGINT, `Session.restore()` returns the mouse to native behaviour (wheels first). Each
   of its requests times out after `Session.restoreTimeout` (400 ms), and quitting waits long enough
   for every one of them to (`Daemon.shutdownDeadline`, 2-5 s), counting the restores of a pause

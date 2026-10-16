@@ -72,8 +72,8 @@ clear the flag afterwards.
 ## Inspecting a mouse
 
 `puremouse probe` lists every HID++ device with its features and current settings. It only reads, so
-it is safe to run at any time. Please attach its output to an issue if a mouse does not work. For an
-untested mouse, include the model, connection type (Bluetooth, Bolt or Unifying), and the log's
+it is safe to run at any time. Please attach its output to an issue if a mouse does not work. For a mouse
+other than the MX Master 3S, include the model, connection type (Bluetooth, Bolt or Unifying), and the log's
 adoption line, which includes the mouse's product ID, and its `configured; features(PureMouse)=`
 line, which lists the features PureMouse resolved once the settings were applied. The probe includes
 the complete feature table, SmartShift Enhanced state, legacy battery state and haptic capabilities.

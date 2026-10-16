@@ -167,8 +167,8 @@ which most apps share; use `{"keys": ...}` for an app that differs.
 `cycleDPI` switches to the next of `dpiPresets` above the current resolution, wrapping to the
 lowest. The choice survives reconnects until a config change alters `dpi` or `dpiPresets`.
 
-**Haptics (MX Master 4, untested):** configure an action in JSON, for example
-`"thumbPanel": {"haptic": "sharpStateChange"}`. It plays only if the mouse reports the haptic
+**Haptics (MX Master 4):** choose an effect under Haptic Feedback in a button's action picker, or
+set one in JSON, for example `"thumbPanel": {"haptic": "sharpStateChange"}`. It plays only if the mouse reports the haptic
 feature and supports that waveform; otherwise it is ignored with a log message once per session.
 An absent haptic feature is cached for the session, so repeated presses do not query the mouse again.
 It does not change strength, enable haptics or write any haptic configuration. If haptics are
