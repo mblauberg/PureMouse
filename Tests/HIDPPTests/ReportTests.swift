@@ -172,15 +172,10 @@ struct EnhancedSmartShiftTests {
         #expect(SmartShiftEnhanced.parseRatchetControlMode([2, 10]) == nil)
     }
 
-    @Test func torqueCapabilitiesAndWritePreservation() {
-        // Solaar ScrollRatchetTorque: capabilities bit 0; write [mode, threshold, torque].
-        #expect(SmartShiftEnhanced.parseCapabilities([0x81])?.tunableTorque == true)
-        #expect(SmartShiftEnhanced.parseCapabilities([0x80])?.tunableTorque == false)
-        #expect(SmartShiftEnhanced.parseCapabilities([]) == nil)
-        #expect(SmartShiftEnhanced.parameters(mode: .ratchet, autoDisengage: 12, torque: nil) == [2, 12, 0])
-        #expect(SmartShiftEnhanced.parameters(mode: .freespin, autoDisengage: nil, torque: nil) == [1, 0, 0])
-        // MX4 requires an explicit mode with a torque write.
-        #expect(SmartShiftEnhanced.parameters(mode: .ratchet, autoDisengage: nil, torque: 75) == [2, 0, 75])
+    @Test func writesLeaveTorqueUnchanged() {
+        // Solaar ScrollRatchetTorque: write [mode, threshold, torque], zero meaning unchanged.
+        #expect(SmartShiftEnhanced.parameters(mode: .ratchet, autoDisengage: 12) == [2, 12, 0])
+        #expect(SmartShiftEnhanced.parameters(mode: .freespin, autoDisengage: nil) == [1, 0, 0])
     }
 }
 

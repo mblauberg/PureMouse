@@ -80,21 +80,26 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   failures must reach configure's retry handling. Feature summaries use already resolved
   indices after a successful apply, never extra adoption queries. Other mice remain labelled untested.
 - On SIGTERM/SIGINT, `Session.restore()` returns the mouse to native behaviour (wheels first).
-  Nothing may be persisted on the device or receiver: they must work normally without PureMouse.
+  Each of its requests times out after `Session.restoreTimeout` (400 ms), and quitting waits long
+  enough for every one of them to (`Daemon.shutdownDeadline`, 2-5 s), so a missed reply cannot
+  leave the rest diverted. Nothing may be persisted on the device or receiver: they must work normally without PureMouse.
 - A session that is `finished` (closed or restored) must not touch the device again; the daemon
   stops adopting once `shuttingDown` or `paused` (`Daemon.accepting`). Pausing from the menu
   (`Control.paused`) restores and drops every session; nothing is adopted until those restores
   finish, even after a resume (`PauseGate`), and quitting waits for them (`Daemon.pausing`). A
   pause is never persisted.
-- Device-action chains propagate tail cancellation through predecessors (`Session.chainedAction`),
-  so an earlier action waiting for transport ownership cannot send after close/restore.
+- Device actions (`cycleDPI`, `toggleScrollMode`, haptics) and `apply()`'s DPI and SmartShift
+  writes run on one chain (`Session.deviceActions`, a `SerialChain`), one at a time, each reading
+  what is wanted (`liveDPI`, `scrollMode`) as it runs, so a press mid-apply is neither undone nor
+  overwritten. `close()` and `restore()` cancel it (`Session.finish`), so an action waiting for
+  transport ownership cannot send after them.
 - Every change to which controls are diverted, and the wheels' diversion, from `apply()`, capture
   or a Universal Control handoff, runs through one chain (`Session.enqueueDiversion`), one at a
   time and in the order asked, reading the wanted state (`Handoff`, including `away`) as it runs
   (`SerialChain`). Each write checks `finished` right before it goes out, not only when the body
   starts; `close()` cancels the chain, and a replacement session's chain starts after the old
   one's end (`Inherited.diversionAfter`), so no retired write lands after a replacement's.
-  `restore()` drains the chain before releasing. Handing inputs back tries each wheel and control
+  `restore()` cancels and drains the chain before releasing. Handing inputs back tries each wheel and control
   on its own (`Independently.each`); one that fails stays counted (`wheelsMayBeDiverted`,
   `divertedControls`) for the next apply or `restore()`.
 - The daemon reports to the menu bar app only through `status.json` (`StatusChannel`): call

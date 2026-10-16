@@ -56,6 +56,28 @@ private final class Gate {
         #expect(log == ["old ended", "replacement set the wheels native"])
     }
 
+    /// Closing a session cancels its device actions: one waiting for the endpoint (inside
+    /// `HIDPPDevice.acquire()`, which is not cancellation-aware) must see it before it sends, and
+    /// nothing queued behind it may run.
+    @Test func cancelReachesABodyWaitingForTransport() async {
+        let chain = SerialChain()
+        let gate = Gate()
+        var earlierWasCancelled = false
+        var touchedDevice = false
+        chain.enqueue {
+            await gate.wait()
+            earlierWasCancelled = Task.isCancelled
+            // HIDPPDevice.send checks cancellation before writing to the endpoint.
+            if !Task.isCancelled { touchedDevice = true }
+        }
+        chain.enqueue { touchedDevice = true }
+        await Gate.spin { gate.isWaiting }
+        chain.cancel()
+        gate.open()
+        await chain.drain()
+        #expect(earlierWasCancelled && !touchedDevice)
+    }
+
     @Test func failuresAreReported() async {
         let chain = SerialChain()
         var failures: [Int] = []

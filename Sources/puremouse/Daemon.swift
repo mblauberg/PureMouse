@@ -520,7 +520,7 @@ final class Daemon {
         for (key, old) in sessions {
             old.close()
             var inherited = old.inheritance
-            if !keepLiveDPI { inherited.liveDPI = nil }
+            if !keepLiveDPI { inherited.state.liveDPI = nil }
             inherited.away = handingOff
             inherited.diversionAfter = old.diversionEnd
             add(Session(device: old.device, name: old.name, id: old.id, controls: Array(old.controls.values),
@@ -533,8 +533,8 @@ final class Daemon {
         Task { await adoptStragglers() }
     }
 
-    /// Restores every mouse to native behaviour, then exits. Gives up after two seconds so a
-    /// sleeping mouse cannot hold up logout; it resets itself on its next reconnect anyway.
+    /// Restores every mouse to native behaviour, then exits. Gives up after `shutdownDeadline` so
+    /// a sleeping mouse cannot hold up logout; it resets itself on its next reconnect anyway.
     private func shutdown() {
         guard !shuttingDown else { return }
         shuttingDown = true
@@ -542,6 +542,7 @@ final class Daemon {
         universalControl?.stop()
         cancelRetries()
         let all = Array(sessions.values)
+        let deadline = Self.shutdownDeadline(restoreSteps: all.map(\.restoreSteps).max() ?? 0)
         Task { [pausing] in
             await withTaskGroup(of: Void.self) { group in
                 for session in all { group.addTask { await session.restore() } }
@@ -550,10 +551,16 @@ final class Daemon {
             exitReporting()
         }
         Task {
-            try? await Task.sleep(for: .seconds(2))
+            try? await Task.sleep(for: deadline)
             Log.error("restore timed out")
             exitReporting()
         }
+    }
+
+    /// How long quitting waits for the mice to be handed back: time for every step of the
+    /// longest restore to time out (mice restore side by side), within 2 to 5 seconds.
+    static func shutdownDeadline(restoreSteps: Int) -> Duration {
+        min(max(Session.restoreTimeout * restoreSteps + .seconds(1), .seconds(2)), .seconds(5))
     }
 
     /// The final status, `running: false`, is the last thing written.

@@ -89,24 +89,10 @@ public enum SmartShift {
 public enum SmartShiftEnhanced {
     public static let id: UInt16 = 0x2111
 
-    public struct Capabilities: Equatable, Sendable {
-        public let tunableTorque: Bool
-    }
-
     public struct State: Equatable, Sendable {
         public let mode: SmartShift.Mode
         public let autoDisengage: UInt8
         public let torque: UInt8
-    }
-
-    public static func getCapabilities(_ d: HIDPPDevice) async throws -> Capabilities {
-        guard let caps = parseCapabilities(try await d.call(id, 0)) else { throw HIDPPError.malformedResponse }
-        return caps
-    }
-
-    public static func parseCapabilities(_ params: [UInt8]) -> Capabilities? {
-        guard let flags = params.first else { return nil }
-        return Capabilities(tunableTorque: flags & 1 != 0)
     }
 
     public static func getRatchetControlMode(_ d: HIDPPDevice) async throws -> State {
@@ -121,15 +107,16 @@ public enum SmartShiftEnhanced {
         return State(mode: mode, autoDisengage: params[1], torque: params[2])
     }
 
-    /// Zero leaves threshold/torque unchanged. Always supply mode: on MX4 a torque change
-    /// takes effect only when the ratchet mode is written with it (Solaar's MX4 quirk).
+    /// Zero leaves threshold/torque unchanged, so torque is always written as zero. The mode is
+    /// always supplied: on MX4 a torque change takes effect only when the ratchet mode is written
+    /// with it (Solaar's MX4 quirk). Nil `autoDisengage` leaves the threshold unchanged.
     public static func setRatchetControlMode(_ d: HIDPPDevice, mode: SmartShift.Mode,
-                                             autoDisengage: UInt8? = nil, torque: UInt8? = nil) async throws {
-        _ = try await d.call(id, 2, parameters(mode: mode, autoDisengage: autoDisengage, torque: torque))
+                                             autoDisengage: UInt8? = nil) async throws {
+        _ = try await d.call(id, 2, parameters(mode: mode, autoDisengage: autoDisengage))
     }
 
-    static func parameters(mode: SmartShift.Mode, autoDisengage: UInt8?, torque: UInt8?) -> [UInt8] {
-        [mode.rawValue, autoDisengage ?? 0, torque ?? 0]
+    static func parameters(mode: SmartShift.Mode, autoDisengage: UInt8?) -> [UInt8] {
+        [mode.rawValue, autoDisengage ?? 0, 0]
     }
 }
 
