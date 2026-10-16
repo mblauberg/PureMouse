@@ -17,4 +17,14 @@ struct DaemonTests {
         #expect(!Daemon.isNewDevice(known: 0xB034, announced: 0xB034))
         #expect(!Daemon.isNewDevice(known: nil, announced: 0xB034))
     }
+
+    /// The permission poll runs only for what is needed now: a receiver-only setup never waits on
+    /// Input Monitoring, nor a config that posts nothing on Accessibility.
+    @Test func permissionsNeededNow() {
+        #expect(Permissions.needed(postsEvents: false, bluetooth: false, hidOpenFailed: false) == [])
+        #expect(Permissions.needed(postsEvents: true, bluetooth: false, hidOpenFailed: false) == .accessibility)
+        #expect(Permissions.needed(postsEvents: false, bluetooth: true, hidOpenFailed: false) == .inputMonitoring)
+        #expect(Permissions.needed(postsEvents: false, bluetooth: false, hidOpenFailed: true) == .inputMonitoring)
+        #expect(Permissions.needed(postsEvents: true, bluetooth: true, hidOpenFailed: false) == .all)
+    }
 }

@@ -85,6 +85,7 @@ import Testing
         guard case .action(.missionControl) = safari.bindings[0x52] else { Issue.record("middle kept"); return }
         guard case .action(.showDesktop) = safari.bindings[0xC4] else { Issue.record("top added"); return }
         #expect(safari.setsButtons && !safari.setsThumbWheel && !safari.setsSmoothScroll)
+        #expect(safari.buttons == [0x53, 0xC4])  // only these need the frontmost app at a press
         // The rest is the global settings.
         #expect(safari.thumbWheel.mode == .actions(left: .volumeDown, right: .volumeUp) && safari.smoothScroll?.speed == 2)
         // Global bindings are untouched; the app's extra button is diverted everywhere.

@@ -27,9 +27,10 @@ final class Session {
     /// Controls bound globally or in any app, all diverted; true for those diverted with raw
     /// motion because some scope binds them to a gesture.
     private let bound: [UInt16: Bool]
-    /// Whether any app sets buttons, thumb wheel or smooth scrolling: only then is the app
-    /// looked up, at a press, a thumb-wheel movement or a scroll burst.
-    private let appButtons: Bool
+    /// Controls some app binds its own way, and whether any app sets the thumb wheel: only then
+    /// is the app looked up, at a press of one of them or a thumb-wheel movement. Scroll bursts
+    /// look it up when `appProfiles` is not empty.
+    private let appButtons: Set<UInt16>
     private let appThumbWheel: Bool
     /// Smooth scrolling profiles of the apps that set it, by lowercased bundle ID.
     private let appProfiles: [String: ScrollEngine.Profile]
@@ -136,7 +137,7 @@ final class Session {
             }
         }
         self.bound = bound
-        appButtons = config.apps.values.contains { $0.setsButtons }
+        appButtons = config.apps.values.reduce(into: []) { $0.formUnion($1.buttons) }
         appThumbWheel = config.apps.values.contains { $0.setsThumbWheel }
         globalProfile = Self.profile(global, config)
         appProfiles = config.apps.filter { $0.value.setsSmoothScroll }.mapValues { Self.profile($0, config) }
@@ -762,8 +763,9 @@ final class Session {
     }
 
     /// The binding for a press: the frontmost app's when an app entry names it, else the global one.
+    /// Only a control some app names needs the lookup.
     private func binding(for cid: UInt16) -> Config.Binding? {
-        if appButtons, let app = ForegroundApp.shared.frontmost(), let scoped = config.settings(forApp: app) {
+        if appButtons.contains(cid), let app = ForegroundApp.shared.frontmost(), let scoped = config.settings(forApp: app) {
             Log.debug("\(name): buttons with \(app)'s settings")
             return scoped.bindings[cid]
         }

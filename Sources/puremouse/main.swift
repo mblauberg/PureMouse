@@ -47,7 +47,7 @@ case nil, "run":
     daemon.start()
     withExtendedLifetime(daemon) { runMainLoop() }
 case "permissions":
-    // The exit status is the granted set's raw value; the daemon polls it (Daemon.restartWhenGranted).
+    // The exit status is the granted set's raw value; the daemon polls it (Daemon.pollPermissions).
     let granted = Permissions.current
     print("Accessibility: \(granted.contains(.accessibility) ? "granted" : "missing")")
     print("Input Monitoring: \(granted.contains(.inputMonitoring) ? "granted" : "missing")")

@@ -18,6 +18,16 @@ struct Permissions: OptionSet {
         return granted
     }
 
+    /// The permissions PureMouse needs now: Accessibility when it posts events (for a binding, or
+    /// for wheels it takes over), Input Monitoring for a Bluetooth mouse or when opening HID
+    /// devices failed (macOS refuses the open without it).
+    static func needed(postsEvents: Bool, bluetooth: Bool, hidOpenFailed: Bool) -> Permissions {
+        var needed: Permissions = []
+        if postsEvents { needed.insert(.accessibility) }
+        if bluetooth || hidOpenFailed { needed.insert(.inputMonitoring) }
+        return needed
+    }
+
     /// Shows the system prompt for each missing permission. Each prompt appears once; later
     /// requests are no-ops until the user acts in System Settings.
     static func requestMissing(_ granted: Permissions) {

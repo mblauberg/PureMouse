@@ -87,10 +87,12 @@ struct BundleIDCache {
     static let capacity = 64
 
     mutating func bundleID(forPID pid: pid_t) -> String? {
-        var buffer = [UInt8](repeating: 0, count: Int(MAXPATHLEN) * 4)  // PROC_PIDPATHINFO_MAXSIZE
-        let length = proc_pidpath(pid, &buffer, UInt32(buffer.count))
-        guard length > 0 else { return nil }
-        return bundleID(forExecutable: String(decoding: buffer.prefix(Int(length)), as: UTF8.self))
+        // On the stack: asked at presses and scroll starts, so no heap buffer each time.
+        let path = withUnsafeTemporaryAllocation(of: UInt8.self, capacity: Int(MAXPATHLEN) * 4) { buffer -> String? in
+            let length = proc_pidpath(pid, buffer.baseAddress, UInt32(buffer.count))  // PROC_PIDPATHINFO_MAXSIZE
+            return length > 0 ? String(decoding: buffer.prefix(Int(length)), as: UTF8.self) : nil
+        }
+        return path.flatMap { bundleID(forExecutable: $0) }
     }
 
     mutating func bundleID(forExecutable path: String,

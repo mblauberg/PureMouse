@@ -12,6 +12,8 @@ extension Config {
         public var bindings: [UInt16: Binding]
         public var thumbWheel: ThumbWheel
         public var smoothScroll: SmoothScroll?
+        /// The controls the app's `buttons` names; every other binding is the global one.
+        public var buttons: Set<UInt16> = []
         /// Which sections the app sets, so the daemon looks the app up only where it matters.
         public var setsButtons = false
         public var setsThumbWheel = false
@@ -55,6 +57,7 @@ extension Config {
                         continue
                     }
                     app.bindings[cid] = try Binding.decode(buttons, forKey: name, base: base.bindings[cid])
+                    app.buttons.insert(cid)
                 }
             }
             if entry.contains(AnyKey("thumbWheel")) {

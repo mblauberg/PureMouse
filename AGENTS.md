@@ -107,7 +107,10 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   are coalesced to one per main-queue turn. On shutdown, `running: false` is written last, after
   the mice are restored (`exitReporting`).
 - Keep it light: no dependencies, and no AppKit or SwiftUI in the daemon or PureMouseKit (only
-  `PureMouseMenu` may link them). Idle cost is zero CPU; the display link
+  `PureMouseMenu` may link them). Idle cost is zero CPU, with one bounded exception: while a
+  permission needed now is missing, a `puremouse permissions` child runs at most once a minute, for
+  10 minutes after start, wake, reload, a control change or a Bluetooth attach
+  (`Daemon.pollPermissions`). The display link
   runs only while a scroll is gliding, never with `smoothingMs` 0 (`PixelCarry` posts at once).
 - The menu bar app never opens HID devices: it edits the config file and talks to the daemon only
   through the companion channel and the daemon CLI (`docs/companion.md`). It must not poll: it
@@ -170,7 +173,8 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
 - Per-app settings (`apps`) are merged onto the global ones by the Kit decoder (`Config+Apps.swift`,
   `Config.AppSettings`); only `buttons`, `thumbWheel` (not `inverted`) and `smoothScroll` are
   per-app. The app is looked up only when some app sets that section (`Session.appButtons`,
-  `appThumbWheel`, `appProfiles`): the frontmost app at each press, the app under the pointer when a
+  `appThumbWheel`, `appProfiles`): the frontmost app at each press of a control some app names
+  (`AppSettings.buttons`), the app under the pointer when a
   scroll burst (`ScrollEngine.profileForBurst`) or thumb-wheel movement starts. `ForegroundApp`
   does the lookups, AppKit-free and on demand; the Universal Control work reuses it. Every control
   bound in any scope is diverted; pressed where nothing binds it, the wheel press, back and
@@ -200,7 +204,12 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   ten-line Swift script, `import notify`), and check the log's "pointer moved to another Mac" lines.
   Going away also stops any glide and drops held gesture state, and ends a capture.
 - Permission checks are cached per process. The launchd-run daemon polls a child
-  (`puremouse permissions`) and restarts itself when a grant arrives (`Daemon.restartWhenGranted`).
+  (`puremouse permissions`) and restarts itself when a grant arrives (`Daemon.pollPermissions`),
+  only for permissions needed now (`Permissions.needed`: Accessibility when anything is bound or
+  the wheels may be taken over; Input Monitoring with a Bluetooth mouse or when opening HID devices
+  failed), and for at most `Daemon.permissionPollLength` (10 min) before wake, reload, a control
+  change or a Bluetooth attach starts it again. Without Input Monitoring a Bluetooth mouse is not
+  retried after its first try.
 - HID++ software IDs rotate per request so a late reply cannot complete a newer request. A
   cancelled request fails at once instead of holding the endpoint until its timeout. Only events
   reach `onEvent` (`Report.isEvent`): software ID 0, or a short HID++ 1.0 notification (sub-ID

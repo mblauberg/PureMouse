@@ -19,6 +19,11 @@ final class Daemon {
     private var configBytes: Data?
     private let startedAt = Date.now
     private let permissions = Permissions.current
+    /// Asking a child process for new grants (`pollPermissions`), while it runs.
+    private var permissionPoll: Task<Void, Never>?
+    static let permissionPollLength: Duration = .seconds(600)
+    /// Opening HID devices failed, usually for want of Input Monitoring.
+    private var hidOpenFailed = false
     private let logiOptionsRunning = !LogiOptions.running().isEmpty
     private var channel: StatusChannel?
     private var watcher: ConfigWatcher?
@@ -134,8 +139,10 @@ final class Daemon {
         monitor.onDetach = { [weak self] interface in self?.detached(interface) }
         let status = monitor.start()
         if status != kIOReturnSuccess {
+            hidOpenFailed = true
             Log.error("opening HID devices failed: 0x\(String(UInt32(bitPattern: status), radix: 16)) (Input Monitoring permission?)")
         }
+        pollPermissions()
         power = PowerObserver { [weak self] in
             Log.info("system woke")
             self?.reconfigureAll()
@@ -170,6 +177,8 @@ final class Daemon {
     /// The menu bar app changed `control.json`. A missing file means no requests.
     private func controlChanged() {
         guard !shuttingDown else { return }
+        // Someone is at the Mac, perhaps granting a permission in System Settings.
+        pollPermissions()
         let control: Control
         if FileManager.default.fileExists(atPath: Companion.controlURL.path) {
             guard let read = Companion.read(Control.self, from: Companion.controlURL) else {
@@ -291,24 +300,40 @@ final class Daemon {
     }
 
     private func requestPermissions() {
-        let granted = Permissions.current
-        Permissions.requestMissing(granted)
-        if granted != .all { restartWhenGranted(beyond: granted) }
+        Permissions.requestMissing(permissions)
     }
 
-    /// A fresh child process (`puremouse permissions`) sees new grants that this one cannot. When
-    /// one arrives, quit cleanly and let launchd start PureMouse again with it. Only under launchd
+    /// The permissions PureMouse needs for its config and mice now but lacks.
+    private var missingPermissions: Permissions {
+        let scopes = [config.global] + Array(config.apps.values)
+        let postsEvents = !config.boundControls.isEmpty
+            || scopes.contains { $0.smoothScroll?.enabled == true || $0.thumbWheel.mode != .scroll }
+        return Permissions.needed(postsEvents: postsEvents, bluetooth: monitor.interfaces.contains { !$0.isReceiver },
+                                  hidOpenFailed: hidOpenFailed).subtracting(permissions)
+    }
+
+    /// A fresh child process (`puremouse permissions`) sees new grants that this one cannot. While
+    /// a permission needed now is missing, ask one from time to time; when it is granted, quit
+    /// cleanly and let launchd start PureMouse again with it. Asking stops after
+    /// `permissionPollLength`, so a declined permission does not cost a process a minute forever;
+    /// wake, reload, a menu request and a new Bluetooth mouse start it again. Only under launchd
     /// (parent pid 1): an instance run from a terminal would not come back.
-    private func restartWhenGranted(beyond granted: Permissions) {
-        guard getppid() == 1, let executable = Bundle.main.executableURL else { return }
-        Task {
+    private func pollPermissions() {
+        guard permissionPoll == nil, !shuttingDown, !missingPermissions.isEmpty, getppid() == 1,
+              let executable = Bundle.main.executableURL else { return }
+        permissionPoll = Task {
+            defer { permissionPoll = nil }
+            let end = ContinuousClock.now + Self.permissionPollLength
             var delay = 2
-            while !shuttingDown {
+            while !shuttingDown, ContinuousClock.now < end {
                 try? await Task.sleep(for: .seconds(delay))
                 delay = min(delay * 2, 60)
-                if !(await Self.permissions(checkedBy: executable)).subtracting(granted).isEmpty {
+                let missing = missingPermissions
+                guard !missing.isEmpty else { return }  // no longer needed, say after a reload
+                if !(await Self.permissions(checkedBy: executable)).intersection(missing).isEmpty {
                     Log.info("permission granted; restarting to apply it")
                     shutdown()
+                    return
                 }
             }
         }
@@ -344,6 +369,7 @@ final class Daemon {
         } else {
             let device = listen(interface, index: directDeviceIndex)
             Task { await adoptRetrying(device) }
+            pollPermissions()  // a Bluetooth mouse needs Input Monitoring
         }
     }
 
@@ -480,6 +506,9 @@ final class Daemon {
         let key = Key(device)
         guard await adopt(device) == .noAnswer, retries[key] == nil,
               endpoints[key] === device, accepting else { return }
+        // Without Input Monitoring a Bluetooth mouse's replies never arrive, so trying again would
+        // only spin; a grant restarts PureMouse (`pollPermissions`).
+        guard device.interface.isReceiver || permissions.contains(.inputMonitoring) else { return }
         retries[key] = Task {
             // A cancelled retry was already removed, perhaps replaced by a newer one.
             defer { if !Task.isCancelled { retries[key] = nil } }
@@ -564,6 +593,7 @@ final class Daemon {
             guard !shuttingDown else { return }
             sessions.values.forEach { $0.configure() }
             retryMissingNotifications()
+            pollPermissions()
             await adoptStragglers()
         }
     }
@@ -609,6 +639,7 @@ final class Daemon {
             // The replacements already start in the new state; this only logs it.
             handOffChanged(from: wasHandingOff)
         }
+        pollPermissions()
         Task { await adoptStragglers() }
     }
 

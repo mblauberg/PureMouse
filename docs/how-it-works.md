@@ -53,8 +53,9 @@ PureMouse applies it itself, reading the setting at the start of each scroll.
 ## Per-app settings
 
 Buttons, the thumb wheel and smooth scrolling can differ per app. Nothing watches app switches:
-PureMouse asks which app is frontmost when a button is pressed, and which is under the pointer
-when a scroll starts, and only when some app has settings of that kind. Each answer costs
+PureMouse asks which app is frontmost when a button some app binds is pressed, and which is under
+the pointer when a scroll or a thumb-wheel movement starts, and only when some app has settings of
+that kind. Each answer costs
 microseconds to a millisecond, and an idle mouse still costs nothing.
 
 ## Source layout

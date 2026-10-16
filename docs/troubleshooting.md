@@ -38,7 +38,10 @@ or remove it with Logitech's uninstaller.
 | **Input Monitoring** | To read the mouse over Bluetooth. A receiver works without it |
 
 macOS applies a grant only to processes started after it, so PureMouse checks in the background
-and restarts itself once a grant arrives.
+and restarts itself once a grant arrives. It checks only for a permission it needs now (Input
+Monitoring only with a Bluetooth mouse), and for ten minutes at a time: after it starts, the Mac
+wakes, the config changes or something is changed from the menu bar app. If a grant goes unnoticed,
+any of those picks it up.
 
 Grants are tied to the app's signature. Every release is signed with the same certificate, so an
 update keeps them; a build signed by anything else (including an ad-hoc build) has to be granted
