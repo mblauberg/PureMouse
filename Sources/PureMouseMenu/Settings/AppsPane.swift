@@ -86,7 +86,7 @@ struct AppsPane: View {
                     addMenu
                 }
             } footer: {
-                Text("Buttons follow the frontmost app. Scrolling and the thumb wheel follow the app under the pointer.")
+                Text("Buttons follow the frontmost app.\nScrolling and the thumb wheel follow the app under the pointer.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.leading)
@@ -238,6 +238,7 @@ private struct AppRow: View {
 /// One app's settings.
 private struct AppDetail: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.app) private var app
     /// The app's key under `apps`.
     let key: String
     let identity: AppIdentities.Identity
@@ -355,15 +356,12 @@ private struct AppDetail: View {
 
     // MARK: Buttons
 
-    /// The named buttons the connected mice have (all when none has reported), plus any bound
-    /// globally or in this app.
+    /// The named buttons the connected mice have (those listed by default when none has
+    /// reported), plus any bound globally or in this app.
     private func namedRows(_ config: ConfigTree) -> [String] {
         let controls = model.devices.flatMap(\.controls)
         let deviceCIDs = controls.isEmpty ? nil : Set(controls.map(\.cid))
-        let boundCIDs = Set(configKeys(config).compactMap(NamedButton.cid(forKey:)))
-        return NamedButton.allCases.filter { button in
-            deviceCIDs.map { $0.contains(button.cid) } ?? true || boundCIDs.contains(button.cid)
-        }.map(\.rawValue)
+        return ButtonRows.named(deviceCIDs: deviceCIDs, configKeys: configKeys(config)).map(\.rawValue)
     }
 
     private func otherRows(_ config: ConfigTree) -> [String] {
@@ -482,17 +480,19 @@ private struct AppDetail: View {
                 RowLabel("Own scrolling speed", help: help)
             }
             .accessibilityLabel("Own scrolling speed\(spoken)")
-            Group {
+            // The rows appear only while on, so nothing is written until the app has its own values.
+            .onChange(of: overrides) { app?.refitSettings() }
+            if overrides {
                 ValueSlider(title: "Speed", spokenTitle: "Scrolling speed\(spoken)",
-                            value: overrides ? model.number(speedPath, default: globalSpeed, step: 0.05) : .constant(globalSpeed),
+                            value: model.number(speedPath, default: globalSpeed, step: 0.05),
                             range: 0.25...3, low: "Slow", high: "Fast", format: Format.multiplier)
+                    .disclosedRow()
                 ValueSlider(title: "Glide", spokenTitle: "Glide\(spoken)", help: "0 scrolls instantly.",
-                            value: overrides ? model.number(glidePath, default: globalGlide, step: 25) : .constant(globalGlide),
+                            value: model.number(glidePath, default: globalGlide, step: 25),
                             range: 0...500, low: "Short", high: "Long", format: Format.milliseconds)
                     .disabled(!smooth)
+                    .disclosedRow()
             }
-            .disclosedRow()
-            .disabled(!overrides)
         }
     }
 }

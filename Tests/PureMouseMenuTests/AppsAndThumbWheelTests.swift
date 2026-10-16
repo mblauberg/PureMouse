@@ -18,6 +18,7 @@ private func kit(_ action: ButtonAction) -> Action? {
     case .named(let name): Action.named[name]
     case .keys(let spec): Keystroke(spec).map(Action.keys)
     case .run(let command): .run(command)
+    case .haptic(let name): HapticWaveform(rawValue: name).map(Action.haptic)
     default: nil
     }
 }
@@ -280,7 +281,7 @@ private func resolved(_ wheel: Config.ThumbWheel) -> Resolved {
     let config = try tree(#"{"apps": {"a.b": {"thumbWheel": {"action": "tabs"}, "buttons": {"back": "mute", "top": "zoomIn"}, "smoothScroll": {"speed": 2}}, "c.d": {"buttons": {"back": "mute"}}}}"#)
     #expect(config.appSummary("a.b") == "Thumb wheel: Switch Tabs, 2 buttons, Scrolling speed")
     #expect(config.appSummary("c.d") == "1 button")
-    #expect(config.appSummary("e.f") == "Same as everywhere")
+    #expect(config.appSummary("e.f") == "Same as Everywhere")
 }
 
 @Test func appEditsReplayOntoAHandEditedFile() throws {
@@ -311,4 +312,46 @@ private func resolved(_ wheel: Config.ThumbWheel) -> Resolved {
     #expect(entries.first?.detail == "(Mission Control)")
     #expect(entries.first?.matches(.standard) == true)
     #expect(!entries.contains { $0.id == "default" })
+}
+
+// MARK: Haptics
+
+@Test func thePickerListsEveryHapticWaveformInWords() {
+    let entries = PickerEntry.all(allowsDefault: true, allowsGesture: true)
+        .filter { $0.group == ActionCatalog.hapticGroup }
+    #expect(entries.map(\.kind) == HapticWaveform.allCases.map { .set(.haptic($0.rawValue)) })
+    #expect(entries.allSatisfy { $0.symbol != nil })
+    #expect(ActionCatalog.hapticLabel(for: "sharpStateChange") == "Sharp State Change")
+    #expect(ActionCatalog.hapticLabel(for: "happyAlert") == "Happy Alert")
+    #expect(ActionCatalog.hapticLabel(for: "boxBreathing") == "Box Breathing")
+    #expect(ButtonAction.haptic("happyAlert").label == "Haptic: Happy Alert")
+    #expect(ActionCatalog.hapticGroup.contains("MX Master 4"))
+}
+
+@Test func aThumbWheelDirectionCanPlayAHaptic() throws {
+    var config = try tree(#"{"thumbWheel":{"action":"volume"}}"#)
+    config.chooseThumbWheel(.custom, at: ["thumbWheel"])
+    config.setThumbWheel("right", to: .haptic("knock"), at: ["thumbWheel"])
+    let wheel = try #require(try decoded(config).thumbWheel)
+    #expect(resolved(wheel).right == .haptic(.knock))
+    #expect(resolved(config.thumbWheel(at: ["thumbWheel"])) == resolved(wheel))
+}
+
+@Test func anAppButtonCanPlayAHaptic() throws {
+    var config = try tree("{}")
+    config.bindInApp("com.apple.Safari", button: "top", to: .haptic("completed"))
+    #expect(config.binding("top", in: ["apps", "com.apple.Safari"]) == .haptic("completed"))
+    _ = try decoded(config)
+}
+
+// MARK: Thumb panel
+
+@Test func theThumbPanelIsListedOnlyWhereItCanBeUsed() {
+    let withoutPanel: Set<UInt16> = [0x52, 0x53, 0x56, 0xC3, 0xC4]
+    #expect(!ButtonRows.named(deviceCIDs: nil, configKeys: []).contains(.thumbPanel))
+    #expect(ButtonRows.named(deviceCIDs: nil, configKeys: []).count == 5)
+    #expect(!ButtonRows.named(deviceCIDs: withoutPanel, configKeys: ["back"]).contains(.thumbPanel))
+    #expect(ButtonRows.named(deviceCIDs: withoutPanel.union([0x1A0]), configKeys: []).contains(.thumbPanel))
+    #expect(ButtonRows.named(deviceCIDs: withoutPanel, configKeys: ["thumbPanel"]).contains(.thumbPanel))
+    #expect(ButtonRows.named(deviceCIDs: nil, configKeys: ["0x01A0"]).contains(.thumbPanel))
 }

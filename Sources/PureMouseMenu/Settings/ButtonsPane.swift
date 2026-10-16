@@ -88,8 +88,7 @@ struct ButtonsPane: View {
 
     // MARK: Rows
 
-    /// Controls the connected mice have (all five names when no mouse has reported any), plus any
-    /// the config binds.
+    /// Controls the connected mice have (nil when no mouse has reported any).
     private var deviceCIDs: Set<UInt16>? {
         let controls = model.devices.flatMap(\.controls)
         return controls.isEmpty ? nil : Set(controls.map(\.cid))
@@ -98,10 +97,7 @@ struct ButtonsPane: View {
     private var configKeys: [String] { (model.config[["buttons"]] as? [String: Any]).map { Array($0.keys) } ?? [] }
 
     private var namedRows: [String] {
-        let configCIDs = Set(configKeys.compactMap(NamedButton.cid(forKey:)))
-        return NamedButton.allCases.filter { button in
-            deviceCIDs.map { $0.contains(button.cid) } ?? true || configCIDs.contains(button.cid)
-        }.map(\.rawValue)
+        ButtonRows.named(deviceCIDs: deviceCIDs, configKeys: configKeys).map(\.rawValue)
     }
 
     private var otherRows: [String] {

@@ -551,7 +551,7 @@ private func scratchStore() -> (BatteryAlertStore, URL) {
         var config = try tree("{\"buttons\":{\"\(key)\":{\"haptic\":\"completed\"}}}")
         #expect(ButtonRows.others(deviceCIDs: [0x01A0], configKeys: [key]).isEmpty)
         let button = NamedButton.config(cid: 0x01A0)
-        #expect(config.binding(button).label == "Haptic: completed")
+        #expect(config.binding(button).label == "Haptic: Completed")
         config.bind(button, to: .named("none"))
         #expect((config.self[["buttons"]] as? [String: Any])?.keys.sorted() == [key])
         config.bind(button, to: .standard)
@@ -562,10 +562,10 @@ private func scratchStore() -> (BatteryAlertStore, URL) {
 @Test func hapticBindingsRemainReadableThroughGestureEdits() throws {
     var config = try tree(#"{"buttons":{"thumbPanel":{"haptic":"completed"}}}"#)
     let haptic = config.binding("thumbPanel")
-    #expect(haptic.label == "Haptic: completed")
+    #expect(haptic.label == "Haptic: Completed")
     config.bind("top", to: haptic)
     config.bind("thumbPanel", to: .gesture)
-    #expect(config.gestureBinding("thumbPanel", "click").label == "Haptic: completed")
+    #expect(config.gestureBinding("thumbPanel", "click").label == "Haptic: Completed")
     config.bind("thumbPanel", direction: "up", to: haptic)
     let decoded = try JSONDecoder().decode(Config.self, from: config.data())
     guard case .action(.haptic(.completed)) = decoded.bindings[0xC4] else { Issue.record("haptic"); return }

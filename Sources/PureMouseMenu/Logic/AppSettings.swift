@@ -142,6 +142,6 @@ extension ConfigTree {
         let buttons = (self[scope + ["buttons"]] as? [String: Any])?.count ?? 0
         if buttons > 0 { parts.append(buttons == 1 ? "1 button" : "\(buttons) buttons") }
         if overridesScrolling(app) { parts.append("Scrolling speed") }
-        return parts.isEmpty ? "Same as everywhere" : parts.joined(separator: ", ")
+        return parts.isEmpty ? "Same as Everywhere" : parts.joined(separator: ", ")
     }
 }

@@ -122,7 +122,8 @@ that is not installed is fine. `puremouse app` prints the bundle IDs PureMouse s
 
 Settings › Apps lists the apps in `apps` and adds one from Applications or the running apps (it is
 written only once a setting is chosen). For each app it sets the buttons, the thumb wheel and an own
-scrolling `speed` and `smoothingMs`; **Same as Everywhere** removes the app's key, and removing the
+scrolling `speed` and `smoothingMs` (both written when **Own scrolling speed** is turned on, both
+removed when it is turned off); **Same as Everywhere** removes the app's key, and removing the
 last one removes the app. Browsers, Zoom, Teams, Word, PowerPoint, Preview and Excel get a suggested
 thumb wheel action. Keys it does not show, unknown ones included, stay as written.
 
@@ -167,7 +168,9 @@ disabled on the mouse, playing an effect may produce no feedback.
 | `haptic` | `sharpStateChange`, `dampStateChange`, `sharpCollision`, `dampCollision`, `subtleCollision`, `happyAlert`, `angryAlert`, `completed`, `square`, `wave`, `firework`, `mad`, `knock`, `jingle`, `ringing`, `whisperCollision` | Solaar: 0–14 in order, plus `whisperCollision` at 0x1B |
 | `haptic` | `simpleBreathing`, `boxBreathing`, `bellyBreathing`, `timer`, `startEndBreathingSignal` | Logi Options+: 15–19 in order |
 
-Settings displays existing bindings as “Haptic: &lt;name&gt;”; choose haptic waveforms in JSON.
+The action picker lists them under Haptic Feedback (MX Master 4), in words (“Happy Alert”), and a
+bound button reads “Haptic: Happy Alert”. Settings shows the Thumb panel row only when a connected
+mouse has it or the config binds it.
 Haptic actions also work for gesture directions. Automatic feedback on DPI changes is not
 implemented.
 

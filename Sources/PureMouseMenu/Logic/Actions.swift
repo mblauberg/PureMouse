@@ -1,4 +1,5 @@
 import Foundation
+import PureMouseKit
 
 /// What a button (or a gesture direction) is bound to, as the config JSON says.
 enum ButtonAction: Equatable {
@@ -37,7 +38,7 @@ enum ButtonAction: Equatable {
         case .named(let name): ActionCatalog.label(for: name)
         case .keys(let spec): Shortcut.display(spec) ?? spec
         case .run(let command): command.isEmpty ? "Run Shell Command" : command
-        case .haptic(let name): "Haptic: \(name)"
+        case .haptic(let name): "Haptic: \(ActionCatalog.hapticLabel(for: name))"
         case .gesture: "Hold and Move"
         }
     }
@@ -125,6 +126,23 @@ enum ActionCatalog {
         }
     }
 
+    /// The haptic group's title: only the MX Master 4 has the motor.
+    static let hapticGroup = "Haptic Feedback (MX Master 4)"
+
+    /// Kit's waveform names, in its order.
+    static var hapticNames: [String] { HapticWaveform.allCases.map(\.rawValue) }
+
+    /// A waveform's config name in words: "happyAlert" reads "Happy Alert".
+    static func hapticLabel(for name: String) -> String {
+        if name == "startEndBreathingSignal" { return "Breathing Start and End" }
+        var words = ""
+        for character in name {
+            if character.isUppercase, !words.isEmpty { words.append(" ") }
+            words.append(words.isEmpty ? Character(character.uppercased()) : character)
+        }
+        return words
+    }
+
     /// Launchpad became "Apps" in macOS 26.
     static var launchpadLabel: String {
         ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26 ? "Apps" : "Launchpad"
@@ -157,6 +175,10 @@ enum NamedButton: String, CaseIterable {
         }
     }
 
+    /// Listed when no mouse has reported its controls. The thumb panel is on the MX Master 4
+    /// only, so it shows when a mouse has it or the config binds it.
+    var listedByDefault: Bool { self != .thumbPanel }
+
     static func config(cid: UInt16) -> String {
         allCases.first { $0.cid == cid }?.rawValue ?? hex(cid)
     }
@@ -171,8 +193,18 @@ enum NamedButton: String, CaseIterable {
     }
 }
 
-/// Which controls the Buttons pane lists under "Other controls".
+/// Which controls the Buttons and Apps panes list.
 enum ButtonRows {
+    /// The named buttons: the connected mice's (`nil`: none has reported, so those listed by
+    /// default), plus any the config binds.
+    static func named(deviceCIDs: Set<UInt16>?, configKeys: [String]) -> [NamedButton] {
+        let bound = Set(configKeys.compactMap(NamedButton.cid(forKey:)))
+        return NamedButton.allCases.filter { button in
+            bound.contains(button.cid) || deviceCIDs.map { $0.contains(button.cid) } ?? button.listedByDefault
+        }
+    }
+
+
     /// Controls without a name: the connected mice's, as hex IDs, plus any the config binds that
     /// they do not have. A hex key for a named control ("0x0053") shows under its name instead.
     static func others(deviceCIDs: [UInt16], configKeys: [String]) -> [String] {

@@ -34,6 +34,10 @@ struct PickerEntry: Identifiable, Equatable {
                                            kind: .set(.named(name)), symbol: ActionCatalog.symbol(for: name)))
             }
         }
+        for name in ActionCatalog.hapticNames {
+            entries.append(PickerEntry(id: "haptic." + name, label: ActionCatalog.hapticLabel(for: name),
+                                       group: ActionCatalog.hapticGroup, kind: .set(.haptic(name)), symbol: "waveform"))
+        }
         entries.append(PickerEntry(id: "keys", label: "Keyboard Shortcut…", group: "Custom", kind: .shortcut,
                                    symbol: "keyboard"))
         entries.append(PickerEntry(id: "run", label: "Run Shell Command…", group: "Custom", kind: .command,

@@ -130,6 +130,10 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   pending edit nothing is written. It refuses to build on a file that does not parse or
   validate, and writes through `JSON.encode` (shortest decimals, sorted keys, whole and big
   numbers kept digit for digit), never `JSONSerialization`.
+- The Buttons and Apps panes list a named button when a connected mouse reports it or the config
+  binds it; with no report, those `NamedButton.listedByDefault` (not the MX Master 4's thumb panel)
+  (`ButtonRows.named`). Haptic picker entries come from Kit's `HapticWaveform.allCases`; the menu
+  only words them (`ActionCatalog.hapticLabel`).
 - The Apps pane writes only `apps.<id>` keys (`AppSettings.swift`): each control's own key, removed
   for "Same as Everywhere" (an emptied app entry is pruned); an added app is not written until a
   setting is chosen. App icons and names load only for rows on screen (`AppIdentities`), and
