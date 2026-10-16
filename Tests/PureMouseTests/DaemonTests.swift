@@ -10,6 +10,17 @@ struct DaemonTests {
         #expect(Daemon.shutdownDeadline(restoreSteps: 100) == .seconds(5))
     }
 
+    /// Quitting right after a pause still waits for the paused mice: their restores count, one
+    /// pause after another, against the mice restored side by side on quit.
+    @Test func quittingCountsRestoresStillPausing() {
+        #expect(Daemon.restoreSteps(quitting: [], pausing: []) == 0)
+        #expect(Daemon.restoreSteps(quitting: [], pausing: [7]) == 7)
+        #expect(Daemon.restoreSteps(quitting: [2, 5], pausing: []) == 5)
+        #expect(Daemon.restoreSteps(quitting: [3], pausing: [4, 2]) == 6)
+        #expect(Daemon.shutdownDeadline(restoreSteps: Daemon.restoreSteps(quitting: [], pausing: [7]))
+                    == Session.restoreTimeout * 7 + .seconds(1))
+    }
+
     /// A slot's session is retired only for a device known to differ: the first announcement
     /// after attach, for a mouse adopted before any, is that mouse reconnecting.
     @Test func newDeviceOnlyWhenTheProductChanges() {

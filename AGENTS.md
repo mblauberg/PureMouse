@@ -79,10 +79,11 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   Enhanced SmartShift may skip malformed/feature-error replies only; timeouts and transport
   failures must reach configure's retry handling. Feature summaries use already resolved
   indices after a successful apply, never extra adoption queries. Other mice remain labelled untested.
-- On SIGTERM/SIGINT, `Session.restore()` returns the mouse to native behaviour (wheels first).
-  Each of its requests times out after `Session.restoreTimeout` (400 ms), and quitting waits long
-  enough for every one of them to (`Daemon.shutdownDeadline`, 2-5 s), so a missed reply cannot
-  leave the rest diverted. Nothing may be persisted on the device or receiver: they must work normally without PureMouse.
+- On SIGTERM/SIGINT, `Session.restore()` returns the mouse to native behaviour (wheels first). Each
+  of its requests times out after `Session.restoreTimeout` (400 ms), and quitting waits long enough
+  for every one of them to (`Daemon.shutdownDeadline`, 2-5 s), counting the restores of a pause
+  still under way (`Daemon.restoreSteps`), so a missed reply cannot leave the rest diverted. Nothing
+  may be persisted on the device or receiver: they must work normally without PureMouse.
 - A session that is `finished` (closed or restored) must not touch the device again; the daemon
   stops adopting once `shuttingDown` or `paused` (`Daemon.accepting`). Pausing from the menu
   (`Control.paused`) restores and drops every session; nothing is adopted until those restores
@@ -108,10 +109,10 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   the mice are restored (`exitReporting`).
 - Keep it light: no dependencies, and no AppKit or SwiftUI in the daemon or PureMouseKit (only
   `PureMouseMenu` may link them). Idle cost is zero CPU, with one bounded exception: while a
-  permission needed now is missing, a `puremouse permissions` child runs at most once a minute, for
-  10 minutes after start, wake, reload, a control change or a Bluetooth attach
-  (`Daemon.pollPermissions`). The display link
-  runs only while a scroll is gliding, never with `smoothingMs` 0 (`PixelCarry` posts at once).
+  permission needed now is missing, a `puremouse permissions` child runs after 2, 4, 8, 16 and
+  32 s and then once a minute, until 10 minutes after the latest start, wake, reload, control
+  change or Bluetooth attach (`Daemon.pollPermissions`). The display link runs only while a
+  scroll is gliding, never with `smoothingMs` 0 (`PixelCarry` posts at once).
 - The menu bar app never opens HID devices: it edits the config file and talks to the daemon only
   through the companion channel and the daemon CLI (`docs/companion.md`). It must not poll: it
   wakes on notifications, file events and the daemon's process exit. Its Settings window and view
@@ -206,10 +207,10 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
 - Permission checks are cached per process. The launchd-run daemon polls a child
   (`puremouse permissions`) and restarts itself when a grant arrives (`Daemon.pollPermissions`),
   only for permissions needed now (`Permissions.needed`: Accessibility when anything is bound or
-  the wheels may be taken over; Input Monitoring with a Bluetooth mouse or when opening HID devices
-  failed), and for at most `Daemon.permissionPollLength` (10 min) before wake, reload, a control
-  change or a Bluetooth attach starts it again. Without Input Monitoring a Bluetooth mouse is not
-  retried after its first try.
+  the wheels may be taken over; Input Monitoring with a Bluetooth mouse or when opening HID
+  devices failed), and until `Daemon.permissionPollLength` (10 min) after the latest start, wake,
+  reload, control change or Bluetooth attach; each of those starts or extends it. Without Input
+  Monitoring a Bluetooth mouse is not retried after its first try.
 - HID++ software IDs rotate per request so a late reply cannot complete a newer request. A
   cancelled request fails at once instead of holding the endpoint until its timeout. Only events
   reach `onEvent` (`Report.isEvent`): software ID 0, or a short HID++ 1.0 notification (sub-ID
@@ -220,11 +221,12 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   left to its connection notification, so idle cost stays zero. A Bluetooth mouse has no
   notifications, so it is then tried once a minute (`Backoff.bluetooth`) until it answers. Turning
   on a receiver's connection notifications is retried the same way (`Daemon.retryNotifications`),
-  then again on wake and resume. When a notification carries a different wireless product ID from
-  the one known for the slot (a new device paired into it), the slot's session is closed as on a
-  disconnect and the newcomer adopted on a fresh `HIDPPDevice`, so no feature index, DPI list or
-  state carries over (`Daemon.replaceEndpoint`); an ignored slot is identified again. The first
-  announcement after attach only records the product.
+  then again on wake and resume; pause, detach and shutdown cancel it. When a notification carries a
+  different wireless product ID from the one known for the slot (a new device paired into it), the
+  slot's session is closed as on a disconnect and the newcomer adopted on a fresh `HIDPPDevice`, so
+  no feature index, DPI list or state carries over (`Daemon.replaceEndpoint`); an ignored slot is
+  identified again, and an identification of the old endpoint that finishes afterwards is discarded.
+  The first announcement after attach only records the product.
 - `puremouse register` (and opening the app from the Finder, i.e. no arguments inside a bundle)
   writes `~/Library/LaunchAgents/<bundle id>.plist` pointing at its own binary and bootstraps it,
   booting out any running instance first (`LoginItem.swift`). Not `SMAppService`: without a
@@ -264,13 +266,13 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   comes after the old session has closed, so the mouse is never restored and launchd relaunches
   into the same crash.
 - Events only route for features whose index is already resolved (`HIDPPDevice.feature(at:)`), so
-  `Session.apply()` resolves the event-bearing ones (0x1B04, 0x1D4B, 0x1004 battery) first.
-  Battery is read on each apply and then follows broadcast events; 0x1000 is read only
-  as a fallback when 0x1004 is absent; resolve/select it before configuration writes and inherit
-  that selection across reloads. Only the selected source's broadcasts are used (0x1004 events,
-  or legacy 0x1000 broadcast events when it was selected). It is informational and never fails
-  an apply. Level bits are masked by getCapabilities (cleared
-  when the mouse reports a percentage) and the highest wins, as in Linux.
+  `Session.apply()` resolves the event-bearing ones (0x1B04, 0x1D4B, 0x1004 battery) first. Battery
+  is read on each apply and then follows broadcast events; 0x1000 is read only as a fallback when
+  0x1004 is absent; resolve/select it before configuration writes and inherit that selection across
+  reloads. Only the selected source's broadcasts are used (0x1004 events, or legacy 0x1000 broadcast
+  events when it was selected). It is informational and never fails an apply. Level bits are masked
+  by getCapabilities (cleared when the mouse reports a percentage) and the highest wins, as in
+  Linux.
 - DPI is snapped to the sensor's own list (0x2201 getSensorDpiList), read once per mouse and
   inherited across reloads; if the list cannot be read, the configured value is sent unchanged.
   `cycleDPI` sets `Session.liveDPI`, which overrides `config.dpi` in `apply()`; `Daemon.reload`

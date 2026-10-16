@@ -21,6 +21,8 @@ final class Daemon {
     private let permissions = Permissions.current
     /// Asking a child process for new grants (`pollPermissions`), while it runs.
     private var permissionPoll: Task<Void, Never>?
+    /// When the poll stops asking; each re-arm pushes it back (`pollPermissions`).
+    private var permissionPollEnd = ContinuousClock.now
     static let permissionPollLength: Duration = .seconds(600)
     /// Opening HID devices failed, usually for want of Input Monitoring.
     private var hidOpenFailed = false
@@ -38,7 +40,9 @@ final class Daemon {
     /// Endpoints whose device did not answer, being tried again: at most one retry each, however
     /// it was started (see `adoptRetrying`).
     private var retries: [Key: Task<Void, Never>] = [:]
-    private var adopting: Set<Key> = []
+    /// Endpoints being identified, by object: a replaced endpoint's identification must not hold
+    /// up its replacement's.
+    private var adopting: Set<ObjectIdentifier> = []
     /// Endpoints found not to be a configurable mouse (e.g. a keyboard on the same receiver),
     /// skipped until the config changes, a different device connects in the slot, or PureMouse
     /// restarts.
@@ -58,6 +62,9 @@ final class Daemon {
     private var paused: Bool { pauseGate.paused }
     /// Restoring the mice for a pause; resuming and quitting wait for it.
     private var pausing: Task<Void, Never>?
+    /// The longest restore (in `Session.restoreSteps`) of each pause whose restores have not
+    /// finished, by generation, so quitting meanwhile still allows time for them.
+    private var pauseRestoreSteps: [Int: Int] = [:]
     /// The current or last select-by-pressing request, as reported.
     private var capture: Status.Capture?
     private var captureTimeout: Task<Void, Never>?
@@ -86,7 +93,7 @@ final class Daemon {
         }
     }
 
-    /// `stopped`: not adopting now (paused or quitting), so do not retry.
+    /// `stopped`: not adopting now (paused or quitting) or the endpoint was replaced, so do not retry.
     private enum Adoption { case adopted, noAnswer, notAMouse, stopped }
 
     init(configURL: URL) {
@@ -270,14 +277,17 @@ final class Daemon {
         endCapture(.cancelled)
         let generation = pauseGate.pause()
         cancelRetries()
+        cancelNotificationRetries()
         let all = Array(sessions.values)
         sessions = [:]
         for session in all { watch(session.device) }
+        pauseRestoreSteps[generation] = all.map(\.restoreSteps).max() ?? 0
         pausing = Task { [previous = pausing] in
             await previous?.value
             await withTaskGroup(of: Void.self) { group in
                 for session in all { group.addTask { await session.restore() } }
             }
+            pauseRestoreSteps[generation] = nil
             if pauseGate.restored(generation), !shuttingDown { await adoptStragglers() }
         }
         statusChanged()
@@ -319,13 +329,14 @@ final class Daemon {
     /// wake, reload, a menu request and a new Bluetooth mouse start it again. Only under launchd
     /// (parent pid 1): an instance run from a terminal would not come back.
     private func pollPermissions() {
-        guard permissionPoll == nil, !shuttingDown, !missingPermissions.isEmpty, getppid() == 1,
+        guard !shuttingDown, !missingPermissions.isEmpty, getppid() == 1,
               let executable = Bundle.main.executableURL else { return }
+        permissionPollEnd = ContinuousClock.now + Self.permissionPollLength
+        guard permissionPoll == nil else { return }  // already asking: it now asks for longer
         permissionPoll = Task {
             defer { permissionPoll = nil }
-            let end = ContinuousClock.now + Self.permissionPollLength
             var delay = 2
-            while !shuttingDown, ContinuousClock.now < end {
+            while !shuttingDown, ContinuousClock.now < permissionPollEnd {
                 try? await Task.sleep(for: .seconds(delay))
                 delay = min(delay * 2, 60)
                 let missing = missingPermissions
@@ -360,7 +371,7 @@ final class Daemon {
         if interface.isReceiver {
             interfaceTasks[id] = Task {
                 // Before the slots are scanned, so a mouse connecting meanwhile is announced.
-                if await !enableNotifications(interface) { retryNotifications(interface) }
+                if await !enableNotifications(interface), !Task.isCancelled { retryNotifications(interface) }
                 for slot in UInt8(1)...6 {
                     guard !Task.isCancelled else { return }
                     await adoptRetrying(listen(interface, index: slot))
@@ -415,14 +426,24 @@ final class Daemon {
     }
 
     /// Tries a receiver's notifications again on `Backoff.adoption` unless they are on or already
-    /// being retried; after that, wake and resume start it again. Detach cancels it.
+    /// being retried; after that, wake and resume start it again. Only for an attached receiver
+    /// while adopting; detach, pause and shutdown cancel it.
     private func retryNotifications(_ interface: HIDInterface) {
         let id = ObjectIdentifier(interface)
-        guard !notifying.contains(id), notificationRetries[id] == nil else { return }
+        guard interfaceNumbers[id] != nil, accepting, !notifying.contains(id), notificationRetries[id] == nil
+        else { return }
         notificationRetries[id] = Task {
             defer { if !Task.isCancelled { notificationRetries[id] = nil } }
-            await Backoff.adoption.retry { await !enableNotifications(interface) }
+            await Backoff.adoption.retry {
+                guard !Task.isCancelled, accepting else { return false }
+                return await !enableNotifications(interface)
+            }
         }
+    }
+
+    private func cancelNotificationRetries() {
+        notificationRetries.values.forEach { $0.cancel() }
+        notificationRetries = [:]
     }
 
     private func retryMissingNotifications() {
@@ -534,9 +555,13 @@ final class Daemon {
         guard sessions[key] == nil else { return .adopted }
         guard !ignored.contains(key) else { return .notAMouse }
         guard accepting else { return .stopped }
-        guard endpoints[key] === device, adopting.insert(key).inserted else { return .noAnswer }
-        defer { adopting.remove(key) }
+        let id = ObjectIdentifier(device)
+        guard endpoints[key] === device, adopting.insert(id).inserted else { return .noAnswer }
+        defer { adopting.remove(id) }
         let result = await identify(device)
+        // A slot's endpoint replaced meanwhile (a different device paired there) is not this one's
+        // to judge: the answer was about the old device.
+        guard endpoints[key] === device else { return .stopped }
         if result == .notAMouse { ignored.insert(key) }
         return result
     }
@@ -651,8 +676,10 @@ final class Daemon {
         Log.info("quitting")
         universalControl?.stop()
         cancelRetries()
+        cancelNotificationRetries()
         let all = Array(sessions.values)
-        let deadline = Self.shutdownDeadline(restoreSteps: all.map(\.restoreSteps).max() ?? 0)
+        let deadline = Self.shutdownDeadline(restoreSteps: Self.restoreSteps(
+            quitting: all.map(\.restoreSteps), pausing: Array(pauseRestoreSteps.values)))
         Task { [pausing] in
             await withTaskGroup(of: Void.self) { group in
                 for session in all { group.addTask { await session.restore() } }
@@ -665,6 +692,12 @@ final class Daemon {
             Log.error("restore timed out")
             exitReporting()
         }
+    }
+
+    /// The restore steps quitting must allow for: the mice restore side by side, alongside the
+    /// pauses still restoring, which run one after another (`pausing` chains them).
+    static func restoreSteps(quitting: [Int], pausing: [Int]) -> Int {
+        max(quitting.max() ?? 0, pausing.reduce(0, +))
     }
 
     /// How long quitting waits for the mice to be handed back: time for every step of the
