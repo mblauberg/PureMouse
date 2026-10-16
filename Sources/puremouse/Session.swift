@@ -97,6 +97,7 @@ final class Session {
         var wheelMode: SmartShift.Mode?
         var battery: UnifiedBattery.State?
         var batteryLevels: UInt8?
+        var legacyBatterySelected = false
         var hasSmartShift = false
         var hasThumbWheel = false
     }
@@ -136,6 +137,7 @@ final class Session {
         wheelMode = inherited.wheelMode
         battery = inherited.battery
         batteryLevels = inherited.batteryLevels
+        legacyBatterySelected = inherited.legacyBatterySelected
         hasSmartShift = inherited.hasSmartShift
         hasThumbWheel = inherited.hasThumbWheel
         // The wheels come to PureMouse when any scope scrolls smoothly; the thumb wheel alone
@@ -163,7 +165,8 @@ final class Session {
         Inherited(diverted: divertedControls, wheelsMayBeDiverted: wheelsMayBeDiverted, scrollMode: scrollMode,
                   liveDPI: liveDPI,
                   resolutions: resolutions, online: online, dpi: dpi, wheelMode: wheelMode,
-                  battery: battery, batteryLevels: batteryLevels, hasSmartShift: hasSmartShift, hasThumbWheel: hasThumbWheel)
+                  battery: battery, batteryLevels: batteryLevels, legacyBatterySelected: legacyBatterySelected,
+                  hasSmartShift: hasSmartShift, hasThumbWheel: hasThumbWheel)
     }
 
     var status: Status.Device {
@@ -320,7 +323,10 @@ final class Session {
                 guard !Task.isCancelled else { return }
                 do {
                     try await apply()
-                    Log.info("\(name): configured")
+                    // Cached indices only: diagnostics must never add adoption traffic or timeouts.
+                    let features = (1...255).compactMap { device.feature(at: UInt8($0)) }.sorted()
+                        .map { String(format: "%04x", $0) }
+                    Log.info("\(name): configured; features(PureMouse)=\(features.joined(separator: " "))")
                     return
                 } catch is CancellationError {
                     return
@@ -342,7 +348,15 @@ final class Session {
         // Resolve the event-bearing features first so their events can be routed.
         _ = try await device.hasFeature(ReprogControls.id)
         _ = try? await device.featureIndex(of: WirelessDeviceStatus.id)
-        _ = try? await device.featureIndex(of: UnifiedBattery.id)
+        // Select and resolve the battery event source before any configuration writes.
+        // Keep the previous selection if an informational lookup fails during reconnect.
+        do {
+            if try await device.hasFeature(UnifiedBattery.id) {
+                legacyBatterySelected = false
+            } else {
+                legacyBatterySelected = try await device.hasFeature(LegacyBattery.id)
+            }
+        } catch { }
 
         try await serialised { session in
             try await session.releaseAll()
@@ -373,8 +387,8 @@ final class Session {
             }
             wheelMode = mode ?? current
         } else {
-            // Keep the 0x2110 path above unchanged. Enhanced-only mice are untested; failure
-            // here must not prevent battery/status reporting or mark an otherwise working mouse offline.
+            // Keep the 0x2110 path above unchanged. Enhanced-only mice are untested: skip
+            // unsupported/malformed replies, but let transport failures trigger a retry.
             do {
                 guard !finished else { throw HIDPPError.closed }
                 hasSmartShift = try await device.hasFeature(SmartShiftEnhanced.id)
@@ -390,17 +404,23 @@ final class Session {
                     }
                     wheelMode = mode ?? current
                 }
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch HIDPPError.closed {
-                throw HIDPPError.closed
-            } catch {
+            } catch where Self.isOptionalFeatureReplyError(error) {
                 Log.error("\(name): SmartShift Enhanced failed (untested mouse): \(error)")
             }
         }
         await readBattery()
         online = true
         changed()
+    }
+
+    /// Unsupported or malformed optional-feature replies can be skipped. Transport failures
+    /// and cancellation must reach the configure retry/lifecycle handling.
+    static func isOptionalFeatureReplyError(_ error: any Error) -> Bool {
+        guard let error = error as? HIDPPError else { return false }
+        switch error {
+        case .malformedResponse, .featureNotSupported, .protocol10, .protocol20: return true
+        case .timeout, .closed, .sendFailed: return false
+        }
     }
 
     /// Battery state is informational. Prefer 0x1004; only its absence selects legacy 0x1000.
@@ -714,13 +734,11 @@ final class Session {
     }
 
     private func playHaptic(_ waveform: HapticWaveform) async {
-        guard !finished else { return }
+        guard !finished, !hapticMissingLogged else { return }
         do {
             guard try await device.hasFeature(Haptic.id) else {
-                if !hapticMissingLogged {
-                    Log.info("\(name): haptic action ignored; no 0x19B0 feature")
-                    hapticMissingLogged = true
-                }
+                Log.info("\(name): haptic action ignored; no 0x19B0 feature")
+                hapticMissingLogged = true
                 return
             }
             guard !finished else { return }
@@ -733,6 +751,8 @@ final class Session {
                 return
             }
             try await Haptic.playWaveform(device, waveform: waveform.id)
+        } catch is CancellationError {
+            return
         } catch {
             Log.error("\(name): haptic \(waveform.rawValue) failed: \(error)")
         }
@@ -752,6 +772,8 @@ final class Session {
                     try await AdjustableDPI.set(device, dpi: supportedDPI(near: target))
                     try await readDPI()
                 }
+            } catch is CancellationError {
+                return
             } catch {
                 Log.error("\(name): setting DPI failed: \(error)")
             }
@@ -775,6 +797,8 @@ final class Session {
             try await readDPI()
             Log.debug("\(name): dpi \(next)")
             changed()
+        } catch is CancellationError {
+            return
         } catch {
             Log.error("\(name): cycle DPI failed: \(error)")
         }
@@ -801,6 +825,8 @@ final class Session {
             wheelMode = next
             changed()
             Log.debug("\(name): scroll mode \(next)")
+        } catch is CancellationError {
+            return
         } catch {
             Log.error("\(name): toggle scroll mode failed: \(error)")
         }

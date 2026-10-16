@@ -7,6 +7,7 @@ enum ButtonAction: Equatable {
     case named(String)
     case keys(String)
     case run(String)
+    case haptic(String)
     case gesture
 
     init(json: Any?) {
@@ -18,6 +19,8 @@ enum ButtonAction: Equatable {
                 self = .keys(spec)
             } else if let command = object["run"] as? String {
                 self = .run(command)
+            } else if let waveform = object["haptic"] as? String {
+                self = .haptic(waveform)
             } else if !object.isEmpty, object.keys.allSatisfy(Gesture.directions.contains) {
                 self = .gesture
             } else {
@@ -34,6 +37,7 @@ enum ButtonAction: Equatable {
         case .named(let name): ActionCatalog.label(for: name)
         case .keys(let spec): Shortcut.display(spec) ?? spec
         case .run(let command): command.isEmpty ? "Run Shell Command" : command
+        case .haptic(let name): "Haptic: \(name)"
         case .gesture: "Hold and Move"
         }
     }
@@ -90,7 +94,7 @@ enum ActionCatalog {
 
 /// The named buttons the Buttons pane lists, in order, with their control IDs.
 enum NamedButton: String, CaseIterable {
-    case gesture, back, forward, top, middle
+    case gesture, back, forward, top, middle, thumbPanel
 
     var label: String {
         switch self {
@@ -99,6 +103,7 @@ enum NamedButton: String, CaseIterable {
         case .forward: "Forward"
         case .top: "Top button"
         case .middle: "Wheel click"
+        case .thumbPanel: "Thumb panel"
         }
     }
 
@@ -109,6 +114,7 @@ enum NamedButton: String, CaseIterable {
         case .forward: 0x0056
         case .gesture: 0x00C3
         case .top: 0x00C4
+        case .thumbPanel: 0x01A0
         }
     }
 

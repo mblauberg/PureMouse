@@ -58,6 +58,7 @@ extension ConfigTree {
         case .named(let name): set(name, at: path)
         case .keys(let spec): set(["keys": spec], at: path)
         case .run(let command): set(["run": command], at: path)
+        case .haptic(let waveform): set(["haptic": waveform], at: path)
         case .gesture:
             if case .gesture = self.binding(button) { return }
             let click: Any = self[path].flatMap { $0 is String || $0 is [String: Any] ? $0 : nil } ?? "none"
@@ -77,6 +78,7 @@ extension ConfigTree {
         case .named(let name): set(name, at: path)
         case .keys(let spec): set(["keys": spec], at: path)
         case .run(let command): set(["run": command], at: path)
+        case .haptic(let waveform): set(["haptic": waveform], at: path)
         case .gesture: break
         }
     }

@@ -14,8 +14,7 @@
     "back": "navigateBack",
     "forward": "navigateForward",
     "top": "showDesktop",
-    "middle": "toggleScrollMode",
-    "thumbPanel": { "haptic": "sharpStateChange" }
+    "middle": "toggleScrollMode"
   },
   "gesture": { "distanceMm": 4, "repeatIntervalMs": 400 }
 }

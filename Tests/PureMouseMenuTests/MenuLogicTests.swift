@@ -149,7 +149,7 @@ private func text(_ tree: ConfigTree) -> String { String(decoding: tree.data(), 
     #expect(NamedButton.cid(forKey: "back") == 0x53)
     #expect(NamedButton.cid(forKey: "0x00c4") == 0xC4)
     #expect(NamedButton.config(cid: 0x56) == "forward")
-    #expect(NamedButton.config(cid: 0x1A0) == "0x01a0")
+    #expect(NamedButton.config(cid: 0x1A0) == "thumbPanel")
 }
 
 // MARK: Shortcuts
@@ -350,7 +350,7 @@ private func mouse(_ id: String, online: Bool, dpi: Int?, steps: [Int] = []) -> 
 @Test func otherControlsSkipNamedOnesAndDuplicates() {
     let rows = ButtonRows.others(deviceCIDs: [0x0053, 0x00c5, 0x00d7],
                                  configKeys: ["0x0053", "back", "0xC5", "1a0", "nonsense"])
-    #expect(rows == ["0x00c5", "0x00d7", "1a0"])
+    #expect(rows == ["0x00c5", "0x00d7"])
 }
 
 // MARK: Saving
@@ -523,4 +523,38 @@ private func scratchStore() -> (BatteryAlertStore, URL) {
     #expect(UpdateCheck.outcome(current: "0.4.0", data: Data("{}".utf8)) == .failed)
     #expect(UpdateCheck.outcome(current: "0.4.0", data: Data("nope".utf8)) == .failed)
     #expect(UpdateCheck.outcome(current: "0.4.0", data: Data(#"{"tag_name":"v1","html_url":"http://x"}"#.utf8)) == .failed)
+}
+
+@Test func everyConfigButtonHasAMenuNameAndTheSameControlID() {
+    for button in Config.Button.allCases {
+        #expect(NamedButton(rawValue: button.rawValue)?.cid == button.cid)
+        #expect(NamedButton.config(cid: button.cid) == button.rawValue)
+    }
+}
+
+@Test func thumbPanelEditsAndDefaultUseTheExistingKey() throws {
+    for key in ["thumbPanel", "0x01a0"] {
+        var config = try tree("{\"buttons\":{\"\(key)\":{\"haptic\":\"completed\"}}}")
+        #expect(ButtonRows.others(deviceCIDs: [0x01A0], configKeys: [key]).isEmpty)
+        let button = NamedButton.config(cid: 0x01A0)
+        #expect(config.binding(button).label == "Haptic: completed")
+        config.bind(button, to: .named("none"))
+        #expect((config.self[["buttons"]] as? [String: Any])?.keys.sorted() == [key])
+        config.bind(button, to: .standard)
+        #expect(config.root.isEmpty)
+    }
+}
+
+@Test func hapticBindingsRemainReadableThroughGestureEdits() throws {
+    var config = try tree(#"{"buttons":{"thumbPanel":{"haptic":"completed"}}}"#)
+    let haptic = config.binding("thumbPanel")
+    #expect(haptic.label == "Haptic: completed")
+    config.bind("top", to: haptic)
+    config.bind("thumbPanel", to: .gesture)
+    #expect(config.gestureBinding("thumbPanel", "click").label == "Haptic: completed")
+    config.bind("thumbPanel", direction: "up", to: haptic)
+    let decoded = try JSONDecoder().decode(Config.self, from: config.data())
+    guard case .action(.haptic(.completed)) = decoded.bindings[0xC4] else { Issue.record("haptic"); return }
+    guard case .gesture(let gesture) = decoded.bindings[0x1A0] else { Issue.record("gesture"); return }
+    #expect(gesture.click == .haptic(.completed) && gesture.up == .haptic(.completed))
 }

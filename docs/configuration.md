@@ -148,13 +148,16 @@ lowest. The choice survives reconnects until a config change alters `dpi` or `dp
 **Haptics (MX Master 4, untested):** configure an action in JSON, for example
 `"thumbPanel": {"haptic": "sharpStateChange"}`. It plays only if the mouse reports the haptic
 feature and supports that waveform; otherwise it is ignored with a log message once per session.
+An absent haptic feature is cached for the session, so repeated presses do not query the mouse again.
 It does not change strength, enable haptics or write any haptic configuration. If haptics are
 disabled on the mouse, playing an effect may produce no feedback.
 
-| Action field | Values |
-|---|---|
-| `haptic` | `sharpStateChange`, `dampStateChange`, `sharpCollision`, `dampCollision`, `subtleCollision`, `happyAlert`, `angryAlert`, `completed`, `square`, `wave`, `firework`, `mad`, `knock`, `jingle`, `ringing`, `whisperCollision` |
+| Action field | Values | Source / waveform IDs |
+|---|---|---|
+| `haptic` | `sharpStateChange`, `dampStateChange`, `sharpCollision`, `dampCollision`, `subtleCollision`, `happyAlert`, `angryAlert`, `completed`, `square`, `wave`, `firework`, `mad`, `knock`, `jingle`, `ringing`, `whisperCollision` | Solaar: 0–14 in order, plus `whisperCollision` at 0x1B |
+| `haptic` | `simpleBreathing`, `boxBreathing`, `bellyBreathing`, `timer`, `startEndBreathingSignal` | Logi Options+: 15–19 in order |
 
+Settings displays existing bindings as “Haptic: &lt;name&gt;”; choose haptic waveforms in JSON.
 Haptic actions also work for gesture directions. Automatic feedback on DPI changes is not
 implemented.
 

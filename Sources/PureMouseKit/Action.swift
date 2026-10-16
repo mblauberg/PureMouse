@@ -79,10 +79,12 @@ public enum Action: Equatable, Decodable, Sendable {
     }
 }
 
-/// Solaar's HapticWaveForms table. Names are config values; IDs are device protocol data.
+/// Solaar's HapticWaveForms table plus Logi Options+ breathing/timer effects.
+/// Names are config values; IDs are device protocol data.
 public enum HapticWaveform: String, CaseIterable, Decodable, Sendable {
     case sharpStateChange, dampStateChange, sharpCollision, dampCollision, subtleCollision
     case happyAlert, angryAlert, completed, square, wave, firework, mad, knock, jingle, ringing
+    case simpleBreathing, boxBreathing, bellyBreathing, timer, startEndBreathingSignal
     case whisperCollision
 
     public var id: UInt8 {
@@ -102,6 +104,11 @@ public enum HapticWaveform: String, CaseIterable, Decodable, Sendable {
         case .knock: 0x0C
         case .jingle: 0x0D
         case .ringing: 0x0E
+        case .simpleBreathing: 0x0F
+        case .boxBreathing: 0x10
+        case .bellyBreathing: 0x11
+        case .timer: 0x12
+        case .startEndBreathingSignal: 0x13
         case .whisperCollision: 0x1B
         }
     }

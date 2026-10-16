@@ -74,7 +74,10 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
 - Prefer SmartShift 0x2110 whenever present (the tested 3S path); only its absence selects
   Enhanced 0x2111. Enhanced writes always include mode, with torque 0 to leave torque unchanged.
   Haptic 0x19B0 is play-only, gated by its waveform capability mask: never write strength,
-  enable flags or configuration (persistence is unknown). Other mice remain labelled untested.
+  enable flags or configuration (persistence is unknown). Cache haptic absence per session.
+  Enhanced SmartShift may skip malformed/feature-error replies only; timeouts and transport
+  failures must reach configure's retry handling. Feature summaries use already resolved
+  indices after a successful apply, never extra adoption queries. Other mice remain labelled untested.
 - On SIGTERM/SIGINT, `Session.restore()` returns the mouse to native behaviour (wheels first).
   Nothing may be persisted on the device or receiver: they must work normally without PureMouse.
 - A session that is `finished` (closed or restored) must not touch the device again; the daemon
@@ -209,7 +212,8 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
 - Events only route for features whose index is already resolved (`HIDPPDevice.feature(at:)`), so
   `Session.apply()` resolves the event-bearing ones (0x1B04, 0x1D4B, 0x1004 battery) first.
   Battery is read on each apply and then follows broadcast events; 0x1000 is read only
-  as a fallback when 0x1004 is absent, and only the selected fallback's broadcasts are used. It is
+  as a fallback when 0x1004 is absent; resolve/select it before configuration writes and inherit
+  that selection across reloads. Only the selected fallback's broadcasts are used. It is
   informational and never fails an apply. Level bits are masked by getCapabilities (cleared
   when the mouse reports a percentage) and the highest wins, as in Linux.
 - DPI is snapped to the sensor's own list (0x2201 getSensorDpiList), read once per mouse and
@@ -220,6 +224,7 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
 
 ## Extending
 
+- New named button: keep `Config.Button` and the menu's `NamedButton` in step (names and CIDs).
 - New action: a case in `Action` and a name in `Action.named` (both in PureMouseKit), handling in
   `SystemActions.perform` (or `Session.perform` for device actions).
 - New device feature: a wrapper in `Sources/HIDPP/Features.swift`, applied in `Session.apply()`,

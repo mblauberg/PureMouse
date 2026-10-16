@@ -48,7 +48,11 @@ import Testing
             let action = try JSONDecoder().decode(Action.self, from: Data("{\"haptic\":\"\(waveform.rawValue)\"}".utf8))
             #expect(action == .haptic(waveform) && action.actsOnDevice)
         }
-        #expect(HapticWaveform.allCases.map(\.id) == Array(UInt8(0)...14) + [0x1B])
+        for (offset, name) in ["simpleBreathing", "boxBreathing", "bellyBreathing", "timer", "startEndBreathingSignal"].enumerated() {
+            let waveform = try #require(HapticWaveform(rawValue: name))
+            #expect(waveform.id == UInt8(15 + offset))
+        }
+        #expect(HapticWaveform.allCases.map(\.id) == Array(UInt8(0)...19) + [0x1B])
         #expect(throws: DecodingError.self) { try decode(#"{"buttons": {"top": {"haptic": "unknown"}}}"#) }
         #expect(throws: DecodingError.self) { try decode(#"{"buttons": {"top": {"haptic": 27}}}"#) }
         let gesture = try decode(#"{"buttons": {"thumbPanel": {"click": {"haptic": "completed"}}}}"#)
