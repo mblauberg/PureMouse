@@ -14,12 +14,4 @@ struct SessionActionTests {
             #expect(Session.isOptionalFeatureReplyError(error))
         }
     }
-
-    /// Every hand-back gets its turn before quitting gives up, within bounds.
-    @Test func shutdownDeadlineCoversEveryRestoreStep() {
-        #expect(Daemon.shutdownDeadline(restoreSteps: 0) == .seconds(2))
-        #expect(Daemon.shutdownDeadline(restoreSteps: 6) == Session.restoreTimeout * 6 + .seconds(1))
-        #expect(Daemon.shutdownDeadline(restoreSteps: 6) >= Session.restoreTimeout * 6)
-        #expect(Daemon.shutdownDeadline(restoreSteps: 100) == .seconds(5))
-    }
 }

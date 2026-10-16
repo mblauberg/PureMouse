@@ -18,6 +18,9 @@ final class Session {
     var onChange: (() -> Void)?
     /// Called with the first control pressed while capturing; that press performs nothing.
     var onCapture: ((UInt16) -> Void)?
+    /// Called with each connection notification before the session acts on it; true when the slot
+    /// now holds a different device and the daemon has closed this session to adopt that one.
+    var onConnection: ((Report) -> Bool)?
     private let config: Config
     /// What applies where no app entry matches.
     private let global: Config.AppSettings
@@ -652,6 +655,7 @@ final class Session {
     private func handle(_ report: Report) {
         guard !finished else { return }
         if report.featureIndex == Receiver.connectionNotification {
+            if onConnection?(report) == true { return }
             if Receiver.isLinkEstablished(report) {
                 Log.info("\(name): link up")
                 configure()

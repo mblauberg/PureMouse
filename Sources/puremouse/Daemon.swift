@@ -40,6 +40,11 @@ final class Daemon {
     private var ignored: Set<Key> = []
     /// The wireless product ID last announced in each receiver slot.
     private var slotProducts: [Key: UInt16] = [:]
+    /// Receivers whose connection notifications are on, being turned on, and being retried
+    /// (`retryNotifications`).
+    private var notifying: Set<ObjectIdentifier> = []
+    private var enablingNotifications: Set<ObjectIdentifier> = []
+    private var notificationRetries: [ObjectIdentifier: Task<Void, Never>] = [:]
     private var power: PowerObserver?
     private var signalSources: [DispatchSourceSignal] = []
     private var shuttingDown = false
@@ -273,6 +278,7 @@ final class Daemon {
         Log.info("resumed")
         let adoptNow = pauseGate.resume()
         statusChanged()
+        retryMissingNotifications()
         if adoptNow { Task { await adoptStragglers() } }
     }
 
@@ -328,13 +334,8 @@ final class Daemon {
         nextInterfaceNumber += 1
         if interface.isReceiver {
             interfaceTasks[id] = Task {
-                let receiver = HIDPPDevice(interface: interface, index: directDeviceIndex)
-                defer { receiver.close() }
-                do {
-                    try await Receiver.enableNotifications(receiver)
-                } catch {
-                    Log.error("\(interface.product): enabling connection notifications failed: \(error)")
-                }
+                // Before the slots are scanned, so a mouse connecting meanwhile is announced.
+                if await !enableNotifications(interface) { retryNotifications(interface) }
                 for slot in UInt8(1)...6 {
                     guard !Task.isCancelled else { return }
                     await adoptRetrying(listen(interface, index: slot))
@@ -350,6 +351,8 @@ final class Daemon {
         Log.info("lost \(interface.product)")
         let id = ObjectIdentifier(interface)
         interfaceTasks.removeValue(forKey: id)?.cancel()
+        notificationRetries.removeValue(forKey: id)?.cancel()
+        notifying.remove(id)
         cancelRetries { $0.interface == id }
         for (key, session) in sessions where key.interface == id {
             session.close()
@@ -363,6 +366,41 @@ final class Daemon {
         slotProducts = slotProducts.filter { $0.key.interface != id }
         interfaceNumbers[id] = nil
         statusChanged()
+    }
+
+    /// Turns on a receiver's connection notifications, without which a mouse asleep at attach is
+    /// never adopted. Returns whether they are on; false too while another attempt is under way.
+    private func enableNotifications(_ interface: HIDInterface) async -> Bool {
+        let id = ObjectIdentifier(interface)
+        guard !notifying.contains(id) else { return true }
+        guard enablingNotifications.insert(id).inserted else { return false }
+        defer { enablingNotifications.remove(id) }
+        let receiver = HIDPPDevice(interface: interface, index: directDeviceIndex)
+        defer { receiver.close() }
+        do {
+            try await Receiver.enableNotifications(receiver)
+        } catch {
+            Log.error("\(interface.product): enabling connection notifications failed: \(error)")
+            return false
+        }
+        // Not for a receiver unplugged meanwhile.
+        if monitor.interfaces.contains(where: { $0 === interface }) { notifying.insert(id) }
+        return true
+    }
+
+    /// Tries a receiver's notifications again on `Backoff.adoption` unless they are on or already
+    /// being retried; after that, wake and resume start it again. Detach cancels it.
+    private func retryNotifications(_ interface: HIDInterface) {
+        let id = ObjectIdentifier(interface)
+        guard !notifying.contains(id), notificationRetries[id] == nil else { return }
+        notificationRetries[id] = Task {
+            defer { if !Task.isCancelled { notificationRetries[id] = nil } }
+            await Backoff.adoption.retry { await !enableNotifications(interface) }
+        }
+    }
+
+    private func retryMissingNotifications() {
+        for interface in monitor.interfaces where interface.isReceiver { retryNotifications(interface) }
     }
 
     /// Starts listening on a device index. Until a session adopts it, a receiver slot only
@@ -383,16 +421,53 @@ final class Daemon {
     }
 
     /// A connection notification for a slot with no session. A different device in the slot
-    /// (say a mouse paired where a keyboard was) is identified afresh even if the slot was
-    /// ignored; the first notification after attach re-checks an ignored device once.
+    /// (say a mouse paired where a keyboard was) is identified afresh on a new endpoint even if
+    /// the slot was ignored; the first notification after attach re-checks an ignored device once.
     private func slotAnnounced(_ device: HIDPPDevice, _ report: Report) {
         let key = Key(device)
+        var device = device
         if let product = Receiver.productID(report), slotProducts[key] != product {
-            slotProducts[key] = product
             ignored.remove(key)
+            if productAnnounced(product, key) { device = replaceEndpoint(device) }
         }
         guard Receiver.isLinkEstablished(report) else { return }
-        Task { await adoptRetrying(device) }
+        Task { [device] in await adoptRetrying(device) }
+    }
+
+    /// A connection notification for a slot with a session (`Session.onConnection`). A different
+    /// device there retires the session, as if its mouse had gone, and is adopted afresh on a new
+    /// endpoint. Returns whether that happened.
+    private func sessionSlotAnnounced(_ session: Session, _ report: Report) -> Bool {
+        let key = Key(session.device)
+        guard sessions[key] === session, let product = Receiver.productID(report),
+              productAnnounced(product, key) else { return false }
+        Log.info("\(session.name): a different device (pid=\(String(format: "0x%04x", product))) is in its slot")
+        let device = replaceEndpoint(session.device)
+        if Receiver.isLinkEstablished(report) { Task { await adoptRetrying(device) } }
+        return true
+    }
+
+    /// Records the wireless product ID announced in a slot; true when it names a different device
+    /// from the one known there.
+    private func productAnnounced(_ product: UInt16, _ key: Key) -> Bool {
+        Self.isNewDevice(known: slotProducts.updateValue(product, forKey: key), announced: product)
+    }
+
+    /// Only a change between two known products is a new device: the first announcement after
+    /// attach names whatever was already there.
+    static func isNewDevice(known: UInt16?, announced: UInt16) -> Bool {
+        known.map { $0 != announced } ?? false
+    }
+
+    /// Closes a receiver slot's endpoint, with its session and retry, and listens there afresh:
+    /// nothing learned about the old device (feature indices, DPI list, diversion) carries over.
+    private func replaceEndpoint(_ device: HIDPPDevice) -> HIDPPDevice {
+        let key = Key(device)
+        cancelRetries { $0 == key }
+        sessions.removeValue(forKey: key)?.close()
+        device.close()  // before `listen`, whose subscription it would otherwise remove
+        statusChanged()
+        return listen(device.interface, index: device.index)
     }
 
     /// Adopts an endpoint. A device that does not answer, perhaps still waking, pairing or busy
@@ -472,6 +547,9 @@ final class Daemon {
     private func add(_ session: Session, _ key: Key) {
         sessions[key] = session
         session.onChange = { [weak self] in self?.statusChanged() }
+        if session.device.interface.isReceiver {
+            session.onConnection = { [weak self, unowned session] in self?.sessionSlotAnnounced(session, $0) ?? false }
+        }
         if capture?.state == .listening { beginCapture(session) }
         session.configure()
         statusChanged()
@@ -485,6 +563,7 @@ final class Daemon {
             try? await Task.sleep(for: .seconds(2))
             guard !shuttingDown else { return }
             sessions.values.forEach { $0.configure() }
+            retryMissingNotifications()
             await adoptStragglers()
         }
     }

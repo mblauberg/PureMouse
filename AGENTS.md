@@ -209,9 +209,13 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   `Backoff.adoption`), one retry per endpoint whether attach, a connection notification, resume,
   wake or reload started it; pause, detach and shutdown cancel it. After that a receiver slot is
   left to its connection notification, so idle cost stays zero. A Bluetooth mouse has no
-  notifications, so it is then tried once a minute (`Backoff.bluetooth`) until it answers. A slot
-  ignored as not a mouse is identified again when a notification carries a different wireless
-  product ID (a new device paired into it).
+  notifications, so it is then tried once a minute (`Backoff.bluetooth`) until it answers. Turning
+  on a receiver's connection notifications is retried the same way (`Daemon.retryNotifications`),
+  then again on wake and resume. When a notification carries a different wireless product ID from
+  the one known for the slot (a new device paired into it), the slot's session is closed as on a
+  disconnect and the newcomer adopted on a fresh `HIDPPDevice`, so no feature index, DPI list or
+  state carries over (`Daemon.replaceEndpoint`); an ignored slot is identified again. The first
+  announcement after attach only records the product.
 - `puremouse register` (and opening the app from the Finder, i.e. no arguments inside a bundle)
   writes `~/Library/LaunchAgents/<bundle id>.plist` pointing at its own binary and bootstraps it,
   booting out any running instance first (`LoginItem.swift`). Not `SMAppService`: without a
