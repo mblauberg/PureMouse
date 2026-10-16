@@ -138,7 +138,13 @@ extension ConfigTree {
         let scope = Self.appScope(app)
         var parts: [String] = []
         let choice = thumbWheelChoice(at: scope + ["thumbWheel"])
-        if choice != .inherit { parts.append("Thumb wheel: \(choice.label)") }
+        let direction = bool(scope + ["thumbWheel", "reversed"]).map { $0 ? "reversed" : "normal direction" }
+        switch (choice != .inherit, direction) {
+        case (true, let direction?): parts.append("Thumb wheel: \(choice.label), \(direction)")
+        case (true, nil): parts.append("Thumb wheel: \(choice.label)")
+        case (false, let direction?): parts.append("Thumb wheel: \(direction.prefix(1).uppercased() + direction.dropFirst())")
+        case (false, nil): break
+        }
         let buttons = (self[scope + ["buttons"]] as? [String: Any])?.count ?? 0
         if buttons > 0 { parts.append(buttons == 1 ? "1 button" : "\(buttons) buttons") }
         if overridesScrolling(app) { parts.append("Scrolling speed") }

@@ -328,6 +328,11 @@ private func resolved(_ wheel: Config.ThumbWheel) -> Resolved {
     #expect(config.appSummary("a.b") == "Thumb wheel: Switch Tabs, 2 buttons, Scrolling speed")
     #expect(config.appSummary("c.d") == "1 button")
     #expect(config.appSummary("e.f") == "Same as Everywhere")
+    // Direction alone is an override too.
+    let directions = try tree(#"{"apps": {"a.b": {"thumbWheel": {"reversed": true}}, "c.d": {"thumbWheel": {"reversed": false}}, "e.f": {"thumbWheel": {"action": "tabs", "reversed": true}}}}"#)
+    #expect(directions.appSummary("a.b") == "Thumb wheel: Reversed")
+    #expect(directions.appSummary("c.d") == "Thumb wheel: Normal direction")
+    #expect(directions.appSummary("e.f") == "Thumb wheel: Switch Tabs, reversed")
 }
 
 @Test func appEditsReplayOntoAHandEditedFile() throws {
