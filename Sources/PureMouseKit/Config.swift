@@ -131,25 +131,29 @@ public struct Config: Decodable, Sendable {
             inverted = try c.decodeIfPresent(Bool.self, forKey: AnyKey("inverted"))
         }
 
-        /// The choice of what the wheel does, on top of `base`: `left`/`right` win over
-        /// `action`, and either replaces the base's choice and step; `step` alone keeps it.
+        /// The keys `c` names, on top of `base`. `action` picks a pair and, if that changes the
+        /// pair, its default step; `left` and `right` then replace one direction each, keeping the
+        /// other and the step; `step` sets the step.
         init(_ c: KeyedDecodingContainer<AnyKey>, base: ThumbWheel) throws {
             self = base
-            let left = try c.decodeIfPresent(Action.self, forKey: AnyKey("left"))
-            let right = try c.decodeIfPresent(Action.self, forKey: AnyKey("right"))
-            if left != nil || right != nil {
-                mode = .actions(left: left ?? .none, right: right ?? .none)
-                step = Self.defaultStep
-            } else if let name = try c.decodeIfPresent(String.self, forKey: AnyKey("action")) {
+            if let name = try c.decodeIfPresent(String.self, forKey: AnyKey("action")) {
                 if name == "scroll" {
                     mode = .scroll
                 } else if let preset = Self.presets[name] {
-                    mode = .actions(left: preset.left, right: preset.right)
-                    step = preset.step
+                    let pair = Mode.actions(left: preset.left, right: preset.right)
+                    if mode != pair { step = preset.step }
+                    mode = pair
                 } else {
                     throw DecodingError.dataCorruptedError(forKey: AnyKey("action"), in: c,
                         debugDescription: "unknown thumb wheel action '\(name)'; known: scroll, \(Self.presets.keys.sorted().joined(separator: ", ")), or left and right actions")
                 }
+            }
+            let left = try c.decodeIfPresent(Action.self, forKey: AnyKey("left"))
+            let right = try c.decodeIfPresent(Action.self, forKey: AnyKey("right"))
+            if left != nil || right != nil {
+                var pair: (left: Action, right: Action) = (.none, .none)
+                if case .actions(let l, let r) = mode { pair = (l, r) }
+                mode = .actions(left: left ?? pair.left, right: right ?? pair.right)
             }
             step = try c.decodeIfPresent(Int.self, forKey: AnyKey("step"), in: Self.stepRange) ?? step
         }

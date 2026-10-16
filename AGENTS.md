@@ -137,7 +137,10 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   scroll burst (`ScrollEngine.profileForBurst`) or thumb-wheel movement starts. `ForegroundApp`
   does the lookups, AppKit-free and on demand; the Universal Control work reuses it. Every control
   bound in any scope is diverted; pressed where nothing binds it, the wheel press, back and
-  forward post their ordinary click (`NativeButton`), released in kind and on reconfigure/close.
+  forward post their ordinary click (`NativeButton`), released in kind. Held buttons
+  (`HeldButtons`) are dropped, native clicks released, whenever the mouse's own release may not
+  come: link down, reconnect, reload, pause and quit (`Session.dropHeld`). A per-app `thumbWheel`
+  keeps the global direction and step it leaves out.
 - `restore()` decides whether to hand the wheels back from `Session.wheelsMayBeDiverted`, not
   from the current config: after a reload that drops (or disables) `smoothScroll`, the
   replacement session inherits the flag and keeps it until its own apply has set the wheels
@@ -217,8 +220,9 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
 - Per-app settings: a new per-app section needs a case in `Config.appSections`, decoding on top of
   the global value in `Config.decodeApps`, a `sets…` flag, and its lookup at the moment it applies.
 - Thumb-wheel actions: `Config.ThumbWheel.presets` (Kit) names action pairs; `ThumbStepper` counts
-  rotation into steps (remainder kept, reset at each movement's start, a cooldown for animated
-  actions, `ThumbStepper.cooldown`).
+  rotation into steps (remainder kept, reset at each movement's start), paced per action
+  (`ThumbStepper.pacing`: media keys free, shortcuts 50 ms, zoom 40 ms, animated actions 300 ms
+  with the turns between discarded).
 - Scroll feel: `ScrollAcceleration` (curve) and `ScrollAnimator` (two-part easing) in
   `ScrollModel.swift`, covered by `ScrollModelTests`.
 - Protocol references: Solaar (`hidpp20.py`), logiops, Mac Mouse Fix. `puremouse probe` dumps the

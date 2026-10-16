@@ -23,11 +23,13 @@ import Testing
         #expect(try thumb(#"{"action": "scroll"}"#).mode == .scroll)
     }
 
-    @Test func leftAndRightWinOverAction() throws {
+    @Test func leftAndRightReplaceOneDirectionEach() throws {
         let t = try thumb(#"{"action": "volume", "left": {"keys": "cmd+["}, "right": "missionControl"}"#)
         guard case .actions(.keys(let k), .missionControl) = t.mode else { Issue.record("\(t.mode)"); return }
-        #expect(k.key == 33 && t.step == Config.ThumbWheel.defaultStep)
+        #expect(k.key == 33 && t.step == 2)
+        #expect(try thumb(#"{"action": "volume", "left": "mute"}"#).mode == .actions(left: .mute, right: .volumeUp))
         #expect(try thumb(#"{"right": "mute"}"#).mode == .actions(left: .none, right: .mute))
+        #expect(try thumb(#"{"right": "mute"}"#).step == Config.ThumbWheel.defaultStep)
     }
 
     @Test(arguments: [
@@ -117,6 +119,25 @@ import Testing
         #expect(music.thumbWheel.mode == .actions(left: .volumeDown, right: .volumeUp) && music.thumbWheel.step == 1)
         let preview = try #require(config.settings(forApp: "com.apple.Preview"))
         #expect(preview.thumbWheel.mode == .scroll && preview.smoothScroll?.enabled == false && preview.smoothScroll?.speed == 2)
+    }
+
+    @Test func partialThumbWheelInAnAppKeepsTheRest() throws {
+        let config = try decode("""
+            {"thumbWheel": {"left": "volumeDown", "right": "volumeUp", "step": 8}, "apps": {
+              "a": {"thumbWheel": {"left": "mute"}},
+              "b": {"thumbWheel": {"action": "volume"}},
+              "c": {"thumbWheel": {"action": "zoom"}},
+              "d": {"thumbWheel": {"action": "zoom", "right": "mute", "step": 5}}}}
+            """)
+        let a = try #require(config.settings(forApp: "a")).thumbWheel
+        #expect(a.mode == .actions(left: .mute, right: .volumeUp) && a.step == 8)
+        // The same pair keeps the global step; a different one brings its own.
+        let b = try #require(config.settings(forApp: "b")).thumbWheel
+        #expect(b.mode == .actions(left: .volumeDown, right: .volumeUp) && b.step == 8)
+        let c = try #require(config.settings(forApp: "c")).thumbWheel
+        #expect(c.mode == .actions(left: .zoomOut, right: .zoomIn) && c.step == 3)
+        let d = try #require(config.settings(forApp: "d")).thumbWheel
+        #expect(d.mode == .actions(left: .zoomOut, right: .mute) && d.step == 5)
     }
 
     @Test func smoothScrollInAnAppWorksWithoutAGlobalOne() throws {

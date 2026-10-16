@@ -72,10 +72,12 @@ By default the thumb wheel scrolls sideways. `action` picks something else:
 | `"tabs"` | `previousTab` / `nextTab` (Ctrl+Shift+Tab / Ctrl+Tab) | 3 |
 | `"spaces"` | `spaceLeft` / `spaceRight` | 4 |
 
-Or give any two actions as `left` and `right` (one may be left out); they take precedence over
-`action`. `step` is how far the wheel turns per action, in its own steps, 1–36 (18 make a full turn
-on the MX Master 3S; default 3). Turning faster gives several actions; Spaces, Mission Control and
-the other animated actions fire at most one per 400 ms.
+Or give any two actions as `left` and `right`; with `action` too, each replaces that direction of
+the pair (one left out stays as `action` has it, or does nothing). `step` is how far the wheel turns
+per action, in its own steps, 1–36 (18 make a full turn on the MX Master 3S; default 3). Turning
+faster gives several actions: media keys as fast as you turn, tab switching and other shortcuts at
+most one per 50 ms, zoom one per 40 ms, and Spaces, Mission Control and the other animated actions
+one per 300 ms (turning in between is ignored).
 
 ```json
 "thumbWheel": { "action": "volume" }
@@ -105,7 +107,9 @@ global.
 
 Each app entry changes only what it names, on top of the global settings: the buttons it lists,
 a gesture's directions it lists (the others stay as the global gesture has them), and the
-`thumbWheel` and `smoothScroll` keys it sets. Bundle IDs match regardless of case; one for an app
+`thumbWheel` and `smoothScroll` keys it sets. A thumb wheel `left` or `right` alone keeps the other
+direction and the step; an `action` keeps the step only if it is the global pair, else it brings its
+own. Bundle IDs match regardless of case; one for an app
 that is not installed is fine. `puremouse app` prints the bundle IDs PureMouse sees, or run
 `osascript -e 'id of app "Safari"'`.
 

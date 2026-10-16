@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import puremouse
 import PureMouseKit
@@ -28,12 +29,20 @@ import PureMouseKit
         #expect(s.add(9, at: t0) == 0)
     }
 
-    @Test func cooldownTakesOneStepAndDiscardsMovementMeanwhile() {
-        var s = ThumbStepper(threshold: 10, cooldown: .milliseconds(400))
+    @Test func animatedPacingTakesOneStepAndDiscardsMovementMeanwhile() {
+        var s = ThumbStepper(threshold: 10, pacing: .init(interval: .milliseconds(300), discards: true))
         #expect(s.add(50, at: t0) == 1)
         #expect(s.add(50, at: t0 + .milliseconds(100)) == 0)
-        #expect(s.add(5, at: t0 + .milliseconds(450)) == 0)  // fresh travel needed
-        #expect(s.add(5, at: t0 + .milliseconds(460)) == 1)
+        #expect(s.add(5, at: t0 + .milliseconds(350)) == 0)  // fresh travel needed
+        #expect(s.add(5, at: t0 + .milliseconds(360)) == 1)
+    }
+
+    @Test func shortcutPacingKeepsOneStepForLater() {
+        var s = ThumbStepper(threshold: 10, pacing: .init(interval: .milliseconds(50)))
+        #expect(s.add(45, at: t0) == 1)                          // one at a time
+        #expect(s.add(45, at: t0 + .milliseconds(20)) == 0)      // held, capped at one step
+        #expect(s.add(1, at: t0 + .milliseconds(60)) == 1)
+        #expect(s.add(1, at: t0 + .milliseconds(120)) == 0)      // nothing more was kept
     }
 
     @Test func thresholdIsInNativeSteps() {
@@ -43,11 +52,67 @@ import PureMouseKit
         #expect(ThumbStepper.threshold(step: 1, native: 0, diverted: 0) == 1)
     }
 
-    @Test func animatedActionsCoolDown() {
-        #expect(ThumbStepper.cooldown(left: .volumeDown, right: .volumeUp) == .zero)
-        #expect(ThumbStepper.cooldown(left: .previousTab, right: .nextTab) == .zero)
-        #expect(ThumbStepper.cooldown(left: .spaceLeft, right: .spaceRight) > .zero)
-        #expect(ThumbStepper.cooldown(left: .none, right: .missionControl) > .zero)
+    @Test func pacingFollowsTheActions() {
+        #expect(ThumbStepper.pacing(left: .volumeDown, right: .volumeUp) == .init())
+        #expect(ThumbStepper.pacing(left: .previousTab, right: .nextTab) == .init(interval: .milliseconds(50)))
+        #expect(ThumbStepper.pacing(left: .zoomOut, right: .zoomIn) == .init(interval: .milliseconds(40)))
+        #expect(ThumbStepper.pacing(left: .spaceLeft, right: .spaceRight) == .init(interval: .milliseconds(300), discards: true))
+        #expect(ThumbStepper.pacing(left: .none, right: .missionControl).discards)
+        #expect(ThumbStepper.pacing(left: .zoomOut, right: .nextTab).interval == .milliseconds(50))
+    }
+}
+
+@Suite struct HeldButtonsTests {
+    final class Posts { var log: [(UInt16, Bool)] = [] }
+
+    func held(_ posts: Posts) -> HeldButtons {
+        HeldButtons { cid, down in
+            guard NativeButton.number(for: cid) != nil else { return false }
+            posts.log.append((cid, down))
+            return true
+        }
+    }
+
+    @Test func dropReleasesANativeClickWhoseReleaseNeverCame() {
+        // Middle bound only in another app, held, then the mouse turned off: link down drops it.
+        let posts = Posts()
+        var h = held(posts)
+        _ = h.update([0x52])
+        h.clickNatively(0x52)
+        h.drop()
+        #expect(posts.log.map(\.1) == [true, false] && h.native.isEmpty && h.pressed.isEmpty)
+        // A release reported after reconnecting posts nothing more.
+        let late = h.release(0x52)
+        #expect(late == nil && posts.log.count == 2)
+        let after = h.update([])
+        #expect(after.released.isEmpty)
+    }
+
+    func gesture(click: String) throws -> Config.Binding.Gesture {
+        try JSONDecoder().decode(Config.Binding.Gesture.self, from: Data(#"{"click": "\#(click)"}"#.utf8))
+    }
+
+    @Test func dropForgetsTheGesture() throws {
+        var h = held(Posts())
+        let gesture = try gesture(click: "missionControl")
+        let first = h.holdGesture(0xC3, gesture), second = h.holdGesture(0xC4, gesture)
+        #expect(first && !second)
+        h.drop()
+        let released = h.release(0xC3)
+        #expect(h.gesture == nil && released == nil)
+    }
+
+    @Test func releaseEndsTheHoldItStarted() throws {
+        let posts = Posts()
+        var h = held(posts)
+        h.clickNatively(0x53)
+        h.clickNatively(0xC4)  // no click to post
+        #expect(h.native == [0x53])
+        let native = h.release(0x53)
+        #expect(native == nil && posts.log.map(\.1) == [true, false])
+        let holding = h.holdGesture(0xC3, try gesture(click: "launchpad"))
+        let ended = h.release(0xC3)
+        #expect(holding && ended?.click == .launchpad && h.gesture == nil)
     }
 }
 

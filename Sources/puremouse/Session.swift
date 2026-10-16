@@ -42,12 +42,8 @@ final class Session {
 
     /// Last scroll mode set by toggling; survives reconnects, overriding the configured mode.
     private var scrollMode: SmartShift.Mode?
-    private var held: [UInt16] = []
-    private var gestureButton: UInt16?
-    /// The gesture `gestureButton` was bound to when pressed, kept for the hold.
-    private var heldGesture: Config.Binding.Gesture?
-    /// Buttons pressed where nothing binds them, whose click was posted; released in kind.
-    private var nativeHeld: Set<UInt16> = []
+    /// Buttons down, the gesture held and native clicks posted (`HeldButtons`).
+    private var held = HeldButtons()
     /// The thumb wheel settings of the current movement and its step counter.
     private var thumbSettings = Config.ThumbWheel()
     private var thumbStepper = ThumbStepper(threshold: 1)
@@ -198,7 +194,7 @@ final class Session {
         configuring?.cancel()
         deviceAction?.cancel()
         scroll?.stop()
-        releaseNativeButtons()
+        dropHeld()
         device.onEvent = nil
     }
 
@@ -212,8 +208,7 @@ final class Session {
         capturing = extras
         releasing.subtract(extras)
         // A gesture held as capture starts must not act when it is let go.
-        gestureButton = nil
-        heldGesture = nil
+        held.forgetGesture()
         enqueueDiversion { session in
             for cid in extras where session.capturing != nil {
                 try await session.setDiverted(cid, true)
@@ -314,10 +309,7 @@ final class Session {
     func configure(after delay: Duration = .zero) {
         guard !finished else { return }
         configuring?.cancel()
-        held = []
-        gestureButton = nil
-        heldGesture = nil
-        releaseNativeButtons()
+        dropHeld()
         configuring = Task {
             try? await Task.sleep(for: delay)
             for attempt in 1...3 {
@@ -468,7 +460,7 @@ final class Session {
         configuring?.cancel()
         deviceAction?.cancel()
         scroll?.stop()
-        releaseNativeButtons()
+        dropHeld()
         await drainDiversion()
         // Wheels first: a silent wheel is worse than a diverted button. Each step stands alone,
         // so one failure does not skip the rest. A replaced session may have diverted them even
@@ -512,7 +504,9 @@ final class Session {
                 Log.info("\(name): link up")
                 configure()
             } else {
+                // The mouse is off or out of range: its releases will not arrive.
                 scroll?.stop()
+                dropHeld()
                 if online {
                     online = false
                     changed()
@@ -554,9 +548,7 @@ final class Session {
     }
 
     private func buttonsChanged(_ cids: [UInt16]) {
-        let pressed = cids.filter { !held.contains($0) }
-        let released = held.filter { !cids.contains($0) }
-        held = cids
+        let (pressed, released) = held.update(cids)
         released.forEach(release)
         if capturing != nil {
             if let first = pressed.first { onCapture?(first) }
@@ -598,7 +590,7 @@ final class Session {
         if case .actions(let left, let right) = settings.mode {
             thumbStepper.threshold = ThumbStepper.threshold(step: settings.step, native: thumbInfo.nativeResolution,
                                                             diverted: thumbInfo.divertedResolution)
-            thumbStepper.cooldown = ThumbStepper.cooldown(left: left, right: right)
+            thumbStepper.pacing = ThumbStepper.pacing(left: left, right: right)
         }
     }
 
@@ -617,35 +609,28 @@ final class Session {
         case .action(let action):
             perform(action)
         case .gesture(let gesture):
-            guard gestureButton == nil else { return }
-            gestureButton = cid
-            heldGesture = gesture
+            guard held.holdGesture(cid, gesture) else { return }
             recognizer.begin()
         case nil:
             // Bound only in other apps: click as the mouse would without PureMouse.
-            if NativeButton.post(cid, down: true) { nativeHeld.insert(cid) }
+            held.clickNatively(cid)
         }
     }
 
     private func release(_ cid: UInt16) {
-        if nativeHeld.remove(cid) != nil {
-            NativeButton.post(cid, down: false)
-            return
-        }
-        guard cid == gestureButton, let gesture = heldGesture else { return }
-        gestureButton = nil
-        heldGesture = nil
+        guard let gesture = held.release(cid) else { return }
         if recognizer.end() { perform(gesture.click) }
     }
 
-    /// Lets go of clicks posted for unbound buttons, so none stays held.
-    private func releaseNativeButtons() {
-        for cid in nativeHeld { NativeButton.post(cid, down: false) }
-        nativeHeld = []
+    /// Lets go of every held button without acting on it, posting the releases of native clicks,
+    /// and ends any thumb-wheel movement: for when the mouse's own releases may never come.
+    private func dropHeld() {
+        held.drop()
+        thumbLast = nil
     }
 
     private func moved(dx: Int, dy: Int) {
-        guard gestureButton != nil, let gesture = heldGesture,
+        guard let gesture = held.gesture?.gesture,
               let direction = recognizer.move(dx: dx, dy: dy) else { return }
         Log.debug("\(name): gesture \(direction)")
         perform(gesture.action(for: direction))
