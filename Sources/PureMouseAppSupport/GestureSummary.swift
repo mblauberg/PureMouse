@@ -15,13 +15,17 @@ public enum GestureSummary {
 }
 
 extension ConfigTree {
-    /// The summary for a gesture button at `scope` (the top level, an app or a device).
+    /// The summary for a gesture button at `scope` (the top level, an app or a device). A device's
+    /// is what applies on that mouse: its directions over the top level's.
     public func gestureSummary(_ button: String, in scope: ConfigScope = .global) -> String {
-        let moves = Gesture.directions.filter { $0 != "click" }.filter {
-            let action = gestureBinding(button, $0, in: scope)
-            return action != .standard && action != .named("none")
+        func action(_ direction: String) -> ButtonAction {
+            guard scope.deviceKey != nil else { return gestureBinding(button, direction, in: scope) }
+            return ButtonAction(json: resolved(["buttons", button, direction], in: scope))
         }
-        return GestureSummary.text(click: gestureBinding(button, "click", in: scope), directionsSet: moves.count)
+        let moves = Gesture.directions.filter { $0 != "click" }.filter {
+            action($0) != .standard && action($0) != .named("none")
+        }
+        return GestureSummary.text(click: action("click"), directionsSet: moves.count)
     }
 
     /// Some button is Hold and Move: globally, in an app or on one mouse. Gesture distance and

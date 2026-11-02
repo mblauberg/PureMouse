@@ -13,7 +13,9 @@ public struct ConfigScope: Hashable, Sendable {
     public static let global = ConfigScope(prefix: [])
 
     /// The scope of one mouse, or nil for a key Kit rejects: `m` plus 12 lowercase hex digits that
-    /// are not a placeholder, or `p` plus 4.
+    /// are not a placeholder, or `p` plus 4. The file may spell the entry's key in other case
+    /// (Kit lowercases it); the tree finds the entry (`entryPrefix(for:)`), and `prefix` is where
+    /// a new one goes.
     public static func device(_ key: String) -> ConfigScope? {
         Config.isDeviceKey(key) ? ConfigScope(prefix: ["devices", key]) : nil
     }
@@ -53,41 +55,71 @@ extension ConfigTree {
     ///   merge per key (an object path returns the merged object); `buttons` merge per control,
     ///   whatever name or hex ID spells it, and a gesture per direction. `buttons`, then a name,
     ///   then a direction narrows the answer. Anything else is the top level's, since a device
-    ///   entry cannot set it.
+    ///   entry cannot set it. The entry is the one Kit keeps for the key, whatever case the file
+    ///   spells it in, and JSON `null` reads as absent on both sides, as Kit reads it.
     /// - `thumbWheel` is per key here, but its `action` also resets `step` and replaces `left` and
     ///   `right`, which only layering gets right: read the wheel with `thumbWheel(in:)`.
     /// - Any other scope has no wider one to fall back to: its own value, as `self[prefix + path]`.
     public func resolved(_ path: [String], in scope: ConfigScope) -> Any? {
-        guard let key = scope.deviceKey else { return value(scope.prefix + path) }
+        guard scope.deviceKey != nil else { return value(scope.prefix + path) }
         guard let section = path.first, Config.deviceSections.contains(section) else { return value(path) }
-        let entry = (self[["devices", key]] as? [String: Any]) ?? [:]
+        let entry = deviceEntry(scope)
         if section == "buttons" { return resolvedButtons(Array(path.dropFirst()), device: entry) }
-        let global = Self.lookup(root, path)
-        guard let own = Self.lookup(entry, path) else { return global }
+        let global = Self.clean(Self.lookup(root, path))
+        guard let own = Self.clean(Self.lookup(entry, path)) else { return global }
         if path.count == 1, let own = own as? [String: Any], let global = global as? [String: Any] {
             return global.merging(own) { _, own in own }
         }
         return own
     }
 
+    /// `resolved` as an integer, a double or a bool: nil when it is absent or another type (a
+    /// bool is not a number here, nor the reverse), as `int`, `double` and `bool` read the tree.
+    public func resolvedInt(_ path: [String], in scope: ConfigScope) -> Int? { Self.int(resolved(path, in: scope)) }
+    public func resolvedDouble(_ path: [String], in scope: ConfigScope) -> Double? { Self.double(resolved(path, in: scope)) }
+    public func resolvedBool(_ path: [String], in scope: ConfigScope) -> Bool? { Self.bool(resolved(path, in: scope)) }
+
     /// Whether `scope` itself sets the value at `path` (relative to the root, as `resolved`),
     /// rather than leaving it to the top level. Always false for the top level, and for a section a
-    /// device entry cannot set. A button counts under whichever name or hex ID spells it.
+    /// device entry cannot set. In a device, a button counts under whichever name or hex ID spells
+    /// it, a primary click never counts (Kit ignores it), and a gesture direction counts when the
+    /// mouse binds the direction itself or binds the control to something that is not a gesture
+    /// (which hides the top level's directions).
     public func isOverridden(_ path: [String], in scope: ConfigScope) -> Bool {
         guard scope != .global else { return false }
-        if scope.deviceKey != nil, !path.isEmpty, !Config.deviceSections.contains(path[0]) { return false }
-        var path = path
-        if path.count >= 2, path[0] == "buttons" { path[1] = buttonKey(path[1], in: scope) }
-        return value(scope.prefix + path) != nil
+        guard scope.deviceKey != nil else {
+            var path = path
+            if path.count >= 2, path[0] == "buttons" { path[1] = buttonKey(path[1], in: scope) }
+            return value(scope.prefix + path) != nil
+        }
+        guard !path.isEmpty else { return self[entryPrefix(for: scope)] != nil }
+        guard let section = path.first, Config.deviceSections.contains(section) else { return false }
+        guard section == "buttons", path.count >= 2 else {
+            return Self.lookup(Self.clean(deviceEntry(scope)) as? [String: Any] ?? [:], path) != nil
+        }
+        let buttons = deviceEntry(scope)["buttons"] as? [String: Any] ?? [:]
+        let name = path[1]
+        let binding: Any?
+        if let cid = NamedButton.cid(forKey: name) {
+            guard !Config.reservedControls.contains(cid) else { return false }
+            binding = Self.binding(for: cid, in: buttons)?.value
+        } else {
+            binding = buttons[name].flatMap { $0 is NSNull ? nil : $0 }
+        }
+        guard let binding else { return false }
+        guard path.count >= 3 else { return true }
+        // A name Kit has no control for is replaced whole, so any binding hides the top level's.
+        guard NamedButton.cid(forKey: name) != nil, let gesture = Self.isGestureShape(binding) else { return true }
+        return !(gesture[path[2]] is NSNull) && gesture[path[2]] != nil
     }
 
     /// The thumb wheel in `scope` as the daemon resolves it: the top level's keys, then the
     /// scope's on top (`Config.ThumbWheel.init(_:base:)`, where `action` resets the step and `left`
     /// and `right` replace one direction each).
     public func thumbWheel(in scope: ConfigScope) -> ThumbWheelState {
-        let global = thumbWheel(at: ["thumbWheel"])
+        let global = ThumbWheelState.initial.applying(Self.clean(self[["thumbWheel"]]) as? [String: Any])
         guard scope != .global else { return global }
-        return global.applying(self[scope.prefix + ["thumbWheel"]] as? [String: Any])
+        return global.applying(Self.clean(self[entryPrefix(for: scope) + ["thumbWheel"]]) as? [String: Any])
     }
 
     // MARK: Writing
@@ -98,9 +130,11 @@ extension ConfigTree {
     /// are not written under a device.
     ///
     /// The first value written under a device creates its entry, with `name` (the mouse's name,
-    /// else its key) written once; an entry that already exists keeps its own. Removing the last
-    /// override removes the entry, as a name-only entry says nothing, but an entry that holds any
-    /// other key (one this app does not know) stays. Removing what is not there changes nothing.
+    /// else its key) written once; an entry that already exists keeps its own, whatever case its
+    /// key is spelled in (`entryPrefix(for:)`). Removing the last override removes the entry, as a
+    /// name-only entry says nothing, but an entry that holds any other key (one this app does not
+    /// know) stays, `name` with it. Removing what is not there changes nothing. Within a section
+    /// any key is written as given, known to Kit or not.
     @discardableResult
     public mutating func set(_ value: Any?, at path: [String], in scope: ConfigScope, name: String? = nil) -> Bool {
         guard let key = scope.deviceKey else {
@@ -108,7 +142,7 @@ extension ConfigTree {
             return true
         }
         guard let section = path.first, Config.deviceSections.contains(section) else { return false }
-        let entry = scope.prefix
+        let entry = entryPrefix(for: scope)
         let target = entry + path
         if value == nil {
             guard contains(target) else { return true }
@@ -125,8 +159,28 @@ extension ConfigTree {
 
     // MARK: Helpers
 
+    /// Where `scope`'s own object lives. A device entry is found the way Kit finds it: the entry
+    /// keys are lowercased, and when several spell one mouse the last in sorted order applies, so
+    /// `MB03400000000` is the entry for `mb03400000000`. Without one, the scope's own prefix, where
+    /// a first write creates it.
+    func entryPrefix(for scope: ConfigScope) -> [String] {
+        guard let key = scope.deviceKey, let devices = self[["devices"]] as? [String: Any],
+              let raw = devices.keys.sorted().last(where: { $0.lowercased() == key }) else { return scope.prefix }
+        return ["devices", raw]
+    }
+
+    private func deviceEntry(_ scope: ConfigScope) -> [String: Any] {
+        self[entryPrefix(for: scope)] as? [String: Any] ?? [:]
+    }
+
     /// The value at `path`, with JSON null read as absent, as the decoder reads it.
     private func value(_ path: [String]) -> Any? { Self.lookup(root, path) }
+
+    /// `value` without the JSON nulls inside it (Kit skips a null key as if it were absent).
+    private static func clean(_ value: Any?) -> Any? {
+        guard let object = value as? [String: Any] else { return value is NSNull ? nil : value }
+        return object.compactMapValues { $0 is NSNull ? nil : clean($0) }
+    }
 
     private static func lookup(_ dict: [String: Any], _ path: [String]) -> Any? {
         var node: Any = dict
@@ -145,17 +199,27 @@ extension ConfigTree {
     }
 
     /// The binding for a control among the names `buttons` gives it: when several spell the same
-    /// control, the decoder keeps the last in sorted order.
+    /// control, the decoder keeps the last in sorted order. A null binding is no binding here.
     private static func binding(for cid: UInt16, in buttons: [String: Any]) -> (name: String, value: Any)? {
-        buttons.keys.sorted().last { NamedButton.cid(forKey: $0) == cid }.flatMap { name in
+        buttons.keys.sorted().last { NamedButton.cid(forKey: $0) == cid && !(buttons[$0] is NSNull) }.flatMap { name in
             buttons[name].map { (name, $0) }
         }
+    }
+
+    /// A binding as `resolved` returns it: no nulls, and a gesture that sets nothing is one whose
+    /// directions all do nothing (Kit reads `{"up": null}` as a gesture).
+    private static func normalised(_ binding: Any?) -> Any? {
+        guard let binding else { return nil }
+        let cleaned = clean(binding)
+        if isGestureShape(binding) != nil, (cleaned as? [String: Any])?.isEmpty ?? true { return ["click": "none"] }
+        return cleaned
     }
 
     /// `buttons` in a device: per control, the device's binding over the top level's, a gesture
     /// per direction when both are gestures (`Config.Binding.decode`). Reserved controls (the
     /// primary clicks) are never bound. `rest` is what follows `buttons`: nothing (all of them), a
-    /// button name, then keys inside its binding.
+    /// button name, then keys inside its binding. `device` is the raw entry: a `null` direction
+    /// leaves the other side's, and a `null` binding is none.
     private func resolvedButtons(_ rest: [String], device: [String: Any]) -> Any? {
         let global = self[["buttons"]] as? [String: Any]
         let own = device["buttons"] as? [String: Any]
@@ -163,7 +227,7 @@ extension ConfigTree {
             guard global != nil || own != nil else { return nil }
             var names: [String: String] = [:]  // a control, or an unknown name, to the name that spells it
             for buttons in [global ?? [:], own ?? [:]] {
-                for key in buttons.keys.sorted() {
+                for key in buttons.keys.sorted() where !(buttons[key] is NSNull) {
                     if let cid = NamedButton.cid(forKey: key) {
                         if !Config.reservedControls.contains(cid) { names["cid:\(cid)"] = key }
                     } else {
@@ -183,7 +247,7 @@ extension ConfigTree {
             let base = global.flatMap { Self.binding(for: cid, in: $0) }?.value
             if let top = own.flatMap({ Self.binding(for: cid, in: $0) })?.value {
                 if let top = Self.isGestureShape(top), let base = Self.isGestureShape(base) {
-                    binding = base.merging(top) { _, top in top }
+                    binding = base.merging(top) { base, top in top is NSNull ? base : top }
                 } else {
                     binding = top
                 }
@@ -191,9 +255,12 @@ extension ConfigTree {
                 binding = base
             }
         } else {
-            binding = own?[name] ?? global?[name]
+            binding = [own?[name], global?[name]].compactMap { $0 }.first { !($0 is NSNull) }
         }
-        guard let binding, rest.count > 1 else { return binding }
+        guard let binding = Self.normalised(binding) else { return nil }
+        guard rest.count > 1 else { return binding }
+        // Directions are a gesture's; any other binding has none (its other keys read as they are).
+        if Gesture.directions.contains(rest[1]), Self.isGestureShape(binding) == nil { return nil }
         return Self.lookup(["b": binding], ["b"] + rest.dropFirst())
     }
 }
