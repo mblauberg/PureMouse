@@ -132,11 +132,19 @@ assemble_bundle() {
     cp $root/config.example.json $root/assets/{Assets.car,AppIcon.icns} $app/Contents/Resources/
     write_info_plist $app/Contents/Info.plist $label puremouse $version $build daemon
 
+    make_menu_bundle $bin/PureMouseMenu $menu_app $menu_label $version $build
+}
+
+# make_menu_bundle <menu binary> <app> <identifier> <version> <build>
+# The menu bar app's bundle, unsigned. assemble_bundle nests it in PureMouse.app; the footprint rig
+# (measure-menu.sh) builds its own under another identifier, so it measures the shape that ships.
+make_menu_bundle() {
+    local binary=$1 menu_app=$2 identifier=$3 version=$4 build=$5
     mkdir -p "$menu_app/Contents/"{MacOS,Resources}
-    cp $bin/PureMouseMenu "$menu_app/Contents/MacOS/PureMouseMenu"
+    cp $binary "$menu_app/Contents/MacOS/PureMouseMenu"
     cp $root/assets/{Assets.car,AppIcon.icns,AppIcon.png,AppIcon-dark.png,MenuBarIcon.pdf} \
         "$menu_app/Contents/Resources/"
-    write_info_plist "$menu_app/Contents/Info.plist" $menu_label PureMouseMenu $version $build menu
+    write_info_plist "$menu_app/Contents/Info.plist" $identifier PureMouseMenu $version $build menu
 }
 
 # check_release_signature <codesign -dvv output> <team ID> <component>
