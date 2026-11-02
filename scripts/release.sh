@@ -31,15 +31,18 @@ while (( $# )); do
     esac
 done
 
-# tag_version: the version HEAD's release tag names, or an explanation of why there is none.
+# tag_version <commit>: the version that commit's release tag names, or an explanation of why there
+# is none.
 tag_version() {
-    local tags=(${(f)"$(git tag --list --points-at HEAD 'v*')"}) valid=() tag
-    (( $#tags )) || die "HEAD is not tagged vX.Y.Z or vX.Y.Z-rc.N (a release is built from a tag; for a trial, use --dry-run --version 0.0.0-ci.<shortsha>)"
+    local listing tags valid=() tag
+    listing=$(git tag --list --points-at $1 'v*') || die "git could not list the tags at $1"
+    tags=(${(f)listing})
+    (( $#tags )) || die "$1 is not tagged vX.Y.Z or vX.Y.Z-rc.N (a release is built from a tag; for a trial, use --dry-run --version 0.0.0-ci.<shortsha>)"
     for tag in $tags; do
         ! release_version_ok ${tag#v} || valid+=$tag
     done
-    (( $#valid )) || die "no tag on HEAD is vX.Y.Z or vX.Y.Z-rc.N: ${(j:, :)tags}"
-    (( $#valid == 1 )) || die "HEAD has more than one release tag: ${(j:, :)valid}"
+    (( $#valid )) || die "no tag on $1 is vX.Y.Z or vX.Y.Z-rc.N: ${(j:, :)tags}"
+    (( $#valid == 1 )) || die "$1 has more than one release tag: ${(j:, :)valid}"
     print -r -- ${valid[1]#v}
 }
 
@@ -60,11 +63,12 @@ notary_credentials() {
 notary_auth=(--key "${NOTARY_KEY_PATH:-}" --key-id "${NOTARY_KEY_ID:-}" --issuer "${NOTARY_ISSUER_ID:-}")
 
 # notarize <file>: submits it and waits; on anything but Accepted, prints Apple's log and dies.
-# Stapling is the caller's: a zip cannot be stapled.
+# Only notarytool's stdout is read (its JSON); its stderr goes straight to ours. Stapling is the
+# caller's: a zip cannot be stapled.
 notarize() {
     local file=$1 output result id
     echo "notarising ${file:t}"
-    output=$(xcrun notarytool submit $file $notary_auth --wait --output-format json 2>&1) || true
+    output=$(xcrun notarytool submit $file $notary_auth --wait --output-format json) || true
     result=$(print -r -- $output | plutil -extract status raw -o - - 2>/dev/null) || result=
     if [[ $result != Accepted ]]; then
         id=$(print -r -- $output | plutil -extract id raw -o - - 2>/dev/null) || id=
@@ -73,63 +77,54 @@ notarize() {
     fi
 }
 
-# verify_dmg <dmg> [verify-bundle.sh options]: mounts it read-only, out of sight of the Finder, and
-# checks that it holds PureMouse.app, which verify-bundle.sh accepts, and the Applications link.
-verify_dmg() {
-    local dmg=$1 mount problem=
+# check_dmg_contents <mount point> [verify-bundle.sh options]: the mounted dmg holds PureMouse.app,
+# which verify-bundle.sh accepts, and the Applications link.
+check_dmg_contents() {
+    local mount=$1
     shift
-    mount=$(mktemp -d)
-    hdiutil attach -nobrowse -readonly -noverify -mountpoint $mount $dmg >/dev/null ||
-        { rmdir $mount; die "could not mount ${dmg:t}"; }
     [[ -L $mount/Applications && $(readlink $mount/Applications) == /Applications ]] ||
-        problem="no Applications link to /Applications"
-    [[ -n $problem ]] || scripts/verify-bundle.sh $mount/PureMouse.app $@ || problem="PureMouse.app does not verify"
-    hdiutil detach -quiet $mount || hdiutil detach -quiet -force $mount ||
-        die "could not unmount $mount; detach it with: hdiutil detach -force $mount"
-    rmdir $mount
-    [[ -z $problem ]] || die "${dmg:t}: $problem"
+        die "the dmg has no Applications link to /Applications"
+    scripts/verify-bundle.sh $mount/PureMouse.app $@ || die "the dmg's PureMouse.app does not verify"
 }
 
+# Everything that differs between a release and a dry run is decided here, once.
 if (( version_given )); then
     (( dry_run )) || die "--version is only for a --dry-run (a release takes its version from its tag)"
     [[ $version =~ '^0\.0\.0-ci\.[0-9A-Za-z]+$' ]] || die "a dry run's --version must be 0.0.0-ci.<shortsha>, not '$version'"
 else
-    version=$(tag_version)
+    version=$(tag_version HEAD)
 fi
-notarise=0
+build_options=(--universal --version $version)
+release_opts=() dmg_options=(--identity "$(signing_identity)")
+notarizing=0
 if (( ! dry_run )); then
-    [[ -z $(git status --porcelain) ]] || die "the working tree is not clean; a release is built from a clean tree"
-    notarise=$(notary_credentials)
+    changes=$(git status --porcelain) || die "git status failed, so the tree cannot be checked for changes"
+    [[ -z $changes ]] || die "the working tree is not clean; a release is built from a clean tree"
+    notarizing=$(notary_credentials)
+    # Apple's notary service and a release need the secure timestamp; a dry run stays offline.
+    build_options+=(--timestamp)
+    dmg_options+=(--timestamp)
+    release_opts=(--release)
 fi
 
 app=.build/app/PureMouse.app
 dist=.build/dist
 dmg=$dist/PureMouse-$version.dmg
-identity=$(signing_identity)
-release_opts=()
 
-build_options=(--universal --version $version)
-if (( ! dry_run )); then
-    # Apple's notary service and a release need the secure timestamp; a dry run stays offline.
-    build_options+=(--timestamp)
-    release_opts=(--release)
-fi
 scripts/build-app.sh $build_options
-[[ $(plist_value $app/Contents/Info.plist CFBundleShortVersionString) == $version ]] ||
-    die "the built app is not version $version"
 scripts/verify-bundle.sh $app $release_opts
 scripts/check-size.sh $app
 
-if (( notarise )); then
-    work=$(mktemp -d)
-    trap 'rm -rf $work' EXIT
-    ditto -c -k --keepParent $app $work/PureMouse.zip
-    notarize $work/PureMouse.zip
+if (( notarizing )); then
+    mkdir -p .build/notary
+    ditto -c -k --keepParent $app .build/notary/PureMouse.zip
+    notarize .build/notary/PureMouse.zip
+    rm -rf .build/notary
     xcrun stapler staple $app
 elif (( dry_run )); then
     echo "dry run: not notarising"
 else
-    if codesign -dvv $app 2>&1 | grep '^Authority=Developer ID Application: ' >/dev/null; then
+    if developer_id_signed "$(codesign -dvv $app 2>&1)"; then
         die "PureMouse.app is signed with a Developer ID, so it must be notarised: set NOTARY_KEY_PATH, NOTARY_KEY_ID and NOTARY_ISSUER_ID"
     fi
     echo "no notary credentials: skipping notarisation"
@@ -137,14 +132,12 @@ fi
 
 mkdir -p $dist
 rm -f $dist/SHA256SUMS
-dmg_options=(--identity "$identity")
-(( dry_run )) || dmg_options+=(--timestamp)
 scripts/make-dmg.sh $app $dmg $dmg_options
-if (( notarise )); then
+if (( notarizing )); then
     notarize $dmg
     xcrun stapler staple $dmg
 fi
-verify_dmg $dmg $release_opts
+with_dmg_mounted $dmg check_dmg_contents $release_opts
 scripts/check-size.sh $dmg
 (cd $dist && shasum -a 256 ${dmg:t} > SHA256SUMS && shasum -a 256 -c SHA256SUMS)
 (( ! dry_run )) || echo "dry run: $dmg is for checking, not for publishing"

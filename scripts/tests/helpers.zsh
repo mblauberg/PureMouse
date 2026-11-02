@@ -85,20 +85,32 @@ STUB
     chmod +x $repo/scripts/build-app.sh
 }
 
-# fake_launchd <dir>: launchctl, pkill and pgrep stand-ins on <dir>, so a test can run install.sh and
-# uninstall.sh without touching the real agents. launchctl logs its arguments to <dir>/launchctl.log
-# and reports every service as not loaded.
+# fake_command <name> <script body>: a stand-in <name> first on PATH for the rest of the test, in
+# $tmp/fakes (where its body can find its own logs as ${0:A:h}). The one place a test's fake PATH
+# is built.
+fake_command() {
+    mkdir -p $tmp/fakes
+    print -r -- "#!/bin/zsh
+$2" > $tmp/fakes/$1
+    chmod +x $tmp/fakes/$1
+    [[ :$PATH: == *:$tmp/fakes:* ]] || export PATH=$tmp/fakes:$PATH
+}
+
+# fake_launchd: launchctl, pkill and pgrep stand-ins, so a test can run install.sh and uninstall.sh
+# without touching the real agents or any process. launchctl and pkill log their arguments to
+# $tmp/fakes/launchctl.log. `launchctl print` reports a service loaded only when its label is in
+# FAKE_LOADED. pgrep finds the menu bar app when FAKE_MENU_RUNNING is set (as this user, for any
+# -u) or FAKE_OTHER_USERS_MENU is set (another user's: only a pgrep that does not say -u sees it).
 fake_launchd() {
-    local dir=$1
-    mkdir -p $dir
-    print -r -- '#!/bin/zsh
-print -r -- "$@" >> "${0:A:h}/launchctl.log"
-[[ $1 == print ]] && exit 1
-exit 0' > $dir/launchctl
-    print -r -- '#!/bin/zsh
-print -r -- "pkill $@" >> "${0:A:h}/launchctl.log"
-exit 1' > $dir/pkill
-    print -r -- '#!/bin/zsh
-exit 1' > $dir/pgrep
-    chmod +x $dir/{launchctl,pkill,pgrep}
+    fake_command launchctl 'print -r -- "$@" >> "${0:A:h}/launchctl.log"
+if [[ $1 == print ]]; then
+    [[ " ${FAKE_LOADED:-} " == *" ${2##*/} "* ]]
+    exit
+fi
+exit 0'
+    fake_command pkill 'print -r -- "pkill $@" >> "${0:A:h}/launchctl.log"
+exit 1'
+    fake_command pgrep '[[ -z ${FAKE_MENU_RUNNING:-} ]] || exit 0
+[[ -z ${FAKE_OTHER_USERS_MENU:-} || $* == *-u* ]] || exit 0
+exit 1'
 }

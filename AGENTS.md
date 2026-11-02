@@ -305,7 +305,8 @@ one. This file covers how to work on it safely.
   permission grants are keyed to identifier plus certificate, which also holds on Macs that do not
   trust the certificate; an ad-hoc signature makes macOS drop them on every install.
   `scripts/verify-bundle.sh` checks every component and every architecture of it. install.sh
-  stops the agent before replacing the binary.
+  and uninstall.sh stop every component's agent and nested process (the names are in
+  `components`, as `id:path:executable`) before touching the app, signalling only this user's.
 - Gatekeeper: launching a quarantined copy parks it at `_dyld_start` behind an on-screen dialog.
   On a test Mac, later launches at that path stayed parked even after clearing the flag and putting
   a fresh copy there (presumably until the dialog is answered). Clear the flag before the first

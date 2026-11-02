@@ -11,18 +11,15 @@ set -euo pipefail
 source "${0:A:h}/lib.zsh"
 
 usage="usage: make-dmg.sh <app> <out.dmg> [--identity ID] [--timestamp]"
-app= dmg= identity= timestamp=--timestamp=none
+(( $# >= 2 )) || die $usage
+app=$1 dmg=$2
+shift 2
+identity= timestamp=--timestamp=none
 while (( $# )); do
     case $1 in
         --identity) (( $# >= 2 )) || die "--identity needs a value"; identity=$2; shift 2 ;;
         --timestamp) timestamp=--timestamp; shift ;;
-        -*) die $usage ;;
-        *)
-            if [[ -z $app ]]; then app=$1
-            elif [[ -z $dmg ]]; then dmg=$1
-            else die $usage
-            fi
-            shift ;;
+        *) die $usage ;;
     esac
 done
 [[ -d $app && $dmg == *.dmg ]] || die $usage

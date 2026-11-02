@@ -10,9 +10,7 @@ source "${0:A:h}/lib.zsh"
 
 target=${1:-}
 [[ -n $target && ( -d $target || -f $target ) ]] || die "usage: check-size.sh <app | dmg>"
-installed_override=${INSTALLED_MAX_BYTES:-} dmg_override=${DMG_MAX_BYTES:-}
-source $root/scripts/size-budget.env
-INSTALLED_MAX_BYTES=${installed_override:-$INSTALLED_MAX_BYTES} DMG_MAX_BYTES=${dmg_override:-$DMG_MAX_BYTES}
+load_env_file $root/scripts/size-budget.env
 
 if [[ -d $target ]]; then
     kind=installed variable=INSTALLED_MAX_BYTES limit=$INSTALLED_MAX_BYTES

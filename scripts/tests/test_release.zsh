@@ -105,20 +105,19 @@ release_flow() {
     print -r -- '#!/bin/zsh
 exit 0' > $repo/scripts/verify-bundle.sh
     release_repo_commit $flow_tags
-    mkdir -p $tmp/fakes
-    print -r -- "#!/bin/zsh
-[[ \$* == *-dvv* ]] && cat $fixtures/${2:-codesign-developer-id.txt}
-exit 0" > $tmp/fakes/codesign
-    print -r -- '#!/bin/zsh
-print -r -- "$@" >> "${0:A:h}/xcrun.log"
+    fake_command codesign "[[ \$* == *-dvv* ]] && cat $fixtures/${2:-codesign-developer-id.txt}
+exit 0"
+    # notarytool's JSON is on stdout; its progress noise on stderr must not be mistaken for it.
+    fake_command xcrun 'print -r -- "$@" >> "${0:A:h}/xcrun.log"
 case "$1 $2" in
-    "notarytool submit") print -r -- "{\"id\":\"fake-id\",\"status\":\"${FAKE_NOTARY_STATUS:-Accepted}\"}" ;;
+    "notarytool submit")
+        print -u2 -- "Conducting pre-submission checks... {not json}"
+        print -r -- "{\"id\":\"fake-id\",\"status\":\"${FAKE_NOTARY_STATUS:-Accepted}\"}" ;;
     "notarytool log") print "apple says: the binary is not signed" ;;
     "stapler staple") [[ -d $3 ]] && touch "$3/STAPLED" ;;
 esac
-exit 0' > $tmp/fakes/xcrun
-    chmod +x $tmp/fakes/{codesign,xcrun}
-    export PATH=$tmp/fakes:$PATH PUREMOUSE_SIGN_IDENTITY=${1:-Developer ID Application: Example Person (ABCDE12345)}
+exit 0'
+    export PUREMOUSE_SIGN_IDENTITY=${1:-Developer ID Application: Example Person (ABCDE12345)}
 }
 
 set_notary_credentials() {
@@ -140,12 +139,7 @@ test_release_notarises_and_staples_the_app_then_the_dmg() {
     (cd $repo/.build/dist && shasum -a 256 -c SHA256SUMS >/dev/null)
     [[ $(<$repo/build-args.log) == "--universal --version 1.2.3 --timestamp" ]] || { print -u2 -- "build ran with: $(<$repo/build-args.log)"; return 1; }
     # The app went into the dmg after it was stapled: the dmg's copy carries what stapling left.
-    mkdir $tmp/mount
-    hdiutil attach -nobrowse -readonly -noverify -mountpoint $tmp/mount $repo/.build/dist/PureMouse-1.2.3.dmg >/dev/null
-    local stapled=0
-    [[ -e $tmp/mount/PureMouse.app/STAPLED ]] || stapled=1
-    hdiutil detach -quiet $tmp/mount
-    expect "the dmg holds the stapled app" test $stapled = 0
+    expect "the dmg holds the stapled app" with_dmg_mounted $repo/.build/dist/PureMouse-1.2.3.dmg mounted_has PureMouse.app/STAPLED
 }
 
 test_release_without_notary_credentials_skips_notarisation() {
@@ -217,42 +211,94 @@ test_release_checks_both_size_budgets() {
     [[ $output == *'installed size '*'allowed 1 bytes'* ]] || { print -u2 -- $output; return 1; }
 }
 
+# mounted_has <mount point> <path>: for with_dmg_mounted.
+mounted_has() { test -e $1/$2 }
+
+mounted_applications_link() { test "$(readlink $1/Applications)" = /Applications }
+
 test_dmg_is_compressed_and_holds_the_app_and_an_applications_link() {
-    local app=$(stand_in_app $tmp 1.2.3) dmg=$tmp/out.dmg mount=$tmp/mount
+    local app=$(stand_in_app $tmp 1.2.3) dmg=$tmp/out.dmg
     scripts/make-dmg.sh $app $dmg >/dev/null
     hdiutil imageinfo $dmg | grep -q 'Format: ULFO' || { print -u2 -- "not a ULFO image"; return 1; }
-    mkdir $mount
-    hdiutil attach -nobrowse -readonly -noverify -mountpoint $mount $dmg >/dev/null
-    local problems=()
-    [[ -d $mount/PureMouse.app ]] || problems+="no PureMouse.app"
-    [[ $(readlink $mount/Applications) == /Applications ]] || problems+="no Applications link"
-    hdiutil detach -quiet $mount
-    (( ! $#problems )) || { print -u2 -- ${(j:, :)problems}; return 1; }
+    expect "the dmg holds PureMouse.app" with_dmg_mounted $dmg mounted_has PureMouse.app
+    expect "the dmg has an Applications link" with_dmg_mounted $dmg mounted_applications_link
 }
 
 # A hdiutil that fails its first two `create`s, as it does when the machine is busy.
 test_dmg_is_made_on_the_third_try() {
     local app=$(stand_in_app $tmp 1.2.3)
-    mkdir -p $tmp/fakes
-    print -r -- "#!/bin/zsh
-if [[ \$1 == create ]]; then
+    fake_command hdiutil "if [[ \$1 == create ]]; then
     print x >> $tmp/creates
     (( \$(wc -l < $tmp/creates) > 2 )) || exit 1
 fi
-exec /usr/bin/hdiutil \"\$@\"" > $tmp/fakes/hdiutil
-    chmod +x $tmp/fakes/hdiutil
-    PATH=$tmp/fakes:$PATH scripts/make-dmg.sh $app $tmp/out.dmg >/dev/null 2>&1
+exec /usr/bin/hdiutil \"\$@\""
+    scripts/make-dmg.sh $app $tmp/out.dmg >/dev/null 2>&1
     expect "the dmg exists" test -f $tmp/out.dmg
     [[ $(wc -l < $tmp/creates) -eq 3 ]] || { print -u2 -- "create ran $(wc -l < $tmp/creates) times"; return 1; }
 }
 
 test_dmg_fails_after_three_tries() {
     local app=$(stand_in_app $tmp 1.2.3) output
-    mkdir -p $tmp/fakes
-    print -r -- '#!/bin/zsh
-[[ $1 == create ]] && exit 1
-exec /usr/bin/hdiutil "$@"' > $tmp/fakes/hdiutil
-    chmod +x $tmp/fakes/hdiutil
-    if output=$(PATH=$tmp/fakes:$PATH scripts/make-dmg.sh $app $tmp/out.dmg 2>&1); then return 1; fi
+    fake_command hdiutil '[[ $1 == create ]] && exit 1
+exec /usr/bin/hdiutil "$@"'
+    if output=$(scripts/make-dmg.sh $app $tmp/out.dmg 2>&1); then return 1; fi
     [[ $output == *'failed three times'* ]]
+}
+
+# A hdiutil that only pretends: it logs attach and detach, and a plain detach fails, as it does
+# when something still has the volume open.
+fake_attach_only_hdiutil() {
+    fake_command hdiutil 'print -r -- "$*" >> "${0:A:h}/hdiutil.log"
+[[ $1 == detach && $* != *-force* ]] && exit 1
+exit 0'
+}
+
+# run_mounted <body...>: runs with_dmg_mounted from lib.zsh in a script of its own, as release.sh
+# does, calling the shell function `body`; prints nothing, leaves $tmp/fakes/hdiutil.log.
+run_mounted() {
+    TMPDIR=$tmp zsh -c 'source "$1/scripts/lib.zsh"; set -e; body() { '"$1"' }; with_dmg_mounted /nowhere.dmg body; print finished' zsh $root
+}
+
+test_dmg_is_detached_with_force_and_its_directory_removed_after_the_command_fails() {
+    fake_attach_only_hdiutil
+    if run_mounted 'return 3' >/dev/null 2>&1; then return 1; fi
+    local calls=(${(f)"$(<$tmp/fakes/hdiutil.log)"})
+    [[ $calls[1] == "attach "* && $calls[2] == "detach -quiet "* && $calls[3] == "detach -quiet -force "* ]] ||
+        { print -u2 -- "hdiutil calls: ${(F)calls}"; return 1; }
+    expect "the mount directory is gone" test -z "$(ls -A $tmp | grep -v '^fakes$')"
+}
+
+test_dmg_is_detached_when_the_command_exits_the_script() {
+    fake_attach_only_hdiutil
+    if run_mounted 'print -u2 stopping; exit 7' >/dev/null 2>&1; then return 1; fi
+    expect "it was detached" grep -q '^detach ' $tmp/fakes/hdiutil.log
+    expect "the mount directory is gone" test -z "$(ls -A $tmp | grep -v '^fakes$')"
+}
+
+test_dmg_is_detached_when_the_script_is_terminated_during_the_command() {
+    fake_attach_only_hdiutil
+    local signal code
+    for signal in TERM HUP INT; do
+        : > $tmp/fakes/hdiutil.log
+        code=0
+        run_mounted "kill -$signal \$\$; sleep 5" >/dev/null 2>&1 || code=$?
+        (( code > 128 )) || { print -u2 -- "$signal: exit status $code"; return 1; }
+        grep -q '^detach ' $tmp/fakes/hdiutil.log || { print -u2 -- "$signal left the image attached"; return 1; }
+        test -z "$(ls -A $tmp | grep -v '^fakes$')" || { print -u2 -- "$signal left the mount directory"; return 1; }
+    done
+}
+
+test_dmg_that_will_not_mount_leaves_nothing_behind() {
+    fake_command hdiutil 'print -r -- "$*" >> "${0:A:h}/hdiutil.log"
+exit 1'
+    if run_mounted 'print ran' >$tmp/out 2>&1; then return 1; fi
+    expect "the command did not run" test -z "$(grep ran $tmp/out)"
+    expect "the mount directory is gone" test -z "$(ls -A $tmp | grep -v -e '^fakes$' -e '^out$')"
+}
+
+test_release_refuses_when_git_cannot_report_the_tree_status() {
+    local repo
+    release_repo v1.2.3
+    print garbage > $repo/.git/index
+    expect_release_refused $repo 'git status failed'
 }
