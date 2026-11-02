@@ -103,7 +103,7 @@ struct ScrollingPane: View {
     }
 
     private var restoreDefaults: some View {
-        FooterButton("Restore Defaults") {
+        PaneFooter(restoreDefaults: {
             model.update {
                 // Smooth scrolling on, with every tuning at its default.
                 $0.set([String: Any](), at: ["smoothScroll"])
@@ -111,7 +111,7 @@ struct ScrollingPane: View {
                 // Only the keys this pane shows; any others under thumbWheel stay.
                 for key in ["inverted", "reversed"] + ThumbWheelChoice.keys { $0.set(nil, at: ["thumbWheel", key]) }
             }
-        }
+        })
     }
 
     private var wheelMode: some View {
