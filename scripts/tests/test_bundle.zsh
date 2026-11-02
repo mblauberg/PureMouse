@@ -81,10 +81,29 @@ test_settings_plist_is_a_regular_app_with_its_own_identifier() {
     [[ $(settings_of $app) == "$app/Contents/Helpers/PureMouse Settings.app" ]]
     [[ -x "$(settings_of $app)/Contents/MacOS/$(plist_value "$settings" CFBundleExecutable)" ]]
     # The Dock draws its icon from Assets.car in every icon style, as it does PureMouse.app's.
-    cmp -s $app/Contents/Resources/Assets.car "$(settings_of $app)/Contents/Resources/Assets.car"
+    [[ $app/Contents/Resources/Assets.car -ef "$(settings_of $app)/Contents/Resources/Assets.car" ]]
     # The About pane draws these; the menu bar app shows no About pane.
     [[ -f "$(settings_of $app)/Contents/Resources/AppIcon-dark.png" ]]
     [[ ! -e "$(menu_of $app)/Contents/Resources/AppIcon-dark.png" ]]
+}
+
+# One icon catalogue on disk, three names for it: the menu bar app's own (macOS 26+ draws its dark,
+# clear and tinted icons from it) and the helper's are hard links to PureMouse.app's, which ditto,
+# the dmg and codesign all keep. A copy would grow the dmg by 1.8 MB each; a symlink out of the
+# nested bundle fails codesign.
+test_nested_apps_hard_link_the_icon_catalogue() {
+    local app=$(stand_in_app $tmp 1.2.3) nested
+    for nested in "$(menu_of $app)" "$(settings_of $app)"; do
+        [[ $app/Contents/Resources/Assets.car -ef $nested/Contents/Resources/Assets.car ]] ||
+            { print -u2 -- "$nested has its own Assets.car"; return 1; }
+        [[ ! -L $nested/Contents/Resources/Assets.car ]] || { print -u2 -- "$nested: symlink"; return 1; }
+    done
+    scripts/sign-bundle.sh $app --identity - 2>/dev/null
+    scripts/verify-bundle.sh $app
+    local copy=$tmp/copy/PureMouse.app
+    mkdir -p $tmp/copy && ditto $app $copy
+    [[ $copy/Contents/Resources/Assets.car -ef "$(menu_of $copy)/Contents/Resources/Assets.car" ]]
+    scripts/verify-bundle.sh $copy
 }
 
 test_pinned_version_reaches_both_plists() {

@@ -71,7 +71,11 @@ one. This file covers how to work on it safely.
   light and dark specializations, on the system's light/dark background, so macOS 26+ renders
   light, dark, clear and tinted variants. After changing it, run `./scripts/make-icon.sh` (needs
   Xcode 26+ and `rsvg-convert`) and commit the compiled `Assets.car`, `AppIcon.icns` (macOS 14/15
-  fallback), the README PNGs (also the About pane's icon) and `MenuBarIcon.pdf`.
+  fallback), the README PNGs (also the About pane's icon) and `MenuBarIcon.pdf`. The menu app
+  and the Settings helper keep their own `Assets.car` (with only the icns, macOS 26+ draws the light
+  icon even in dark mode), but `assemble_bundle` makes both hard
+  links to PureMouse.app's: codesign, `ditto` and the dmg keep them, so the 1.8 MB ships once,
+  while `check-size.sh` still counts it per path. A symlink out of a nested bundle fails codesign.
   `assets/MenuBarIcon.svg` is the same mouse as an 18x18 pt template (alpha only; the wheel is a slot, gaps are 1-1.5 pt on the half-point grid
   so they stay crisp at 1x and 2x); it is plain clip and even-odd paths because rsvg rasterises
   SVG masks in the PDF. The menu bar app loads `MenuBarIcon.pdf`. Keep the two in step.

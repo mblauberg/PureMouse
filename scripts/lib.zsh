@@ -188,7 +188,10 @@ PLIST
 # Lays out an unsigned PureMouse.app from built `puremouse`, `PureMouseMenu` and `PureMouseSettings`
 # binaries, with the menu bar app nested at Contents/Library/LoginItems (a login item of its own:
 # `puremouse register` writes its agent) and the Settings helper at Contents/Helpers (opened by the
-# menu bar app). The About pane's icon PNGs are the helper's only.
+# menu bar app). The About pane's icon PNGs are the helper's only. The two nested apps keep their
+# own Assets.car (the icon macOS 26+ draws for each, in every style: with only the icns it falls
+# back to the light one), but as hard links to PureMouse.app's, so a dmg and a `ditto` copy hold
+# the 1.8 MB once. A symlink would not do: codesign refuses one that leaves its bundle.
 assemble_bundle() {
     local bin=$1 app=$2 version=$3 build=$4
     local menu_app=$(component_path $app "$(menu_component)")
@@ -201,6 +204,8 @@ assemble_bundle() {
 
     make_menu_bundle $bin/$(component_executable "$(menu_component)") $menu_app $menu_label $version $build
     make_settings_bundle $bin/$(component_executable "$(settings_component)") $settings_app $settings_label $version $build
+    ln -f $app/Contents/Resources/Assets.car "$menu_app/Contents/Resources/Assets.car"
+    ln -f $app/Contents/Resources/Assets.car "$settings_app/Contents/Resources/Assets.car"
 }
 
 # make_menu_bundle <menu binary> <app> <identifier> <version> <build>
