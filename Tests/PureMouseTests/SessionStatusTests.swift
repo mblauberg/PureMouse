@@ -157,10 +157,10 @@ struct SessionStatusTests {
             let h = try await SessionHarness(.m750, config: SessionHarness.config(#"{"smoothScroll": {}}"#),
                                              environment: .init(canPostEvents: false))
             defer { h.close() }
-            try await h.session.apply()  // looks the wheels up
+            try await h.session.apply()
             try await h.session.apply()
         }
-        #expect(log.lines.filter { $0.message.contains("no Accessibility permission") }.count == 1)
+        #expect(!log.lines.contains { $0.message.contains("no Accessibility permission") })
     }
 
     @Test func aMouseWithoutSmartShiftThumbWheelOrHapticsIsConfiguredQuietly() async throws {

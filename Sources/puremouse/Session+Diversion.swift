@@ -149,9 +149,6 @@ extension Session {
         // Taking the wheels over without permission to post scroll events would silence them.
         let accessibility = environment.canPostEvents
         let takeOver = Handoff.wheelsDiverted(scrolling: scroll != nil, accessibility: accessibility, away: away)
-        if scroll != nil && !accessibility && mayHaveWheels {
-            Log.error("\(name): no Accessibility permission; leaving the wheels native")
-        }
         let smooth = takeOver && smoothAnywhere
         // Set before diverting, so `restore` hands them back even if a write below fails.
         if takeOver && mayHaveWheels { wheelsMayBeDiverted = true }
@@ -160,7 +157,11 @@ extension Session {
             try await applyWheel($0, takeOver: takeOver, smooth: smooth)
         }
         // Reached only when both were set, so a wheel that failed still counts as maybe diverted.
-        if !takeOver || wheels.allSatisfy({ device.knownPresence(of: $0) == false }) { wheelsMayBeDiverted = false }
+        let hasNoWheels = wheels.allSatisfy { device.knownPresence(of: $0) == false }
+        if !takeOver || hasNoWheels { wheelsMayBeDiverted = false }
+        if scroll != nil && !accessibility && !hasNoWheels {
+            Log.error("\(name): no Accessibility permission; leaving the wheels native")
+        }
         if smoothAnywhere, device.knownPresence(of: HiResWheel.id) == false, !smoothScrollUnsupportedLogged {
             smoothScrollUnsupportedLogged = true
             Log.info("\(name): smooth scrolling needs HID++ 0x2121, which this mouse lacks; its wheel scrolls natively")

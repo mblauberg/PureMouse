@@ -19,7 +19,7 @@ struct Identification: Equatable, Sendable {
     static func read(_ device: HIDPPDevice, productID: UInt16?) async -> Identification {
         var result = Identification()
         result.name = try? await DeviceName.get(device)
-        result.kind = (try? await DeviceName.kind(device)) ?? nil
+        result.kind = try? await DeviceName.kind(device)
         do {
             let info = try await DeviceIdentity.info(device)
             result.model = Config.deviceKey(modelID: info.modelID, productID: productID)
