@@ -4,7 +4,7 @@ import IOKit.hid
 /// One Logitech HID++ collection seen by macOS: a Bolt/Unifying receiver (usage page 0xFF00)
 /// or a directly connected Bluetooth device (usage page 0xFF43).
 @MainActor
-public final class HIDInterface {
+public final class HIDInterface: HIDPPTransport {
     public let device: IOHIDDevice
     public let product: String
     public let productID: Int

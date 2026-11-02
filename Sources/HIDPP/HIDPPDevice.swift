@@ -4,7 +4,7 @@ import Foundation
 /// Bluetooth device (index 0xFF). Requests are serialised; one is in flight at a time.
 @MainActor
 public final class HIDPPDevice {
-    public nonisolated let interface: HIDInterface
+    public nonisolated let interface: any HIDPPTransport
     public nonisolated let index: UInt8
     /// Unsolicited reports: HID++ 2.0 events and HID++ 1.0 notifications (`Report.isEvent`).
     public var onEvent: ((Report) -> Void)?
@@ -32,7 +32,7 @@ public final class HIDPPDevice {
         var deadline: Task<Void, Never>?
     }
 
-    public init(interface: HIDInterface, index: UInt8, softwareIDs: ClosedRange<UInt8> = defaultSoftwareIDs) {
+    public init(interface: any HIDPPTransport, index: UInt8, softwareIDs: ClosedRange<UInt8> = defaultSoftwareIDs) {
         precondition(softwareIDs.lowerBound > 0 && softwareIDs.upperBound <= 0xF)
         self.interface = interface
         self.index = index
