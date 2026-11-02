@@ -570,9 +570,11 @@ final class Daemon {
     }
 
     /// Closes a receiver slot's endpoint, with its session and retry, and listens there afresh:
-    /// nothing learned about the old device (feature indices, DPI list, diversion) carries over.
+    /// nothing learned about the old device (feature indices, DPI list, diversion, that it was
+    /// no mouse) carries over.
     private func replaceEndpoint(_ device: HIDPPDevice) -> HIDPPDevice {
         let key = Key(device)
+        ignored.remove(key)
         cancelRetries { $0 == key }
         sessions.removeValue(forKey: key)?.close()
         device.close()  // before `listen`, whose subscription it would otherwise remove

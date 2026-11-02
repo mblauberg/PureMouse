@@ -192,6 +192,35 @@ struct SessionDeviceConfigTests {
         #expect(adopted.device !== original && adopted !== session)
     }
 
+    /// The old device's identification answers "not a mouse" after the paused announcement of its
+    /// replacement: that verdict was about the old device, so the replacement endpoint made at
+    /// the resume is identified, not ignored.
+    @Test func aLateNotAMouseAnswerFromTheOldDeviceDoesNotIgnoreTheNewOne() async throws {
+        let h = try DaemonHarness("{}")
+        defer { h.close() }
+        let fake = FakeDevice.m750
+        fake.onReceiver(slot: 2)
+        fake.ping = .hidpp10(1)  // the old device answers HID++ 1.0, once it answers
+        fake.transport.timing = .never  // holding its answer
+        let original = h.daemon.listen(fake.transport, index: fake.index)
+        original.timeout = .seconds(5)
+        defer { original.close() }
+        fake.announce(product: 0xB034)  // the old device; identification starts
+        try await eventually { !fake.transport.sent.isEmpty }
+        h.daemon.handle(Control(paused: true))
+        fake.announce(product: 0xB02C)  // the new device, while the old one's question is open
+        let question = try #require(fake.transport.sent.last)
+        let held = try #require(try fake.transport.answer?(question))
+        fake.transport.deliver(held)
+        try await Task.sleep(for: .milliseconds(100))  // the old verdict is in
+        fake.ping = .hidpp20(4, 5)
+        fake.transport.timing = .nextTurn
+        h.daemon.handle(Control(paused: false))
+        try await eventually { h.daemon.sessions.values.contains { $0.device.interface === fake.transport } }
+        let adopted = try await h.settled(fake)
+        #expect(adopted.device !== original)
+    }
+
     @Test(arguments: [true, false])
     func theM750sKeyFollowsDeviceInfoAndItsEntryApplies(hasDeviceInfo: Bool) async throws {
         let h = try DaemonHarness(#"{"dpi": 1600}"#)
