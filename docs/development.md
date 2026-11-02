@@ -9,16 +9,22 @@ device features are in [`AGENTS.md`](../AGENTS.md).
 ./scripts/make-cert.sh   # once per Mac: a signing identity, so permissions survive rebuilds
 ./scripts/install.sh     # build, install /Applications/PureMouse.app and start it
 ./scripts/uninstall.sh   # stop and remove (keeps your config)
-./scripts/package.sh     # release zip for Apple silicon and Intel, in .build/dist/
+./scripts/release.sh --dry-run --version 0.0.0-ci.local   # universal dmg and SHA256SUMS in .build/dist/
 ```
 
-`install.sh` and `package.sh` build with `build-app.sh`; CI runs all three, and so can you:
+`install.sh` and `release.sh` build with `build-app.sh`; `release.sh` also runs these, and so can you:
 
 ```sh
 ./scripts/build-app.sh [--universal] [--version X.Y.Z]   # sign and assemble .build/app/PureMouse.app
 ./scripts/verify-bundle.sh .build/app/PureMouse.app      # signatures, identifiers, plists
 ./scripts/check-size.sh .build/app/PureMouse.app         # installed size against the budget
+./scripts/make-dmg.sh .build/app/PureMouse.app out.dmg   # the release dmg alone
 ```
+
+`install.sh` and `uninstall.sh` take their labels and bundle paths from `scripts/lib.zsh`, stop the
+agents with its `stop_agents`, and check the staged app with `verify-bundle.sh` before swapping it
+in. `PUREMOUSE_INSTALL_DIR` (default `/Applications`) exists for `scripts/tests`, which run them
+against a temporary directory, a stubbed build and a fake `launchctl`.
 
 `build-app.sh` builds for this Mac only; `--universal` adds Intel and strips local symbols, as
 releases do. The bundle version is `--version` or `PUREMOUSE_VERSION` if given, else
@@ -115,7 +121,7 @@ first of:
 4. ad hoc (`-`).
 
 Local builds sign with `--timestamp=none`; `sign-bundle.sh --timestamp` asks for a secure
-timestamp, which releases need once they are notarised. macOS ties permission grants to the
+timestamp, which `release.sh` does for a release (it needs the network, and notarisation needs it). macOS ties permission grants to the
 signature, so an ad-hoc build needs them granted again after every install, and every release must
 be signed with the same identity. Keep a backup of it.
 
@@ -128,12 +134,33 @@ signature from that team.
 
 ## Releases
 
-1. Tag `vX.Y.Z` on a clean `main`; the bundle version is the tag without the `v`.
-2. Run `PUREMOUSE_SIGN_IDENTITY=PureMouse ./scripts/package.sh` on a Mac that holds the
+1. Tag `vX.Y.Z` (or `vX.Y.Z-rc.N`) on a clean `main`; the bundle version is the tag without the `v`.
+2. Run `PUREMOUSE_SIGN_IDENTITY=PureMouse ./scripts/release.sh` on a Mac that holds the
    `PureMouse` identity. Naming it matters: on a Mac that also holds a Developer ID, the build would
    otherwise sign with that, and every user would have to grant permissions again.
-   `package.sh` runs `verify-bundle.sh --release` and makes the zip only if it passes.
-3. Attach `.build/dist/PureMouse-X.Y.Z.zip` to a GitHub release with its SHA-256.
+3. Attach `.build/dist/PureMouse-X.Y.Z.dmg` and `.build/dist/SHA256SUMS` to a GitHub release.
+   `shasum -a 256 -c SHA256SUMS` checks the download.
+
+`release.sh` takes no version: it refuses unless `HEAD` is tagged exactly `vX.Y.Z` or `vX.Y.Z-rc.N`
+(one such tag) on a clean tree, and rejects `--version` without `--dry-run`. It builds the universal
+app, re-signs it with a secure timestamp, runs `verify-bundle.sh --release`, checks the size budgets
+(`INSTALLED_MAX_BYTES`, `DMG_MAX_BYTES`), makes and signs the dmg (`make-dmg.sh`: ULFO, with
+`PureMouse.app` and an `Applications` link), mounts it read-only to verify its contents, and writes
+`SHA256SUMS`. `scripts/release.env` holds `PUREMOUSE_TEAM_ID`, empty until there is a Developer ID.
+
+`--dry-run` is the same without the timestamp or notarisation, from any tree:
+`--dry-run --version 0.0.0-ci.<shortsha>` (only that form), or `--dry-run` alone on a tagged commit.
+CI runs it on every pull request.
+
+### Notarisation
+
+Notarisation follows [ADR 14](adr/0014-signing-identity-is-configuration.md). It runs only when
+`NOTARY_KEY_PATH` (an App Store Connect API key file), `NOTARY_KEY_ID` and `NOTARY_ISSUER_ID` are
+all set: it zips and submits the app, staples the app, builds and signs the dmg, then submits and
+staples the dmg. With none set, `release.sh` logs "skipping notarisation" and carries on. With some
+but not all, it fails naming the missing ones, and a Developer ID signature without them fails too.
+On an `Invalid` result it prints `notarytool log`. This path has only run against a fake `xcrun`
+(`scripts/tests/test_release.zsh`); its first real run belongs to the Developer ID work.
 
 Release notes come from GitHub Releases ([ADR 17](adr/0017-github-releases-is-the-changelog.md)):
 `.github/release.yml` groups merged pull requests by label (bug, device, documentation).
@@ -141,8 +168,9 @@ Release notes come from GitHub Releases ([ADR 17](adr/0017-github-releases-is-th
 ## CI
 
 `.github/workflows/ci.yml` runs on pushes to `main` and on pull requests: build, `swift test`, the
-universal bundle signed ad hoc, `verify-bundle.sh`, `check-size.sh`, the script tests, and the
-zipped bundle uploaded as an artefact kept for 7 days. A newer push to a pull request cancels its
+`release.sh --dry-run` (the universal bundle signed ad hoc, `verify-bundle.sh`, `check-size.sh` on
+the app and the dmg), the script tests, and the dmg and `SHA256SUMS` uploaded as an artefact kept for
+7 days. A newer push to a pull request cancels its
 running checks.
 
 - The job named `test` is the check the `main` ruleset requires; rename it only together with the
@@ -152,8 +180,9 @@ running checks.
 - Every action is pinned to a full commit SHA with its version in a comment. Dependabot
   (`.github/dependabot.yml`) proposes updates weekly. Look up a pin with
   `gh api repos/<owner>/<repo>/git/ref/tags/<tag>`, and dereference an annotated tag to its commit.
-- The installed-size budget is `INSTALLED_MAX_BYTES` in `scripts/size-budget.env`, measured from
-  the universal build plus 15%. Raising it is a reviewed change that says what grew.
+- The size budgets are `INSTALLED_MAX_BYTES` (the app) and `DMG_MAX_BYTES` (the dmg) in
+  `scripts/size-budget.env`, each measured from the universal build plus 15%. Raising one is a
+  reviewed change that says what grew.
 
 ## Repository settings the release relies on
 

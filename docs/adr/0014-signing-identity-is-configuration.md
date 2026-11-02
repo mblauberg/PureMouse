@@ -2,8 +2,9 @@
 
 ## Status
 
-Accepted. The identity order and hardened runtime are built; notarisation, stapling and the
-notary-credential checks are not built yet (#46).
+Accepted. The identity order, hardened runtime, notarisation, stapling and the notary-credential
+checks are built (`scripts/release.sh`). The notarisation code has never run with real credentials:
+its tests use a fake `xcrun` and `codesign`, and its first real run is the Developer ID work's.
 
 ## Context
 

@@ -1,6 +1,6 @@
 #!/bin/zsh
 # Builds and signs .build/app/PureMouse.app, with the menu bar app nested at
-# Contents/Library/LoginItems/PureMouse Menu.app. Used by install.sh and package.sh.
+# Contents/Library/LoginItems/PureMouse Menu.app. Used by install.sh and release.sh.
 #
 #   --universal      one stripped binary for Apple silicon and Intel (releases); otherwise this
 #                    Mac's only, unstripped

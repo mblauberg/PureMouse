@@ -26,19 +26,15 @@ jobs:
         run: swift build
       - name: Test
         run: swift test
-      - name: Build the universal app bundle
-        run: scripts/build-app.sh --universal
-      - name: Verify the bundle's signatures
-        run: scripts/verify-bundle.sh .build/app/PureMouse.app
-      - name: Check the size budget
-        run: scripts/check-size.sh .build/app/PureMouse.app
+      # The dry run builds the universal app signed ad hoc, verifies it, checks the size budgets
+      # (the app's and the dmg's), makes the dmg and its checksum, and checks the dmg's contents.
+      - name: Release dry run
+        run: scripts/release.sh --dry-run --version 0.0.0-ci.$(git rev-parse --short HEAD)
       - name: Script tests
         run: scripts/tests/run.sh
-      - name: Pack the bundle
-        run: ditto -c -k --keepParent .build/app/PureMouse.app .build/PureMouse-ci.zip
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: PureMouse-${{ github.sha }}
-          path: .build/PureMouse-ci.zip
+          path: .build/dist/
           retention-days: 7
           if-no-files-found: error

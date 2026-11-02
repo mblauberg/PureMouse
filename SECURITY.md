@@ -36,10 +36,11 @@ Bugs in macOS, Logitech firmware or Logi Options+ belong with their vendors.
 
 ## Verifying a download
 
-A release is a zip of the app, attached to its GitHub release with its SHA-256. Compare that with:
+A release is a dmg holding the app, attached to its GitHub release with a `SHA256SUMS` file. Check
+the download against it, from the folder holding both:
 
 ```sh
-shasum -a 256 PureMouse-<version>.zip
+shasum -a 256 -c SHA256SUMS
 ```
 
 If you build PureMouse yourself, `scripts/verify-bundle.sh .build/app/PureMouse.app` checks that

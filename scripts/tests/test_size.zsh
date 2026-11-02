@@ -25,3 +25,16 @@ test_size_budget_holds_for_the_built_bundle() {
     app=$(real_app)
     scripts/check-size.sh $app
 }
+
+test_dmg_over_budget_fails_with_both_sizes() {
+    local dmg=$tmp/PureMouse.dmg output
+    head -c 5000 /dev/zero > $dmg
+    if output=$(DMG_MAX_BYTES=4999 scripts/check-size.sh $dmg 2>&1); then return 1; fi
+    [[ $output == *"dmg size 5000 bytes"*"allowed 4999 bytes"*"DMG_MAX_BYTES"* ]] || { print -u2 -- $output; return 1; }
+}
+
+test_dmg_within_budget_passes_whatever_the_installed_budget() {
+    local dmg=$tmp/PureMouse.dmg
+    head -c 5000 /dev/zero > $dmg
+    DMG_MAX_BYTES=5000 INSTALLED_MAX_BYTES=1 scripts/check-size.sh $dmg >/dev/null
+}
