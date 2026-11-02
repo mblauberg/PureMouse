@@ -4,31 +4,88 @@ import PureMouseKit
 import Testing
 @testable import puremouse
 
+/// Collects errors thrown on worker threads so the test can fail on them.
+private final class Errors: @unchecked Sendable {
+    private let lock = NSLock()
+    private var all: [String] = []
+    func record(_ error: Error) { lock.lock(); all.append("\(error)"); lock.unlock() }
+    var messages: [String] { lock.lock(); defer { lock.unlock() }; return all }
+}
+
 @MainActor @Suite struct ClearControlTests {
-    /// The menu read `control.json` and is mid-write under `control.json.lock` as the daemon starts.
-    /// The daemon's delete waits for that write, then removes it, so no state read from the old
-    /// file is written back after the clear.
-    @Test func theStartupClearWaitsForAWriteInProgress() throws {
+    nonisolated private static let bound: DispatchTimeInterval = .seconds(10)
+
+    private func makeControl() throws -> (URL, URL) {
         let directory = FileManager.default.temporaryDirectory.appending(path: "ClearControlTests-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: directory) }
         let control = directory.appending(path: "control.json")
         try Data(#"{"paused":true}"#.utf8).write(to: control)
+        return (directory, control)
+    }
 
+    /// The menu holds `control.json.lock` mid-write as the daemon starts. The worker holds the lock
+    /// until the clear has either finished (an unlocked delete) or provably not, within `grace`,
+    /// then writes. A locked delete waits for that write and removes it; an unlocked one runs first
+    /// and the write lands after it, leaving the file. Ordering is by signals; `grace` is a bounded
+    /// wait that only ever expires when the delete is correctly blocked.
+    @Test func theStartupClearWaitsForAWriteInProgress() throws {
+        let (directory, control) = try makeControl()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let errors = Errors()
         let locked = DispatchSemaphore(value: 0)
-        let written = DispatchSemaphore(value: 0)
+        let cleared = DispatchSemaphore(value: 0)
+        let finished = DispatchSemaphore(value: 0)
+        let clearedWhileHeld = Box()
         DispatchQueue.global().async {
-            try? FileLock.withLock(FileLock.url(for: control)) {
-                locked.signal()
-                // Long enough for an unlocked delete to run first and this write to land after it.
-                Thread.sleep(forTimeInterval: 0.2)
-                try? Data(#"{"paused":true,"capture":{"token":7}}"#.utf8).write(to: control, options: .atomic)
-            }
-            written.signal()
+            do {
+                try FileLock.withLock(FileLock.url(for: control)) {
+                    locked.signal()
+                    clearedWhileHeld.value = cleared.wait(timeout: .now() + .milliseconds(500)) == .success
+                    try Data(#"{"paused":true,"capture":{"token":7}}"#.utf8).write(to: control, options: .atomic)
+                }
+            } catch { errors.record(error) }
+            finished.signal()
         }
-        locked.wait()
-        StatusChannel.clearControl(control)
-        written.wait()
+        #expect(locked.wait(timeout: .now() + Self.bound) == .success)
+        let clearer = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async {
+            StatusChannel.clearControl(control, timeout: 10)
+            cleared.signal()
+            clearer.signal()
+        }
+        #expect(finished.wait(timeout: .now() + Self.bound) == .success)
+        #expect(clearer.wait(timeout: .now() + Self.bound) == .success)
+        #expect(errors.messages.isEmpty, "\(errors.messages)")
+        #expect(!clearedWhileHeld.value)
         #expect(!FileManager.default.fileExists(atPath: control.path))
     }
+
+    /// A holder that outlasts the deadline: the clear returns, leaves the file and never deletes unlocked.
+    @Test func aStuckHolderMakesTheClearGiveUpWithoutDeleting() throws {
+        let (directory, control) = try makeControl()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let errors = Errors()
+        let locked = DispatchSemaphore(value: 0)
+        let release = DispatchSemaphore(value: 0)
+        let finished = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async {
+            do {
+                try FileLock.withLock(FileLock.url(for: control)) {
+                    locked.signal()
+                    _ = release.wait(timeout: .now() + Self.bound)
+                }
+            } catch { errors.record(error) }
+            finished.signal()
+        }
+        #expect(locked.wait(timeout: .now() + Self.bound) == .success)
+        StatusChannel.clearControl(control, timeout: 0.2)
+        #expect(FileManager.default.fileExists(atPath: control.path))
+        release.signal()
+        #expect(finished.wait(timeout: .now() + Self.bound) == .success)
+        #expect(errors.messages.isEmpty, "\(errors.messages)")
+    }
+}
+
+private final class Box: @unchecked Sendable {
+    var value = false
 }
