@@ -209,8 +209,10 @@ one. This file covers how to work on it safely.
   silences them. Both are diverted when any scope (global or an app) scrolls smoothly; the thumb
   wheel alone when any scope gives it actions (`Session.applyWheels`). Where the scope in effect
   does not scroll smoothly, the diverted wheel still scrolls, with zero smoothing. Only wheels the
-  mouse has are taken over: smooth scrolling needs 0x2121 (0x2150 for the thumb wheel), and a mouse
-  without it scrolls natively with one info line per session.
+  mouse has are taken over. Smooth scrolling needs a main wheel in `Session.smoothScrollWheels`
+  (0x2121 for now; a new kind of wheel is added there, and `capabilities.smoothScroll` follows); a
+  mouse without one scrolls natively, with one info line per session ("isn't supported for smooth
+  scrolling yet").
 - Per-device settings (`devices.<key>`, `Config+Devices.swift`) are resolved by the Kit decoder:
   each entry is decoded on top of the top level, then `apps` on top of that, so precedence is top
   level, device, app. The key is `m` plus the 0x0003 model ID, else `p` plus the product ID

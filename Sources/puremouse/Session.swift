@@ -69,7 +69,7 @@ final class Session {
     var state: DeviceState
     var hapticCapabilities: Haptic.Capabilities?
     var hapticMissingLogged = false
-    /// Logged once per session: smooth scrolling configured on a mouse without 0x2121, and
+    /// Logged once per session: smooth scrolling configured on a mouse whose wheel cannot, and
     /// `toggleScrollMode` on one without SmartShift.
     var smoothScrollUnsupportedLogged = false
     var toggleUnsupportedLogged = false
@@ -230,19 +230,28 @@ final class Session {
 
     /// What the mouse has, from the lookups an apply made (`HIDPPDevice.knownPresence`), so
     /// building it sends nothing. Nil before the first successful apply; a member is nil while
-    /// unknown, such as after a lookup that timed out. A choice of two features is false only
-    /// when both are known absent.
+    /// unknown, such as after a lookup that timed out. A choice of features is false only when
+    /// all are known absent.
     var capabilities: Status.Device.Capabilities? {
         guard state.applied else { return nil }
         func has(_ feature: UInt16) -> Bool? { device.knownPresence(of: feature) }
-        func either(_ a: UInt16, _ b: UInt16) -> Bool? {
-            let pair = [has(a), has(b)]
-            return pair.contains(true) ? true : pair.allSatisfy { $0 == false } ? false : nil
-        }
         return Status.Device.Capabilities(
-            dpi: has(AdjustableDPI.id), smartShift: either(SmartShift.id, SmartShiftEnhanced.id),
-            smoothScroll: has(HiResWheel.id), thumbWheel: has(ThumbWheel.id), haptics: has(Haptic.id),
-            battery: either(UnifiedBattery.id, LegacyBattery.id))
+            dpi: has(AdjustableDPI.id), smartShift: hasAny(of: [SmartShift.id, SmartShiftEnhanced.id]),
+            smoothScroll: scrollsSmoothly, thumbWheel: has(ThumbWheel.id), haptics: has(Haptic.id),
+            battery: hasAny(of: [UnifiedBattery.id, LegacyBattery.id]))
+    }
+
+    /// The main-wheel features PureMouse can take over to scroll smoothly. Supporting another
+    /// kind of wheel adds its feature here.
+    static let smoothScrollWheels = [HiResWheel.id]
+
+    /// Whether the main wheel can scroll smoothly, from known presence: true when it has one of
+    /// `smoothScrollWheels`, false when all are known absent, nil while unknown.
+    var scrollsSmoothly: Bool? { hasAny(of: Self.smoothScrollWheels) }
+
+    private func hasAny(of features: [UInt16]) -> Bool? {
+        let presence = features.map { device.knownPresence(of: $0) }
+        return presence.contains(true) ? true : presence.allSatisfy { $0 == false } ? false : nil
     }
 
     private static func status(_ battery: UnifiedBattery.State) -> Status.Device.Battery? {

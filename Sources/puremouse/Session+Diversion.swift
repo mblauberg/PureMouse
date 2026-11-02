@@ -162,9 +162,9 @@ extension Session {
         if scroll != nil && !accessibility && !hasNoWheels {
             Log.error("\(name): no Accessibility permission; leaving the wheels native")
         }
-        if smoothAnywhere, device.knownPresence(of: HiResWheel.id) == false, !smoothScrollUnsupportedLogged {
+        if smoothAnywhere, scrollsSmoothly == false, !smoothScrollUnsupportedLogged {
             smoothScrollUnsupportedLogged = true
-            Log.info("\(name): smooth scrolling needs HID++ 0x2121, which this mouse lacks; its wheel scrolls natively")
+            Log.info("\(name): this mouse's wheel isn't supported for smooth scrolling yet; it scrolls natively")
         }
     }
 

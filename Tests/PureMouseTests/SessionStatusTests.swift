@@ -141,12 +141,14 @@ struct SessionStatusTests {
             try await h.session.apply()
             try await h.session.apply()
             #expect(h.session.status.capabilities?.smoothScroll == false)
-            #expect(h.fake.transport.sent.allSatisfy { [0x2121, 0x2150].contains(h.fake.feature(of: $0)) == false })
+            // Every request went to a feature the mouse has, so none to 0x2121 or 0x2150.
+            #expect(!h.fake.transport.sent.isEmpty)
+            #expect(h.fake.transport.sent.allSatisfy { h.fake.feature(of: $0).map { ![0x2121, 0x2150].contains($0) } ?? false })
             // Nothing was taken over, so quitting has no wheel to hand back.
             #expect(!h.session.wheelsMayBeDiverted)
             #expect(Daemon.restoreSteps(quitting: [h.session.restoreSteps], pausing: []) == h.session.divertedControls.count)
         }
-        let line = "smooth scrolling needs HID++ 0x2121, which this mouse lacks; its wheel scrolls natively"
+        let line = "this mouse's wheel isn't supported for smooth scrolling yet; it scrolls natively"
         #expect(log.lines.filter { $0.level == "info" && $0.message.hasSuffix(line) }.count == 1)
         #expect(!log.lines.contains { $0.level == "error" })
     }
