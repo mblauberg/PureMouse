@@ -193,11 +193,17 @@ the entry's `back` still applies there.
 
 What Settings writes under `devices` (`ConfigTree`, `ConfigScope.device`): only the keys a control sets
 under the mouse's own entry, and only the sections above; `apps`, `universalControl` and
-`notifications` are never written there. The first value for a mouse creates its entry with a
-`name` (the mouse's name, else its key), written once. Putting a control back to "All Mice" removes its key
-there, and removing the last one removes the entry, so an entry with only a `name` is not kept
-(keys Settings does not know are kept, and keep the entry). A key the decoder would skip is
-never written.
+`notifications` are never written there. An entry is found the way the decoder finds it, so a file
+that spells the key in other case (`MB03400000000`) is edited in place and gets no lowercase twin;
+with several spellings, the last in sorted order is the one edited. The first value for a mouse
+creates its entry with a `name` (the mouse's name, else its key), written once. Putting a control
+back to "All Mice" removes its key there (for a gesture direction, its key in the gesture, and the
+whole binding with the last direction), and removing the last override removes the entry, so an entry
+with only a `name` is not kept (keys Settings does not know are kept, and keep the entry and its
+`name`). "Do Nothing" is a value, not a removal: on a mouse it hides the top level's action. A
+`smoothScroll` left empty stays, since an empty one means on. Only per-device sections are
+written: a section the decoder would skip is refused, though inside a section a key is written
+as given. A JSON `null` in an entry or at the top level reads as absent, as the decoder reads it.
 
 A key that is neither form (a typo, or a mouse's name) matches no mouse: the log warns and the entry
 is skipped, though a bad value in it still fails the load. Keys that differ only in case warn, and
