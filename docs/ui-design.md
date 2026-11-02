@@ -74,7 +74,8 @@ Each level has one mechanism, and each label says what it reveals.
 - **Disclosure triangle** only for a control's own children (gesture directions, Exact value);
   at most one per row.
 - **⌥ alternates** only in the status menu, and each also has a home in Settings (see Status menu).
-- No sheet opens from a sheet; inside a sheet, use disclosures.
+- No sheet opens from a sheet; inside a sheet, use disclosures, and an editor that is a sheet
+  elsewhere (keyboard shortcut, shell command) opens as a popover anchored to its row.
 - Every advanced control has a safe default that the pane's Restore Defaults covers.
 - **Hide or dim.** Dim a row when a switch above turns its feature off. Hide rows that do not apply
   to the current mode or mouse.

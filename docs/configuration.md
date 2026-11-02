@@ -143,7 +143,7 @@ that is not installed is fine. `puremouse app` prints the bundle IDs PureMouse s
 
 Settings › Apps lists the apps in `apps` and adds one from Applications or the running apps (it is
 written only once a setting is chosen). For each app it sets the buttons, the thumb wheel and an own
-scrolling `speed` and `smoothingMs` (both written when **Own scrolling speed** is turned on, both
+scrolling `speed` and `smoothingMs` (both written when **Custom scrolling** is turned on, both
 removed when it is turned off); **Same as Everywhere** removes the app's key, and removing the
 last one removes the app. Browsers, Zoom, Teams, Word, PowerPoint, Preview and Excel get a suggested
 thumb wheel action. Keys it does not show, unknown ones included, stay as written.

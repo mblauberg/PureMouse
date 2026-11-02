@@ -270,13 +270,18 @@ struct ActionButton: View {
     @Binding var isPresented: Bool
     let choose: (PickerEntry) -> Void
     var accessibilityName: String
-    /// In an app: what applies elsewhere. `.standard` then reads "Same as Everywhere".
+    /// In an app: what applies elsewhere, which `.standard` shows dimmed (`InheritedValue`).
     var sameAsEverywhere: String?
     @State private var openedFromKeyboard = false
 
-    private var label: String {
-        action == .standard && sameAsEverywhere != nil ? "Same as Everywhere" : action.label
+    /// An app's binding as its row shows it: `.standard` leaves it to `everywhere`.
+    static func inherited(_ action: ButtonAction, everywhere: String) -> InheritedValue<String> {
+        InheritedValue(own: action == .standard ? nil : action.label, inherited: everywhere, source: "Everywhere")
     }
+
+    private var inherited: InheritedValue<String>? { sameAsEverywhere.map { Self.inherited(action, everywhere: $0) } }
+
+    private var label: String { inherited?.effective ?? action.label }
 
     var body: some View {
         Button {
@@ -287,7 +292,7 @@ struct ActionButton: View {
                 Text(label)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                    .foregroundStyle(action == .standard ? .secondary : .primary)
+                    .foregroundStyle(inherited?.style ?? (action == .standard ? .secondary : .primary))
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.up.chevron.down")
                     .font(.system(size: 9, weight: .semibold))
@@ -304,7 +309,7 @@ struct ActionButton: View {
         }
         .help(helpText)
         .accessibilityLabel(accessibilityName)
-        .accessibilityValue(action == .standard && sameAsEverywhere == nil ? "Default" : label)
+        .accessibilityValue(inherited?.spoken ?? (action == .standard ? "Default" : label))
         .accessibilityHint("Opens the list of actions")
         .popover(isPresented: $isPresented, arrowEdge: .bottom) {
             ActionPicker(current: action,

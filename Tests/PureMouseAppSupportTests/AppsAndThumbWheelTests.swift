@@ -325,14 +325,96 @@ private func resolved(_ wheel: Config.ThumbWheel) -> Resolved {
 
 @Test func appSummaries() throws {
     let config = try tree(#"{"apps": {"a.b": {"thumbWheel": {"action": "tabs"}, "buttons": {"back": "mute", "top": "zoomIn"}, "smoothScroll": {"speed": 2}}, "c.d": {"buttons": {"back": "mute"}}}}"#)
-    #expect(config.appSummary("a.b") == "Thumb wheel: Switch Tabs, 2 buttons, Scrolling speed")
-    #expect(config.appSummary("c.d") == "1 button")
-    #expect(config.appSummary("e.f") == "Same as Everywhere")
+    #expect(config.appSummary("a.b") == "Thumb wheel: Switch Tabs, 2 buttons changed, Custom scrolling")
+    #expect(config.appSummary("c.d") == "1 button changed")
+    #expect(config.appSummary("e.f") == "No custom settings")
     // Direction alone is an override too.
     let directions = try tree(#"{"apps": {"a.b": {"thumbWheel": {"reversed": true}}, "c.d": {"thumbWheel": {"reversed": false}}, "e.f": {"thumbWheel": {"action": "tabs", "reversed": true}}}}"#)
     #expect(directions.appSummary("a.b") == "Thumb wheel: Reversed")
     #expect(directions.appSummary("c.d") == "Thumb wheel: Normal direction")
     #expect(directions.appSummary("e.f") == "Thumb wheel: Switch Tabs, reversed")
+}
+
+@Test func customScrollingSaysWhatTheAppsScrollingDoes() throws {
+    // Off: the app follows Scrolling.
+    #expect(try tree(#"{"smoothScroll": {}}"#).customScrollingCaption("a.b") == "Uses Scrolling's speed and glide.")
+    // On, smooth scrolling as everywhere.
+    #expect(try tree(#"{"smoothScroll": {}, "apps": {"a.b": {"smoothScroll": {"speed": 2}}}}"#).customScrollingCaption("a.b")
+        == "Smooth scrolling is on, as set in Scrolling.")
+    // On, and smooth scrolling is on nowhere else: the app's smoothScroll turns it on there.
+    let only = try tree(#"{"apps": {"a.b": {"smoothScroll": {"speed": 2}}}}"#)
+    #expect(only.customScrollingCaption("a.b") == "Smooth scrolling is on in this app only.")
+    // On, but smooth scrolling is off: no glide.
+    #expect(try tree(#"{"smoothScroll": {"enabled": false}, "apps": {"a.b": {"smoothScroll": {"speed": 2}}}}"#)
+        .customScrollingCaption("a.b") == "Smooth scrolling is off, so this app scrolls at this speed without the glide.")
+}
+
+@Test func anInheritedGestureOffersItsDirectionsWithoutWriting() throws {
+    let config = try tree(#"{"buttons": {"gesture": {"click": "missionControl", "up": "appExpose"}}}"#)
+    let button = config.appButton("a.b", button: "gesture")
+    #expect(button.inheritsGesture)
+    #expect(button.own == .standard)
+    #expect(button.directions.map(\.name) == Gesture.directions)
+    #expect(button.directions.first { $0.name == "up" } == .init(name: "up", own: .standard, everywhere: .named("appExpose")))
+    #expect(button.directions.first { $0.name == "left" }?.everywhere == .standard)
+    // Reading it (expanding the row) wrote nothing.
+    #expect(!config.contains(["apps"]))
+    // Editing one direction writes only that direction under the app.
+    var edited = config
+    edited.bindInApp("a.b", button: "gesture", direction: "left", to: .named("spaceLeft"))
+    #expect(edited[["apps"]] as? NSDictionary == ["a.b": ["buttons": ["gesture": ["left": "spaceLeft"]]]])
+    #expect(edited[["buttons"]] as? NSDictionary == config[["buttons"]] as? NSDictionary)
+    let resolved = try decoded(edited)
+    #expect(resolved.settings(forApp: "a.b") != nil)
+    // The app's own gesture now: the other directions still show what applies everywhere.
+    let own = edited.appButton("a.b", button: "gesture")
+    #expect(own.own == .gesture && !own.inheritsGesture)
+    #expect(own.directions.first { $0.name == "up" } == .init(name: "up", own: .standard, everywhere: .named("appExpose")))
+    #expect(own.directions.first { $0.name == "left" }?.own == .named("spaceLeft"))
+    // Back to Same as Everywhere: the app's entry goes.
+    edited.bindInApp("a.b", button: "gesture", direction: "left", to: .standard)
+    #expect(!edited.contains(["apps"]))
+}
+
+@Test func onlyAGestureShowsDirectionsInAnApp() throws {
+    let config = try tree(#"{"buttons": {"gesture": {"click": "missionControl"}, "back": "mute"}, "apps": {"a.b": {"buttons": {"gesture": "zoomIn", "top": {"click": "mute"}}}}}"#)
+    // The app's plain action replaces the global gesture.
+    #expect(config.appButton("a.b", button: "gesture").directions.isEmpty)
+    #expect(config.appButton("a.b", button: "back") == AppButton(own: .standard, everywhere: .named("mute"), directions: []))
+    // The app's own gesture, with nothing set everywhere for it: no inherited directions.
+    let top = config.appButton("a.b", button: "top")
+    #expect(top.own == .gesture && top.directions.allSatisfy { $0.everywhere == nil })
+}
+
+@Test func theAppsListAddsWithoutWritingAndRemoveClosesTheSheet() throws {
+    var config = try tree(#"{"apps": {"com.apple.Safari": {"buttons": {"back": "mute"}}}}"#)
+    var list = AppList()
+    list.add("com.apple.safari", in: config)
+    #expect(list.open == "com.apple.Safari")
+    #expect(list.added.isEmpty)
+    list.add("a.b", in: config)
+    #expect(list.open == "a.b")
+    #expect(list.ids(in: config) == ["com.apple.Safari", "a.b"])
+    #expect(list.summary("a.b", in: config) == "No custom settings")
+    #expect(!config.contains(["apps", "a.b"]))
+    // Remove… confirmed in the open sheet: the entry goes and the sheet closes.
+    list.open = "com.apple.Safari"
+    list.remove("com.apple.Safari", from: &config)
+    #expect(list.open == nil)
+    #expect(!config.contains(["apps"]))
+    #expect(list.ids(in: config) == ["a.b"])
+    // Removing another app leaves an open sheet alone.
+    list.open = "a.b"
+    list.remove("c.d", from: &config)
+    #expect(list.open == "a.b")
+    list.remove("a.b", from: &config)
+    #expect(list.open == nil && list.ids(in: config).isEmpty)
+}
+
+@Test func anAppWithoutABundleIdentifierCantBeAdded() {
+    let alert = AppList.cannotAdd(URL(fileURLWithPath: "/Applications/Foo.app"))
+    #expect(alert.title == "Foo can't be added.")
+    #expect(alert.message == "PureMouse can't identify it. Choose a different app.")
 }
 
 @Test func appEditsReplayOntoAHandEditedFile() throws {

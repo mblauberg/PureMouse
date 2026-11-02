@@ -36,9 +36,10 @@ one. This file covers how to work on it safely.
   (`Sources/PureMouseMenu/DevHooks.swift`); `--login` launches it as launchd does (no Settings).
   Debug builds of the helper take `PUREMOUSE_DEV_PANE=<pane>` (a tab, `general`, `mouse`, `apps`,
   `about`, or a Mouse segment, `buttons`, `scrolling`, `pointer`), `PUREMOUSE_DEV_APPEARANCE`,
-  `PUREMOUSE_DEV_PICKER=<button>`, `PUREMOUSE_DEV_SHORTCUT=<button>` (Mouse › Buttons) and
-  `PUREMOUSE_DEV_APP=<bundle id>` (Apps tab; adds the app without writing) and
-  `PUREMOUSE_DEV_SHEET=<name>` (a pane's sheet: `presets`, Mouse › Pointer) for screenshots
+  `PUREMOUSE_DEV_PICKER=<button>`, `PUREMOUSE_DEV_SHORTCUT=<button>` (Mouse › Buttons, or with
+  `PUREMOUSE_DEV_APP` the app sheet's editor popover), `PUREMOUSE_DEV_APP=<bundle id>` (Apps
+  tab; adds the app without writing and opens its sheet) and `PUREMOUSE_DEV_SHEET=<name>` (a
+  pane's sheet: `presets`, Mouse › Pointer) for screenshots
   (`Sources/PureMouseSettingsUI/DevHooks.swift`). `PUREMOUSE_DEV_MENU=1` puts a plain backdrop
   under the menu, since its glass shows whatever is behind it. A window capture
   (`screencapture -l`) leaves out that blur, so the README's menu shots take the shape and shadow
@@ -223,7 +224,11 @@ one. This file covers how to work on it safely.
   only words them (`ActionCatalog.hapticLabel`).
 - The Apps pane writes only `apps.<id>` keys (`AppSettings.swift`): each control's own key, removed
   for "Same as Everywhere" (an emptied app entry is pruned); an added app is not written until a
-  setting is chosen (its row says so until Settings closes). Names are looked up without icons
+  setting is chosen (its row says so until Settings closes). Each app opens in a sheet (`AppSheet`)
+  over the list; a value it leaves unset shows what applies everywhere, dimmed, with "Same as
+  Everywhere" (`InheritedValue`, the one presentation for any inherited value), and inside it the
+  shortcut and command editors are popovers (`EditorPresentation`, read by `ThumbWheelRows` and the
+  button rows), since no sheet opens from a sheet. Names are looked up without icons
   (`AppIdentities`); an icon loads when its frame meets the scroll view's visible bounds (`AppIcon`;
   a grouped form builds every row, so `onAppear` is not enough, and macOS 14 lacks
   `onScrollVisibilityChange`), and Applications is never listed (adding goes through an
