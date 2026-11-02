@@ -139,6 +139,7 @@ struct EndLabeledSlider: View {
             } maximumValueLabel: {
                 Text(high)
             }
+            .labelsHidden()
             .accessibilityLabel(title)
         }
     }
