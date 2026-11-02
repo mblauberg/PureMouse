@@ -159,7 +159,7 @@ private struct ScrollingAdvancedSheet: View {
                     .disabled(!config.smoothScrollEnabled)
                 }
                 if layout.shows(.switchesAt) {
-                    Section("Main Wheel") { switchesAt }
+                    Section("Main Wheel") { switchesAt(layout.availability(.switchesAt)) }
                 }
                 if !layout.advancedThumbWheelRows.isEmpty {
                     Section("Thumb Wheel") {
@@ -172,16 +172,13 @@ private struct ScrollingAdvancedSheet: View {
     }
 
     /// The SmartShift threshold: how fast a scroll frees the wheel.
-    private var switchesAt: some View {
+    private func switchesAt(_ availability: ControlAvailability) -> some View {
         let threshold = model.config.int(["scrollWheel", "smartShiftThreshold"])
-        return LabeledContent {
-            EndLabeledSlider(title: "Switches at",
-                             value: Binding(get: { Double(min(threshold ?? 12, 50)) },
-                                            set: { model.set(Int($0.rounded()), at: ["scrollWheel", "smartShiftThreshold"], debounce: true) }),
-                             range: 1...50, low: "Slower", high: "Faster")
-                .frame(width: 200)
-        } label: {
-            RowLabel("Switches at", help: "How fast you scroll before the wheel frees up.", mouseDefault: threshold == nil)
-        }
+        return ValueSlider(title: "Switches at", help: "How fast you scroll before the wheel frees up.",
+                           value: Binding(get: { Double(min(threshold ?? 12, 50)) },
+                                          set: { model.set(Int($0.rounded()), at: ["scrollWheel", "smartShiftThreshold"], debounce: true) }),
+                           range: 1...50, low: "Slower", high: "Faster",
+                           format: { String(Int($0.rounded())) },
+                           availability: availability, mouseDefault: threshold == nil)
     }
 }

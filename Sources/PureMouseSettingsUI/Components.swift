@@ -50,6 +50,8 @@ struct ValueSlider: View {
     let format: (Double) -> String
     var width: CGFloat = 200
     var availability = ControlAvailability.available
+    /// The key is absent and the mouse keeps its own setting (`RowLabel.mouseDefault`).
+    var mouseDefault = false
 
     var body: some View {
         LabeledContent {
@@ -64,7 +66,7 @@ struct ValueSlider: View {
                     .accessibilityHidden(true)
             }
         } label: {
-            RowLabel(title, help: help, availability: availability)
+            RowLabel(title, help: help, mouseDefault: mouseDefault, availability: availability)
         }
     }
 }
