@@ -30,7 +30,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         // Finder restarts the menu agent, then opens it) counts too. Consumed either way.
         let requested = ShowRequest.consume()
         if !Locations.launchedByLaunchd || statusMenu == nil || requested { showSettings() }
-        #if DEBUG
+        #if DEBUG || DEVHOOKS
         DevHooks.run(app: self)
         #endif
     }
@@ -139,8 +139,9 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     var showsStatusItem: Bool { statusMenu != nil }
 
-    #if DEBUG
+    #if DEBUG || DEVHOOKS
     func openMenuForTesting(appearance: NSAppearance?) { statusMenu?.open(appearance: appearance) }
+    func closeMenuForTesting() { statusMenu?.close() }
     #endif
 
     private var pendingMenuOff = false
