@@ -15,6 +15,10 @@ one. This file covers how to work on it safely.
   `.build/debug/puremouse --verbose run ./config.example.json`. A terminal-run daemon uses the
   terminal's permissions and never restarts itself. Finish with `./scripts/install.sh`, which
   rebuilds, re-signs and restarts the agent, and check `~/Library/Logs/PureMouse.log`.
+  The daemon owns that file: `run` attaches stderr to it unless stderr is a terminal (`LogFile`),
+  and rotates it to `PureMouse.log.1` past `Log.rotateAt` (1 MiB). The agent plists set no
+  `StandardErrorPath`, and the menu bar app keeps no log. Any non-terminal stderr counts, so a dev
+  run piped or redirected also writes to that file.
   (`puremouse permissions` answers for whoever launches it, so from a terminal it reports the
   terminal's permissions, not the app's.)
 - Menu bar app (`Sources/PureMouseMenu`): run `.build/debug/PureMouseMenu` alongside the installed

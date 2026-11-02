@@ -1,8 +1,20 @@
 import Foundation
 
-/// Timestamped lines on stderr. The login agent sends stderr to ~/Library/Logs/PureMouse.log.
+/// Timestamped lines on stderr. When the daemon runs as a login agent, `main` attaches stderr to
+/// ~/Library/Logs/PureMouse.log first (`LogFile`), which rotates it at `rotateAt`.
 enum Log {
     nonisolated(unsafe) static var verbose = false
+
+    /// Where lines go when stderr is the log file: set once at the start of `run`, before any
+    /// other thread logs. Nil from a terminal and for every other command.
+    nonisolated(unsafe) static var file: LogFile?
+
+    /// Overrides `file` for one task tree, so tests can log to their own file in parallel.
+    @TaskLocal static var testFile: LogFile?
+
+    /// The log moves to PureMouse.log.1 once a write takes it past this size, so the two files
+    /// hold about 2 MiB at most.
+    static let rotateAt = 1 << 20
 
     static func info(_ message: @autoclosure () -> String) {
         write("info", message())
@@ -16,11 +28,120 @@ enum Log {
         write("error", message())
     }
 
+    /// Rotates the log when it has outgrown `rotateAt` (see `LogFile.rotateIfNeeded`).
+    static func rotateIfNeeded() {
+        (testFile ?? file)?.rotateIfNeeded()
+    }
+
     private static let timeFormat = Date.ISO8601FormatStyle(timeZone: .current)
         .year().month().day().time(includingFractionalSeconds: true)
 
     private static func write(_ level: String, _ message: String) {
         let time = Date.now.formatted(timeFormat)
-        FileHandle.standardError.write(Data("\(time) \(level) \(message)\n".utf8))
+        let line = Data("\(time) \(level) \(message)\n".utf8)
+        if let file = testFile ?? file {
+            file.write(line)
+        } else {
+            FileHandle.standardError.write(line)
+        }
+    }
+}
+
+/// The daemon's log file, attached to stderr so that anything written there lands in it.
+///
+/// The daemon owns the file rather than launchd (`StandardErrorPath`), so it can rotate it: once a
+/// write takes it past `Log.rotateAt`, the file is renamed to `<name>.1` (replacing any older one)
+/// and a fresh one is opened onto the same descriptor. A run from a terminal keeps printing there
+/// and never touches the file. No timer: the size check runs on writes.
+final class LogFile: @unchecked Sendable {
+    static let defaultURL = FileManager.default.homeDirectoryForCurrentUser
+        .appending(path: "Library/Logs/PureMouse.log")
+
+    let url: URL
+    /// The descriptor the log is attached to: 2 (stderr) in the daemon, another in tests.
+    let fd: Int32
+    let rotateAt: Int
+    /// False when `fd` already was the log file (agents registered by 0.3.x set
+    /// `StandardErrorPath`), so nothing was opened.
+    let opened: Bool
+
+    private let lock = NSLock()
+    /// Bytes in the file: its size when attached, plus every line written since.
+    private var size: Int
+
+    init(url: URL, fd: Int32, rotateAt: Int, opened: Bool) {
+        self.url = url
+        self.fd = fd
+        self.rotateAt = rotateAt
+        self.opened = opened
+        var info = stat()
+        size = fstat(fd, &info) == 0 ? Int(info.st_size) : 0
+    }
+
+    /// Points `fd` at the log file, appending, unless `fd` is a terminal (nil: nothing to do) or
+    /// already is that file. Rotates once if the file is already past `rotateAt`. Returns nil if
+    /// the file cannot be opened, leaving `fd` as it was.
+    static func attachStderr(url: URL = defaultURL, fd: Int32 = STDERR_FILENO,
+                             rotateAt: Int = Log.rotateAt) -> LogFile? {
+        guard isatty(fd) == 0 else { return nil }
+        var opened = false
+        if !refersTo(url, fd) {
+            try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                                     withIntermediateDirectories: true)
+            guard reopen(url, onto: fd) else { return nil }
+            opened = true
+        }
+        let file = LogFile(url: url, fd: fd, rotateAt: rotateAt, opened: opened)
+        file.rotateIfNeeded()
+        return file
+    }
+
+    /// Writes all of `data` to the log, then rotates if that took it past `rotateAt`. Lines from
+    /// several threads never interleave or straddle a rotation.
+    func write(_ data: Data) {
+        lock.withLock {
+            data.withUnsafeBytes { buffer in
+                var offset = 0
+                while offset < buffer.count {
+                    let count = Darwin.write(fd, buffer.baseAddress! + offset, buffer.count - offset)
+                    if count < 0 {
+                        if errno == EINTR { continue }
+                        return
+                    }
+                    offset += count
+                }
+            }
+            size += data.count
+            rotateLocked()
+        }
+    }
+
+    /// Renames the file to `<name>.1` and opens a fresh one onto `fd`, once it is past
+    /// `rotateAt`, and only while `fd` still is that file and not a terminal.
+    func rotateIfNeeded() {
+        lock.withLock { rotateLocked() }
+    }
+
+    private func rotateLocked() {
+        guard size > rotateAt, isatty(fd) == 0, Self.refersTo(url, fd) else { return }
+        let old = url.path + ".1"
+        // Count afresh even if this fails, so a failure is retried a cap later, not on every line.
+        size = 0
+        guard rename(url.path, old) == 0 else { return }
+        _ = Self.reopen(url, onto: fd)
+    }
+
+    /// Whether `fd` is the file at `url` (same device and inode).
+    private static func refersTo(_ url: URL, _ fd: Int32) -> Bool {
+        var open = stat(), named = stat()
+        guard fstat(fd, &open) == 0, stat(url.path, &named) == 0 else { return false }
+        return open.st_dev == named.st_dev && open.st_ino == named.st_ino
+    }
+
+    private static func reopen(_ url: URL, onto fd: Int32) -> Bool {
+        let new = open(url.path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0o644)
+        guard new >= 0 else { return false }
+        defer { close(new) }
+        return dup2(new, fd) >= 0
     }
 }

@@ -6,7 +6,9 @@ the examples below call it `puremouse`.
 ## First checks
 
 - **Logs** are in `~/Library/Logs/PureMouse.log`. The first line of each start shows the macOS
-  version.
+  version. Past 1 MiB the log moves to `PureMouse.log.1`, replacing the previous one, and a new
+  log starts, so older lines may be there. Run from a terminal, PureMouse prints there instead.
+  The menu bar app keeps no log; an old `PureMouse Menu.log` can be deleted.
 - **Wheels stay native and buttons do nothing:** a permission is missing. Settings › General and
   the log say which. PureMouse restarts itself once it is granted;
   `launchctl kickstart -k gui/$UID/io.github.mblauberg.puremouse` forces a restart.

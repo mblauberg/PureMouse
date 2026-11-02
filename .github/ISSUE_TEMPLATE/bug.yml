@@ -39,5 +39,5 @@ body:
     id: log
     attributes:
       label: Log excerpt
-      description: Lines from `~/Library/Logs/PureMouse.log` around the problem.
+      description: Lines from `~/Library/Logs/PureMouse.log` around the problem (older lines are in `PureMouse.log.1`).
       render: shell
