@@ -1,21 +1,23 @@
 import Foundation
 
 /// An advisory `flock` that makes a read-merge-replace of a shared file one step for every process
-/// that takes it (the config's writers, `control.json`'s writers). It locks a separate file beside
-/// the data, never the data itself: atomic writes give the data a new inode each time, so a lock
-/// on it would guard nothing. `flock` belongs to the open file description, so two opens in one
-/// process exclude each other too.
-enum FileLock {
+/// that takes it: the config's writers, `control.json`'s writers and the daemon's startup delete of
+/// it. It locks a separate file beside the data, never the data itself: atomic writes give the data
+/// a new inode each time, so a lock on it would guard nothing. `flock` belongs to the open file
+/// description, so two opens in one process exclude each other too.
+public enum FileLock {
     /// The lock file for `file`: `<name>.lock` in the same directory.
-    static func url(for file: URL) -> URL {
+    public static func url(for file: URL) -> URL {
         file.deletingLastPathComponent().appending(path: file.lastPathComponent + ".lock")
     }
 
     /// The lock could not be opened or taken; `body` did not run.
-    struct Failed: LocalizedError {
-        let path: String
-        let reason: String
-        var errorDescription: String? { "PureMouse could not lock \(Format.tildePath(path)): \(reason)" }
+    public struct Failed: LocalizedError {
+        public let path: String
+        public let reason: String
+        public var errorDescription: String? {
+            "PureMouse could not lock \((path as NSString).abbreviatingWithTildeInPath): \(reason)"
+        }
 
         init(_ lock: URL, errno code: Int32) { self.init(path: lock.path, reason: String(cString: strerror(code))) }
         init(path: String, reason: String) {
@@ -27,7 +29,7 @@ enum FileLock {
     /// Runs `body` holding an exclusive lock on `lock` (created if needed), waiting while another
     /// writer holds it. Writers hold it for one read and one atomic write, so the wait is short
     /// and needs no timer. Closing the descriptor releases it, also when `body` throws.
-    static func withLock<T>(_ lock: URL, _ body: () throws -> T) throws -> T {
+    public static func withLock<T>(_ lock: URL, _ body: () throws -> T) throws -> T {
         do {
             try FileManager.default.createDirectory(at: lock.deletingLastPathComponent(), withIntermediateDirectories: true)
         } catch {

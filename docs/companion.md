@@ -50,7 +50,8 @@ missing or stale file means "PureMouse Is Off".
 
 - `paused: true`: every session is restored to native behaviour (`Session.restore()`, wheels first),
   sessions are dropped and adoption stops. `paused: false` re-adopts connected mice and applies the
-  config. Pausing is not persisted: the daemon deletes `control.json` at start.
+  config. Pausing is not persisted: the daemon deletes `control.json` at start, under
+  `control.json.lock`, so a menu write already under way lands first and is deleted with it.
 - `capture: {token}` with a new token starts **select by pressing**. For up to 10 s every divertable
   control of every mouse is diverted; the first press reports `{token, state: pressed, cid,
   deviceID}` and performs no action; then the normal diversion is restored. Timeout reports

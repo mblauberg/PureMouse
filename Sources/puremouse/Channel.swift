@@ -51,12 +51,17 @@ final class StatusChannel {
     }
 
     /// Requests left by a previous run must not apply to this one (a pause never outlives the daemon).
-    static func clearControl() {
+    /// The delete takes `control.json.lock`, as the menu's writes do, so a write the menu has begun
+    /// lands before it and is removed, never after it with state read from the old file.
+    static func clearControl(_ url: URL = Companion.controlURL) {
         do {
-            try FileManager.default.removeItem(at: Companion.controlURL)
-        } catch CocoaError.fileNoSuchFile {
+            try FileLock.withLock(FileLock.url(for: url)) {
+                do {
+                    try FileManager.default.removeItem(at: url)
+                } catch CocoaError.fileNoSuchFile {}
+            }
         } catch {
-            Log.error("removing \(Companion.controlURL.path): \(error)")
+            Log.error("removing \(url.path): \(error)")
         }
     }
 }
