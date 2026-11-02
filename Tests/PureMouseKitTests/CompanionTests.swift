@@ -89,7 +89,7 @@ private func fullStatus() -> Status {
     }
 }
 
-@Test(.enabled(if: ProcessInfo.processInfo.environment["PUREMOUSE_COMPANION_DIR"] == nil))
+@Test(.enabled(if: Companion.overrideDirectory == nil))
 func doorbellsKeepTheirNamesWithoutACompanionDirectory() {
     // So an old build and a new one still pair.
     #expect(Companion.doorbell("io.github.mblauberg.puremouse.status", directory: nil) == "io.github.mblauberg.puremouse.status")

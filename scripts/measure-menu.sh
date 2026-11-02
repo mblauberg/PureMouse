@@ -79,7 +79,7 @@ done
 check_budgets() {
     [[ -f $budgets ]] || fail "no budgets file at $budgets"
     local name limit
-    while IFS=$'\t' read -r name limit; do
+    while IFS=$'\t' read -r name limit || [[ -n $name ]]; do  # a last line without a newline counts too
         [[ $name == \#* || -z $name ]] && continue
         [[ $limit == <-> ]] || fail "$budgets: the limit for '$name' is '$limit', not a whole number"
     done < $budgets
