@@ -53,6 +53,8 @@ final class SettingsLauncher {
     /// Quit PureMouse has begun: nothing more opens, and a helper an earlier open starts is quit.
     private var quitting = false
     private var whenSettled: [@MainActor () -> Void] = []
+    /// Counts opens; a retry of an earlier one that a newer open has overtaken is dropped.
+    private var generation = 0
 
     init(system: System) {
         self.system = system
@@ -61,10 +63,11 @@ final class SettingsLauncher {
     /// `done` runs once the helper is open or the alert saying why not is answered.
     func open(pane: SettingsPane? = nil, then done: @escaping @MainActor () -> Void = {}) {
         guard !quitting else { return done() }
+        generation += 1
         system.post(pane)
         switch system.find() {
         case .success(.app(let app)):
-            launch(app, pane: pane, retries: 1, then: done)
+            launch(app, pane: pane, generation: generation, retries: 1, then: done)
         case .success(.binary(let url)):
             // A running copy has already heard the doorbell.
             if binary?.isRunning != true {
@@ -84,7 +87,8 @@ final class SettingsLauncher {
         }
     }
 
-    private func launch(_ app: URL, pane: SettingsPane?, retries: Int, then done: @escaping @MainActor () -> Void) {
+    private func launch(_ app: URL, pane: SettingsPane?, generation: Int, retries: Int,
+                        then done: @escaping @MainActor () -> Void) {
         pending += 1
         system.open(app) { [self] helper, error in
             pending -= 1
@@ -104,12 +108,13 @@ final class SettingsLauncher {
             pending += 1
             system.after(Self.retryDelay) { [self] in
                 pending -= 1
-                if quitting {
+                // Quitting, or a newer open has asked for its own pane and opened the helper.
+                if quitting || generation != self.generation {
                     if pending == 0 { settle() }
                     return done()
                 }
                 system.post(pane)
-                launch(app, pane: pane, retries: retries - 1, then: done)
+                launch(app, pane: pane, generation: generation, retries: retries - 1, then: done)
             }
         }
     }

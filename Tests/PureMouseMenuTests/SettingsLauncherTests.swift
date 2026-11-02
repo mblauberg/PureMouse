@@ -124,6 +124,23 @@ struct SettingsLauncherTests {
         #expect(quit == 1)
     }
 
+    /// pointer, then general: the pointer open's retry must not ask for pointer again.
+    @Test func aRetryANewerOpenHasOvertakenIsDropped() {
+        let fake = FakeSystem()
+        let launcher = SettingsLauncher(system: fake.system)
+        var done = 0
+        launcher.open(pane: .pointer) { done += 1 }
+        fake.answer(FakeSystem.Helper(alive: false)) // only a quitting copy: a retry is due
+        launcher.open(pane: .general) { done += 1 }
+        let live = FakeSystem.Helper(alive: true)
+        fake.running = [live]
+        fake.answer(live)
+        fake.runDelayed() // the pointer open's retry
+        #expect(fake.posts == [.pointer, .general])
+        #expect(fake.opens.isEmpty)
+        #expect(done == 2)
+    }
+
     @Test func quitDuringARetryWaitOpensNothingMore() {
         let fake = FakeSystem()
         let launcher = SettingsLauncher(system: fake.system)
