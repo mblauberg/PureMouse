@@ -67,7 +67,7 @@ struct PointerPane: View {
             } footer: {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(model.devices.count > 1
-                         ? "The Tracking speed setting in System Settings applies on top. Applies to every mouse without its own setting."
+                         ? "The Tracking speed setting in System Settings applies on top. Applies to every connected mouse."
                          : "The Tracking speed setting in System Settings applies on top.")
                     PaneFooter(restoreDefaults: {
                         typed = nil
