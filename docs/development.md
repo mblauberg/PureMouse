@@ -193,6 +193,8 @@ running checks.
 - The size budgets are `INSTALLED_MAX_BYTES` (the app) and `DMG_MAX_BYTES` (the dmg) in
   `scripts/size-budget.env`, each measured from the universal build plus 15%. Raising one is a
   reviewed change that says what grew.
+- When the app grows past a budget, re-measure and raise the budget by that rule rather than shrink
+  the app at the cost of functionality or polish worth keeping (the owner's rule).
 
 ## Repository settings the release relies on
 
