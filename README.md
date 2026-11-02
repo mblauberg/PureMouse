@@ -91,14 +91,18 @@ The menu bar shows the mouse and its battery, and switches smooth scrolling, poi
 pause. **Settings…** covers everything else, and changes apply as you make them. Opening
 PureMouse from Applications opens Settings too, even with the menu bar icon hidden.
 
+Settings has four tabs: General, Mouse, Apps and About. Mouse holds Buttons, Scrolling and
+Pointer, and shows only the controls your mouse has. Fine tuning sits behind each pane's
+**Advanced…** button, and each app opens in a sheet that shows what it shares with everywhere else.
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-buttons-dark.png">
-    <img src="docs/images/settings-buttons-light.png" width="400" align="top" alt="Buttons settings: an action for each button and gesture">
+    <img src="docs/images/settings-buttons-light.png" width="400" align="top" alt="Mouse › Buttons: a gesture button with Mission Control on click, and an action for back, forward, the top button and the wheel click">
   </picture>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-app-dark.png">
-    <img src="docs/images/settings-app-light.png" width="400" align="top" alt="Google Chrome's own settings: Command-T on the top button and the thumb wheel switching tabs">
+    <img src="docs/images/settings-app-light.png" width="400" align="top" alt="Google Chrome's own settings in a sheet: Command-T on the top button and the thumb wheel switching tabs, with the other buttons the same as everywhere">
   </picture>
 </p>
 
@@ -107,23 +111,23 @@ PureMouse from Applications opens Settings too, even with the menu bar icon hidd
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-scrolling-dark.png">
-    <img src="docs/images/settings-scrolling-light.png" width="400" align="top" alt="Scrolling settings: smooth scrolling feel and speed, main wheel direction and mode, thumb wheel switching tabs with its direction">
+    <img src="docs/images/settings-scrolling-light.png" width="400" align="top" alt="Mouse › Scrolling: smooth scrolling with its feel and speed, the main wheel's direction, mode and SmartShift, and the thumb wheel's action">
   </picture>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-general-dark.png">
-    <img src="docs/images/settings-general-light.png" width="400" align="top" alt="General settings: open at login, whether PureMouse is running, menu bar icon, low battery notification, Universal Control, permissions and files">
+    <img src="docs/images/settings-general-light.png" width="400" align="top" alt="General: whether PureMouse is running, open at login, the menu bar icon, the low battery notification and permissions">
   </picture>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-apps-dark.png">
-    <img src="docs/images/settings-apps-light.png" width="400" align="top" alt="Apps settings: Chrome, Teams, Word, Preview and Safari, each with its own thumb wheel and buttons">
+    <img src="docs/images/settings-apps-light.png" width="400" align="top" alt="Apps: Chrome, Teams, Word, Preview and Safari, each with its own thumb wheel action or buttons">
   </picture>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-pointer-dark.png">
-    <img src="docs/images/settings-pointer-light.png" width="400" align="top" alt="Pointer settings: resolution and DPI presets">
+    <img src="docs/images/settings-pointer-light.png" width="400" align="top" alt="Mouse › Pointer: pointer speed at 1,600 DPI with presets of 800, 1,600 and 3,200 DPI">
   </picture>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-about-dark.png">
-    <img src="docs/images/settings-about-light.png" width="400" align="top" alt="About settings: version, links, Check for Updates and a Support PureMouse link">
+    <img src="docs/images/settings-about-light.png" width="400" align="top" alt="About: version 0.5.0, Check for Updates, and links to GitHub, releases, the licence and Support PureMouse">
   </picture>
 </p>
 </details>
