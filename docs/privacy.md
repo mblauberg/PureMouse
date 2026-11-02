@@ -82,7 +82,7 @@ It uses an ephemeral session, so no cookies or cache are kept. GitHub sees what 
 shows: your IP address and a standard user agent naming the app and the system version. There are
 no background checks, and the background process has no network code at all.
 
-Buttons such as **View Releases**, **View Latest Release** and **Learn More** open a GitHub page in your browser.
+Buttons such as **View Releases**, **Update PureMouse…** and **Learn More** open a GitHub page in your browser.
 
 ## Commands you set up
 
