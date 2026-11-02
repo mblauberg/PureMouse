@@ -55,7 +55,12 @@ and a change to this page lands with the text it changes.
 - **Spelling.** Australian English in docs and prose. UI text uses macOS's own names for macOS
   places ("Applications folder", "Login Items", "Privacy & Security").
 - **Accessibility labels** say what a control does in words; never read a separator ("·") or a
-  symbol name aloud, and never give two controls in one window the same label.
+  symbol name aloud, and never give two controls in one window the same label. A shortcut is
+  spoken in words ("Shift Command 4", `Shortcut.spoken`), never as its glyphs. The status item's
+  label names the mouse's state in order (off; the mouse and its battery, spoken as a percentage
+  or, with only a level, "battery low" or "battery critical"; "paused" or "on another Mac"), and
+  says paused whether or not a mouse is listed. `PUREMOUSE_DEV_AX_DUMP=1` checks the Settings
+  labels (docs/ui-design.md, "Motion, sound and accessibility").
 
 ## Glossary
 

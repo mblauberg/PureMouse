@@ -143,9 +143,9 @@ struct AppSheet: View {
 
     /// What applies everywhere, for the dimmed value and "Same as Everywhere (…)". An unset
     /// direction does nothing.
-    private func everywhereLabel(_ action: ButtonAction, direction: Bool = false) -> String {
-        if action == .standard, direction { return ButtonAction.named("none").label }
-        return action.label
+    private func everywhereLabel(_ action: ButtonAction, direction: Bool = false, spoken: Bool = false) -> String {
+        let action = action == .standard && direction ? ButtonAction.named("none") : action
+        return spoken ? action.spokenLabel : action.label
     }
 
     @ViewBuilder
@@ -153,10 +153,11 @@ struct AppSheet: View {
         let state = config.appButton(key, button: button)
         let target = bindingTarget(button)
         let everywhere = everywhereLabel(state.everywhere)
+        let spokenEverywhere = everywhereLabel(state.everywhere, spoken: true)
         let caption = ActionButton.inherited(state.own, everywhere: everywhere).caption
         if state.directions.isEmpty {
             LabeledContent {
-                actionButton(state.own, target: target, sameAsEverywhere: everywhere)
+                actionButton(state.own, target: target, sameAsEverywhere: everywhere, spokenEverywhere: spokenEverywhere)
             } label: {
                 RowLabel(title(button), help: caption)
             }
@@ -168,9 +169,10 @@ struct AppSheet: View {
             let isExpanded = Binding(get: { expanded.contains(button) },
                                      set: { if $0 { expanded.insert(button) } else { expanded.remove(button) } })
             LabeledContent {
-                actionButton(state.own, target: target, sameAsEverywhere: everywhere)
+                actionButton(state.own, target: target, sameAsEverywhere: everywhere, spokenEverywhere: spokenEverywhere)
             } label: {
-                DisclosureLabel(title: title(button), help: caption, isExpanded: isExpanded)
+                DisclosureLabel(title: title(button), help: caption, spokenTitle: "\(title(button)) directions",
+                                isExpanded: isExpanded)
             }
             .padding(.leading, indented ? 16 : 0)
             .actionEditorPopover($editor, for: target, save: apply)
@@ -180,9 +182,10 @@ struct AppSheet: View {
                     // A direction the app leaves out follows the global gesture, if there is one;
                     // else it does nothing.
                     let inherited = direction.everywhere.map { everywhereLabel($0, direction: true) }
+                    let spokenInherited = direction.everywhere.map { everywhereLabel($0, direction: true, spoken: true) }
                     let own = direction.own == .standard && inherited == nil ? .named("none") : direction.own
                     LabeledContent {
-                        actionButton(own, target: target, sameAsEverywhere: inherited)
+                        actionButton(own, target: target, sameAsEverywhere: inherited, spokenEverywhere: spokenInherited)
                     } label: {
                         RowLabel(Gesture.label(direction.name),
                                  help: inherited.flatMap { ActionButton.inherited(own, everywhere: $0).caption })
@@ -194,7 +197,8 @@ struct AppSheet: View {
         }
     }
 
-    private func actionButton(_ action: ButtonAction, target: BindingTarget, sameAsEverywhere: String?) -> some View {
+    private func actionButton(_ action: ButtonAction, target: BindingTarget, sameAsEverywhere: String?,
+                              spokenEverywhere: String?) -> some View {
         let id = target.direction.map { "\(target.button).\($0)" } ?? target.button
         let isDirection = target.direction != nil
         return ActionButton(
@@ -204,7 +208,8 @@ struct AppSheet: View {
             isPresented: Binding(get: { presented == id }, set: { presented = $0 ? id : nil }),
             choose: { entry in choose(entry, for: target, current: action) },
             accessibilityName: target.title + spoken,
-            sameAsEverywhere: sameAsEverywhere)
+            sameAsEverywhere: sameAsEverywhere,
+            spokenEverywhere: spokenEverywhere)
     }
 
     private func choose(_ entry: PickerEntry, for target: BindingTarget, current: ButtonAction) {

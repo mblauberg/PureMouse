@@ -18,11 +18,12 @@ import Testing
 
     @Test func theAboutPaneHasOneSupportLinkToSponsors() throws {
         let about = try String(contentsOf: Self.sources.appending(path: "PureMouseSettingsUI/AboutPane.swift"), encoding: .utf8)
-        let links = about.components(separatedBy: "Link(").count - 1
-        let sponsorLinks = about.components(separatedBy: "destination: Links.sponsors").count - 1
+        // `link(_:_:)` draws each as a plain button with a 20 pt target (a `Link` is its text's height).
+        let links = about.components(separatedBy: " link(\"").count - 1
+        let sponsorLinks = about.components(separatedBy: ", Links.sponsors)").count - 1
         #expect(sponsorLinks == 1)
         #expect(links == 4)
-        #expect(about.contains(#"Link("Support PureMouse", destination: Links.sponsors)"#))
+        #expect(about.contains(#"link("Support PureMouse", Links.sponsors)"#))
     }
 
     @Test func theSponsorsURLIsWrittenOnlyOnce() throws {
@@ -57,7 +58,7 @@ import Testing
     @Test func theAboutPaneLeadsWithVersionAndUpdatesBeforeLinksAndFootnote() throws {
         let about = try String(contentsOf: Self.sources.appending(path: "PureMouseSettingsUI/AboutPane.swift"), encoding: .utf8)
         let order = ["Image(nsImage:", #"Text("PureMouse")"#, #"Text("Version "#, "UpdateRow()",
-                     #"Link("GitHub""#, "No account, no telemetry.", "Not affiliated with Logitech."]
+                     #"link("GitHub""#, "No account, no telemetry.", "Not affiliated with Logitech."]
         let positions = try order.map { try #require(about.range(of: $0)).lowerBound }
         #expect(positions == positions.sorted())
     }

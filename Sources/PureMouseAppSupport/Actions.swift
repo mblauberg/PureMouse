@@ -42,6 +42,12 @@ public enum ButtonAction: Equatable, Sendable {
         case .gesture: "Hold and Move"
         }
     }
+
+    /// The label as VoiceOver says it: a shortcut in words ("Shift Command 4"), not glyphs.
+    public var spokenLabel: String {
+        if case .keys(let spec) = self { return Shortcut.spoken(spec) }
+        return label
+    }
 }
 
 public enum Gesture {

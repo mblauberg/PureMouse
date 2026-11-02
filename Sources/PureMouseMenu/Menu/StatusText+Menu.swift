@@ -11,12 +11,20 @@ extension StatusText {
             parts.append(device.name)
             if !device.online {
                 parts.append("asleep")
-            } else if let percent = device.battery?.percent {
-                parts.append("battery \(percent) percent")
+            } else if let battery = device.battery {
+                if let percent = battery.percent {
+                    parts.append("battery \(percent) percent")
+                } else if battery.level == .low || battery.level == .critical {
+                    // A level without a percentage still tells the person to charge it.
+                    parts.append("battery \(battery.level.rawValue)")
+                }
             }
-            if let standby = Standby(paused: state.paused, away: state.away) { parts.append(standby.spoken) }
         } else {
             parts.append("no mouse connected")
+        }
+        // Said with or without a mouse: a paused PureMouse lists none.
+        if state.daemonRunning, let standby = Standby(paused: state.paused, away: state.away) {
+            parts.append(standby.spoken)
         }
         if state.needsAttention { parts.append("needs attention") }
         return parts.joined(separator: ", ")

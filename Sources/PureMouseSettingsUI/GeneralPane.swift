@@ -77,6 +77,9 @@ struct GeneralPane: View {
         .sheet(isPresented: $showingAdvanced) {
             GeneralAdvancedSheet().environment(model)
         }
+        #if DEBUG
+        .onAppear { if DevHooks.sheet(on: "general") == .advanced { showingAdvanced = true } }
+        #endif
     }
 
     // MARK: Rows

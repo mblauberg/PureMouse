@@ -77,7 +77,8 @@ extension String {
 }
 
 /// A slider with its words under each end, as System Settings draws them (Slow … Fast), and
-/// its value on the right.
+/// its value on the right. Every slider is one width, so the tracks of a pane's rows line up
+/// whatever their labels and readouts.
 struct ValueSlider: View {
     let title: String
     /// What VoiceOver calls the slider, where the title alone is ambiguous (two "Speed" rows).
@@ -88,7 +89,6 @@ struct ValueSlider: View {
     let low: String
     let high: String
     let format: (Double) -> String
-    var width: CGFloat = 200
     var availability = ControlAvailability.available
     /// The key is absent and the mouse keeps its own setting (`RowLabel.mouseDefault`).
     var mouseDefault = false
@@ -97,13 +97,20 @@ struct ValueSlider: View {
         LabeledContent {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 EndLabeledSlider(title: spokenTitle ?? title, value: $value, range: range, low: low, high: high)
-                    .frame(width: width)
                     .accessibilityValue(format(value))
-                Text(format(value))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-                    .frame(minWidth: 52, alignment: .trailing)
-                    .accessibilityHidden(true)
+                    .frame(width: 200)
+                // The readout takes the room of the widest value it can show, hidden, so the
+                // slider does not shift as the digits change, and at least one shared width, so
+                // the tracks of rows with short and long readouts ("2.2", "300 ms") line up.
+                ZStack(alignment: .trailing) {
+                    Text(format(range.lowerBound)).hidden()
+                    Text(format(range.upperBound)).hidden()
+                    Text(format(value))
+                }
+                .frame(minWidth: 56, alignment: .trailing)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
             }
         } label: {
             RowLabel(title, help: help, mouseDefault: mouseDefault, availability: availability)
@@ -111,8 +118,11 @@ struct ValueSlider: View {
     }
 }
 
-/// A plain slider with small words under its ends. No `step:`: macOS would draw a tick per
-/// step, so callers snap in their binding instead.
+/// A plain slider with its words under its ends, in caption type, as System Settings draws
+/// them: `minimumValueLabel` and `maximumValueLabel` would put them beside the track, making each
+/// row's track a different length. The slider speaks its title; VoiceOver reads the value, not
+/// the end words. No `step:`: macOS would draw a tick per step, so callers snap in their
+/// binding instead.
 struct EndLabeledSlider: View {
     let title: String
     @Binding var value: Double
@@ -124,8 +134,8 @@ struct EndLabeledSlider: View {
         VStack(spacing: 0) {
             Slider(value: $value, in: range) { Text(title) }
                 .labelsHidden()
-            // No words under the ends when there are none to say (Pointer Speed before the mouse
-            // has reported its range).
+            // No words when there are none to say (Pointer Speed before the mouse has reported
+            // its range).
             if !low.isEmpty || !high.isEmpty {
                 HStack {
                     Text(low)
@@ -248,6 +258,9 @@ extension AdvancedSheet where Leading == EmptyView {
 struct DisclosureLabel: View {
     let title: String
     var help: String?
+    /// What VoiceOver calls the disclosure where the title alone names another control in the row
+    /// (a gesture button's action pop-up).
+    var spokenTitle: String?
     @Binding var isExpanded: Bool
 
     var body: some View {
@@ -256,19 +269,21 @@ struct DisclosureLabel: View {
         } label: {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .bold))
+                    .imageScale(.small)
+                    .fontWeight(.bold)
                     .foregroundStyle(.secondary)
                     .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                    .frame(width: 10)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                     if let help { Text(help).font(.subheadline).foregroundStyle(.secondary) }
                 }
             }
+            // A line of text is 16 pt tall; the padding takes the hit target to the 20 pt minimum.
+            .padding(.vertical, 2)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(title)
+        .accessibilityLabel(spokenTitle ?? title)
         .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
     }
 }

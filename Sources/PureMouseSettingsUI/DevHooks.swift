@@ -12,6 +12,8 @@ import PureMouseAppSupport
 /// `PUREMOUSE_DEV_SHEET=<name>` opens a sheet: `presets` (Mouse › Pointer) through a `ShowRequest`,
 /// or a sheet on the pane shown (`DevSheet`).
 /// `PUREMOUSE_DEV_CAPTURE=<file.png>` saves the windows to that file and quits (`DevCapture`).
+/// `PUREMOUSE_DEV_AX_DUMP=1` prints every control's accessibility role, label and size for each
+/// tab and segment, or for what the hooks above open, and quits (`DevAXDump`).
 @MainActor
 public enum DevHooks {
     /// The sheet to open on `pane`, only when `PUREMOUSE_DEV_PANE` names it: Mouse builds more
@@ -22,7 +24,7 @@ public enum DevHooks {
         return environment["PUREMOUSE_DEV_SHEET"].flatMap(DevSheet.init(rawValue:))
     }
 
-    public static func run(show: (ShowRequest) -> Void) {
+    public static func run(show: @escaping (ShowRequest) -> Void) {
         let environment = ProcessInfo.processInfo.environment
         // The menu bar app's `DevHooks` reads the same variable the same way.
         switch environment["PUREMOUSE_DEV_APPEARANCE"] {
@@ -40,13 +42,14 @@ public enum DevHooks {
         default: break
         }
         DevCapture.schedule(environment)
+        DevAXDump.schedule(environment, show: show)
     }
 }
 
 /// A sheet `PUREMOUSE_DEV_SHEET` opens: one case per sheet; a pane checks `DevHooks.sheet(on:)` as
 /// it appears.
 enum DevSheet: String {
-    /// The pane's Advanced… sheet (Mouse › Buttons, Mouse › Scrolling).
+    /// The pane's Advanced… sheet (General, Mouse › Buttons, Mouse › Scrolling).
     case advanced
 }
 #endif
