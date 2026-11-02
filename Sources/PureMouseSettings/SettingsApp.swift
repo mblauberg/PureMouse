@@ -12,10 +12,13 @@ final class SettingsApp: NSObject, NSApplicationDelegate {
     private let model = AppModel(alert: Alerts.show)
     private var settings: SettingsWindowController?
     private var showToken: Int32 = -1
+    private lazy var menuActions = MainMenu.Actions(
+        showAbout: { [weak self] in self?.show(.about) },
+        open: { NSWorkspace.shared.open($0) })
     private var terminateSignal: DispatchSourceSignal?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.mainMenu = MainMenu.make()
+        NSApp.mainMenu = MainMenu.make(actions: menuActions)
         terminateSignal = Self.terminateOnSIGTERM()
         model.startWatching()
         // Asked again while open (the menu bar app posts, then opens this app): the pane is in

@@ -49,7 +49,7 @@ let package = Package(
         .testTarget(name: "PureMouseMenuTests", dependencies: ["PureMouseMenu"]),
         .testTarget(
             name: "PureMouseSettingsTests",
-            dependencies: ["PureMouseSettingsUI", "PureMouseAppSupport"]
+            dependencies: ["PureMouseSettings", "PureMouseSettingsUI", "PureMouseAppSupport"]
         ),
         .testTarget(
             name: "PureMouseAppSupportTests",
