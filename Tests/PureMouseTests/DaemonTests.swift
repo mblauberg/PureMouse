@@ -67,7 +67,7 @@ struct DaemonTests {
         let before = try config(#"{"dpi": 1600, "devices": {"pb02c": {"dpi": 1200}}}"#)
         let otherEntry = try config(#"{"dpi": 1600, "devices": {"pb02c": {"dpi": 1000}}}"#)
         #expect(!keeps(before, otherEntry, "pb02c"))
-        #expect(keeps(before, otherEntry, "mb03440910000"))
+        #expect(keeps(before, otherEntry, "mb03400000000"))
         #expect(keeps(before, otherEntry, nil))
         let topLevel = try config(#"{"dpi": 1400, "devices": {"pb02c": {"dpi": 1200}}}"#)
         #expect(keeps(before, topLevel, "pb02c"))

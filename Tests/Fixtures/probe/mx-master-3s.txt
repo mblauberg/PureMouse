@@ -1,27 +1,35 @@
-# Hand-built from PureMouse's tested MX Master 3S feature list; not a hardware capture.
-# Feature indices and readbacks are illustrative. Replace with an owner-supplied probe dump.
+# MX Master 3S: a RAW CAPTURE, from OpenLogi fixtures/devices/mx-master-3s-001 (commit e581c20),
+# https://github.com/AprilNEA/OpenLogi/tree/e581c20/fixtures/devices/mx-master-3s-001, decoded into
+# `puremouse probe` format. Direct Bluetooth LE, no receiver, no wireless product ID.
+# Not in the capture, so written with the fake's default values: the 0x2121 caps and the 0x2150
+# info and status reads. Also not in it: the 0x1004 capabilities, and every control's reporting
+# (written here as native, the state a mouse comes up in). The "type" line is the capture's
+# profile kind.
+== MX Master 3S pid=0xb034 page=0x0001 transport=Bluetooth Low Energy
+
+-- index 255: HID++ 4.5
   name: MX Master 3S
-  device product IDs: bluetoothLE=0xb034 wireless=0x4091
-  features: 01:0001 02:0003 03:0005 04:1b04 05:2110 06:2121 07:2150 08:2201 09:1004 0a:1d4b
+  type: mouse
+  device product IDs: bluetoothLE=0xb034
+  features: 01:0001 02:0003 03:0005 04:1d4b 05:0020 06:0021 07:0007 08:1004 09:1b04 0a:1814 0b:1815 0c:2250 0d:2201 0e:2110 0f:2121 10:2150 11:2251 12:00c3 13:1802 14:1803 15:1806 16:1816 17:1805 18:1830 19:1891 1a:18a1 1b:1e00 1c:1e02 1d:1602 1e:1eb0 1f:1861 20:9300 21:9001 22:1e22 23:9205
   controls (0x1B04 getCidInfo / getCidReporting):
-    cid=0x0050 info=00 50 00 00 00 00 00 00 00 reporting=00 50 00 00 00 00
-    cid=0x0051 info=00 51 00 00 00 00 00 00 00 reporting=00 51 00 00 00 00
-    cid=0x0052 info=00 52 00 00 20 00 00 00 00 reporting=00 52 00 00 00 00
-    cid=0x0053 info=00 53 00 00 20 00 00 00 00 reporting=00 53 00 00 00 00
-    cid=0x0056 info=00 56 00 00 20 00 00 00 00 reporting=00 56 00 00 00 00
-    cid=0x00c3 info=00 c3 00 00 20 00 00 00 01 reporting=00 c3 00 00 00 00
-    cid=0x00c4 info=00 c4 00 00 20 00 00 00 00 reporting=00 c4 00 00 00 00
-    cid=0x00d7 info=00 d7 00 00 a0 00 00 00 01 reporting=00 d7 00 00 00 00
-  smartshift 0x2110 get: 02 1e 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    cid=0x0050 info=00 50 00 38 01 00 01 01 04 reporting=00 50 00 00 00 00
+    cid=0x0051 info=00 51 00 39 01 00 01 01 04 reporting=00 51 00 00 00 00
+    cid=0x0052 info=00 52 00 3a 31 00 02 03 05 reporting=00 52 00 00 00 00
+    cid=0x0053 info=00 53 00 3c 31 00 02 03 05 reporting=00 53 00 00 00 00
+    cid=0x0056 info=00 56 00 3e 31 00 02 03 05 reporting=00 56 00 00 00 00
+    cid=0x00c3 info=00 c3 00 a9 31 00 02 03 05 reporting=00 c3 00 00 00 00
+    cid=0x00c4 info=00 c4 00 9d 31 00 02 03 05 reporting=00 c4 00 00 00 00
+    cid=0x00d7 info=00 d7 00 b4 a0 00 03 00 03 reporting=00 d7 00 00 00 00
+  smartshift 0x2110 get: 02 0a 0a 00 00 00 00 00 00 00 00 00 00 00 00 00
   smartshift 0x2111 caps: feature 0x2111 not supported
   smartshift 0x2111 get: feature 0x2111 not supported
   dpi 0x2201 sensors: 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
   dpi 0x2201 list: 00 00 c8 e0 32 1f 40 00 00 00 00 00 00 00 00 00
-  dpi 0x2201 get: 00 03 e8 00 00 00 00 00 00 00 00 00 00 00 00 00
+  dpi 0x2201 get: 00 03 e8 03 e8 00 00 00 00 00 00 00 00 00 00 00
   hires 0x2121 caps: 0f 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
   hires 0x2121 mode: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
   thumb 0x2150 info: 00 12 00 78 00 00 00 00 00 00 00 00 00 00 00 00
   thumb 0x2150 status: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-  battery 0x1004 status: 50 04 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  battery 0x1004 status: 2d 04 00 00 00 00 00 00 00 00 00 00 00 00 00 00
   battery 0x1000 status: feature 0x1000 not supported
-  haptic 0x19B0 caps: feature 0x19b0 not supported

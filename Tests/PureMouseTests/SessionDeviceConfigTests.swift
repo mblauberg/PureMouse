@@ -8,7 +8,7 @@ import Testing
 /// Each mouse gets the settings resolved for its device key, and requests can aim at one.
 @Suite(.quietLog) @MainActor
 struct SessionDeviceConfigTests {
-    static let m1 = "mb03440910000"  // the MX Master 3S fixture
+    static let m1 = "mb03400000000"  // the MX Master 3S fixture
     static let m2 = "m40aa00000000"  // the synthetic mouse
 
     @Test func eachMouseGetsItsOwnDPIAndUseConfiguredDPICanAimAtOne() async throws {

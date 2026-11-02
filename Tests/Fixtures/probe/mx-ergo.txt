@@ -1,0 +1,32 @@
+# MX Ergo: a RAW CAPTURE, from OpenLogi fixtures/devices/mx-ergo-001 (commit e581c20),
+# https://github.com/AprilNEA/OpenLogi/tree/e581c20/fixtures/devices/mx-ergo-001, decoded into
+# `puremouse probe` format. Taken through a Unifying receiver (0xc52b), slot 1. It has no 0x2201 and
+# no 0x2121; its wheel is the notched 0x2130, it has 0x2205 pointer speed, and its controls carry
+# the persistent-divert flag (0x71): only the temporary divert bit may ever be set on them.
+# Not in the capture, so written as a mouse comes up: the 0x2130 reporting byte (native), and
+# every control's reporting (native). The "type" line is the capture's profile kind.
+== MX Ergo Multi-Device Trackball pid=0x406f page=0x0001 transport=Unifying receiver
+
+-- index 1: HID++ 4.5
+  name: MX Ergo Multi-Device Trackball
+  type: trackball
+  device product IDs: bluetoothLE=0xb01d wireless=0x406f
+  features: 01:0001 02:0003 03:0005 04:1d4b 05:0007 06:0020 07:0021 08:1000 09:1300 0a:1b04 0b:1c00 0c:2006 0d:2205 0e:2100 0f:00c2 10:1802 11:1803 12:1806 13:1805 14:1813 15:1814 16:1815 17:1830 18:1861 19:1890 1a:1891 1b:18a1 1c:1df3 1d:1e00 1e:1eb0 1f:18b1 20:1850 21:1f03 22:18c0 23:2130
+  controls (0x1B04 getCidInfo / getCidReporting):
+    cid=0x0050 info=00 50 00 38 11 00 01 01 00 reporting=00 50 00 00 00 00
+    cid=0x0051 info=00 51 00 39 11 00 01 01 00 reporting=00 51 00 00 00 00
+    cid=0x0052 info=00 52 00 3a 71 00 02 03 01 reporting=00 52 00 00 00 00
+    cid=0x0053 info=00 53 00 3c 71 00 02 03 01 reporting=00 53 00 00 00 00
+    cid=0x0056 info=00 56 00 3e 71 00 02 03 01 reporting=00 56 00 00 00 00
+    cid=0x00ed info=00 ed 00 c4 71 00 02 03 01 reporting=00 ed 00 00 00 00
+    cid=0x005b info=00 5b 00 3f 71 00 02 03 01 reporting=00 5b 00 00 00 00
+    cid=0x005d info=00 5d 00 40 71 00 02 03 01 reporting=00 5d 00 00 00 00
+    cid=0x00d7 info=00 d7 00 b4 a0 00 03 00 03 reporting=00 d7 00 00 00 00
+  smartshift 0x2110 get: feature 0x2110 not supported
+  smartshift 0x2111 caps: feature 0x2111 not supported
+  smartshift 0x2111 get: feature 0x2111 not supported
+  dpi 0x2201 sensors: feature 0x2201 not supported
+  hires 0x2121 mode: feature 0x2121 not supported
+  battery 0x1004 status: feature 0x1004 not supported
+  lowres 0x2130 mode: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  battery 0x1000 status: 32 14 00 00 00 00 00 00 00 00 00 00 00 00 00 00

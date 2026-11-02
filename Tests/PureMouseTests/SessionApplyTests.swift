@@ -35,7 +35,7 @@ struct SessionApplyTests {
 
     @Test func enhancedTimeoutReachesConfigureRetry() async throws {
         let fake = FakeDevice.mxMaster3S
-        fake.features[5] = 0x2111
+        fake.features[0x0E] = 0x2111
         fake.failures[.init(0x2111, 1)] = .timeout
         let h = try await SessionHarness(fake)
         defer { h.close() }
@@ -83,18 +83,31 @@ struct SessionApplyTests {
         #expect(log.lines.contains { $0.message.contains("no Accessibility permission; leaving the wheels native") })
     }
 
-    @Test func probeDumpRoundTripsFixtureState() async {
-        let fake = FakeDevice.mxMaster3S
+    /// `puremouse probe` output read back by `FakeDevice.probe` rebuilds every fixture, which is
+    /// the contract the fixtures rely on.
+    @Test(arguments: ["3S", "Master 4", "Ergo", "G305", "Superstrike", "M750"])
+    func probeDumpRoundTripsFixtureState(_ name: String) async {
+        let fake: FakeDevice = switch name {
+        case "3S": .mxMaster3S
+        case "Master 4": .mxMaster4
+        case "Ergo": .mxErgo
+        case "G305": .g305
+        case "Superstrike": .superstrike
+        default: .m750
+        }
         let device = fake.endpoint(softwareIDs: 0x2...0x7)
         defer { device.close() }
         var lines: [String] = []
         await Probe.dump(device) { lines.append($0) }
         let parsed = FakeDevice.probe(lines.joined(separator: "\n"))
         #expect(parsed.name == fake.name)
+        #expect(parsed.kind == fake.kind)
         #expect(parsed.features == fake.features)
         #expect(parsed.controls == fake.controls)
         #expect(parsed.responses == fake.responses)
-        #expect((try? await DeviceIdentity.transportIDs(device)) == [.bluetoothLE: 0xB034, .wireless: 0x4091])
+        if name == "3S" {
+            #expect((try? await DeviceIdentity.transportIDs(device)) == [.bluetoothLE: 0xB034])
+        }
         #expect(fake.transport.sent.allSatisfy { (0x2...0x7).contains($0.softwareID) })
     }
 }

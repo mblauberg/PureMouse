@@ -27,3 +27,7 @@
   battery 0x1004 status: 5f 08 00 00 00 00 00 00 00 00 00 00 00 00 00 00
   battery 0x1000 status: feature 0x1000 not supported
   haptic 0x19B0 caps: feature 0x19b0 not supported
+# Added by hand, NOT in adlyzi's dump (the probe did not read 0x2130 then): the notched wheel's
+# reporting byte, bit 0 clear meaning ordinary HID scrolling. Layout from Solaar's `LowresMode`
+# (function 0 reads it). The dump's feature table is what shows the M750 has 0x2130, at index 0x0d.
+  lowres 0x2130 mode: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
