@@ -16,6 +16,13 @@ extension Session {
 
     // MARK: Events
 
+    /// Records a battery broadcast from the selected source when it differs from what is known.
+    private func batteryChanged(_ battery: UnifiedBattery.State?) {
+        guard let battery, battery != state.battery else { return }
+        state.battery = battery
+        changed()
+    }
+
     func handle(_ report: Report) {
         guard !finished else { return }
         if report.featureIndex == Receiver.connectionNotification {
@@ -37,13 +44,17 @@ extension Session {
         reconfigureIfOffline()
         let feature = device.feature(at: report.featureIndex)
         // Late wheel and button reports from before a handoff: the pointer is on another Mac.
-        if away, let feature, [HiResWheel.id, ThumbWheel.id, ReprogControls.id].contains(feature) { return }
+        if away, let feature, Wheel.allCases.map(\.feature).contains(feature) || feature == ReprogControls.id { return }
         switch feature {
         case HiResWheel.id:
             switch HiResWheel.parse(function: report.function, params: report.params) {
             case .scroll(let delta, _): scroll?.wheel(delta, perNotch: wheelMultiplier)
             case .ratchet(let engaged): Log.debug("\(name): ratchet \(engaged ? "engaged" : "released")")
             case nil: break
+            }
+        case LowResWheel.id:
+            if case .scroll(let notches) = LowResWheel.parse(function: report.function, params: report.params) {
+                scroll?.wheel(notches, perNotch: 1)
             }
         case ThumbWheel.id:
             if let event = ThumbWheel.parse(function: report.function, params: report.params) { thumbMoved(event) }
@@ -62,13 +73,10 @@ extension Session {
                 changed()
             }
         case LegacyBattery.id:
-            // If both features exist, only 0x1004 is authoritative.
-            if state.legacyBatterySelected,
-               let battery = LegacyBattery.parse(function: report.function, params: report.params),
-               battery != state.battery {
-                state.battery = battery
-                changed()
-            }
+            // Only the selected source is authoritative (0x1004, else 0x1000, else 0x1001).
+            if state.batterySource == .legacy { batteryChanged(LegacyBattery.parse(function: report.function, params: report.params)) }
+        case BatteryVoltage.id:
+            if state.batterySource == .voltage { batteryChanged(BatteryVoltage.parse(function: report.function, params: report.params)) }
         case WirelessDeviceStatus.id:
             if WirelessDeviceStatus.needsReconfiguration(function: report.function, params: report.params) {
                 Log.info("\(name): reconnected")
@@ -222,7 +230,6 @@ extension Session {
         deviceActions.enqueue { [self] in
             state.liveDPI = nil
             do {
-                guard try await device.hasFeature(AdjustableDPI.id) else { return }
                 try await applyDPI()
                 changed()
             } catch {
@@ -237,13 +244,12 @@ extension Session {
             return
         }
         do {
-            guard try await device.hasFeature(AdjustableDPI.id) else { return }
-            let current = if let dpi = state.dpi { dpi } else { try await AdjustableDPI.get(device) }
+            guard let feature = try await dpiFeature(), !state.dpiRefused else { return }
+            let current = if let dpi = state.dpi { dpi } else { try await readDPI(feature).x }
             guard let next = Config.nextPreset(config.dpiPresets.map(supportedDPI(near:)), after: current) else { return }
-            try ensureOpen()
-            try await AdjustableDPI.set(device, dpi: next)
+            try await writeDPI(next, feature)
             state.liveDPI = next
-            try await readDPI()
+            try await confirmDPI(next, feature)
             Log.debug("\(name): dpi \(next)")
             changed()
         } catch {

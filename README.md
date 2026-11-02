@@ -134,7 +134,10 @@ should work too. Only the MX Master 3S has been tested on a real mouse; the othe
 | MX Master 4 | The same, plus haptic feedback as an action | Untested |
 | MX Anywhere 3 / 3S | Buttons, DPI, smooth scrolling, SmartShift and battery | Untested |
 | MX Vertical / Lift | Buttons, DPI and battery | Untested |
-| Signature Plus M750 | Buttons, DPI and battery | Untested |
+| Signature Plus M750 | Buttons, DPI, smooth scrolling on its notched wheel and battery | Untested |
+| MX Ergo | Buttons, smooth scrolling on its notched wheel and battery; no DPI control | Untested |
+| G305 and other G-series mice in onboard mode | Battery and, where the mouse accepts it, DPI; in onboard mode DPI cannot be set and the status says so | Untested |
+| G Pro X 2 Superstrike | DPI and battery | Untested |
 
 Bluetooth and Logi Bolt or Unifying receivers are picked up automatically. Using a different
 Logitech mouse? Attaching [`puremouse probe` output](docs/troubleshooting.md#inspecting-a-mouse)

@@ -46,6 +46,30 @@ watches it (`UniversalControlWatcher`, no polling) and, while the pointer is awa
 and diverted buttons back to macOS, keeping DPI and the other settings. When the pointer returns it
 diverts them again. `universalControl.handOff: false` turns this off.
 
+## Which devices and features
+
+A device is adopted if it says it is a mouse or trackball, or has adjustable DPI (0x2201, or
+0x2202 on mice such as the G Pro X 2 Superstrike, which have no 0x2201). Keyboards, numpads,
+presenters and receivers report a control list too, so that alone does not qualify them. Each
+feature a mouse reports is then used and nothing else is asked.
+
+DPI goes through 0x2201, else 0x2202. The value is snapped to the sensor's list and read back. If
+the mouse reads back something else, as a G305 in onboard mode does (its profile, 0x8100, owns the
+resolution), DPI is reported as not controllable and the log says so once. PureMouse never writes
+0x8100. A battery is read through 0x1004, else 0x1000, else 0x1001; the last gives a level only,
+never a percentage.
+
+### Deferred features
+
+Not used, and why:
+
+- 0x2205 (pointer speed, the MX Ergo's): whether a write survives a power cycle is unestablished,
+  and PureMouse writes nothing a mouse keeps.
+- 0x2120 (a flag-only wheel mode with no diversion): it cannot hand wheel input to PureMouse.
+- 0x8100 (onboard profiles): persistent by design.
+- 0x1001 percentages, and the Ergo's persistent control diversion (0x71 flag): only the temporary
+  bit is ever set.
+
 ## Smooth scrolling
 
 With smooth scrolling on, the wheels report raw movement to PureMouse, which accelerates it and
@@ -53,6 +77,12 @@ spreads it across display frames. A display link runs only while a scroll is gli
 mouse costs no CPU. Thumb-wheel actions (volume, zoom, tabs and the rest) take over the thumb wheel
 alone, even with smooth scrolling off; where the thumb wheel scrolls, it then scrolls without the
 glide.
+
+A notched wheel (0x2130, as on the Signature Plus M750 and the MX Ergo) reports whole notches
+once PureMouse asks for them; each notch becomes the same per-notch distance a 0x2121 notch is
+(40 px) and glides the same way. Asking is a temporary reporting bit, so the wheel is native again
+whenever PureMouse lets go or the mouse reconnects, and the mouse is never given a persistent
+setting. When a mouse has both features, 0x2121 is the wheel.
 
 PureMouse posts plain continuous pixel scrolls without trackpad gesture phases, which would make
 browsers swipe back and forward. Synthetic scrolls skip the system's natural-scrolling flip, so
@@ -100,3 +130,16 @@ and its function-0 broadcast handler. SmartShift parse tests use response parame
 [OpenLogi's MX Master 4 and Anywhere 3S fixtures](https://github.com/AprilNEA/OpenLogi/tree/master/fixtures/devices),
 available under its [MIT licence](https://github.com/AprilNEA/OpenLogi/blob/master/LICENSE-MIT).
 These layouts have not been tested on those mice by this project.
+
+The 0x2130 (low-resolution wheel) and 0x2202 (extended adjustable DPI) layouts are inferred from
+Solaar's settings templates (`LowresMode`, `ExtendedAdjustableDpi`, `produce_dpi_list`), not checked
+against a capture: no raw reply of either from a real mouse is public, and the Linux driver has no
+code for them. The 0x1001 (battery voltage) layout follows Solaar's `decipher_battery_voltage` and
+the driver's `hidpp20_battery_map_status_voltage`, which agree, and one raw sample (a G915). The
+direction of a positive 0x2130 notch count rests on Solaar alone and awaits an owner with an M750
+or MX Ergo. Because a write cannot be assumed to take, PureMouse reads the 0x2130 reporting byte
+back after diverting it and leaves a wheel that does not confirm scrolling natively, and reads the
+DPI back from every axis it wrote. The MX Master 3S, MX Master 4 and MX Ergo fixtures are raw
+captures from OpenLogi; the G305 and Superstrike fixtures are hand-built from Solaar's device
+listings, and say so in their headers. Layouts were read for protocol facts, and no code was
+copied.

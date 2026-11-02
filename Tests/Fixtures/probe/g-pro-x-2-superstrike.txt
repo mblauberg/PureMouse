@@ -1,0 +1,31 @@
+# G Pro X 2 Superstrike: HAND-BUILT from a Solaar device listing, NOT a capture:
+# https://github.com/pwr-Solaar/Solaar/blob/e7304c4/docs/devices/PRO%20X%202%20Superstrike%2040BD.txt
+# The listing gives the feature IDs and versions (as ordered here), WPID 0x40BD, USB ID 0xC0A8, kind
+# mouse, model ID 40BDC0A80000, and "Sensitivity (DPI): {X:800, Y:800, LOD:HIGH}" through the
+# extended DPI feature 0x2202, "Device Mode: On-Board" (0x8100) and a unified battery (0x1004). It
+# has no 0x2201 and no 0x1B04, so only 0x2202 can set its resolution.
+# NOT in the listing, so built from Solaar's code for 0x2202 (see docs/how-it-works.md): the
+# capabilities (separate Y axis and lift-off distance, which the Y and LOD readback implies), the
+# DPI list (100 to 25600 step 50, invented) and the byte layout of every 0x2202 and 0x1004 line.
+# The 0x1004 line is invented too: 80 %, good, discharging.
+== PRO X 2 Superstrike pid=0x40bd page=0x0001 transport=Lightspeed receiver
+
+-- index 1: HID++ 4.2
+  name: PRO X2 SUPERSTRIKE
+  type: mouse
+  device product IDs: wireless=0x40bd usb=0xc0a8
+  features: 01:0001 02:0003 03:0005 04:1d4b 05:0020 06:1004 07:2250 08:2251 09:2202 0a:8090 0b:80e0 0c:1b0c 0d:8061 0e:8100 0f:8110 10:1500 11:1801 12:1802 13:1803 14:1806 15:1817 16:1805 17:1830 18:1877 19:9403 1a:1861 1b:1890 1c:18a1 1d:1e00 1e:1e02 1f:1e22 20:1e30 21:1602 22:1eb0 23:18b1
+  smartshift 0x2110 get: feature 0x2110 not supported
+  smartshift 0x2111 caps: feature 0x2111 not supported
+  smartshift 0x2111 get: feature 0x2111 not supported
+  dpi 0x2201 sensors: feature 0x2201 not supported
+  dpi 0x2202 caps: 00 00 03 00 00 00 00 00 00 00 00 00 00 00 00 00
+  dpi 0x2202 list: 00 00 00 00 64 e0 32 64 00 00 00 00 00 00 00 00
+  dpi 0x2202 get: 00 03 20 03 20 03 20 03 20 02 00 00 00 00 00 00
+  hires 0x2121 caps: feature 0x2121 not supported
+  hires 0x2121 mode: feature 0x2121 not supported
+  thumb 0x2150 info: feature 0x2150 not supported
+  thumb 0x2150 status: feature 0x2150 not supported
+  battery 0x1004 status: 50 04 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  battery 0x1000 status: feature 0x1000 not supported
+  haptic 0x19B0 caps: feature 0x19b0 not supported

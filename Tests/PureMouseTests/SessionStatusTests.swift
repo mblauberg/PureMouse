@@ -23,14 +23,15 @@ struct SessionStatusTests {
         #expect(h.session.status.capabilities == nil)  // not before an apply
         try await h.session.apply()
         let status = h.session.status
-        #expect(status.model == "mb03440910000")
+        #expect(status.model == "mb03400000000")
         #expect(status.unit == "0a1b2c3d")
         #expect(status.kind == "mouse")
         // Haptics are asked about only by a haptic action, so are unknown here.
         #expect(status.capabilities == Capabilities(dpi: true, smartShift: true, smoothScroll: true, thumbWheel: true,
                                                     haptics: nil, battery: true))
         #expect(status.controls.map(\.cid) == [0x52, 0x53, 0x56, 0xC3, 0xC4])
-        #expect(status.controls.filter { $0.gestures == true }.map(\.cid) == [0xC3])
+        // The raw capture marks every divertable control (additional flags 0x05) as raw-XY capable.
+        #expect(status.controls.filter { $0.gestures == true }.map(\.cid) == [0x52, 0x53, 0x56, 0xC3, 0xC4])
         #expect(status.controls.allSatisfy { $0.gestures != nil })
     }
 
@@ -39,7 +40,7 @@ struct SessionStatusTests {
         defer { h.close() }
         try await h.session.apply()
         let status = h.session.status
-        #expect(status.capabilities == Capabilities(dpi: true, smartShift: false, smoothScroll: false, thumbWheel: false,
+        #expect(status.capabilities == Capabilities(dpi: true, smartShift: false, smoothScroll: true, thumbWheel: false,
                                                     haptics: nil, battery: true))
         // 0x0050 and 0x0051 are not divertable, 0x00D7 is virtual; the rest report raw XY.
         #expect(status.controls.map(\.cid) == [0x52, 0x53, 0x56, 0xFD])
@@ -119,8 +120,8 @@ struct SessionStatusTests {
 
     @Test func aMouseWithOnlyTheFallbackFeaturesHasThoseCapabilities() async throws {
         let fake = FakeDevice.mxMaster3S
-        fake.features[5] = 0x2111  // Enhanced SmartShift in place of 0x2110
-        fake.features[9] = 0x1000  // legacy battery in place of 0x1004
+        fake.features[0x0E] = 0x2111  // Enhanced SmartShift in place of 0x2110
+        fake.features[0x08] = 0x1000  // legacy battery in place of 0x1004
         let h = try await SessionHarness(fake)
         defer { h.close() }
         try await h.session.apply()
@@ -130,7 +131,7 @@ struct SessionStatusTests {
 
     @Test func aFallbackLookupThatFailsLeavesThatCapabilityOutNotFalse() async throws {
         let fake = FakeDevice.mxMaster3S
-        fake.features[9] = nil  // no 0x1004, so 0x1000 is looked up
+        fake.features[0x08] = nil  // no 0x1004, so 0x1000 is looked up
         fake.dropFirstLookup(of: 0x1000)
         let h = try await SessionHarness(fake)
         defer { h.close() }
@@ -162,7 +163,8 @@ struct SessionStatusTests {
     @Test func theM750WithSmoothScrollingSendsNoWheelWriteAndSaysWhyOnce() async throws {
         let log = CapturedLog()
         try await Log.$testOutput.withValue(.lines { log.append($0) }) {
-            let h = try await SessionHarness(.m750, config: SessionHarness.config(#"{"smoothScroll": {}}"#), identify: true)
+            let h = try await SessionHarness(.m750WithoutWheelFeature, config: SessionHarness.config(#"{"smoothScroll": {}}"#),
+                                             identify: true)
             defer { h.close() }
             try await h.session.apply()
             try await h.session.apply()
@@ -184,7 +186,7 @@ struct SessionStatusTests {
     @Test func withoutAccessibilityAMouseWithNoWheelsLogsNoWheelError() async throws {
         let log = CapturedLog()
         try await Log.$testOutput.withValue(.lines { log.append($0) }) {
-            let h = try await SessionHarness(.m750, config: SessionHarness.config(#"{"smoothScroll": {}}"#),
+            let h = try await SessionHarness(.m750WithoutWheelFeature, config: SessionHarness.config(#"{"smoothScroll": {}}"#),
                                              environment: .init(canPostEvents: false))
             defer { h.close() }
             try await h.session.apply()

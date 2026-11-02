@@ -1,0 +1,27 @@
+# G305 Lightspeed: HAND-BUILT from a Solaar device listing, NOT a capture:
+# https://github.com/pwr-Solaar/Solaar/blob/e7304c4/docs/devices/G305%20Lightspeed%20Wireless%20Gaming%20Mouse%204074.text
+# The listing gives the feature IDs and versions (as ordered here), WPID 0x4074, kind mouse, model
+# ID 407400000000, battery 50 %, and DPI 1600 with "Device Mode: On-Board" and onboard profiles
+# enabled (feature 0x8100). It has no 0x1B04 and no 0x2121.
+# NOT in the listing, so invented: the DPI list (200 to 12000 step 50) and the 0x1000 "next level"
+# byte. `FakeDevice.g305` also makes the fake keep its own DPI on a write, as an onboard profile may.
+== G305 Lightspeed Wireless Gaming Mouse pid=0x4074 page=0x0001 transport=Lightspeed receiver
+
+-- index 1: HID++ 4.2
+  name: G305 Lightspeed Wireless Gaming Mouse
+  type: mouse
+  device product IDs: wireless=0x4074
+  features: 01:0001 02:0003 03:0005 04:1d4b 05:1000 06:8070 07:8100 08:8110 09:8060 0a:8090 0b:00c2 0c:1802 0d:1803 0e:1806 0f:1811 10:1805 11:1830 12:1890 13:1df3 14:1e00 15:1eb0 16:1861 17:18b1 18:1e22 19:1801 1a:2201
+  smartshift 0x2110 get: feature 0x2110 not supported
+  smartshift 0x2111 caps: feature 0x2111 not supported
+  smartshift 0x2111 get: feature 0x2111 not supported
+  dpi 0x2201 sensors: 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  dpi 0x2201 list: 00 00 c8 e0 32 2e e0 00 00 00 00 00 00 00 00 00
+  dpi 0x2201 get: 00 06 40 06 40 00 00 00 00 00 00 00 00 00 00 00
+  hires 0x2121 caps: feature 0x2121 not supported
+  hires 0x2121 mode: feature 0x2121 not supported
+  thumb 0x2150 info: feature 0x2150 not supported
+  thumb 0x2150 status: feature 0x2150 not supported
+  battery 0x1004 status: feature 0x1004 not supported
+  battery 0x1000 status: 32 1e 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  haptic 0x19B0 caps: feature 0x19b0 not supported

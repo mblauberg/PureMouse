@@ -8,7 +8,7 @@ import Testing
 /// Each mouse gets the settings resolved for its device key, and requests can aim at one.
 @Suite(.quietLog) @MainActor
 struct SessionDeviceConfigTests {
-    static let m1 = "mb03440910000"  // the MX Master 3S fixture
+    static let m1 = "mb03400000000"  // the MX Master 3S fixture
     static let m2 = "m40aa00000000"  // the synthetic mouse
 
     @Test func eachMouseGetsItsOwnDPIAndUseConfiguredDPICanAimAtOne() async throws {
@@ -81,24 +81,6 @@ struct SessionDeviceConfigTests {
         let s2 = try await h.adopt(other)
         await s2.diversion.drain()
         #expect(s2.capturing == nil && !other.controls.contains { $0.diverted })
-    }
-
-    /// The synthetic mouse without DPI is a mouse only for a control its own settings bind: one
-    /// bound only for another mouse lets it past the first check, not the second.
-    @Test(arguments: [("m40aa00000000", true), (nil, false), ("mb03440910000", false)] as [(String?, Bool)])
-    func aMouseWithoutDPIIsAdoptedOnlyForAControlBoundForIt(entry: String?, adopted: Bool) async throws {
-        let h = try DaemonHarness(entry.map { #"{"devices": {"\#($0)": {"buttons": {"back": "none"}}}}"# } ?? "{}")
-        defer { h.close() }
-        let fake = FakeDevice.synthetic
-        fake.features[5] = nil  // 0x2201
-        let endpoint = h.daemon.listen(fake.transport, index: directDeviceIndex)
-        endpoint.timeout = .milliseconds(100)
-        defer { endpoint.close() }
-        #expect(await h.daemon.adopt(endpoint) == (adopted ? .adopted : .notAMouse))
-        if !adopted {
-            #expect(h.daemon.sessions.isEmpty)
-            #expect(fake.requests(feature: 0x1B04, function: 3).isEmpty && !fake.controls.contains { $0.diverted })
-        }
     }
 
     @Test func theM750LogsNoErrorsAcrossReloadsAndItsSnappedDPIOnce() async throws {

@@ -1,0 +1,36 @@
+# MX Master 4: a RAW CAPTURE, from OpenLogi fixtures/devices/mx-master-4-001 (commit e581c20),
+# https://github.com/AprilNEA/OpenLogi/tree/e581c20/fixtures/devices/mx-master-4-001, decoded into
+# `puremouse probe` format. Taken through a Logi Bolt receiver (0xc548); the mouse's own ID is 0xb042.
+# Not in the capture, so written with the fake's default values: the 0x2111, 0x2121, 0x2150 and
+# 0x19B0 capability reads; every control's reporting is written as native. The DPI reads 2000, which the
+# capture's owner had set. Control 0x01a0 is new on this model and unnamed.
+== MX Master 4 pid=0xb042 page=0x0001 transport=Logi Bolt receiver
+
+-- index 2: HID++ 4.5
+  name: MX Master 4
+  type: mouse
+  device product IDs: bluetoothLE=0xb042
+  features: 01:0001 02:0003 03:0005 04:1d4b 05:0020 06:0021 07:0007 08:0011 09:1004 0a:1701 0b:19b0 0c:19c0 0d:1b04 0e:1814 0f:1815 10:2250 11:2111 12:2121 13:2150 14:2201 15:2251 16:00d1 17:1802 18:1803 19:1807 1a:1816 1b:1805 1c:1830 1d:1891 1e:18a1 1f:1e00 20:1e02 21:1e22 22:1e30 23:1602 24:1eb0 25:1861 26:9205 27:9201 28:9300 29:9401 2a:9402 2b:9001 2c:18b1 2d:18c0
+  controls (0x1B04 getCidInfo / getCidReporting):
+    cid=0x0050 info=00 50 00 38 01 00 01 00 04 reporting=00 50 00 00 00 00
+    cid=0x0051 info=00 51 00 39 01 00 01 00 04 reporting=00 51 00 00 00 00
+    cid=0x0052 info=00 52 00 3a 31 00 02 03 05 reporting=00 52 00 00 00 00
+    cid=0x0053 info=00 53 00 3c 31 00 02 03 05 reporting=00 53 00 00 00 00
+    cid=0x0056 info=00 56 00 3e 31 00 02 03 05 reporting=00 56 00 00 00 00
+    cid=0x00c3 info=00 c3 00 9c 31 00 02 03 05 reporting=00 c3 00 00 00 00
+    cid=0x00c4 info=00 c4 00 9d 31 00 02 03 05 reporting=00 c4 00 00 00 00
+    cid=0x01a0 info=01 a0 01 09 31 00 02 03 05 reporting=01 a0 00 00 00 00
+    cid=0x00d7 info=00 d7 00 b4 a0 00 03 00 03 reporting=00 d7 00 00 00 00
+  smartshift 0x2110 get: feature 0x2110 not supported
+  smartshift 0x2111 caps: 01 32 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  smartshift 0x2111 get: 02 ff 4b 00 00 00 00 00 00 00 00 00 00 00 00 00
+  dpi 0x2201 sensors: 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  dpi 0x2201 list: 00 00 c8 e0 32 1f 40 00 00 00 00 00 00 00 00 00
+  dpi 0x2201 get: 00 07 d0 03 e8 00 00 00 00 00 00 00 00 00 00 00
+  hires 0x2121 caps: 0f 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  hires 0x2121 mode: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  thumb 0x2150 info: 00 12 00 78 00 00 00 00 00 00 00 00 00 00 00 00
+  thumb 0x2150 status: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  battery 0x1004 status: 28 04 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  battery 0x1000 status: feature 0x1000 not supported
+  haptic 0x19B0 caps: 00 00 00 00 ff ff ff ff 00 00 00 00 00 00 00 00

@@ -214,9 +214,15 @@ one. This file covers how to work on it safely.
   silences them. Both are diverted when any scope (global or an app) scrolls smoothly; the thumb
   wheel alone when any scope gives it actions (`Session.applyWheels`). Where the scope in effect
   does not scroll smoothly, the diverted wheel still scrolls, with zero smoothing. Only wheels the
-  mouse has are taken over, each through its `Session.Wheel.feature`. Smooth scrolling needs the
-  main wheel's (0x2121 for now; `capabilities.smoothScroll` follows it); a mouse without it
-  scrolls natively, with one info line per session (`Session.smoothScrollUnsupported`).
+  mouse has are taken over, each through its `Session.Wheel.feature`. Smooth scrolling needs a
+  main wheel: 0x2121, else the notched 0x2130 (`Wheel.mainWheels`; `capabilities.smoothScroll`
+  follows them); a mouse with neither scrolls natively, with one info line per session
+  (`Session.smoothScrollUnsupported`). 0x2130 is diverted with its temporary reporting bit only,
+  has no persistent form, and is handed back like the rest (`restoreSteps` counts it). It is read
+  back after diverting: a wheel that does not report diverted stays native and is not offered smooth
+  scrolling (`Session.notchedRefused`). One found diverted at apply is owed a hand-back
+  (`wheelsMayBeDiverted`) until the mouse reads back native. A new wheel
+  feature is a `Wheel` case, not a second list.
 - Per-device settings (`devices.<key>`, `Config+Devices.swift`) are resolved by the Kit decoder:
   each entry is decoded on top of the top level, then `apps` on top of that, so precedence is top
   level, device, app. The key is `m` plus the 0x0003 model ID, else `p` plus the product ID
@@ -225,8 +231,10 @@ one. This file covers how to work on it safely.
   announced gets its key, and a session on that key's settings, when it next links up
   (`Daemon.sessionSlotAnnounced`); while quitting or paused that only records the product. The
   daemon hands each session `config.forDevice(deviceKey)` at adoption and on reload; permission
-  decisions cover every scope (`Config.everyScope`, `Daemon.postsEvents`). The adoption gate (`Daemon.gates`) checks every bound control
-  (`Config.everyBoundControl`) before identification, then the mouse's own settings. Nothing
+  decisions cover every scope (`Config.everyScope`, `Daemon.postsEvents`). The adoption gate (`Daemon.gates`) is decided by the device's
+  type (0x0005): a mouse or trackball is adopted whatever the config binds, any device with
+  adjustable DPI (0x2201 or 0x2202) is, and one without a type needs 0x1B04. Keyboards, numpads,
+  presenters, remotes, touchpads and receivers are left alone. Nothing
   is special-cased by model or product ID: a session uses what its mouse reports, and a bound
   control it lacks is a debug line once per session.
 - Per-app settings (`apps`) are merged onto the global ones by the Kit decoder (`Config+Apps.swift`,
@@ -364,6 +372,9 @@ one. This file covers how to work on it safely.
   and `Control.useConfiguredDPI` clears it on request, for every mouse or those whose key is
   `Control.device` (`AppModel.setDPI` sends it, since choosing the saved value changes nothing on
   disk). A snapped DPI is logged once per mouse (`DeviceState.snapLogged`), not per reload.
+  The DPI written is read back on every axis written (0x2202's Y too); a mouse that shows another
+  value, or whose X and Y lists share none, is refused (`DeviceState.dpiRefused`): nothing more is
+  written, once logged, until a reload changes `dpi` or `dpiPresets`.
 
 ## Extending
 

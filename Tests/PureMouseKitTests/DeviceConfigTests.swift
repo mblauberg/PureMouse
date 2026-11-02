@@ -159,7 +159,6 @@ import Testing
         // The device's own global scope, the only one with smooth scrolling, and its copy of the app.
         #expect(c.everyScope.contains { $0.smoothScroll != nil })
         #expect(c.everyScope.filter { $0.bindings[0x56] != nil }.count == 2)
-        #expect(c.everyBoundControl == [0x53, 0x56])
         #expect(Config.empty.everyScope.count == 1)
     }
 }

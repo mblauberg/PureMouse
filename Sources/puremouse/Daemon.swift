@@ -574,7 +574,7 @@ final class Daemon {
     /// connection notifications, so it keeps being tried once a minute (`Backoff.bluetooth`).
     /// Resume, wake and reload try every endpoint again. Attach, those and connection
     /// notifications share the endpoint's one retry; pause, detach and shutdown cancel it.
-    private func adoptRetrying(_ device: HIDPPDevice) async {
+    func adoptRetrying(_ device: HIDPPDevice) async {
         let key = Key(device)
         guard await adopt(device) == .noAnswer, retries[key] == nil,
               endpoints[key] === device, accepting else { return }
@@ -585,7 +585,7 @@ final class Daemon {
             // A cancelled retry was already removed, perhaps replaced by a newer one.
             defer { if !Task.isCancelled { retries[key] = nil } }
             let backoff = device.interface.isReceiver ? Backoff.adoption : Backoff.bluetooth
-            await backoff.retry {
+            await backoff.retry(sleep: environment.adoptionSleep) {
                 guard endpoints[key] === device, accepting else { return false }
                 return await adopt(device) == .noAnswer
             }
@@ -599,8 +599,7 @@ final class Daemon {
         }
     }
 
-    /// Creates a session if the endpoint is an awake HID++ 2.0 device with adjustable DPI or a
-    /// control configured for it (`gates`).
+    /// Creates a session if the endpoint is an awake HID++ 2.0 device `gates` lets in.
     func adopt(_ device: HIDPPDevice) async -> Adoption {
         let key = Key(device)
         guard sessions[key] == nil else { return .adopted }
@@ -620,23 +619,29 @@ final class Daemon {
     private func identify(_ device: HIDPPDevice) async -> Adoption {
         let key = Key(device)
         if let result = Self.adoption(for: await device.ping()) { return result }
+        // The type is read first, so a keyboard is asked nothing more once the gate refuses it. A
+        // device that answers without a type is judged by its features; one that does not
+        // answer is retried, not judged.
+        let kind: DeviceName.Kind?
         let controls: [ReprogControls.Control]
-        let hasDPI: Bool
         do {
-            controls = try await device.hasFeature(ReprogControls.id) ? ReprogControls.controls(device) : []
-            hasDPI = try await device.hasFeature(AdjustableDPI.id)
+            do {
+                kind = try await DeviceName.kind(device)
+            } catch where Session.isDeviceAnswer(error) {
+                kind = nil
+            }
+            let hasControls = try await device.hasFeature(ReprogControls.id)
+            var hasDPI = try await device.hasFeature(AdjustableDPI.id)
+            if !hasDPI { hasDPI = try await device.hasFeature(ExtendedDPI.id) }
+            guard Self.gates(kind: kind, hasControls: hasControls, hasDPI: hasDPI) else { return .notAMouse }
+            controls = hasControls ? try await ReprogControls.controls(device) : []
         } catch {
             return .noAnswer
         }
-        // Before identification the key is unknown, so a control bound for any mouse lets it on;
-        // the settings for its own key then decide (`gates`). Neither asks a keyboard more.
-        guard Self.gates(hasDPI: hasDPI, controls: controls, bound: config.everyBoundControl) else { return .notAMouse }
         let pid: UInt16? = device.interface.isReceiver
             ? slotProducts[key] : UInt16(exactly: device.interface.productID)
         let name = (try? await DeviceName.get(device)).flatMap { $0.isEmpty ? nil : $0 } ?? "device \(device.index)"
-        let identity = await Identification.read(device, productID: pid)
-        guard Self.gates(hasDPI: hasDPI, controls: controls, bound: config.forDevice(identity.deviceKey).boundControls)
-        else { return .notAMouse }
+        let identity = await Identification.read(device, kind: kind, productID: pid)
         let pidLabel = pid.map { String(format: "0x%04x", $0) } ?? "unknown"
         // The device may have gone, or the daemon paused or begun quitting, while we were asking.
         guard accepting else { return .stopped }
@@ -649,10 +654,17 @@ final class Daemon {
         return .adopted
     }
 
-    /// Whether a device is a mouse PureMouse configures: it has adjustable DPI, or a control
-    /// `bound` binds, so keyboards and other Logitech devices are left alone.
-    static func gates(hasDPI: Bool, controls: [ReprogControls.Control], bound: Set<UInt16>) -> Bool {
-        hasDPI || controls.contains { bound.contains($0.cid) }
+    /// Whether a device is a mouse PureMouse configures, whatever the config binds. A mouse or
+    /// trackball is; so is any device with adjustable DPI (0x2201 or 0x2202). Without a type
+    /// (the read failed or named none) a control list (0x1B04) is enough. Keyboards, numpads,
+    /// presenters, remotes and receivers report 0x1B04 too, and are left alone for it.
+    static func gates(kind: DeviceName.Kind?, hasControls: Bool, hasDPI: Bool) -> Bool {
+        if hasDPI { return true }
+        switch kind {
+        case .mouse, .trackball: return true
+        case nil: return hasControls
+        default: return false
+        }
     }
 
     private func deviceID(_ key: Key) -> String {
@@ -728,7 +740,11 @@ final class Daemon {
     private func replace(_ old: Session, at key: Key, identity: Identification, keepingLiveDPI: Bool) {
         old.close()
         var inherited = old.inheritance
-        if !keepingLiveDPI { inherited.state.liveDPI = nil }
+        // A changed `dpi` or `dpiPresets` is a new request, so a mouse that refused DPI is tried again.
+        if !keepingLiveDPI {
+            inherited.state.liveDPI = nil
+            inherited.state.dpiRefused = false
+        }
         inherited.away = handingOff
         inherited.diversionAfter = old.diversionEnd
         add(Session(device: old.device, name: old.name, identity: identity, id: old.id,

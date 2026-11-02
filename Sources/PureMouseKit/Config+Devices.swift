@@ -26,12 +26,6 @@ extension Config {
         }
     }
 
-    /// Every control bound in any scope of any mouse (`everyScope`): the adoption gate's
-    /// pre-filter, before the mouse's key, and so its own `boundControls`, is known.
-    public var everyBoundControl: Set<UInt16> {
-        everyScope.reduce(into: []) { $0.formUnion($1.bindings.keys) }
-    }
-
     /// A mouse's device key: `m` and its 0x0003 model ID in 12 lowercase hex digits, or, without a
     /// usable model ID (absent, or a placeholder), `p` and its product ID in 4.
     public static func deviceKey(modelID: [UInt8]?, productID: UInt16?) -> String? {

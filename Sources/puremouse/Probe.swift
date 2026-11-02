@@ -34,6 +34,7 @@ enum Probe {
 
     static func dump(_ d: HIDPPDevice, print: (String) -> Void = { Swift.print($0) }) async {
         if let name = try? await DeviceName.get(d) { print("  name: \(name)") }
+        if let kind = try? await DeviceName.kind(d) { print("  type: \(kind.name)") }
         if let ids = try? await DeviceIdentity.transportIDs(d) {
             let labels = DeviceIdentity.Transport.allCases.compactMap { transport in
                 ids[transport].map { "\(transport)=\(String(format: "0x%04x", $0))" }
@@ -76,6 +77,11 @@ enum Probe {
         await show(d, "battery 0x1004 status", 0x1004, 1, print: print)
         await show(d, "battery 0x1000 status", 0x1000, 0, print: print)
         await show(d, "haptic 0x19B0 caps", 0x19B0, 0, print: print)
+        await show(d, "battery 0x1001 voltage", 0x1001, 0, print: print)
+        await show(d, "lowres 0x2130 mode", 0x2130, 0, print: print)
+        await show(d, "dpi 0x2202 caps", 0x2202, 1, print: print)
+        await show(d, "dpi 0x2202 list", 0x2202, 2, [0, 0, 0], print: print)
+        await show(d, "dpi 0x2202 get", 0x2202, 5, print: print)
     }
 
     private static func show(_ d: HIDPPDevice, _ label: String, _ feature: UInt16, _ fn: UInt8,

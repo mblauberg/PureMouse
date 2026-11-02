@@ -182,6 +182,32 @@ public enum AdjustableDPI {
             self.values = values
         }
 
+        /// Decodes a DPI list of big-endian words ended by 0x0000 (or by the end of the bytes). A
+        /// word with its top three bits set is a step (low 13 bits) between the values either
+        /// side of it, so 200, step 50, 8000 means 200, 250, …, 8000. Nil if the list is empty or
+        /// a step has no range. Shared by 0x2201 and 0x2202, which encode lists alike.
+        init?(words bytes: ArraySlice<UInt8>) {
+            let words = stride(from: bytes.startIndex, to: bytes.endIndex - 1, by: 2)
+                .map { Int(UInt16(bigEndian: bytes[$0], bytes[$0 + 1])) }
+                .prefix { $0 != 0 }
+            var values: [Int] = []
+            var step: Int?
+            for word in words {
+                if word & 0xE000 == 0xE000 {
+                    guard step == nil, values.last != nil, word & 0x1FFF > 0 else { return nil }
+                    step = word & 0x1FFF
+                } else if let s = step {
+                    guard let last = values.last, word > last else { return nil }
+                    values += stride(from: last + s, through: word, by: s)
+                    step = nil
+                } else {
+                    values.append(word)
+                }
+            }
+            guard step == nil, !values.isEmpty else { return nil }
+            self.init(values.sorted())
+        }
+
         /// The supported resolution closest to `dpi`; the lower one on a tie.
         public func nearest(to dpi: Int) -> Int? {
             values.min { abs($0 - dpi) < abs($1 - dpi) }
@@ -194,29 +220,9 @@ public enum AdjustableDPI {
         return resolutions
     }
 
-    /// getSensorDpiList reply: [sensor, big-endian words…, 0x0000]. A word with its top three
-    /// bits set is a step (low 13 bits) between the values either side of it, so 200, step 50,
-    /// 8000 means 200, 250, …, 8000. Nil if the list is empty or a step has no range.
+    /// getSensorDpiList reply: [sensor, big-endian words…, 0x0000]. See `Resolutions.init(words:)`.
     public static func parseResolutions(_ params: [UInt8]) -> Resolutions? {
-        let words = stride(from: 1, to: params.count - 1, by: 2)
-            .map { Int(UInt16(bigEndian: params[$0], params[$0 + 1])) }
-            .prefix { $0 != 0 }
-        var values: [Int] = []
-        var step: Int?
-        for word in words {
-            if word & 0xE000 == 0xE000 {
-                guard step == nil, values.last != nil, word & 0x1FFF > 0 else { return nil }
-                step = word & 0x1FFF
-            } else if let s = step {
-                guard let last = values.last, word > last else { return nil }
-                values += stride(from: last + s, through: word, by: s)
-                step = nil
-            } else {
-                values.append(word)
-            }
-        }
-        guard step == nil, !values.isEmpty else { return nil }
-        return Resolutions(values.sorted())
+        Resolutions(words: params.dropFirst())
     }
 
     public static func get(_ d: HIDPPDevice, sensor: UInt8 = 0) async throws -> Int {
@@ -227,6 +233,153 @@ public enum AdjustableDPI {
 
     public static func set(_ d: HIDPPDevice, dpi: Int, sensor: UInt8 = 0) async throws {
         _ = try await d.call(id, 3, [sensor] + UInt16(clamping: dpi).bigEndianBytes)
+    }
+}
+
+/// 0x2202 EXTENDED_ADJUSTABLE_DPI: resolution on mice without 0x2201 (the G Pro X 2 family), with
+/// separate X and Y axes and a lift-off distance. Function numbers and layouts follow Solaar's
+/// `ExtendedAdjustableDpi` and `produce_dpi_list` (settings_templates.py at e7304c4), which assume
+/// one sensor; no raw capture is public, so everything here is inferred from that source and
+/// checked against hand-built fixtures only.
+public enum ExtendedDPI {
+    public static let id: UInt16 = 0x2202
+
+    public struct Capabilities: Equatable, Sendable {
+        /// The Y axis has its own resolution and list.
+        public let separateY: Bool
+        /// The sensor has a lift-off distance setting.
+        public let liftOffDistance: Bool
+    }
+
+    /// The sensor's resolution, as getDpi reports it.
+    public struct Reading: Equatable, Sendable {
+        public let x: Int
+        /// The Y axis, meaningful only with a separate Y axis (`Capabilities.separateY`).
+        public let y: Int
+        /// 0 low, 1 medium, 2 high; kept as read, so a write leaves it alone.
+        public let liftOffDistance: UInt8
+    }
+
+    /// getCapabilities (function 1): bit 0 of byte 2 is a separate Y axis, bit 1 lift-off distance.
+    public static func capabilities(_ d: HIDPPDevice) async throws -> Capabilities {
+        guard let caps = parseCapabilities(try await d.call(id, 1)) else { throw HIDPPError.malformedResponse }
+        return caps
+    }
+
+    public static func parseCapabilities(_ params: [UInt8]) -> Capabilities? {
+        guard params.count >= 3 else { return nil }
+        return Capabilities(separateY: params[2] & 0x01 != 0, liftOffDistance: params[2] & 0x02 != 0)
+    }
+
+    /// Why the two axes' lists cannot be used together.
+    public enum ListError: Error, Equatable, Sendable {
+        /// The X and Y lists share no resolution, so no one value can be written to both.
+        case noCommonResolution
+    }
+
+    /// The most reply pages read for one list (Solaar reads up to 256; real lists are a few).
+    static let maxListPages = 32
+
+    /// The resolutions both axes accept (the X list alone without a separate Y). Throws
+    /// `ListError.noCommonResolution` when the axes share none.
+    public static func resolutions(_ d: HIDPPDevice, capabilities: Capabilities) async throws
+        -> AdjustableDPI.Resolutions {
+        let x = try await list(d, direction: 0)
+        guard capabilities.separateY else { return x }
+        let y = try await list(d, direction: 1)
+        let common = x.values.filter(y.values.contains)
+        guard !common.isEmpty else { throw ListError.noCommonResolution }
+        return AdjustableDPI.Resolutions(common)
+    }
+
+    /// One axis's list, read a page at a time (the page index is the third parameter) and joined
+    /// until a 0x0000 word ends it: a long list, or a range whose bounds fall on different pages,
+    /// continues in the next reply.
+    private static func list(_ d: HIDPPDevice, direction: UInt8) async throws -> AdjustableDPI.Resolutions {
+        var words: [UInt8] = []
+        for page in 0..<maxListPages {
+            let reply = try await d.call(id, 2, [0, direction, UInt8(page)])
+            guard reply.count > 3 else { throw HIDPPError.malformedResponse }
+            words += reply.dropFirst(3)
+            if endsList(words) {
+                guard let list = AdjustableDPI.Resolutions(words: words[...]) else { throw HIDPPError.malformedResponse }
+                return list
+            }
+        }
+        throw HIDPPError.malformedResponse
+    }
+
+    /// Whether the words so far hold the 0x0000 that ends a list, counted from the first byte.
+    private static func endsList(_ bytes: [UInt8]) -> Bool {
+        stride(from: 0, to: bytes.count - 1, by: 2).contains { bytes[$0] == 0 && bytes[$0 + 1] == 0 }
+    }
+
+    /// getDpi (function 5).
+    public static func get(_ d: HIDPPDevice) async throws -> Reading {
+        guard let reading = parseReading(try await d.call(id, 5)) else { throw HIDPPError.malformedResponse }
+        return reading
+    }
+
+    /// [sensor, X, default X, Y, default Y, lift-off distance], big endian. A zero X (or Y) means
+    /// the default.
+    public static func parseReading(_ params: [UInt8]) -> Reading? {
+        guard params.count >= 10 else { return nil }
+        func word(_ i: Int) -> Int { Int(UInt16(bigEndian: params[i], params[i + 1])) }
+        let x = word(1) == 0 ? word(3) : word(1)
+        guard x > 0 else { return nil }
+        return Reading(x: x, y: word(5) == 0 ? word(7) : word(5), liftOffDistance: params[9])
+    }
+
+    /// setDpi (function 6): [sensor, X, Y, lift-off distance]. Without a separate Y axis, Y is
+    /// zero and the lift-off distance is `reading`'s; with one, both axes get `dpi`.
+    public static func set(_ d: HIDPPDevice, dpi: Int, capabilities: Capabilities, keeping reading: Reading) async throws {
+        _ = try await d.call(id, 6, parameters(dpi: dpi, capabilities: capabilities, keeping: reading))
+    }
+
+    static func parameters(dpi: Int, capabilities: Capabilities, keeping reading: Reading) -> [UInt8] {
+        let value = UInt16(clamping: dpi)
+        return [0] + value.bigEndianBytes + (capabilities.separateY ? value.bigEndianBytes : [0, 0])
+            + [capabilities.liftOffDistance ? reading.liftOffDistance : 0]
+    }
+}
+
+/// 0x2130 LOWRES_WHEEL: the main wheel of a mouse whose wheel has only whole notches (Lift,
+/// Signature M650/M750, MX Ergo). The layout is read from one source, Solaar (settings_templates.py,
+/// hidpp20.py and diversion.py at e7304c4), for protocol facts only:
+/// - `LowresMode` is a plain on/off setting on this feature, so it uses the default feature
+///   read and write functions, 0x00 and 0x10: function 0 reads and function 1 writes, with the
+///   boolean validator's 0x01 for on and 0x00 for off (settings.py `FeatureRW`, settings_validator.py
+///   `BooleanValidator`).
+/// - `get_lowres_wheel_status` reads function 0 and takes bit 0 of byte 0 as "HID++" (set) or
+///   "HID" (clear).
+/// - The `lowres_wheel_up` and `lowres_wheel_down` rules take a function 0 notification whose first
+///   byte is a signed notch count, positive for up.
+/// The Linux kernel driver has no 0x2130 code, and no raw capture of the feature is public (the M750
+/// dump in issue #1 lists the feature but reads none of it). So the direction of a positive count
+/// on a real wheel is Solaar's word alone, and the first M750 or Ergo owner should confirm it.
+/// Because a write cannot be assumed to take, `Session` reads the byte back after asking.
+public enum LowResWheel {
+    public static let id: UInt16 = 0x2130
+
+    public enum Event: Equatable, Sendable {
+        /// Whole notches while diverted. Positive is away from the user (scroll up).
+        case scroll(notches: Int)
+    }
+
+    /// Whether the wheel reports to HID++ software instead of as ordinary HID scrolling.
+    public static func diverted(_ d: HIDPPDevice) async throws -> Bool {
+        guard let bits = try await d.call(id, 0).first else { throw HIDPPError.malformedResponse }
+        return bits & 0x01 != 0
+    }
+
+    /// Temporary, like 0x2121's: the mouse reports natively again after a power cycle or reconnect.
+    public static func setDiverted(_ d: HIDPPDevice, _ diverted: Bool) async throws {
+        _ = try await d.call(id, 1, [diverted ? 0x01 : 0x00])
+    }
+
+    public static func parse(function: UInt8, params: [UInt8]) -> Event? {
+        guard function == 0, let notches = params.first, notches != 0 else { return nil }
+        return .scroll(notches: Int(Int8(bitPattern: notches)))
     }
 }
 
@@ -449,6 +602,39 @@ public enum LegacyBattery {
             : params[2] == 4 ? .low : nil
         return UnifiedBattery.State(percent: params[0] == 0 ? nil : Int(params[0]), level: level,
                                     charging: charging, externalPower: (1...4).contains(params[2]))
+    }
+}
+
+/// 0x1001 BATTERY_VOLTAGE: older gaming mice report millivolts, not a percentage. Function 0 is
+/// both the read and the broadcast event: [millivolts (big endian), flags]. Layout from Solaar
+/// (`decipher_battery_voltage`) and the Linux driver (`hidpp20_battery_map_status_voltage`),
+/// which agree; the flags' low bits are read as the driver does (0 charging, 1 full).
+public enum BatteryVoltage {
+    public static let id: UInt16 = 0x1001
+
+    public static func status(_ d: HIDPPDevice) async throws -> UnifiedBattery.State {
+        guard let state = parseStatus(try await d.call(id, 0)) else { throw HIDPPError.malformedResponse }
+        return state
+    }
+
+    public static func parse(function: UInt8, params: [UInt8]) -> UnifiedBattery.State? {
+        function == 0 ? parseStatus(params) : nil
+    }
+
+    /// A level, never a percentage: no curve fits every battery (the driver says so), so the
+    /// millivolts are banded at the points where the driver's and Solaar's curves both read
+    /// 80 %, 30 % and 10 %. Flags: 0x80 on external power, then 1 full, 0 charging, 2 not
+    /// charging; 0x10 slow charge; 0x20 critical.
+    public static func parseStatus(_ params: [UInt8]) -> UnifiedBattery.State? {
+        guard params.count >= 3 else { return nil }
+        let millivolts = Int(UInt16(bigEndian: params[0], params[1]))
+        let flags = params[2]
+        let external = flags & 0x80 != 0
+        let charging: UnifiedBattery.Charging? = !external ? .discharging
+            : flags & 0x07 == 1 ? .complete : flags & 0x07 == 0 ? (flags & 0x10 != 0 ? .chargingSlowly : .charging) : nil
+        let level: UnifiedBattery.Level = charging == .complete ? .full : flags & 0x20 != 0 ? .critical
+            : millivolts >= 3989 ? .full : millivolts >= 3751 ? .good : millivolts >= 3671 ? .low : .critical
+        return UnifiedBattery.State(percent: nil, level: level, charging: charging, externalPower: external)
     }
 }
 
