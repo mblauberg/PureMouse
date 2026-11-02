@@ -142,10 +142,10 @@ private func makeModel(config: String = "{}", devices: [Status.Device], defaults
     #expect(!forM750.shows(.smartShift) && !forM750.showsThumbWheel)
     let forMX = ScrollingLayout(config: model.config, devices: model.capabilityDevices(in: scope(mx)), scope: scope(mx))
     #expect(forMX.shows(.smartShift) && forMX.showsThumbWheel)
-    // A setting the mouse already has keeps a hidden row, with its caption (the top level counts).
+    // A setting only All Mice has leaves the row hidden for a mouse that lacks the control.
     let (set, _) = try makeModel(config: #"{"scrollWheel": {"smartShiftThreshold": 20}}"#, devices: [mxMaster, m750])
     let kept = ScrollingLayout(config: set.config, devices: set.capabilityDevices(in: scope(m750Key)), scope: scope(m750Key))
-    #expect(kept.availability(.smartShift) == .unsupportedButConfigured)
+    #expect(kept.availability(.smartShift) == .hidden)
     // A mouse that is not connected decides nothing.
     let asleep = mouse("MX", key: mx, caps: m750Caps, online: false)
     let (offline, _) = try makeModel(devices: [asleep, m750])
@@ -405,4 +405,18 @@ private func kitWheel(_ config: ConfigTree, _ key: String) throws -> Config.Thum
     #expect(bare.availability(.smartShift) == .hidden)
     let other = try tree(#"{"devices":{"\#(mx)":{"name":"MX","scrollWheel":{"smartShiftThreshold":20}}}}"#)
     #expect(ScrollingLayout(config: other, devices: [m750], scope: scope(m750Key)).availability(.smartShift) == .hidden)
+}
+
+@Test func aMouseHoldsOnlyItsOwnValueSoAnInheritedOneKeepsNoRowForAControlItLacks() throws {
+    // All Mice sets a thumb wheel and the M750, which has none, sets nothing of its own.
+    let config = try tree(#"{"thumbWheel":{"action":"zoom"},"devices":{"\#(m750Key)":{"name":"M750"}}}"#)
+    let layout = ScrollingLayout(config: config, devices: [m750], scope: scope(m750Key))
+    #expect(!config.holds(["thumbWheel"], in: scope(m750Key)))
+    #expect(layout.availability(.thumbWheelAction) == .hidden)
+    #expect(!layout.shows(.thumbWheelAction))
+    // All Mice still holds it, and so does a mouse with a value of its own.
+    #expect(config.holds(["thumbWheel"], in: .global))
+    let own = try tree(#"{"thumbWheel":{"action":"zoom"},"devices":{"\#(m750Key)":{"name":"M750","thumbWheel":{"action":"volume"}}}}"#)
+    #expect(own.holds(["thumbWheel"], in: scope(m750Key)))
+    #expect(ScrollingLayout(config: own, devices: [m750], scope: scope(m750Key)).availability(.thumbWheelAction) == .unsupportedButConfigured)
 }

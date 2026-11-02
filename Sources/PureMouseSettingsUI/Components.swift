@@ -23,10 +23,19 @@ struct RowLabel: View {
 
     static let mouseDefaultCaption = "Using the mouse's own setting."
 
+    /// The caption sentences that apply. One stands as written ("Same as All Mice" has no full
+    /// stop); two or more run together as separate sentences, each with its full stop, so "Same as
+    /// All Mice" and "Not supported by this mouse." do not merge.
+    static func caption(_ sentences: [String?]) -> String? {
+        let parts = sentences.compactMap { $0?.trimmingCharacters(in: .whitespaces).nilIfEmpty }
+        guard parts.count > 1 else { return parts.first }
+        let ends: Set<Character> = [".", "!", "?", "…"]
+        return parts.map { part in part.last.map { ends.contains($0) } == true ? part : part + "." }.joined(separator: " ")
+    }
+
     var body: some View {
         Text(title)
-        let parts = [help, mouseDefault ? Self.mouseDefaultCaption : nil, availability.caption]
-        if let caption = parts.compactMap({ $0 }).joined(separator: " ").nilIfEmpty {
+        if let caption = Self.caption([help, mouseDefault ? Self.mouseDefaultCaption : nil, availability.caption]) {
             Text(caption)
         }
     }

@@ -262,3 +262,16 @@ private let swappedVolume = #"{"thumbWheel":{"action":"volume","reversed":true},
     #expect(calls.count == 2)
     for call in calls { #expect(call.prefix(400).contains("base: ThumbWheelRows.base(config, scope)")) }
 }
+
+// MARK: Row captions
+
+@Test func captionSentencesJoinAsSeparateSentences() {
+    let inherited = InheritedScope.sameAs(InheritedScope.allMice)
+    let joined = RowLabel.caption([inherited, nil, ControlAvailability.unsupportedCaption])
+    #expect(joined == "Same as All Mice. Not supported by this mouse.")
+    #expect(RowLabel.caption(["How far to turn.", RowLabel.mouseDefaultCaption, ControlAvailability.unsupportedCaption])
+        == "How far to turn. Using the mouse's own setting. Not supported by this mouse.")
+    // A lone caption stands as written, and nothing gives none.
+    #expect(RowLabel.caption([inherited, nil, nil]) == "Same as All Mice")
+    #expect(RowLabel.caption([nil, nil, nil]) == nil)
+}

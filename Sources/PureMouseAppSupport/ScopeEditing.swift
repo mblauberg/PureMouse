@@ -26,10 +26,11 @@ extension ConfigTree {
 
     // MARK: Values
 
-    /// Whether the config holds a value at `path` that applies in `scope`, which keeps a control
-    /// shown for a mouse that lacks it (`ControlAvailability`). A mouse counts the top level's.
+    /// Whether the config holds a value at `path` in `scope`, which keeps a control shown for a mouse
+    /// that lacks it (`ControlAvailability`). A mouse counts only its own value: one All Mice sets
+    /// is not a reason to show a control the mouse does not have.
     public func holds(_ path: [String], in scope: ConfigScope) -> Bool {
-        scope.deviceKey == nil ? contains(path) : resolved(path, in: scope) != nil
+        scope.deviceKey == nil ? contains(path) : isOverridden(path, in: scope)
     }
 
     /// A number at `path` as it applies in `scope`, or `fallback`.
