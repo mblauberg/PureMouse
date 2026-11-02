@@ -1,8 +1,9 @@
 #!/bin/zsh
 # Checks a signed PureMouse.app before anyone installs or ships it, and names every component that
 # fails. For each bundle in lib.zsh's `components`: its Info.plist is present and valid, its
-# identifier is the frozen label (in the plist and the signature), its signature verifies strictly
-# and carries the hardened runtime, and its version matches the app's.
+# identifier is the frozen label (in the plist and the signature), its signature verifies strictly,
+# every architecture of its executable is signed with that identifier and the hardened runtime, and
+# its version matches the app's.
 #
 #   verify-bundle.sh <app> [--release]
 #
@@ -18,7 +19,7 @@ for argument; do
     case $argument in
         --release) release=1 ;;
         -*) die "usage: verify-bundle.sh <app> [--release]" ;;
-        *) app=$argument ;;
+        *) [[ -z $app ]] || die "one app at a time"; app=$argument ;;
     esac
 done
 [[ -n $app && -d $app ]] || die "usage: verify-bundle.sh <app> [--release]"
@@ -34,10 +35,6 @@ fail() {
     failed=1
 }
 
-plist_value() {
-    /usr/libexec/PlistBuddy -c "Print :$2" $1 2>/dev/null
-}
-
 app_version=$(plist_value $app/Contents/Info.plist CFBundleShortVersionString || true)
 app_build=$(plist_value $app/Contents/Info.plist CFBundleVersion || true)
 if (( release )) && ! release_version_ok "$app_version"; then
@@ -45,8 +42,8 @@ if (( release )) && ! release_version_ok "$app_version"; then
 fi
 
 for component in $components; do
-    expected=${component%%:*}
-    bundle=${${:-$app/${component#*:}}%/.}
+    expected=$(component_id $component)
+    bundle=$(component_path $app $component)
     name=${bundle:t}
     plist=$bundle/Contents/Info.plist
     if [[ ! -f $plist ]]; then
@@ -64,19 +61,32 @@ for component in $components; do
     if ! codesign --verify --strict $bundle 2>/dev/null; then
         fail "$name: signature does not verify ($(codesign --verify --strict $bundle 2>&1 | tail -1))"
     fi
-    details=$(codesign -dvv $bundle 2>&1) || { fail "$name: not signed"; continue; }
-    signed_as=$(print -r -- $details | sed -n 's/^Identifier=//p')
-    [[ $signed_as == "$expected" ]] || fail "$name: signed as '$signed_as', not $expected"
-    print -r -- $details | grep '^CodeDirectory .*flags=0x[0-9a-f]*(.*runtime.*)' >/dev/null ||
-        fail "$name: no hardened runtime ($(print -r -- $details | grep -o 'flags=[^ ]*'))"
-    if (( release )) && [[ -n $team ]]; then
-        if ! problems=$(check_release_signature "$details" $team $name 2>&1); then
+    # `codesign -d` shows one architecture (this Mac's) unless told which, so read each slice: a
+    # universal build could otherwise ship an Intel slice without the hardened runtime.
+    executable=$bundle/Contents/MacOS/$(plist_value $plist CFBundleExecutable || true)
+    if ! archs=($(lipo -archs $executable 2>/dev/null)); then
+        fail "$name: no executable at ${executable#$app/}"
+        continue
+    fi
+    signed_ok=1
+    for arch in $archs; do
+        details=$(codesign -dvv --architecture $arch $bundle 2>&1) || { fail "$name ($arch): not signed"; signed_ok=0; continue; }
+        signed_as=$(print -r -- $details | sed -n 's/^Identifier=//p')
+        [[ $signed_as == "$expected" ]] || fail "$name ($arch): signed as '$signed_as', not $expected"
+        print -r -- $details | grep '^CodeDirectory .*flags=0x[0-9a-f]*(.*runtime.*)' >/dev/null ||
+            fail "$name ($arch): no hardened runtime ($(print -r -- $details | grep -o 'flags=[^ ]*'))"
+        if (( release )) && [[ -n $team ]] &&
+            ! problems=$(check_release_signature "$details" $team "$name ($arch)" 2>&1); then
             for line in ${(f)problems}; do fail "$line"; done
-        # The text names the signer; this proves it: a Developer ID leaf from that team, chained to
-        # Apple, so a self-made certificate with the same names cannot pass.
-        elif ! codesign --verify --strict -R="$(developer_id_requirement $team)" $bundle 2>/dev/null; then
-            fail "$name: not a Developer ID signature from team $team under Apple's root"
+            signed_ok=0
         fi
+    done
+    # The text names the signer; this proves it: a Developer ID leaf from that team, chained to
+    # Apple, so a self-made certificate with the same names cannot pass. `--verify` checks every
+    # architecture.
+    if (( release && signed_ok )) && [[ -n $team ]] &&
+        ! codesign --verify --strict -R="$(developer_id_requirement $team)" $bundle 2>/dev/null; then
+        fail "$name: not a Developer ID signature from team $team under Apple's root"
     fi
 done
 

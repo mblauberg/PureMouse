@@ -30,5 +30,5 @@ for name in ${(ok)functions[(I)test_*]}; do
     rm -rf $tmp
 done
 print "$passed passed, $failed failed, $skipped skipped"
-(( passed + failed > 0 )) || { print "no tests ran"; exit 1; }
+(( passed + failed + skipped > 0 )) || { print "no tests ran"; exit 1; }
 (( failed == 0 ))

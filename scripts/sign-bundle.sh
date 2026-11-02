@@ -6,8 +6,8 @@
 #
 #   sign-bundle.sh <app> [--identity ID] [--timestamp]
 #
-#   --identity ID  a code-signing identity, or - for ad hoc; default as in lib.zsh's
-#                  signing_identity (PUREMOUSE_SIGN_IDENTITY, Developer ID, PureMouse, ad hoc)
+#   --identity ID  a code-signing identity, or - for ad hoc; default: lib.zsh's signing_identity
+#                  (the order is in docs/development.md#signing)
 #   --timestamp    ask Apple's timestamp server for a secure timestamp (release builds; needs the
 #                  network). Without it, builds sign with --timestamp=none.
 set -euo pipefail
@@ -29,5 +29,5 @@ done
 
 for component in $components; do
     codesign --force --sign "$identity" --options runtime $timestamp \
-        --identifier ${component%%:*} "${${:-$app/${component#*:}}%/.}"
+        --identifier "$(component_id $component)" "$(component_path $app $component)"
 done

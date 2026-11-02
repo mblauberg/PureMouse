@@ -21,6 +21,7 @@ test_size_counts_every_file() {
 }
 
 test_size_budget_holds_for_the_built_bundle() {
-    local app=$(real_app)
+    local app
+    app=$(real_app)
     scripts/check-size.sh $app
 }

@@ -13,7 +13,7 @@ category=public.app-category.utilities
 
 # Every signed bundle as "identifier:path inside the app" ("." is the app itself), innermost first:
 # sign-bundle.sh signs in this order and verify-bundle.sh checks each one. A new nested bundle is one
-# more entry, before the bundle that contains it.
+# more entry, before the bundle that contains it. Read entries with component_id and component_path.
 components=(
     "$menu_label:Contents/Library/LoginItems/PureMouse Menu.app"
     "$label:."
@@ -22,6 +22,26 @@ components=(
 die() {
     print -u2 -- "$*"
     exit 1
+}
+
+# component_id <component>: the bundle identifier of a `components` entry.
+component_id() {
+    print -r -- ${1%%:*}
+}
+
+# component_path <app> <component>: where that entry's bundle sits in <app>.
+component_path() {
+    print -r -- ${${:-$1/${2#*:}}%/.}
+}
+
+# menu_component: the `components` entry of the nested menu bar app.
+menu_component() {
+    print -r -- ${(M)components:#$menu_label:*}
+}
+
+# plist_value <plist> <key>: a top-level value, or a non-zero status when the key is missing.
+plist_value() {
+    /usr/libexec/PlistBuddy -c "Print :$2" $1 2>/dev/null
 }
 
 # The bundle version: PUREMOUSE_VERSION when set, else the nearest tag without its `v` (with
@@ -48,9 +68,10 @@ release_version_ok() {
     [[ $1 =~ '^[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$' ]]
 }
 
-# The signing identity: PUREMOUSE_SIGN_IDENTITY, else a valid Developer ID Application identity,
-# else the self-signed "PureMouse" (scripts/make-cert.sh), else "-" (ad hoc). "PureMouse" is
-# untrusted, so it is looked up without -v.
+# The signing identity, in this order (the one place the order is written down for code; people read
+# docs/development.md#signing): PUREMOUSE_SIGN_IDENTITY, else a valid Developer ID Application
+# identity, else the self-signed "PureMouse" (scripts/make-cert.sh), else "-" (ad hoc). "PureMouse"
+# is untrusted, so it is looked up without -v.
 signing_identity() {
     if [[ -n ${PUREMOUSE_SIGN_IDENTITY:-} ]]; then
         print -r -- $PUREMOUSE_SIGN_IDENTITY
@@ -104,7 +125,7 @@ PLIST
 # writes its agent).
 assemble_bundle() {
     local bin=$1 app=$2 version=$3 build=$4
-    local menu_app="$app/Contents/Library/LoginItems/PureMouse Menu.app"
+    local menu_app=$(component_path $app "$(menu_component)")
     rm -rf $app
     mkdir -p $app/Contents/{MacOS,Resources}
     cp $bin/puremouse $app/Contents/MacOS/puremouse

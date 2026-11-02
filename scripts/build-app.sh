@@ -6,9 +6,8 @@
 #                    Mac's only, unstripped
 #   --version X.Y.Z  the bundle version (or PUREMOUSE_VERSION); otherwise from `git describe`
 #
-# Signing (sign-bundle.sh, always with the hardened runtime): the identity named by
-# PUREMOUSE_SIGN_IDENTITY, else a Developer ID Application identity, else one named "PureMouse"
-# (scripts/make-cert.sh), else ad hoc. macOS ties PureMouse's Accessibility and Input Monitoring
+# Signing (sign-bundle.sh, always with the hardened runtime) uses lib.zsh's signing_identity; the
+# order is in docs/development.md#signing. macOS ties PureMouse's Accessibility and Input Monitoring
 # grants to the signature, so a stable identity keeps them across rebuilds and releases; ad hoc
 # needs them granted again after every install.
 set -euo pipefail
@@ -28,7 +27,9 @@ done
 version=$(resolve_version)
 build=$(resolve_build_number)
 identity=$(signing_identity)
-if [[ $identity == - ]]; then
+if [[ $identity == - && ${PUREMOUSE_SIGN_IDENTITY:-} == - ]]; then
+    echo "Signing ad hoc (PUREMOUSE_SIGN_IDENTITY=-), so permissions must be granted again"
+elif [[ $identity == - ]]; then
     echo "No 'PureMouse' code-signing identity (scripts/make-cert.sh): signing ad hoc, so permissions must be granted again"
 fi
 
