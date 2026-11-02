@@ -21,10 +21,10 @@ if let i = arguments.firstIndex(of: "--verbose") {
 
 switch arguments.first {
 case nil where LoginItem.inBundle:
-    // Opened from the Finder: install the login agents, then show the menu bar app's Settings.
+    // Opened from the Finder: install the login agents, then show Settings through the menu bar app.
     do {
         let outcome = try login.register()
-        // With the icon hidden, the app still opens for Settings and quits when they close.
+        // With the icon hidden, the menu bar app still opens, opens Settings and quits.
         if let menu = LoginItem.menuApp, login.openMenu(menu) { exit(0) }
         LoginItem.alert("PureMouse", outcome + """
 

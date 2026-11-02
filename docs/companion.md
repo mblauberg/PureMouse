@@ -190,8 +190,8 @@ app. The menu app opens Settings when it was opened by hand rather than by launc
 fresh stamp at launch (so a request made while `register` restarts the agent is not lost), when its
 icon is hidden (it then quits once Settings is open), and when it is reopened
 (`applicationShouldHandleReopen`). `open` is tried twice, since it can reach the instance
-`register` is booting out and fail (`_LSOpenURLsWithCompletionHandler` error -600). The old alert
-is kept only when there is no menu app or it cannot be opened. The menu app keeps a single
+`register` is booting out and fail (`_LSOpenURLsWithCompletionHandler` error -600); if both fail, the Settings helper is opened
+directly and reads the same stamp. The old alert is kept only when neither app can be opened. The menu app keeps a single
 instance: a second launch opens Settings and exits, and the running one keeps the icon. If the user
 has blocked the item under System Settings › Menu Bar, opening the app still reaches Settings.
 

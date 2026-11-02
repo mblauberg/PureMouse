@@ -1,5 +1,4 @@
 import Foundation
-import notify
 import PureMouseKit
 
 /// Starting PureMouse at login: launchd agents in `~/Library/LaunchAgents/<label>.plist`, one
@@ -182,15 +181,30 @@ struct LoginItem {
         }
     }
 
-    /// Opens the menu bar app, which then shows Settings (a second launch hands over to the
+    /// Opens the menu bar app, which then opens Settings (a second launch hands over to the
     /// running one). `register` has just restarted the menu agent, and `open` can fail (-600)
     /// while launchd is starting the app, so the request is also left in
-    /// `Companion.showSettingsURL` for it to read on launch, and `open` is tried once more.
-    /// False if the app could not be reached at all.
+    /// `Companion.showSettingsURL` for it to read on launch, and `open` is tried once more. If the
+    /// menu app still cannot be reached, the Settings helper is opened itself; it reads the same
+    /// request, and it is the one listening on the doorbell, not the menu app. False if neither
+    /// opened.
     func openMenu(_ app: URL) -> Bool {
         try? FileManager.default.createDirectory(at: Companion.directory, withIntermediateDirectories: true)
         FileManager.default.createFile(atPath: Companion.showSettingsURL.path, contents: nil)
-        for attempt in 0..<2 {
+        if Self.open(app, attempts: 2) { return true }
+        guard let settings = Self.settingsApp else { return false }
+        return Self.open(settings, attempts: 1)
+    }
+
+    /// The bundled Settings helper, absent from builds that do not include it.
+    static var settingsApp: URL? {
+        let app = Bundle.main.bundleURL.appending(path: "Contents/Helpers/PureMouse Settings.app")
+        return FileManager.default.fileExists(atPath: app.path) ? app : nil
+    }
+
+    /// `open` with the app, `attempts` times a second apart until it succeeds.
+    private static func open(_ app: URL, attempts: Int) -> Bool {
+        for attempt in 0..<attempts {
             if attempt > 0 { Thread.sleep(forTimeInterval: 1) }
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
@@ -200,10 +214,7 @@ struct LoginItem {
             process.waitUntilExit()
             if process.terminationStatus == 0 { return true }
         }
-        // A shown menu app is launchd's to start: one already running takes the notification, one
-        // still starting reads the request.
-        notify_post(Companion.showSettingsNotification)
-        return !menuHidden
+        return false
     }
 
     /// Registers and starts the menu agent. When the menu bar app itself asked (its process is our
