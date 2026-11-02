@@ -49,7 +49,7 @@ public enum DevHooks {
 /// A sheet `PUREMOUSE_DEV_SHEET` opens: one case per sheet; a pane checks `DevHooks.sheet(on:)` as
 /// it appears.
 enum DevSheet: String {
-    /// The pane's Advanced… sheet (Mouse › Buttons, Mouse › Scrolling).
+    /// The pane's Advanced… sheet (General, Mouse › Buttons, Mouse › Scrolling).
     case advanced
 }
 #endif
