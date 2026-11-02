@@ -29,6 +29,9 @@ public enum Companion {
     public static var statusURL: URL { directory.appending(path: "status.json") }
     /// Written by the menu bar app: `Control`.
     public static var controlURL: URL { directory.appending(path: "control.json") }
+    /// The marker `menu off` leaves in `directory` and `menu on` removes: the icon is hidden. The
+    /// daemon writes it and the menu bar app reads it, each naming the path from this.
+    public static let menuHiddenName = "menu-hidden"
     /// Created to ask the menu bar app to show Settings when it next starts, if within a few
     /// seconds (opening PureMouse.app restarts the menu agent just before opening it).
     public static var showSettingsURL: URL { directory.appending(path: "show-settings") }

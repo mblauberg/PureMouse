@@ -13,17 +13,14 @@ public struct Locations: Sendable {
     public var daemon: URL?
     /// The status/control channel's directory.
     public var companion: URL
-    /// `~/Library/LaunchAgents`.
-    var launchAgents: URL
     /// `PUREMOUSE_DAEMON` is set: a development run against a stub daemon.
     var daemonOverridden: Bool
 
-    public init(config: URL, log: URL, daemon: URL?, companion: URL, launchAgents: URL, daemonOverridden: Bool = false) {
+    public init(config: URL, log: URL, daemon: URL?, companion: URL, daemonOverridden: Bool = false) {
         self.config = config
         self.log = log
         self.daemon = daemon
         self.companion = companion
-        self.launchAgents = launchAgents
         self.daemonOverridden = daemonOverridden
     }
 
@@ -43,7 +40,6 @@ public struct Locations: Sendable {
         }
         companion = Companion.overrideDirectory(in: environment).map { URL(fileURLWithPath: $0, isDirectory: true) }
             ?? home.appending(path: "Library/Application Support/PureMouse")
-        launchAgents = home.appending(path: "Library/LaunchAgents")
         daemonOverridden = environment["PUREMOUSE_DAEMON"] != nil
     }
 
@@ -58,12 +54,7 @@ public struct Locations: Sendable {
     /// The low-battery bands already announced (`BatteryAlertStore`).
     public var batteryAlerts: URL { companion.appending(path: "battery-alerts.json") }
     /// Left by the daemon's `menu off`, removed by `menu on`.
-    var menuHidden: URL { companion.appending(path: "menu-hidden") }
-
-    func launchAgent(_ label: String) -> URL { launchAgents.appending(path: "\(label).plist") }
-
-    /// Start at login: the daemon's agent exists.
-    public var startsAtLogin: Bool { FileManager.default.fileExists(atPath: launchAgent(Companion.daemonLabel).path) }
+    var menuHidden: URL { companion.appending(path: Companion.menuHiddenName) }
 
     /// Show in menu bar: the daemon's `menu off` leaves a `menu-hidden` marker beside the status
     /// file, and `menu on` removes it (docs/companion.md, "Daemon decisions"). A development build

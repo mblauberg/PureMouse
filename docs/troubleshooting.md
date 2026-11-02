@@ -68,6 +68,9 @@ clear the flag afterwards.
 |---|---|
 | `puremouse register` | Adds the login items and starts PureMouse (what opening the app does) |
 | `puremouse stop` | Stops PureMouse and the menu bar icon until the next login (**Quit PureMouse**) |
+| `puremouse start` | Starts PureMouse (and the menu bar icon, unless hidden) again after `stop`, without changing whether they start at login |
+| `puremouse login on` / `off` | Starts PureMouse at login, or not, without starting or stopping it now. With login off it keeps running until you run `stop` or log out |
+| `puremouse login-status` | Prints whether PureMouse and the menu bar icon start at login, as JSON |
 | `puremouse unregister` | Stops both and removes the login items. Your config is kept |
 | `puremouse menu off` / `on` | Hides or shows the menu bar icon. PureMouse keeps working without it |
 
@@ -100,6 +103,11 @@ that has Accessibility.
 | Symbolic hot key lookup | `spaceLeft`, `spaceRight` (your own shortcut) | Falls back to Ctrl+Left/Right by itself |
 | Front process lookup | Per-app button settings | Falls back to the app owning the frontmost window by itself |
 | Universal Control input-state notification | Handing the mouse back while the pointer is on another Mac | Pause PureMouse from the menu while using the other Mac |
+
+The menu bar app also relies on an undocumented allocator setting, `MallocSpaceEfficient`, that keeps
+about 6 MB off its footprint. If a macOS release ignores it the app still works but uses more
+memory; run `./scripts/measure-menu.sh` on a spare Mac after the upgrade (`docs/development.md`,
+"Footprint rig") and compare with `scripts/measure-menu.budgets`.
 
 macOS 27 stopped honouring the event fields for three-finger Dock swipes. PureMouse does not use
 them, and navigation swipes still work on macOS 27.

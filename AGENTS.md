@@ -149,7 +149,7 @@ one. This file covers how to work on it safely.
   of it. It must not poll: it wakes on notifications, file events and the daemon's process exit.
   Its Settings window and view tree are built when shown (each pane on its first visit); once
   Settings closes the process starts over (`Relaunch`): the agent's copy exits 75 for launchd to
-  restart, since AppKit and SwiftUI keep about 39 MB otherwise (against about 14 MB fresh;
+  restart, since AppKit and SwiftUI keep about 25 MB otherwise (against about 10 MB fresh;
   `docs/companion.md`, Footprint). Never `exec` in place (LaunchServices then withholds the status
   item). The menu is rebuilt on open. Settings controls carry their own accessibility label where a
   `RowLabel` (title plus caption) leaves them unnamed. Shortcut specs are parsed and named by Kit's
@@ -285,6 +285,18 @@ one. This file covers how to work on it safely.
   out its agent kills its process group: `main` calls `setsid()` first, every command boots the
   menu agent out last (after removing its plist), and `register`/`menu on` leave an already
   loaded menu agent running when the menu app itself is the caller.
+- `LoginItem` is the policy (order above, `menu-hidden`, the caller's own agent) and talks to a
+  `LoginService` (`LoginService.swift`; `LaunchdAgentService` is the launch agents, which owns the
+  plist definitions and `launchctl`, and its `stop` holds the wait for the old instance to finish
+  restoring the mouse). The seam names jobs by what to run, never by plist. `LoginItemTests` drives
+  the policy against a fake and `LaunchdAgentServiceTests` the mechanism against a scripted
+  `launchctl`. Every mutating command holds `lifecycle.lock` in the companion directory. "Starts at login" and "running now" are separate axes:
+  `login on|off` register or unregister without loading or booting out, `start` starts what has no
+  process (bootstrap if not loaded, kickstart if loaded idle with this copy's executable, otherwise bootout and bootstrap) and refreshes a registered job's
+  plist first, without registering anything (an unregistered job runs from a plist under the
+  companion directory that launchd does not load at login), `stop` boots out and keeps the registration
+  (table in `docs/companion.md`). `puremouse login-status` prints `LoginStatus` (Kit) as JSON, and
+  the menu reads "starts at login" from it, not from a plist file.
 - Builds are signed by `scripts/sign-bundle.sh`: inside out from `scripts/lib.zsh`'s `components`
   (a new nested bundle is one more entry), no `--deep`, always the hardened runtime, with the
   identity `signing_identity` picks (the order is in `docs/development.md`, Signing). The

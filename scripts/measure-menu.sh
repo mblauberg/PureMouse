@@ -6,7 +6,7 @@
 #
 #   ./scripts/measure-menu.sh [--runs N] [--blocks] [--no-build] [--budgets FILE] [--tsv FILE]
 #                             [--write-budgets] [--keep] [--plugin-path DIR] [--env NAME=value]...
-#   --env NAME=value  adds a variable to the menu's environment (e.g. MallocSpaceEfficient=1), to compare
+#   --env NAME=value  adds a variable to the menu's environment, on top of the bundle's LSEnvironment
 #
 # A Mac with only the command line tools cannot expand SwiftUI's @State (the SDK's SwiftUIMacros
 # plugin ships with Xcode). Copy Xcode's libSwiftUIMacros.dylib (Xcode.app/Contents/Developer/
@@ -115,6 +115,10 @@ bin=$(swift build -c release --product PureMouseMenu --scratch-path $scratch/bui
 rm -rf $app
 make_menu_bundle $bin/PureMouseMenu $app $rig_label rig 0
 codesign --force --sign - --identifier $rig_label $app >/dev/null 2>&1 || fail "could not sign the rig bundle"
+# The rig starts the executable itself, so the Info.plist's LSEnvironment (what a Finder launch gives the
+# shipped app) is passed on by hand; --env adds to it.
+bundle_env=(${(f)"$(/usr/libexec/PlistBuddy -c 'Print :LSEnvironment' $app/Contents/Info.plist 2>/dev/null | sed -n 's/^ *\(.*\) = \(.*\)$/\1=\2/p')"})
+rig_env=($bundle_env $rig_env)
 
 # The Settings helper, once it exists, is built and measured too.
 helper=

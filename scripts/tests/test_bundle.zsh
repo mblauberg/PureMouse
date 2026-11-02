@@ -52,11 +52,18 @@ test_info_plists_lint_and_differ_only_in_role_keys() {
     local daemon=$app/Contents/Info.plist menu="$(menu_of $app)/Contents/Info.plist"
     plutil -lint -s $daemon "$menu"
     local differing=$(diff $daemon "$menu" | sed -n 's/^[<>] *<key>\([^<]*\)<.*/\1/p' | sort -u)
-    local expected=$'CFBundleDisplayName\nCFBundleExecutable\nCFBundleIdentifier\nLSBackgroundOnly'
+    local expected=$'CFBundleDisplayName\nCFBundleExecutable\nCFBundleIdentifier\nLSBackgroundOnly\nLSEnvironment'
     [[ $differing == $expected ]] || { print -u2 -- "differing keys: ${(f)differing}"; return 1; }
     for key in CFBundleVersion NSHumanReadableCopyright LSApplicationCategoryType; do
         expect "$key in both" eval 'plist_value $daemon $key >/dev/null && plist_value "$menu" $key >/dev/null'
     done
+}
+
+test_menu_info_plist_sets_the_allocator_variable_for_finder_launches() {
+    local app=$(stand_in_app $tmp 1.2.3)
+    local menu="$(menu_of $app)/Contents/Info.plist"
+    [[ $(/usr/libexec/PlistBuddy -c "Print :LSEnvironment:MallocSpaceEfficient" "$menu") == 1 ]] || return 1
+    ! /usr/libexec/PlistBuddy -c "Print :LSEnvironment" $app/Contents/Info.plist >/dev/null 2>&1
 }
 
 test_pinned_version_reaches_both_plists() {

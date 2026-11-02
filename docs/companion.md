@@ -130,15 +130,44 @@ All optional; nil members are left out of the JSON.
 
 ## Login and lifecycle
 
-The daemon CLI owns every launchd change (`LoginItem.swift`). The menu app runs these commands
-through the daemon binary at `Bundle.main.bundleURL/../../../MacOS/puremouse`:
+The daemon CLI owns every launchd change (`LoginItem.swift` holds the policy; a `LoginService`,
+`LaunchdAgentService`, holds the mechanism, so the policy is tested against a fake). The menu
+app runs these commands through the daemon binary at `Bundle.main.bundleURL/../../../MacOS/puremouse`.
+
+"Starts at login" and "is running now" are separate, and each command changes only the axis the
+table gives:
+
+| Command | Starts at login | Running now |
+|---|---|---|
+| `puremouse login on` | on | unchanged |
+| `puremouse login off` | off | unchanged (a running job stays loaded until logout or `stop`) |
+| `puremouse start` | unchanged | on (daemon, and menu unless hidden) |
+| `puremouse stop` | unchanged | off |
+| `puremouse register` / `unregister` | on / off | restarted / off |
 
 | Command | Effect |
 |---|---|
-| `puremouse register` | writes and boots both agents (daemon `KeepAlive`; menu `RunAtLoad`, `KeepAlive: {SuccessfulExit: false}`), unless the menu is hidden. Prints the outcome |
+| `puremouse register` | writes and boots both agents (daemon `KeepAlive`; menu `RunAtLoad`, `KeepAlive: {SuccessfulExit: false}`, `MallocSpaceEfficient`), unless the menu is hidden. Prints the outcome |
 | `puremouse unregister` | boots out both agents and removes both plists |
-| `puremouse stop` | boots out both agents but keeps their plists: **Quit PureMouse**. Both start again at login |
+| `puremouse login on` / `off` | writes both plists (the menu's unless hidden) without booting anything, or removes both without booting anything out. A running agent is left as it is |
+| `puremouse start` | starts the agents that have no process (the menu's unless hidden) and leaves running ones alone: a job that is not loaded is bootstrapped, one that is loaded without a process (the menu after Quit) is kickstarted, or booted out and bootstrapped again when the executable `launchctl print` shows for it is not this copy's. A registered job's plist is first rewritten for this copy of the app, so a moved app does not start from the old path; it stays registered. An agent that is not registered runs from a plist in `launchd/` under `Companion.directory`, which launchd does not load at the next login and which stays there until `stop` removes it |
+| `puremouse stop` | boots out both agents but keeps their plists: **Quit PureMouse**. Both start again at login if registered |
 | `puremouse menu on` / `off` | writes and boots, or boots out and removes, the menu agent only: **Show in menu bar** / **Hide Menu Bar Icon** |
+| `puremouse login-status` | prints one JSON object and changes nothing: `{"daemon":"enabled","hidden":false,"menu":"notRegistered","service":"launchd"}` |
+
+Every command that changes what is registered or running (`register`, `unregister`, `stop`, `start`,
+`login on|off`, `menu on|off`) holds an exclusive lock on `lifecycle.lock` in `Companion.directory`,
+so a `stop` and a `start` that overlap (the menu and a terminal, or a double click) run one after
+the other. A command that cannot take it within 30 s fails with a message naming the lock.
+`login-status` takes none.
+
+`login-status` fields: `service` names the mechanism (`launchd`); `daemon` and `menu` are the job's
+state: `notRegistered` (does not start at login), `enabled` (does), `requiresApproval` (registered,
+but the user must approve it in System Settings › Login Items; no mechanism reports it yet) or
+`notFound` (the build has no such job, e.g. no menu bar app); `hidden` is whether `menu off` is in
+force. The decoder is `LoginStatus` in `PureMouseKit`. It says nothing about what is running: a
+job started with `start` while unregistered reads `notRegistered`. The menu app reads its "starts
+at login" answer from it rather than looking for a plist file.
 
 Opening PureMouse.app from the Finder runs `register`, touches `show-settings` in
 `Companion.directory` and opens the menu app, which shows Settings; with the icon hidden it quits
@@ -160,39 +189,44 @@ the figures below are medians of 5 runs of `scripts/measure-menu.sh` (`docs/deve
 read them as "about" and repeat the rig after each macOS release. The bare AppKit column is
 `scripts/measure-bare-appkit.sh` (5 runs, the same Mac and day).
 
-| Menu app, release build | MB | Bare AppKit status item and menu, same Mac |
-|---|---|---|
-| fresh, about 4.5 s after launch | 13.8 | 10.8 |
-| after 1 menu open | 19.8 | 15.2 |
-| after 3 menu opens | 19.8 | 15.4 |
-| after 10 menu opens | 20.2 | 15.6 |
-| after 200 status doorbells, 10 ms apart, menu never opened | 13.8 | |
-| Settings open, in this process | 42.9 | |
-| Settings closed again, in this process | 38.7 | |
+| Menu app, release build | Without the variable, MB | Shipped (`MallocSpaceEfficient=1`), MB | Bare AppKit status item and menu, same Mac |
+|---|---|---|---|
+| fresh, about 4.5 s after launch | 13.8 | 10.1 | 10.8 |
+| after 1 menu open | 19.8 | 14.1 | 15.2 |
+| after 3 menu opens | 19.9 | 14.1 | 15.4 |
+| after 10 menu opens | 19.9 | 14.2 | 15.6 |
+| after 200 status doorbells, 10 ms apart, menu never opened | 13.8 | 10.0 | |
+| Settings open, in this process | 43.1 | 33.9 | |
+| Settings closed again, in this process | 38.9 | 24.9 | |
+
+The shipped column is the rig, which passes on the Info.plist's `LSEnvironment` (the agent's plist
+sets the same variable); the other column is main's build without it (same Mac, same day).
+After 3 opens that is 0.71 times the baseline, and fresh is lower, which passes the adoption rule
+(at most 0.75 times, fresh no worse).
 
 What the numbers say:
 
-- **The first menu open costs about 6 MB, once.** Later opens add almost nothing (19.8 to 20.2 MB
-  over ten). A bare `NSStatusItem` with an `NSMenu` and nothing else grows by about 4 MB on its first
+- **The first menu open costs about 4 to 6 MB, once.** Later opens add almost nothing (14.1 to 14.2 MB
+  over ten, shipped; 19.8 to 19.9 without the variable). A bare `NSStatusItem` with an `NSMenu` and nothing else grows by about 4 MB on its first
   open (10.8 to 15.2 MB), so most of the cost is AppKit's, not the menu's; the rest is ours.
 - **Status updates did not grow it.** 200 doorbells posted 10 ms apart, `status.json` changed
-  before each, left the fresh figure where it was (13.8 against 13.8 MB).
+  before each, left the fresh figure where it was (10.0 against 10.1 MB shipped; 13.8 against 13.8 without the variable).
 - **No growth was seen across the measured opens and doorbells.** The earlier question was a
   repeating 272 KB block per open. It was not reproduced: after 30 opens under
   `MallocStackLogging`, `heap -addresses=all` listed no live block of that size (the largest live
   block was 64 KB), so no owner could be named. One run on 2026-11-02, with
   `scripts/measure-menu.sh --blocks`.
-- **Settings is where the rest goes.** Opening it adds about 29 MB, and closing it gives back only
-  about 4 MB, even after `malloc_zone_pressure_relief`: AppKit and SwiftUI keep the pages. Hence
+- **Settings is where the rest goes.** Opening it adds about 24 MB (29 without the variable), and closing it gives back only
+  about 9 MB (4 without), even after `malloc_zone_pressure_relief`: AppKit and SwiftUI keep the pages. Hence
   `Relaunch`: once Settings has closed, the app starts over as a fresh copy (the "closed" row above
   is the process without that restart; the rig does not restart it).
-- **Allocator.** The growth looks like freed small-malloc pages that stay resident and that
-  `malloc_zone_pressure_relief` does not return. Running the same rig with
-  `MallocSpaceEfficient=1` (a preference for reusing freed space over speed) gave: fresh 10.1,
-  after 1 open 14.3, after 3 opens 14.2, after 10 opens 14.2, 200 doorbells 10.1, Settings open
-  32.3 and closed 23.9 MB. That is 0.71 times the baseline at 3 opens (20.1 MB in the run beside it, before the rig took
-  the shipped bundle's Info.plist; the table above is from after), and fresh was lower, not
-  higher. This is a measurement only: whether to adopt it is a separate decision.
+- **Allocator.** The growth was freed small-malloc pages that stay resident and that
+  `malloc_zone_pressure_relief` does not return. The menu app runs with
+  `MallocSpaceEfficient=1` (a preference for reusing freed space over speed), in its launchd
+  environment and, for a launch by the Finder, `LSEnvironment` in its Info.plist. The gate ran on the
+  branch build against main's, five runs each, side by side: 14.1 against 19.9 MB after 3 opens
+  (0.71 times) and 10.1 against 13.8 fresh. The variable is undocumented, so a macOS release may
+  ignore it; the rig is repeated after each one.
 - **The prefs-domain caveat.** For a while the rig's numbers were bimodal: some launches started
   about 4 MB higher, even for the fresh and doorbell scenarios, and a fresh bundle id or
   `defaults delete` of the rig's domain brought them back. The cause is a transient state of the

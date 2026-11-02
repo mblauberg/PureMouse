@@ -17,8 +17,7 @@ guard arguments.count >= 5, let count = Int(arguments[4]) else {
 }
 let directory = URL(filePath: arguments[1], directoryHint: .isDirectory)
 let locations = Locations(config: directory.appending(path: "config.json"), log: directory.appending(path: "log"),
-                          daemon: nil, companion: directory.appending(path: "companion", directoryHint: .isDirectory),
-                          launchAgents: directory.appending(path: "LaunchAgents", directoryHint: .isDirectory))
+                          daemon: nil, companion: directory.appending(path: "companion", directoryHint: .isDirectory))
 
 func fail(_ message: String) -> Never {
     FileHandle.standardError.write(Data((message + "\n").utf8))

@@ -10,6 +10,8 @@ func runMainLoop() -> Never {
     while true { CFRunLoopRun() }
 }
 
+let login = LoginItem()
+
 // Older macOS passes a process serial number to apps opened from the Finder.
 var arguments = CommandLine.arguments.dropFirst().filter { !$0.hasPrefix("-psn_") }
 if let i = arguments.firstIndex(of: "--verbose") {
@@ -21,9 +23,9 @@ switch arguments.first {
 case nil where LoginItem.inBundle:
     // Opened from the Finder: install the login agents, then show the menu bar app's Settings.
     do {
-        let outcome = try LoginItem.register()
+        let outcome = try login.register()
         // With the icon hidden, the app still opens for Settings and quits when they close.
-        if let menu = LoginItem.menuApp, LoginItem.openMenu(menu) { exit(0) }
+        if let menu = LoginItem.menuApp, login.openMenu(menu) { exit(0) }
         LoginItem.alert("PureMouse", outcome + """
 
 
@@ -80,35 +82,57 @@ case "app":
             print("\(label): \(app ?? "unknown") (\(start.duration(to: .now)))")
         }
     }
-case "register", "unregister", "stop", "menu":
+case "login-status":
+    // Read-only, so it keeps the menu bar app's process group.
+    do {
+        print(try login.loginStatus().json())
+    } catch {
+        print("cannot read the login state: \(error)")
+        exit(1)
+    }
+case "register", "unregister", "stop", "start", "login", "menu":
     // launchd kills a job's process group when booting it out, and the menu bar app (one of the
     // jobs) runs these commands as its child: leave its group so the command can finish.
     setsid()
     switch (arguments.first, arguments.dropFirst().first) {
     case ("register", _):
         do {
-            print(try LoginItem.register())
+            print(try login.register())
         } catch {
             print("cannot register: \(error)")
             exit(1)
         }
     case ("unregister", _):
         do {
-            try LoginItem.unregister()
+            try login.unregister()
         } catch {
             print("cannot unregister: \(error)")
             exit(1)
         }
     case ("stop", _):
         do {
-            print(try LoginItem.stopAll())
+            print(try login.stopAll())
         } catch {
             print("cannot stop: \(error)")
             exit(1)
         }
+    case ("start", _):
+        do {
+            print(try login.start())
+        } catch {
+            print("cannot start: \(error)")
+            exit(1)
+        }
+    case ("login", let setting?) where setting == "on" || setting == "off":
+        do {
+            print(try setting == "on" ? login.loginOn() : login.loginOff())
+        } catch {
+            print("cannot change login: \(error)")
+            exit(1)
+        }
     case ("menu", let setting?) where setting == "on" || setting == "off":
         do {
-            print(try LoginItem.showMenu(setting == "on"))
+            print(try login.showMenu(setting == "on"))
         } catch {
             print("cannot change the menu bar icon: \(error)")
             exit(1)
@@ -142,6 +166,10 @@ func usage() -> Never {
                                                       menu bar icon, now and at login
            puremouse unregister                       stop both and remove them from login
            puremouse stop                             stop both until the next login
+           puremouse start                            start both now, leaving login as it is
+           puremouse login on | off                   start at login, or not, leaving what is
+                                                      running as it is
+           puremouse login-status                     whether each starts at login, as JSON
            puremouse menu on | off                    show or hide the menu bar icon
     The config is reloaded when its file changes, or on SIGHUP.
     """)

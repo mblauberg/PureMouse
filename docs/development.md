@@ -55,7 +55,7 @@ that nobody is using, not on the Mac whose PureMouse you rely on: it opens menus
 ./scripts/measure-menu.sh                 # builds, runs 5 times, prints a table, writes a TSV
 ./scripts/measure-menu.sh --runs 3 --no-build
 ./scripts/measure-menu.sh --blocks        # also: 30 menu opens under MallocStackLogging, heap and malloc_history
-./scripts/measure-menu.sh --env MallocSpaceEfficient=1   # the same, with a variable in the menu's environment
+./scripts/measure-menu.sh --env NAME=value   # the same, with one more variable in the menu's environment
 ./scripts/measure-menu.sh --write-budgets # replace the budgets with the medians plus 2 MB, rounded up
 ```
 

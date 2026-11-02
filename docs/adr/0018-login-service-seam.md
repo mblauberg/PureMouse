@@ -3,7 +3,8 @@
 ## Status
 
 Proposed. Gated by the SMAppService spike on a Developer ID build across an update. The seam itself,
-with launch agents behind it, needs no Developer ID and proceeds now.
+with launch agents behind it, needs no Developer ID and is implemented (`LoginService`,
+`LaunchdAgentService`, `puremouse login-status`, `login on|off`, `start`).
 
 ## Context
 
@@ -18,10 +19,10 @@ upgrades.
 ## Decision
 
 `LoginItem` keeps its policy (daemon before menu, menu removed last, the hidden-menu marker, the
-caller's own agent left running) and talks to a `LoginService`. Launch agents implement it now. An
+caller's own agent left running) and talks to a `LoginService`. Launch agents implement it. An
 `SMAppService.agent` implementation is chosen when the running binary has a Team ID and the bundled
 plists exist, if the spike passes; otherwise launch agents stay for Developer ID builds too. The CLI
-reports login state, so the menu no longer checks for a plist file.
+reports login state, so the menu reads it from the CLI, not from a plist file.
 
 ## Alternatives rejected
 
@@ -32,6 +33,11 @@ reports login state, so the menu no longer checks for a plist file.
 
 ## Consequences
 
-- Two implementations to keep; the launch-agent one is small and already written.
+- The seam names a job by what to run (the daemon's executable, the menu app's bundle) and never
+  carries a launchd plist, so the plist, its `MallocSpaceEfficient` setting and its `launchctl`
+  verbs stay in `LaunchdAgentService`, which has tests of its own against a scripted `launchctl`.
+- Every command that changes what is registered or running takes one file lock in the companion
+  directory (30 s wait, then a clear error), so a `stop` and a `start` that overlap run in order.
+- Two implementations to keep once `SMAppService` is added; the launch-agent one is small.
 - Login Items shows an entry the user can switch off, which `register` must handle.
 - `docs/companion.md` ("Login and lifecycle") is rewritten when `SMAppService` lands.

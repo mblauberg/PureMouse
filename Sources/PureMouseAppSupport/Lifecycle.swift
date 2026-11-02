@@ -1,13 +1,15 @@
 import Foundation
+import PureMouseKit
 
 /// Login and lifecycle changes, all made by the daemon's CLI (docs/companion.md, "Login and
-/// lifecycle"): `register`, `unregister`, `stop`, `menu on|off`.
+/// lifecycle"): `register`, `unregister`, `stop`, `menu on|off`, and the read of `login-status`.
 @MainActor
 public enum Lifecycle {
     public enum Command: Sendable {
-        case register, unregister, stop, menuOn, menuOff
+        case register, unregister, stop, menuOn, menuOff, loginStatus
         var arguments: [String] {
             switch self {
+            case .loginStatus: ["login-status"]
             case .register: ["register"]
             case .unregister: ["unregister"]
             case .stop: ["stop"]
@@ -21,6 +23,13 @@ public enum Lifecycle {
 
     /// No command is running (the menu app waits for this before it relaunches).
     public static var idle: Bool { running == 0 }
+
+    /// Asks the daemon's CLI whether PureMouse starts at login; nil when it cannot be asked or its
+    /// answer is not understood.
+    public static func readLoginStatus(daemon: URL? = Locations.live.daemon,
+                                       then completion: @escaping @MainActor (LoginStatus?) -> Void) {
+        run(.loginStatus, daemon: daemon) { completion((try? $0.get()).flatMap(LoginStatus.parse)) }
+    }
 
     /// Called after each command's completion handler (the menu app then tries its relaunch).
     public static var finished: @MainActor () -> Void = {}
