@@ -131,6 +131,17 @@ private final class Rig {
         #expect(try rig.item.stopAll() == "PureMouse was not running.")
     }
 
+    @Test func stopDoesNotPromiseALoginStartWhenTheJobIsNotRegistered() throws {
+        let rig = Rig()
+        _ = try rig.item.register()
+        _ = try rig.item.loginOff()
+        #expect(try rig.item.stopAll() == "PureMouse stopped.")
+        #expect(try rig.item.stopAll() == "PureMouse was not running.")
+        _ = try rig.item.start()
+        #expect(rig.service.registered.isEmpty)
+        #expect(try rig.item.stopAll() == "PureMouse stopped.")
+    }
+
     // MARK: The menu app as the caller
 
     @Test func registerFromTheMenuRewritesALoadedMenuJobWithoutRestartingIt() throws {
@@ -193,14 +204,14 @@ private final class Rig {
 
     @Test func nothingChangesWhenThisIsNotAnInstalledApp() {
         let rig = Rig(executable: { throw LoginItem.Failure.notInBundle })
-        #expect(throws: LoginItem.Failure.self) { try rig.item.register() }
-        #expect(throws: LoginItem.Failure.self) { try rig.item.unregister() }
-        #expect(throws: LoginItem.Failure.self) { try rig.item.stopAll() }
-        #expect(throws: LoginItem.Failure.self) { try rig.item.start() }
-        #expect(throws: LoginItem.Failure.self) { try rig.item.loginOn() }
-        #expect(throws: LoginItem.Failure.self) { try rig.item.loginOff() }
-        #expect(throws: LoginItem.Failure.self) { try rig.item.showMenu(false) }
-        #expect(throws: LoginItem.Failure.self) { try rig.item.showMenu(true) }
+        #expect(throws: LoginItem.Failure.notInBundle) { try rig.item.register() }
+        #expect(throws: LoginItem.Failure.notInBundle) { try rig.item.unregister() }
+        #expect(throws: LoginItem.Failure.notInBundle) { try rig.item.stopAll() }
+        #expect(throws: LoginItem.Failure.notInBundle) { try rig.item.start() }
+        #expect(throws: LoginItem.Failure.notInBundle) { try rig.item.loginOn() }
+        #expect(throws: LoginItem.Failure.notInBundle) { try rig.item.loginOff() }
+        #expect(throws: LoginItem.Failure.notInBundle) { try rig.item.showMenu(false) }
+        #expect(throws: LoginItem.Failure.notInBundle) { try rig.item.showMenu(true) }
         #expect(rig.service.calls.isEmpty)
         #expect(rig.seeded == 0)
         #expect(!rig.hidden)

@@ -14,8 +14,7 @@ struct Sandbox {
         locations = Locations(config: directory.appending(path: "config.json"),
                               log: directory.appending(path: "PureMouse.log"),
                               daemon: nil,
-                              companion: directory.appending(path: "companion", directoryHint: .isDirectory),
-                              launchAgents: directory.appending(path: "LaunchAgents", directoryHint: .isDirectory))
+                              companion: directory.appending(path: "companion", directoryHint: .isDirectory))
     }
 
     var config: URL { locations.config }

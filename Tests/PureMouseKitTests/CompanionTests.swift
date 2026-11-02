@@ -135,6 +135,7 @@ private let bells = [
     #expect(Companion.fnv1a("") == "811c9dc5")
     #expect(Companion.fnv1a("a") == "e40c292c")
     #expect(Companion.fnv1a("foobar") == "bf9cf968")
+}
 
 // MARK: - Login status
 

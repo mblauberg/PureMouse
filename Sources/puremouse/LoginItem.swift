@@ -129,7 +129,8 @@ struct LoginItem {
         _ = try host.executable()
         let wasRunning = try service.stop(.daemon)
         try service.stop(.menu)
-        return wasRunning ? "PureMouse stopped; it starts again at login." : "PureMouse was not running."
+        guard wasRunning else { return "PureMouse was not running." }
+        return service.status(.daemon) == .enabled ? "PureMouse stopped; it starts again at login." : "PureMouse stopped."
     }
 
     /// Makes both agents (the menu's unless hidden) start at login, without starting or

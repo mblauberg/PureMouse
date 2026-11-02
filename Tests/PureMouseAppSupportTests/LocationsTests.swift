@@ -29,8 +29,6 @@ private let menuApp = URL(fileURLWithPath: "/Applications/PureMouse.app/Contents
     #expect(locations.daemon?.path == "/Applications/PureMouse.app/Contents/MacOS/puremouse")
     #expect(probed?.path == "/Applications/PureMouse.app/Contents/MacOS/puremouse")
     #expect(locations.companion.path == "/Users/someone/Library/Application Support/PureMouse")
-    #expect(locations.launchAgent(Companion.daemonLabel).path
-        == "/Users/someone/Library/LaunchAgents/io.github.mblauberg.puremouse.plist")
     #expect(!locations.daemonOverridden)
     let bare = Locations(environment: [:], home: home, bundle: menuApp, isExecutable: { _ in false })
     #expect(bare.daemon == nil)
