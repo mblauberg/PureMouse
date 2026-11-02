@@ -96,11 +96,10 @@ import Testing
         }
     }
 
-    /// Every Settings source but the Pointer pane, which lane #53 rewords.
+    /// Every Settings source.
     private static var files: [URL] {
         let enumerator = FileManager.default.enumerator(at: ui, includingPropertiesForKeys: nil)
-        return (enumerator?.allObjects as? [URL] ?? [])
-            .filter { $0.pathExtension == "swift" && $0.lastPathComponent != "PointerPane.swift" }
+        return (enumerator?.allObjects as? [URL] ?? []).filter { $0.pathExtension == "swift" }
     }
 
     @Test func noRetiredWordsInUIStrings() throws {

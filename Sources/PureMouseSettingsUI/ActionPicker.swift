@@ -362,7 +362,8 @@ struct SearchField: NSViewRepresentable {
 }
 
 /// The button showing a binding, drawn as the form's own pop-up menus are (natural width,
-/// trailing, the system chevrons; a value left unset in secondary). It opens the searchable
+/// trailing, the system chevrons; Mouse Default in primary like any other choice, only an app's
+/// inherited value dimmed). It opens the searchable
 /// picker, which a `Picker` cannot hold.
 struct ActionButton: View {
     @Environment(AppModel.self) private var model
@@ -402,7 +403,7 @@ struct ActionButton: View {
             HStack(spacing: 4) {
                 Text(Self.shortened(label))
                     .lineLimit(1)
-                    .foregroundStyle(inherited?.style ?? (action == .standard ? .secondary : .primary))
+                    .foregroundStyle(inherited?.style ?? .primary)
                 Image(systemName: "chevron.up.chevron.down")
                     .imageScale(.small)
                     .foregroundStyle(.secondary)
