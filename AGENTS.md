@@ -156,7 +156,7 @@ one. This file covers how to work on it safely.
 - The menu bar app and the Settings helper never open HID devices: they edit the config file and
   talk to the daemon only through the companion channel and the daemon CLI (`docs/companion.md`).
   Their shared logic lives in `Sources/PureMouseAppSupport` (`AppModel`, config editing and
-  saving, `Locations`, `ShowRequest`, `SettingsLookup`, status words), tested in
+  saving, `Locations`, `ShowRequest` over Kit's `SettingsRequest`, `SettingsLookup`, status words), tested in
   `Tests/PureMouseAppSupportTests`; keep UI frameworks out of it. Neither may poll: they wake on
   notifications, file events and the daemon's process exit. Settings is an app of its own
   (`PureMouse Settings.app`, docs/adr/0009-settings-helper-app.md): the menu writes the pane to
