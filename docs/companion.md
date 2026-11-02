@@ -182,7 +182,9 @@ Settings opens the same way from everywhere (`SettingsLauncher`): `show-settings
 `Companion.directory` is written with the pane to show (empty: the last one; `general`, `mouse`,
 `apps` or `about` for a tab, `buttons`, `scrolling` or `pointer` for Mouse on that segment; a dot and a
 sheet name opens a sheet over the pane, `pointer.presets` for Pointer's presets list, which the menu's
-Edit Presets… row asks for), the doorbell
+Edit Presets… row asks for; `apps:` and a bundle identifier opens Apps on that app's sheet, which the menu's
+"Settings for <app>…" row asks for, listing the app first if the config has none and writing nothing
+until a setting is chosen), the doorbell
 `io.github.mblauberg.puremouse.menu.show` is posted, and the helper is opened with `NSWorkspace`,
 which starts it or brings the running one forward (one instance per bundle ID). A running helper
 reads the file on the doorbell; a starting one reads it at launch. Only a stamp from the last 5 s

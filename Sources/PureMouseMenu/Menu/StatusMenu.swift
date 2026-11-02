@@ -62,13 +62,19 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         model.refreshLiveness()
         model.reloadConfig()
         let option = NSEvent.modifierFlags.contains(.option)
-        let rows = MenuPlan.rows(for: MenuState(model: model), option: option)
+        var state = MenuState(model: model)
+        // Read once, as the menu opens: choosing the menu does not activate PureMouse, so this is
+        // still the app the person was using. No observer, no timer.
+        let front = NSWorkspace.shared.frontmostApplication
+        state.frontmost = FrontmostApp(bundleID: front?.bundleIdentifier, name: front?.localizedName)
+        let rows = MenuPlan.rows(for: state, option: option)
         MenuRenderer { [weak self] in self?.perform($0) }.fill(menu, with: rows)
     }
 
     private func perform(_ action: MenuAction) {
         switch action {
         case .openSettings(let pane): app.showSettings(ShowRequest(pane: pane))
+        case .openAppSettings(let id): app.showSettings(ShowRequest(app: id))
         case .editPresets: app.showSettings(ShowRequest(sheet: .presets))
         case .openReleases: app.openReleases()
         case .openPrivacy(let pane): app.openPrivacy(pane)

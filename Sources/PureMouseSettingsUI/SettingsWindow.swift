@@ -106,6 +106,7 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
         DispatchQueue.main.async { [context] in
             window.makeFirstResponder(nil)
             if let sheet = request?.sheet { context.sheet = sheet }
+            if let app = request?.app { context.app = app }
         }
     }
 

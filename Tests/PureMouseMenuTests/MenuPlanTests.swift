@@ -312,4 +312,54 @@ struct MenuPlanTests {
         #expect(start.command == .start)
         #expect(MenuAction.setPaused(true).command == nil)
     }
+
+    // MARK: Settings for the app in use
+
+    private func settingsRows(front: FrontmostApp?, running: Bool = true) -> String {
+        var state = running ? Self.running() : MenuState()
+        state.frontmost = front
+        return lines(state).split(separator: "\n").drop { !$0.hasPrefix("Settings…") }.joined(separator: "\n")
+    }
+
+    @Test func theFrontmostAppGetsItsOwnRowBelowSettings() {
+        #expect(settingsRows(front: FrontmostApp(bundleID: "com.apple.Safari", name: "Safari")) == """
+            Settings… [⌘,, -> openSettings(nil)]
+            Settings for Safari… [-> openAppSettings("com.apple.Safari")]
+            Quit PureMouse [⌘q, -> quit]
+            Hide Menu Bar Icon [⌘q, alternate, -> hideMenuBarIcon]
+            """)
+        // PureMouse off or paused: the buttons are not remapped, but the settings are still editable.
+        #expect(settingsRows(front: FrontmostApp(bundleID: "com.apple.Safari", name: "Safari"), running: false)
+            .contains("Settings for Safari…"))
+    }
+
+    @Test func finderDockPureMouseAndAppsWithoutAnIdentifierGetNoRow() {
+        let none = settingsRows(front: nil)
+        #expect(none == Self.footer.split(separator: "\n").dropFirst().joined(separator: "\n"))
+        for id in ["com.apple.finder", "com.apple.Finder", "com.apple.dock", "io.github.mblauberg.puremouse",
+                   "io.github.mblauberg.puremouse.menu", "io.github.mblauberg.puremouse.settings",
+                   "io.github.mblauberg.PureMouse.Settings", nil, "", "  "] {
+            #expect(settingsRows(front: FrontmostApp(bundleID: id, name: "Whatever")) == none, "\(id ?? "nil")")
+        }
+        // A lookalike is an app like any other.
+        #expect(settingsRows(front: FrontmostApp(bundleID: "io.github.mblauberg.puremouse-tool", name: "Tool"))
+            .contains("Settings for Tool…"))
+    }
+
+    @Test func anAppWithoutANameIsNamedByItsIdentifier() {
+        #expect(FrontmostApp(bundleID: "a.b", name: nil).title == "a.b")
+        #expect(FrontmostApp(bundleID: "a.b", name: " ").title == "a.b")
+        #expect(FrontmostApp(bundleID: "a.b", name: "Ab").title == "Ab")
+    }
+
+    @Test func theRowSendsTheAppsIdentifierAsAnAppRequest() throws {
+        var state = Self.running()
+        state.frontmost = FrontmostApp(bundleID: "com.apple.Safari", name: "Safari")
+        let action = try #require(MenuPlan.rows(for: state, option: false).compactMap { row -> MenuAction? in
+            if case let .item(item) = row, item.title == "Settings for Safari…" { return item.action }
+            return nil
+        }.first)
+        guard case .openAppSettings(let id) = action else { Issue.record("not an app request"); return }
+        #expect(ShowRequest(app: id).app == "com.apple.Safari")
+    }
 }

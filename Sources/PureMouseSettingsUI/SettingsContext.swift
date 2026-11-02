@@ -9,6 +9,9 @@ final class SettingsContext {
     /// The sheet open over the pane, if any: a request can ask for one (`ShowRequest`), and the
     /// pane that owns it presents it.
     var sheet: SettingsSheet?
+    /// The app (by bundle identifier) whose sheet a request asks Apps to open: Apps takes it,
+    /// listing the app if need be, and clears it.
+    var app: String?
 
     var window: NSWindow? { tabs?.view.window }
 
