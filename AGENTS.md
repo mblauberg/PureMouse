@@ -224,6 +224,9 @@ one. This file covers how to work on it safely.
   whose height changes while shown calls `SettingsContext.refit()`: a nested
   `NSHostingController` updates its `preferredContentSize` without telling the tab controller, so
   `SettingsTabs.refit()` copies it across.
+- User-facing text (menu, Settings, alerts, notifications, accessibility labels, CLI output)
+  follows `docs/ui-language.md`: its casing rules and glossary. Change that page in the same PR as
+  the text it governs.
 - Settings shows no focus ring until the keyboard is used: windows, panes, the action picker and
   the shortcut sheet open with nothing focused (the picker's search takes the first keystroke).
   Check with keyboard navigation (`AppleKeyboardUIMode`) both on and off.
