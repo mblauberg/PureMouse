@@ -159,7 +159,7 @@ final class SettingsTabs: NSTabViewController {
 
     /// Fits the window to the current pane after its content changed height. The nested hosting
     /// controller's size follows its content, but it never tells its parent, so this passes it
-    /// up (the Apps pane calls it when it opens an app or goes back; the Mouse tab when its
+    /// up (the Apps pane calls it when its list grows or shrinks; the Mouse tab when its
     /// segment changes).
     func refit() {
         guard let pane = tabViewItems[selectedTabViewItemIndex].viewController,

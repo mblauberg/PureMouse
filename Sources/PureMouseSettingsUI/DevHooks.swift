@@ -7,7 +7,8 @@ import PureMouseAppSupport
 /// `scrolling`, `pointer`), and `PUREMOUSE_DEV_APPEARANCE=light|dark` overrides the system
 /// appearance. On Mouse › Buttons, `PUREMOUSE_DEV_PICKER=<button>` opens a button's action picker
 /// and `PUREMOUSE_DEV_SHORTCUT=<button>` its shortcut sheet. On the Apps pane,
-/// `PUREMOUSE_DEV_APP=<bundle id>` opens (or adds) that app's settings.
+/// `PUREMOUSE_DEV_APP=<bundle id>` opens (or adds) that app's sheet, and with it
+/// `PUREMOUSE_DEV_SHORTCUT=<button>` opens that button's shortcut editor popover.
 @MainActor
 public enum DevHooks {
     public static func run(show: (SettingsPane) -> Void) {

@@ -67,7 +67,7 @@ connects is retried once a minute until it does.</sub>
 - Wheel direction, ratchet or free spin, and SmartShift.
 
 **Per app**
-- Give an app its own buttons, thumb wheel and scrolling speed. Buttons follow the frontmost app;
+- Give an app its own buttons, thumb wheel and scrolling. Buttons follow the app you're using;
   scrolling and the thumb wheel follow the app under the pointer.
 - Suggestions for common apps: tab switching in browsers, volume in Zoom and Teams, zoom in Word,
   PowerPoint and Preview.

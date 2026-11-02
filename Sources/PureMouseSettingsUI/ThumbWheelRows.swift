@@ -10,66 +10,76 @@ struct ThumbWheelRows: View {
     let path: [String]
     /// The state the keys at `path` apply on top of: none globally, the global one in an app.
     var base: ThumbWheelState = .initial
-    /// In an app: the global choice's label, which "Same as Everywhere" keeps.
-    var inherited: String?
+    /// In an app: the choice everywhere, which "Same as Everywhere" keeps (`InheritedValue`).
+    var inherited: ThumbWheelChoice?
     /// Names the controls for VoiceOver where several panes' rows read alike ("in Safari").
     var spokenSuffix = ""
 
     @State private var presented: String?
     @State private var sheet: SheetRequest?
+    /// In an app: "More thumb wheel options", the reverse and turn rows.
+    @State private var showMore = false
 
     var body: some View {
         let config = model.config
         let choice = config.thumbWheelChoice(at: path)
         let state = config.thumbWheel(at: path, base: base)
+        let set: (ThumbWheelChoice) -> Void = { new in model.update { $0.chooseThumbWheel(new, at: path, base: base) } }
         LabeledContent {
-            Picker("Thumb wheel action\(spokenSuffix)",
-                   selection: Binding(get: { choice },
-                                      set: { new in model.update { $0.chooseThumbWheel(new, at: path, base: base) } })) {
-                if inherited != nil {
-                    Text(ThumbWheelChoice.inherit.label).tag(ThumbWheelChoice.inherit)
-                    Divider()
+            if let inherited {
+                InheritedPicker(title: "Thumb wheel action\(spokenSuffix)",
+                                value: InheritedValue(own: choice == .inherit ? nil : choice, inherited: inherited,
+                                                      source: "Everywhere"),
+                                options: ThumbWheelChoice.menu, label: \.label) { set($0 ?? .inherit) }
+            } else {
+                Picker("Thumb wheel action\(spokenSuffix)", selection: Binding(get: { choice }, set: { set($0) })) {
+                    ForEach(ThumbWheelChoice.menu) { Text($0.label).tag($0) }
                 }
-                ForEach(ThumbWheelChoice.menu) { Text($0.label).tag($0) }
+                .labelsHidden()
+                .fixedSize()
             }
-            .labelsHidden()
-            .fixedSize()
         } label: {
             RowLabel("Action", help: help(choice, reversed: state.reversed))
         }
         // Custom and the turn per action add rows.
         .onChange(of: choice) { settings?.refit() }
-        .sheet(item: $sheet) { request in
-            switch request.kind {
-            case .shortcut: ShortcutSheet(request: request) { apply(.keys($0), to: request.target) }
-            case .command: CommandSheet(request: request) { apply(.run($0), to: request.target) }
-            }
-        }
+        .actionEditorSheet($sheet) { action, target in apply(action, to: target) }
         if choice == .custom, let pair = state.pair {
             // Rows name the way the wheel turns; reversed, each shows the other key's action.
             direction("left", state.reversed ? pair.right : pair.left, reversed: state.reversed)
             direction("right", state.reversed ? pair.left : pair.right, reversed: state.reversed)
         }
-        if !state.scrolls {
-            reverse(state)
-        }
-        if !state.scrolls, choice != .inherit {
-            LabeledContent {
-                HStack(spacing: 8) {
-                    Text("\(state.step)")
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
-                        .accessibilityHidden(true)
-                    Stepper("Turn per action\(spokenSuffix)",
-                            value: Binding(get: { state.step },
-                                           set: { model.set($0, at: path + ["step"], debounce: true) }),
-                            in: 1...36)
-                        .labelsHidden()
-                        .accessibilityValue("\(state.step) steps")
-                }
-            } label: {
-                RowLabel("Turn per action", help: "In wheel steps; a full turn is about 18. Fewer acts sooner.")
+        if inherited == nil {
+            if !state.scrolls { reverse(state) }
+            if !state.scrolls, choice != .inherit { turn(state) }
+        } else if !state.scrolls {
+            // In an app (a sheet), the rest is a disclosure (docs/ui-design.md).
+            DisclosureLabel(title: "More thumb wheel options", isExpanded: $showMore)
+            if showMore {
+                reverse(state).disclosedRow()
+                if choice != .inherit { turn(state).disclosedRow() }
             }
+        }
+    }
+
+    /// How far to turn per action.
+    private func turn(_ state: ThumbWheelState) -> some View {
+        let path = path
+        return LabeledContent {
+            HStack(spacing: 8) {
+                Text("\(state.step)")
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+                Stepper("Turn per action\(spokenSuffix)",
+                        value: Binding(get: { state.step },
+                                       set: { model.set($0, at: path + ["step"], debounce: true) }),
+                        in: 1...36)
+                    .labelsHidden()
+                    .accessibilityValue("\(state.step) steps")
+            }
+        } label: {
+            RowLabel("Turn per action", help: "In wheel steps; a full turn is about 18. Fewer acts sooner.")
         }
     }
 
@@ -84,28 +94,23 @@ struct ThumbWheelRows: View {
             }
             .accessibilityLabel("Reverse thumb wheel actions")
         } else {
-            let own = model.config.thumbWheelReversed(at: path)
+            let value = InheritedValue(own: model.config.thumbWheelReversed(at: path), inherited: base.reversed,
+                                       source: "Everywhere")
             LabeledContent {
-                Picker("Reverse thumb wheel actions\(spokenSuffix)",
-                       selection: Binding(get: { own },
-                                          set: { new in model.update { $0.setThumbWheelReversed(new, at: path) } })) {
-                    Text("Same as Everywhere").tag(nil as Bool?)
-                    Divider()
-                    Text("Normal").tag(false as Bool?)
-                    Text("Reversed").tag(true as Bool?)
+                InheritedPicker(title: "Reverse thumb wheel actions\(spokenSuffix)", value: value, options: [false, true],
+                                label: { $0 ? "Reversed" : "Normal" }) { new in
+                    model.update { $0.setThumbWheelReversed(new, at: path) }
                 }
-                .labelsHidden()
-                .fixedSize()
             } label: {
-                RowLabel("Reverse direction",
-                         help: own == nil ? "Everywhere: \(base.reversed ? "Reversed" : "Normal")." : "Swaps the actions.")
+                RowLabel("Reverse direction", help: value.caption ?? "Swaps the actions.")
             }
         }
     }
 
     private func help(_ choice: ThumbWheelChoice, reversed: Bool) -> String {
         switch choice {
-        case .inherit: "Everywhere: \(inherited ?? ThumbWheelChoice.scroll.label)."
+        // An app leaving it to everywhere: the `InheritedValue` caption.
+        case .inherit: "Same as Everywhere"
         case .scroll: "Scrolls sideways, as without PureMouse."
         case .preset("zoom"): reversed ? "Turn left to zoom in, right to zoom out." : "Turn left to zoom out, right to zoom in."
         case .preset("volume"): reversed ? "Turn left for louder, right for quieter." : "Turn left for quieter, right for louder."
@@ -132,6 +137,7 @@ struct ThumbWheelRows: View {
                          accessibilityName: "Thumb wheel, \(title.lowercased())\(spokenSuffix)")
         }
         .disclosedRow()
+        .actionEditorPopover($sheet, for: target) { action, target in apply(action, to: target) }
     }
 
     private func choose(_ entry: PickerEntry, for target: BindingTarget, current: ButtonAction) {
