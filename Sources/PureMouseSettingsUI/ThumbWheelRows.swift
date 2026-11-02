@@ -1,24 +1,42 @@
 import PureMouseAppSupport
 import SwiftUI
 
-/// What turning the thumb wheel does: a pop-up of choices and, for Custom, an action per
-/// direction, plus whether the pair is reversed and the turn per action. Shared by the Scrolling pane (`["thumbWheel"]`) and an
-/// app in the Apps pane (`["apps", key, "thumbWheel"]`, with "Same as Everywhere").
+/// The thumb wheel's rows, shared by the Scrolling pane (`["thumbWheel"]`) and an app in the Apps
+/// pane (`["apps", key, "thumbWheel"]`, with "Same as Everywhere"). `.standard`: the Action
+/// pop-up and, for Custom, an action per direction. `.advanced` (an Advanced… sheet or an app's
+/// disclosure): the rows that apply to what the wheel does (`ThumbWheelAdvancedRow`), such as
+/// swapping the directions and the turn distance. `.all`: both in one list, as the Apps pane
+/// shows them until it has a place of its own for the advanced rows.
 struct ThumbWheelRows: View {
+    enum Rows { case standard, advanced, all }
+
     @Environment(AppModel.self) private var model
     @Environment(\.settings) private var settings
     let path: [String]
+    var rows = Rows.all
     /// The state the keys at `path` apply on top of: none globally, the global one in an app.
     var base: ThumbWheelState = .initial
     /// In an app: the global choice's label, which "Same as Everywhere" keeps.
     var inherited: String?
     /// Names the controls for VoiceOver where several panes' rows read alike ("in Safari").
     var spokenSuffix = ""
+    /// The mouse lacks a thumb wheel but a value is set: the Action row says so.
+    var availability = ControlAvailability.available
 
     @State private var presented: String?
     @State private var sheet: SheetRequest?
 
     var body: some View {
+        switch rows {
+        case .standard: standardRows
+        case .advanced: advancedRows
+        case .all:
+            standardRows
+            advancedRows
+        }
+    }
+
+    @ViewBuilder private var standardRows: some View {
         let config = model.config
         let choice = config.thumbWheelChoice(at: path)
         let state = config.thumbWheel(at: path, base: base)
@@ -35,9 +53,9 @@ struct ThumbWheelRows: View {
             .labelsHidden()
             .fixedSize()
         } label: {
-            RowLabel("Action", help: help(choice, reversed: state.reversed))
+            RowLabel("Action", help: help(choice, reversed: state.reversed), availability: availability)
         }
-        // Custom and the turn per action add rows.
+        // Custom adds rows.
         .onChange(of: choice) { settings?.refit() }
         .sheet(item: $sheet) { request in
             switch request.kind {
@@ -50,55 +68,91 @@ struct ThumbWheelRows: View {
             direction("left", state.reversed ? pair.right : pair.left, reversed: state.reversed)
             direction("right", state.reversed ? pair.left : pair.right, reversed: state.reversed)
         }
-        if !state.scrolls {
-            reverse(state)
-        }
-        if !state.scrolls, choice != .inherit {
-            LabeledContent {
-                HStack(spacing: 8) {
-                    Text("\(state.step)")
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
-                        .accessibilityHidden(true)
-                    Stepper("Turn per action\(spokenSuffix)",
-                            value: Binding(get: { state.step },
-                                           set: { model.set($0, at: path + ["step"], debounce: true) }),
-                            in: 1...36)
-                        .labelsHidden()
-                        .accessibilityValue("\(state.step) steps")
-                }
-            } label: {
-                RowLabel("Turn per action", help: "In wheel steps; a full turn is about 18. Fewer acts sooner.")
+    }
+
+    /// The rows that apply to what the wheel does at `path`.
+    static func advancedRows(_ config: ConfigTree, path: [String], base: ThumbWheelState) -> [ThumbWheelAdvancedRow] {
+        let inApp = path.first == "apps"
+        return ThumbWheelAdvancedRow.rows(scrolls: config.thumbWheel(at: path, base: base).scrolls,
+                                          someAppScrolls: config.someAppScrollsThumbWheel, inApp: inApp,
+                                          inherits: config.thumbWheelChoice(at: path) == .inherit)
+    }
+
+    @ViewBuilder private var advancedRows: some View {
+        let config = model.config
+        let state = config.thumbWheel(at: path, base: base)
+        ForEach(Self.advancedRows(config, path: path, base: base), id: \.self) { row in
+            switch row {
+            case .reverseScrolling: reverseScrolling(scrollsHere: state.scrolls)
+            case .swapDirections: swapDirections(state)
+            case .turnDistance: turnDistance(state)
+            case .speed:
+                ValueSlider(title: "Speed", spokenTitle: "Thumb wheel speed",
+                            value: model.number(["smoothScroll", "horizontalSpeed"], default: 1, step: 0.05),
+                            range: 0.25...3, low: "Slow", high: "Fast", format: Format.multiplier)
+                    // A scrolling speed: it applies while smooth scrolling is on.
+                    .disabled(!config.smoothScrollEnabled)
             }
         }
     }
 
-    /// Reverse direction: a switch globally; in an app a pop-up, since an app without the key
+    /// `inverted`, global only: reverses the wheel's scrolling, here or in the apps where it scrolls.
+    private func reverseScrolling(scrollsHere: Bool) -> some View {
+        let inverted = model.config.bool(path + ["inverted"])
+        return Toggle(isOn: model.toggle(path + ["inverted"], default: false)) {
+            RowLabel("Reverse direction",
+                     help: scrollsHere ? "Reverses this wheel." : "Reverses this wheel in apps where it scrolls.",
+                     mouseDefault: inverted == nil)
+        }
+        .accessibilityLabel("Reverse thumb wheel direction")
+    }
+
+    private func turnDistance(_ state: ThumbWheelState) -> some View {
+        LabeledContent {
+            HStack(spacing: 8) {
+                Text("\(state.step)")
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+                Stepper("Turn distance\(spokenSuffix)",
+                        value: Binding(get: { state.step },
+                                       set: { model.set($0, at: path + ["step"], debounce: true) }),
+                        in: 1...36)
+                    .labelsHidden()
+                    .accessibilityValue("\(state.step)")
+            }
+        } label: {
+            RowLabel("Turn distance", help: "How far to turn before the action repeats.")
+        }
+    }
+
+    /// Swap directions: a switch globally; in an app a pop-up, since an app without the key
     /// follows the global setting.
-    @ViewBuilder private func reverse(_ state: ThumbWheelState) -> some View {
+    @ViewBuilder private func swapDirections(_ state: ThumbWheelState) -> some View {
         let path = path
+        let caption = "Swaps what turning left and right does."
         if inherited == nil {
             Toggle(isOn: Binding(get: { state.reversed },
                                  set: { on in model.update { $0.setThumbWheelReversed(on, at: path) } })) {
-                RowLabel("Reverse direction", help: "Swaps the actions. Scrolling keeps its own direction.")
+                RowLabel("Swap directions", help: caption)
             }
-            .accessibilityLabel("Reverse thumb wheel actions")
+            .accessibilityLabel("Swap thumb wheel directions\(spokenSuffix)")
         } else {
             let own = model.config.thumbWheelReversed(at: path)
             LabeledContent {
-                Picker("Reverse thumb wheel actions\(spokenSuffix)",
+                Picker("Swap thumb wheel directions\(spokenSuffix)",
                        selection: Binding(get: { own },
                                           set: { new in model.update { $0.setThumbWheelReversed(new, at: path) } })) {
                     Text("Same as Everywhere").tag(nil as Bool?)
                     Divider()
                     Text("Normal").tag(false as Bool?)
-                    Text("Reversed").tag(true as Bool?)
+                    Text("Swapped").tag(true as Bool?)
                 }
                 .labelsHidden()
                 .fixedSize()
             } label: {
-                RowLabel("Reverse direction",
-                         help: own == nil ? "Everywhere: \(base.reversed ? "Reversed" : "Normal")." : "Swaps the actions.")
+                RowLabel("Swap directions",
+                         help: own == nil ? "Everywhere: \(base.reversed ? "Swapped" : "Normal")." : caption)
             }
         }
     }
@@ -106,7 +160,7 @@ struct ThumbWheelRows: View {
     private func help(_ choice: ThumbWheelChoice, reversed: Bool) -> String {
         switch choice {
         case .inherit: "Everywhere: \(inherited ?? ThumbWheelChoice.scroll.label)."
-        case .scroll: "Scrolls sideways, as without PureMouse."
+        case .scroll: "Scrolls sideways."
         case .preset("zoom"): reversed ? "Turn left to zoom in, right to zoom out." : "Turn left to zoom out, right to zoom in."
         case .preset("volume"): reversed ? "Turn left for louder, right for quieter." : "Turn left for quieter, right for louder."
         case .preset("tabs"):

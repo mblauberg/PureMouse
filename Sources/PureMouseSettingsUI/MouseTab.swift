@@ -129,11 +129,15 @@ struct MouseHeader: View {
         // In line with the grouped boxes below, whose form insets them by the same margin.
         .padding(.horizontal, 20)
         .padding(.top)
+        .onChange(of: model.captureOutcome) { _, outcome in
+            if let outcome { AccessibilityNotification.Announcement(outcome.message).post() }
+        }
     }
 
     private func choose(_ segment: MouseSegment) {
         // Find by Pressing belongs to Buttons, so leaving it ends one under way.
         if segment != .buttons, model.captureListening { model.cancelCapture() }
+        model.clearCaptureOutcome()
         selection.select(segment)
     }
 

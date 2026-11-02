@@ -6,10 +6,15 @@ import PureMouseAppSupport
 /// opens Settings on a tab (`general`, `mouse`, `apps`, `about`) or a Mouse segment (`buttons`,
 /// `scrolling`, `pointer`), and `PUREMOUSE_DEV_APPEARANCE=light|dark` overrides the system
 /// appearance. On Mouse › Buttons, `PUREMOUSE_DEV_PICKER=<button>` opens a button's action picker
-/// and `PUREMOUSE_DEV_SHORTCUT=<button>` its shortcut sheet. On the Apps pane,
+/// and `PUREMOUSE_DEV_SHORTCUT=<button>` its shortcut sheet. `PUREMOUSE_DEV_SHEET=<name>` opens a
+/// sheet on the pane shown (`DevSheet`). On the Apps pane,
 /// `PUREMOUSE_DEV_APP=<bundle id>` opens (or adds) that app's settings.
 @MainActor
 public enum DevHooks {
+    static var sheet: DevSheet? {
+        ProcessInfo.processInfo.environment["PUREMOUSE_DEV_SHEET"].flatMap(DevSheet.init(rawValue:))
+    }
+
     public static func run(show: (SettingsPane) -> Void) {
         let environment = ProcessInfo.processInfo.environment
         // The menu bar app's `DevHooks` reads the same variable the same way.
@@ -24,5 +29,12 @@ public enum DevHooks {
             NSApp.activate(ignoringOtherApps: true)
         }
     }
+}
+
+/// A sheet `PUREMOUSE_DEV_SHEET` opens: one case per sheet; a pane checks `DevHooks.sheet` as it
+/// appears.
+enum DevSheet: String {
+    /// The pane's Advanced… sheet (Mouse › Buttons, Mouse › Scrolling).
+    case advanced
 }
 #endif
