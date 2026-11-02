@@ -62,9 +62,8 @@ public enum Companion {
 
 /// What the daemon is doing, rewritten whenever any of it changes.
 public struct Status: Codable, Equatable, Sendable {
-    /// Bumped only when the additive rules (docs/companion.md, Versioning) cannot be kept; a
-    /// reader seeing a newer version shows "update PureMouse". Still 1: every field added since is
-    /// optional, so older menus and daemons keep working against newer ones.
+    /// Bumped when the status or control shape changes; a reader seeing a newer version shows
+    /// "update PureMouse".
     public static let currentSchema = 1
 
     public var schema = Status.currentSchema
@@ -84,12 +83,12 @@ public struct Status: Codable, Equatable, Sendable {
     /// The current or most recent select-by-pressing request.
     public var capture: Capture?
     /// True while the pointer is on another Mac (Universal Control) and the mice are handed back
-    /// to macOS for it. Absent from older daemons.
-    public var away: Bool?
+    /// to macOS for it.
+    public var away: Bool
 
     public init(pid: Int32, startedAt: Date, version: String, running: Bool, paused: Bool,
                 permissions: Permissions, logiOptionsRunning: Bool, config: ConfigState,
-                devices: [Device], capture: Capture?, away: Bool? = nil) {
+                devices: [Device], capture: Capture?, away: Bool = false) {
         self.pid = pid
         self.startedAt = startedAt
         self.version = version
@@ -146,11 +145,10 @@ public struct Status: Codable, Equatable, Sendable {
         /// The 0x0003 unit ID as 8 lowercase hex digits, when known: stable for one physical mouse,
         /// for state that belongs to a unit (low-battery alerts). Never written to the config.
         public var unit: String?
-        /// A word such as "mouse", "trackball" or "keyboard". A String, so a kind this version
-        /// does not know cannot make an older reader fail.
+        /// A word such as "mouse", "trackball" or "keyboard".
         public var kind: String?
         /// What the mouse reports it can do; nil when not published. A member that is nil is
-        /// unknown (not false): readers show the option.
+        /// unknown (not false).
         public var capabilities: Capabilities?
 
         public init(id: String, name: String, connection: Connection, online: Bool, battery: Battery?,
@@ -262,8 +260,7 @@ public struct Control: Codable, Equatable, Sendable {
     /// choosing the saved value leaves the file unchanged, so no reload would.
     public var useConfiguredDPI: Int?
     /// Aims `useConfiguredDPI` at the one mouse with this device key (`Status.Device.model`),
-    /// leaving the others as they are. Nil means every mouse. A daemon older than the field
-    /// ignores it and sets every mouse.
+    /// leaving the others as they are. Nil means every mouse.
     public var device: String?
 
     public init(paused: Bool = false, capture: Capture? = nil, useConfiguredDPI: Int? = nil,
@@ -276,8 +273,7 @@ public struct Control: Codable, Equatable, Sendable {
 
     public struct Capture: Codable, Equatable, Sendable {
         public var token: Int
-        /// Listens on the one mouse with this device key only; nil means every mouse. A daemon
-        /// older than the field ignores it and listens on every mouse.
+        /// Listens on the one mouse with this device key only; nil means every mouse.
         public var device: String?
         public init(token: Int, device: String? = nil) {
             self.token = token

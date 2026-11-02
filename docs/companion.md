@@ -76,28 +76,12 @@ Slider writes from the menu are debounced to about 300 ms.
 
 ## Versioning
 
-The menu and the daemon are released and updated independently, so any menu version must read any
-status the daemon writes, and the reverse for `control.json`. The menu decodes the whole `Status`
-or nothing, and its enums are strict: one unknown enum case or one missing required field makes an
-older menu show "PureMouse Is Off". So `schema` stays 1 and four rules apply:
+The menu and the daemon ship together in one bundle, so the status and control formats change with
+the bundle and nothing is kept for older versions. `schema` is bumped when they change; a menu that
+sees a higher `schema` shows "update PureMouse" (`AppModel.statusTooNew`). A capability member that
+is missing means unknown: a reader shows the option, and hiding needs an explicit `false`.
 
-1. New fields are optional and never become required. The writer omits an unknown value rather
-   than writing `null` or a guess, and the reader treats a missing one as unknown.
-2. Fields are never removed or retyped.
-3. No case is added to an existing enum (`Connection`, `WheelMode`, `Battery.Level`,
-   `Capture.State`). An enum-like new field is a String with documented values, so a value an older
-   reader does not know cannot fail it.
-4. `schema` is bumped only when rules 1 to 3 must be broken. A menu that sees a higher `schema`
-   shows "update PureMouse" (`AppModel.statusTooNew`) instead of guessing.
-
-`Status030.swift` in the tests is a frozen copy of the 0.3.0 `Status` and `Control`; tests check
-that it decodes everything the current types encode, and that a 0.3.0 `status.json` fixture
-(`CompanionTests`) decodes into the current types with every new field nil.
-
-`hasSmartShift` and `hasThumbWheel` are still written, for menus up to 0.3.x. A capability that is
-missing means unknown, and a reader shows the option (hiding needs an explicit `false`).
-
-### Fields added to Status
+### Device identity and capabilities (Status)
 
 All optional; nil members are left out of the JSON.
 
@@ -105,23 +89,18 @@ All optional; nil members are left out of the JSON.
 |---|---|---|
 | `devices[].model` | String | The device key used by `devices.<key>` in the config: `m` plus the 12 lowercase hex digits of the 0x0003 model ID when the mouse reports one, else `p` plus the 4-digit lowercase hex product ID (e.g. `pb02c`). Absent when neither is known. Two mice of one model share it |
 | `devices[].unit` | String | The 0x0003 unit ID as 8 lowercase hex digits, when known. Stable for one physical mouse, for per-unit state such as low-battery alerts. Never written to the config |
-| `devices[].kind` | String | A word such as `mouse`, `trackball` or `keyboard`. A String so a new kind cannot break an older reader |
+| `devices[].kind` | String | A word such as `mouse`, `trackball` or `keyboard`. |
 | `devices[].capabilities` | object | What the mouse reports. Members: `dpi`, `smartShift`, `smoothScroll`, `thumbWheel`, `haptics`, `battery` (each Bool: true has it, false reported not to; absent unknown, e.g. a lookup that failed transiently) and `features` ([String], HID++ feature IDs in hex, for support) |
 | `devices[].controls[].gestures` | Bool | The control can report raw XY movement. Absent when unknown |
 | `capture.model` | String | The device key (`devices[].model`) of the mouse whose control was pressed |
 
-### Fields added to Control
-
-Requests aimed at one mouse. A daemon older than these fields ignores them and acts on every
-mouse, so the menu treats the aim as a hint.
+### Requests aimed at one mouse (Control)
 
 | Field | Type | Meaning |
 |---|---|---|
 | `capture.device` | String | Listen on the mouse with this device key (`devices[].model`) only. Absent means every mouse |
 | `device` | String | Qualifies `useConfiguredDPI`: set only the mouse with this device key to the config's `dpi`. Absent means every mouse |
 
-Nothing in this section is filled or honoured by the daemon until its own change lands; until then
-the fields are absent from `status.json` and ignored in `control.json`.
 
 ## New config keys
 
@@ -192,7 +171,7 @@ Choices the contract left open, as the daemon implements them:
 - **Universal Control.** `away` is true while the pointer is on another Mac and
   `universalControl.handOff` is on: each session keeps its settings but leaves the wheels and
   controls native (`Session.setAway`). Going away cancels a listening capture. The menu shows "On
-  another Mac" in the device line. Older daemons omit the key.
+  another Mac" in the device line.
 - **Capture.** Only controls not already bound are diverted for it (bound ones already reach the
   daemon). A capture still listening when the config reloads or the daemon pauses reports
   `cancelled`. A mouse adopted during a capture joins it; one lost during it simply drops out.

@@ -65,9 +65,10 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   `docs/companion.md`). Data only: no HID, no event posting, no `Log` (the decoder collects
   problems such as `unknownButtons` and the daemon logs them). `ConfigCheck.validate` is the real
   decoder, so the menu never writes a file the daemon would reject. A config change must keep
-  `ConfigGoldenTests` identical, or regenerate it on purpose. The status line is additive only: new
-  fields optional, none removed or retyped, no case added to an existing enum, `schema` untouched
-  (`docs/companion.md`, Versioning); `Status030.swift` is the frozen 0.3.0 reader.
+  `ConfigGoldenTests` identical, or regenerate it on purpose. Before 1.0 nothing is kept
+  for backward compatibility: the menu and daemon ship together, and config, status and control
+  formats change freely (say so in the release notes). Add no frozen readers, fallbacks for older
+  versions, legacy shims or migrations.
 - All HID and HID++ work runs on the main actor. IOKit and CoreVideo callbacks hop to it
   (`MainActor.assumeIsolated` / `DispatchQueue.main`); keep it that way. The process serves the
   main queue with `runMainLoop()` (a `CFRunLoop` on the main thread), never `dispatchMain()`:
