@@ -154,18 +154,58 @@ under System Settings › Menu Bar, opening the app still reaches Settings.
 ## Footprint
 
 The daemon's budget is unchanged: zero CPU while idle, about 10 MB. The menu app must use zero CPU
-while idle, with no timers or polling. Its target is under 25 MB resident with Settings closed
-(a bare AppKit status item is about 12 MB, so idle is about 15 MB). The Settings window and its
-view tree are created when shown; once Settings has closed, the app starts over as a fresh copy
-(`Relaunch`), because AppKit and SwiftUI keep about 35 MB after the window is released. The agent's
-copy exits with 75 (EX_TEMPFAIL) and launchd restarts it (`KeepAlive` unless successful) within a
-second, in the same place in the menu bar; it waits until 11 s after its own start (launchd's
-respawn throttle), and while the menu is open or a lifecycle command runs. A copy the Finder
-started (the icon was hidden, then shown again in Settings) exits and has launchd start the agent,
-so the icon is supervised again. `exec` in place does not work: LaunchServices keeps the old
-image's registration for the pid and the new image never gets its status item. The menu itself is
-a plain `NSMenu` built on open (`menuNeedsUpdate`). Measure both apps with
-`footprint`/`vmmap --summary` before and after each change.
+while idle, with no timers or polling. Its footprint is `phys_footprint` from `footprint(1)`, and
+the figures below are medians of 5 runs of `scripts/measure-menu.sh` (`docs/development.md`,
+"Footprint rig") on a spare Mac, macOS 27.0.1, arm64, on 2026-11-02. They move with the OS, so
+read them as "about" and repeat the rig after each macOS release.
+
+| Menu app, release build | MB | Bare AppKit status item and menu, same Mac |
+|---|---|---|
+| fresh, 4 s after launch | 14.1 | 10.9 |
+| after 1 menu open | 19.9 | 15.2 |
+| after 3 menu opens | 20.1 | |
+| after 10 menu opens | 20.1 | 15.4 |
+| after 200 status doorbells, menu never opened | 13.8 | |
+| Settings open, in this process | 41.2 | |
+| Settings closed again, in this process | 37.8 | |
+
+What the numbers say:
+
+- **The first menu open costs about 6 MB, once.** Later opens add almost nothing (19.9 to 20.1 MB
+  over ten). A bare `NSStatusItem` with an `NSMenu` and nothing else grows by about 4 MB on its first
+  open (10.9 to 15.2 MB), so most of the cost is AppKit's, not the menu's; the rest is ours.
+- **Status updates do not grow it.** 200 doorbells with a changed `status.json` each leave the
+  fresh figure where it was (13.8 against 14.1 MB).
+- **The menu does not leak.** The earlier question was a repeating 272 KB block per open. It was not
+  reproduced: after 30 opens under `MallocStackLogging`, `heap` found no live block of that size
+  (the largest live block was 64 KB), so no owner could be named. Run on 2026-11-02, with
+  `scripts/measure-menu.sh --blocks`.
+- **Settings is where the rest goes.** Opening it adds about 27 MB, and closing it gives back only
+  about 3 MB, even after `malloc_zone_pressure_relief`: AppKit and SwiftUI keep the pages. Hence
+  `Relaunch`: once Settings has closed, the app starts over as a fresh copy (the "closed" row above
+  is the process without that restart; the rig does not restart it).
+- **Allocator.** The growth looks like freed small-malloc pages that stay resident and that
+  `malloc_zone_pressure_relief` does not return. Running the same rig with
+  `MallocSpaceEfficient=1` (a preference for reusing freed space over speed) gave: fresh 10.1,
+  after 1 open 14.3, after 3 opens 14.2, after 10 opens 14.2, 200 doorbells 10.1, Settings open
+  32.3 and closed 23.9 MB. That is 0.71 times the baseline at 3 opens, and fresh was lower, not
+  higher. This is a measurement only: whether to adopt it is a separate decision.
+- **The prefs-domain caveat.** For a while the rig's numbers were bimodal: some launches started
+  about 4 MB higher, even for the fresh and doorbell scenarios, and a fresh bundle id or
+  `defaults delete` of the rig's domain brought them back. The cause is a transient state of the
+  preferences domain that we could not reproduce on demand, so the rig clears its domain before
+  every launch. An installed app that carries that state may read several MB above these figures.
+
+The Settings window and its view tree are created when shown. Once Settings has closed, the app
+starts over as a fresh copy (`Relaunch`): the agent's copy exits with 75 (EX_TEMPFAIL) and launchd
+restarts it (`KeepAlive` unless successful) within a second, in the same place in the menu bar; it
+waits until 11 s after its own start (launchd's respawn throttle), and while the menu is open or a
+lifecycle command runs. A copy the Finder started (the icon was hidden, then shown again in
+Settings) exits and has launchd start the agent, so the icon is supervised again. `exec` in place
+does not work: LaunchServices keeps the old image's registration for the pid and the new image
+never gets its status item. The menu itself is a plain `NSMenu` built on open (`menuNeedsUpdate`).
+`scripts/measure-menu.budgets` holds the limits the rig checks; measure with the rig, or
+`footprint`/`vmmap --summary`, before and after each change.
 
 ## Daemon decisions
 
