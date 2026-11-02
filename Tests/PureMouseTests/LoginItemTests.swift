@@ -507,4 +507,10 @@ private final class Rig: @unchecked Sendable {
         #expect(CLIError.line("unknown or device-only action", "explode")
             == "puremouse: unknown or device-only action: explode")
     }
+
+    @Test func aMultiLineReasonStaysOneLine() {
+        let line = CLIError.line("can't start", "Bootstrap failed: 5: Input/output error\n  Try re-running as root.\r\n\n")
+        #expect(line == "puremouse: can't start: Bootstrap failed: 5: Input/output error; Try re-running as root.")
+        #expect(!line.contains("\n"))
+    }
 }
