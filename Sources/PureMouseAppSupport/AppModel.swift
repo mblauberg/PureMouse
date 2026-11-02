@@ -127,6 +127,11 @@ public final class AppModel {
 
     public func cancelCapture() { capture.cancel() }
 
+    /// How the last Find by Pressing ended, while it is worth saying.
+    public var captureOutcome: CaptureController.Outcome? { capture.outcome }
+
+    public func clearCaptureOutcome() { capture.clearOutcome() }
+
     // MARK: Config
 
     public var config: ConfigTree { store.config }
