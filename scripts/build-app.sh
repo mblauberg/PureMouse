@@ -1,6 +1,7 @@
 #!/bin/zsh
 # Builds and signs .build/app/PureMouse.app, with the menu bar app nested at
-# Contents/Library/LoginItems/PureMouse Menu.app. Used by install.sh and release.sh.
+# Contents/Library/LoginItems/PureMouse Menu.app and the Settings helper at
+# Contents/Helpers/PureMouse Settings.app. Used by install.sh and release.sh.
 #
 #   --universal      one stripped binary for Apple silicon and Intel (releases); otherwise this
 #                    Mac's only, unstripped
@@ -16,11 +17,12 @@ source "${0:A:h}/lib.zsh"
 cd $root
 
 app=.build/app/PureMouse.app
-products=(puremouse PureMouseMenu)
-# Neither executable loads plugins or looks up its own symbols (dlsym finds only the system
+# One SwiftPM product per component, named as its executable.
+products=(${components##*:})
+# No executable loads plugins or looks up its own symbols (dlsym finds only the system
 # frameworks'), so they export nothing; otherwise every `public` declaration is listed. Passed here,
 # not in Package.swift: there SwiftPM also applied it to debug links, and swift test then silently
-# dropped the tests of both executables.
+# dropped the tests of the executables.
 link=(-Xlinker -no_exported_symbols)
 universal=0 timestamp=()
 while (( $# )); do

@@ -111,9 +111,9 @@ spare Mac after each macOS release (and see `docs/companion.md`, "Footprint", fo
 
 ## Signing
 
-`scripts/sign-bundle.sh` signs every build, the menu app first and then PureMouse.app, each with
-its own identifier, without `--deep`, and always with the hardened runtime. The identity is the
-first of:
+`scripts/sign-bundle.sh` signs every build inside out, the nested apps (the menu bar app, then the
+Settings helper) first and PureMouse.app last, each with its own identifier, without `--deep`, and
+always with the hardened runtime. The identity is the first of:
 
 1. `PUREMOUSE_SIGN_IDENTITY`;
 2. a valid `Developer ID Application` identity in the keychain;

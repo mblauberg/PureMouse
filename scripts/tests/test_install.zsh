@@ -20,6 +20,8 @@ test_install_stops_the_agents_then_replaces_the_app() {
     expect "no staged or previous copy is left" test -z "$(print -l $tmp/Applications/.PureMouse.app.*(N))"
     local log=$(<$tmp/fakes/launchctl.log)
     [[ $log == *"bootout gui/$UID/$menu_label"*"bootout gui/$UID/$label"* ]] || { print -u2 -- $log; return 1; }
+    # Settings has no agent; it is quit (and saves its edits) before its bundle is replaced.
+    grep -qx "pkill -x -u $UID PureMouseSettings" $tmp/fakes/launchctl.log || { print -u2 -- $log; return 1; }
 }
 
 test_install_keeps_the_installed_app_when_the_staged_one_does_not_verify() {

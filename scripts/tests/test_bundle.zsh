@@ -22,7 +22,7 @@ test_stand_in_bundle_signs_with_runtime_and_verifies() {
     local app=$(stand_in_app $tmp 1.2.3)
     scripts/sign-bundle.sh $app --identity - 2>/dev/null
     local bundle details
-    for bundle in $app "$(menu_of $app)"; do
+    for bundle in $app "$(menu_of $app)" "$(settings_of $app)"; do
         details=$(codesign -dv $bundle 2>&1)
         expect "$bundle flags (adhoc,runtime)" eval '[[ $details == *"flags=0x10002(adhoc,runtime)"* ]]'
     done
@@ -31,7 +31,7 @@ test_stand_in_bundle_signs_with_runtime_and_verifies() {
     for component in $components; do
         signed+=$(codesign -dv "$(component_path $app $component)" 2>&1 | sed -n 's/^Identifier=//p')
     done
-    [[ ${(j: :)signed} == "$menu_label $label" ]] || { print -u2 -- "signed as: $signed"; return 1; }
+    [[ ${(j: :)signed} == "$menu_label $settings_label $label" ]] || { print -u2 -- "signed as: $signed"; return 1; }
 }
 
 test_verify_names_a_component_with_the_wrong_identifier() {
@@ -66,11 +66,28 @@ test_menu_info_plist_sets_the_allocator_variable_for_finder_launches() {
     ! /usr/libexec/PlistBuddy -c "Print :LSEnvironment" $app/Contents/Info.plist >/dev/null 2>&1
 }
 
+test_settings_plist_is_a_regular_app_with_its_own_identifier() {
+    local app=$(stand_in_app $tmp 1.2.3)
+    local menu="$(menu_of $app)/Contents/Info.plist" settings="$(settings_of $app)/Contents/Info.plist"
+    plutil -lint -s "$settings"
+    local differing=$(diff "$menu" "$settings" | sed -n 's/^[<>] *<key>\([^<]*\)<.*/\1/p' | sort -u)
+    local expected=$'CFBundleDisplayName\nCFBundleExecutable\nCFBundleIdentifier\nLSEnvironment\nLSUIElement'
+    [[ $differing == $expected ]] || { print -u2 -- "differing keys: ${(f)differing}"; return 1; }
+    [[ $(plist_value "$settings" CFBundleIdentifier) == io.github.mblauberg.puremouse.settings ]]
+    [[ $(plist_value "$settings" LSUIElement) == false ]]
+    [[ $(plist_value "$settings" CFBundleDisplayName) == "PureMouse Settings" ]]
+    [[ $(settings_of $app) == "$app/Contents/Helpers/PureMouse Settings.app" ]]
+    [[ -x "$(settings_of $app)/Contents/MacOS/$(plist_value "$settings" CFBundleExecutable)" ]]
+    # The About pane draws these; the menu bar app shows no About pane.
+    [[ -f "$(settings_of $app)/Contents/Resources/AppIcon-dark.png" ]]
+    [[ ! -e "$(menu_of $app)/Contents/Resources/AppIcon-dark.png" ]]
+}
+
 test_pinned_version_reaches_both_plists() {
     local version=$(PUREMOUSE_VERSION=v1.2.3 resolve_version)
     [[ $version == 1.2.3 ]] || { print -u2 -- "resolved $version"; return 1; }
     local app=$(stand_in_app $tmp $version)
-    for plist in $app/Contents/Info.plist "$(menu_of $app)/Contents/Info.plist"; do
+    for plist in $app/Contents/Info.plist "$(menu_of $app)/Contents/Info.plist" "$(settings_of $app)/Contents/Info.plist"; do
         expect "1.2.3 in $plist" \
             eval '[[ $(plist_value "$plist" CFBundleShortVersionString) == 1.2.3 ]]'
     done
@@ -150,9 +167,9 @@ test_verify_names_a_plist_that_does_not_parse() {
 test_verify_names_a_bundle_changed_after_signing() {
     local app=$(stand_in_app $tmp 1.2.3) output
     scripts/sign-bundle.sh $app --identity - 2>/dev/null
-    print extra >> "$(menu_of $app)/Contents/Resources/AppIcon.png"
+    print extra >> "$(settings_of $app)/Contents/Resources/AppIcon.png"
     if output=$(scripts/verify-bundle.sh $app 2>&1); then return 1; fi
-    [[ $output == *"PureMouse Menu.app: signature does not verify"* ]]
+    [[ $output == *"PureMouse Settings.app: signature does not verify"* ]]
 }
 
 test_release_signature_needs_a_developer_id_authority() {

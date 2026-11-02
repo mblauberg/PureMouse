@@ -10,7 +10,8 @@ staged=$install_dir/.PureMouse.app.new
 previous=$install_dir/.PureMouse.app.old
 scripts/build-app.sh "$@"
 
-# Stop the menu bar app and the agent before touching their files; register starts them again.
+# Stop the menu bar app, Settings (which saves its edits as it quits) and the agent before touching
+# their files; register starts the menu bar app and the agent again.
 stop_agents "it was not replaced"
 
 # Copy the new app alongside the old one and check it before swapping, so a failed copy or a
