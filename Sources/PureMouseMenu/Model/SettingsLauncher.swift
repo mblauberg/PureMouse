@@ -19,8 +19,8 @@ extension NSRunningApplication: RunningHelper {
 /// The alerts for a Settings helper that cannot be opened: what failed and what to do, with no path
 /// or system text (`docs/ui-language.md`). The detail goes to the log.
 enum SettingsAlert {
-    static let missing = (title: "PureMouse Settings is missing", body: "Reinstall PureMouse to get it back.")
-    static let couldNotOpen = (title: "PureMouse Settings could not open",
+    static let missing = (title: "PureMouse Settings is missing.", body: "Reinstall PureMouse to get it back.")
+    static let couldNotOpen = (title: "PureMouse Settings couldn't open.",
                                body: "Try again. If it keeps happening, restart your Mac.")
 }
 
