@@ -1,18 +1,6 @@
 import AppKit
 import PureMouseAppSupport
 
-extension Lifecycle {
-    /// Runs the command and shows an alert if it fails.
-    static func perform(_ command: Command, then success: @escaping @MainActor () -> Void = {}) {
-        run(command) { result in
-            switch result {
-            case .success: success()
-            case .failure(let error): Alerts.show("PureMouse could not do that", error.description)
-            }
-        }
-    }
-}
-
 @MainActor
 enum Alerts {
     static func show(_ message: String, _ info: String) {

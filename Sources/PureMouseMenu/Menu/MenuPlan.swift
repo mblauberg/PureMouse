@@ -53,12 +53,6 @@ enum Standby {
     }
 }
 
-/// The System Settings privacy pane an attention row opens.
-enum PrivacyPane: String {
-    case accessibility = "Privacy_Accessibility"
-    case inputMonitoring = "Privacy_ListenEvent"
-}
-
 /// What choosing a row does; `StatusMenu` maps each to the model or `AppController`.
 enum MenuAction {
     case openSettings(SettingsPane?)

@@ -108,12 +108,12 @@ struct GeneralPane: View {
 
     private func setStartsAtLogin(_ on: Bool) {
         if on {
-            Lifecycle.perform(.register) { refreshStartsAtLogin() }
+            model.perform(.register) { refreshStartsAtLogin() }
         } else if Alerts.confirm("Stop PureMouse?",
                                  "The mouse returns to normal, the menu bar icon goes, and PureMouse no longer starts at login. Open PureMouse from Applications to start it again.",
                                  action: "Stop PureMouse") {
             model.flush()
-            Lifecycle.perform(.unregister) { refreshStartsAtLogin() }
+            model.perform(.unregister) { refreshStartsAtLogin() }
         }
     }
 

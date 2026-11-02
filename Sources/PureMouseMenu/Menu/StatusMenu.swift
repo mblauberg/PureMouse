@@ -83,7 +83,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         case .openPrivacy(let pane): app.openPrivacy(pane)
         case .toggleSmoothScrolling: model.update { $0.smoothScrollEnabled.toggle() }
         case .setDPI(let dpi): model.setDPI(dpi)
-        case .start: Lifecycle.perform(.register)
+        case .start: model.perform(.register)
         case .setPaused(let paused): model.setPaused(paused)
         case .reloadConfig: model.reloadDaemonConfig()
         case .showLog: NSWorkspace.shared.activateFileViewerSelecting([model.locations.log])

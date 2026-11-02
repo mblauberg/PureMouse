@@ -8,7 +8,7 @@ import notify
 final class AppController: NSObject, NSApplicationDelegate {
     static var shared: AppController? { NSApp.delegate as? AppController }
 
-    let model = AppModel()
+    let model = AppModel(alert: Alerts.show, announce: Notifier.post)
     private var statusMenu: StatusMenu?
     private var settings: SettingsWindowController?
     private var showToken: Int32 = -1
@@ -28,7 +28,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         if Locations.live.showsInMenuBar { statusMenu = StatusMenu(model: model, app: self) }
         // A request posted while this instance was still starting (opening the app from the
         // Finder restarts the menu agent, then opens it) counts too. Consumed either way.
-        let requested = ShowRequest.consume()
+        let requested = ShowRequest.consume() != nil
         if !Locations.launchedByLaunchd || statusMenu == nil || requested { showSettings() }
         #if DEBUG || DEVHOOKS
         DevHooks.run(app: self)
@@ -121,7 +121,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     /// Hide Menu Bar Icon: removes the menu app's login agent; the daemon keeps running.
     func hideMenuBarIcon() {
         model.flush()
-        Lifecycle.perform(.menuOff) { [self] in
+        model.perform(.menuOff) { [self] in
             setShowsInMenuBar(false)
         }
     }
@@ -157,46 +157,17 @@ final class AppController: NSObject, NSApplicationDelegate {
             pendingMenuOff = false
             setShowsInMenuBar(true)
         } else if !Locations.live.showsInMenuBar {
-            Lifecycle.perform(.menuOn) { [self] in setShowsInMenuBar(true) }
+            model.perform(.menuOn) { [self] in setShowsInMenuBar(true) }
         } else {
             setShowsInMenuBar(true)
         }
     }
 
     func openPrivacy(_ pane: PrivacyPane) {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane.rawValue)") {
-            NSWorkspace.shared.open(url)
-        }
+        NSWorkspace.shared.open(pane.url)
     }
 
     func openReleases() {
         NSWorkspace.shared.open(Links.releases)
     }
-}
-
-/// "Show Settings", from a second launch to the running instance: a notification, plus a file
-/// stamped with its time, so an instance still starting up (and not yet listening) sees it too.
-enum ShowRequest {
-    private static var file: URL { Companion.showSettingsURL }
-
-    static func post() {
-        try? FileManager.default.createDirectory(at: Companion.directory, withIntermediateDirectories: true)
-        try? Data().write(to: file)
-        notify_post(Companion.showSettingsNotification)
-    }
-
-    /// Whether one was posted in the last few seconds; removes it either way.
-    static func consume() -> Bool {
-        guard let date = (try? FileManager.default.attributesOfItem(atPath: file.path))?[.modificationDate] as? Date
-        else { return false }
-        try? FileManager.default.removeItem(at: file)
-        return -date.timeIntervalSinceNow < 5
-    }
-}
-
-enum Links {
-    static let repository = URL(string: "https://github.com/mblauberg/PureMouse")!
-    static let releases = URL(string: "https://github.com/mblauberg/PureMouse/releases")!
-    static let licence = URL(string: "https://github.com/mblauberg/PureMouse/blob/main/LICENSE")!
-    static let logiOptions = URL(string: "https://github.com/mblauberg/PureMouse/blob/main/docs/troubleshooting.md#logi-options")!
 }

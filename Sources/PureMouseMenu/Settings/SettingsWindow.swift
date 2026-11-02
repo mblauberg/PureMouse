@@ -2,33 +2,6 @@ import AppKit
 import PureMouseAppSupport
 import SwiftUI
 
-enum SettingsPane: String, CaseIterable {
-    case general, buttons, scrolling, pointer, apps, about
-
-    var title: String {
-        switch self {
-        case .general: "General"
-        case .buttons: "Buttons"
-        case .scrolling: "Scrolling"
-        case .pointer: "Pointer"
-        case .apps: "Apps"
-        case .about: "About"
-        }
-    }
-
-    /// SF Symbols available on macOS 14.
-    var symbol: String {
-        switch self {
-        case .general: "gearshape"
-        case .buttons: "computermouse"
-        case .scrolling: "arrow.up.and.down"
-        case .pointer: "cursorarrow"
-        case .apps: "square.grid.2x2"
-        case .about: "info.circle"
-        }
-    }
-}
-
 /// The Settings window: native toolbar tabs (`NSTabViewController`, `.toolbar` style) over
 /// SwiftUI grouped forms. Created when first shown and released when closed.
 @MainActor
@@ -65,7 +38,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         super.init(window: window)
         window.delegate = self
         tabs.didSelect = { pane in UserDefaults.standard.set(pane.rawValue, forKey: Self.paneKey) }
-        let saved = UserDefaults.standard.string(forKey: Self.paneKey).flatMap(SettingsPane.init) ?? .buttons
+        let saved = SettingsPane.remembered(UserDefaults.standard.string(forKey: Self.paneKey))
         // Titled before the first pane loads, so "Untitled" never shows.
         window.title = saved.title
         select(saved)
