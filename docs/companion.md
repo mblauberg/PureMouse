@@ -127,6 +127,10 @@ All optional; nil members are left out of the JSON.
 | `capture.device` | String | Listen on the mouse with this device key (`devices[].model`) only. Absent means every mouse |
 | `device` | String | Qualifies `useConfiguredDPI`: set only the mouse with this device key to the config's `dpi`. Absent means every mouse |
 
+Settings sets `capture.device` and `device` to the mouse chosen on Mouse (none for All Mice). The
+status menu sets neither and writes the top-level `dpi`. A press reports the mouse's key in
+`capture.model`, and Settings switches Mouse to that mouse's scope when it is one the pop-up lists.
+
 
 ## New config keys
 

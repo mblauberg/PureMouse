@@ -84,6 +84,9 @@ One term per concept. "Retire" lists words that must not appear in UI text for t
 | The last good config | Use Last Working Config… | Restore Last Working |
 | App scope | Same as Everywhere (entry), everywhere (prose) | global |
 | A value left to a wider scope (an app to everywhere, a mouse to all mice) | the value in effect, dimmed, with the caption "Same as Everywhere" ("Same as All Mice"); the picker's entry "Same as Everywhere (Mission Control)" removes the own value | "Everywhere: …" caption, "Same as Everywhere" as the shown value |
+| The mouse pop-up and its entries | Mouse (its label); All Mice, then each mouse's name; "Unknown mouse <key>" for an entry no mouse has | Device, Profile, Default mouse |
+| Giving a mouse's value back | Use All Mice Setting (the row's button, tooltip and label); the row then reads "Same as All Mice" | Reset to default, Inherit |
+| The pop-up's Apps note | Apps are the same for every mouse. | Apps are global |
 | An app's own speed and glide | Custom scrolling (switch and row summary) | Own scrolling speed, Scrolling speed (summary) |
 | An app with nothing set yet | No custom settings (row summary) | "No settings yet, so not saved" |
 | One app's settings from the status menu | "Settings for <app name>…" (opens its sheet in Apps) | App Settings…, Configure <app>… |

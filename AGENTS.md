@@ -37,7 +37,8 @@ one. This file covers how to work on it safely.
   Debug builds of the helper take `PUREMOUSE_DEV_PANE=<pane>` (a tab, `general`, `mouse`, `apps`,
   `about`, or a Mouse segment, `buttons`, `scrolling`, `pointer`), `PUREMOUSE_DEV_APPEARANCE`,
   `PUREMOUSE_DEV_PICKER=<button>`, `PUREMOUSE_DEV_SHORTCUT=<button>` (Mouse › Buttons, or with
-  `PUREMOUSE_DEV_APP` the app sheet's editor popover), `PUREMOUSE_DEV_APP=<bundle id>` (Apps
+  `PUREMOUSE_DEV_APP` the app sheet's editor popover), `PUREMOUSE_DEV_MOUSE=<device key>|all` (chooses that mouse on Mouse, or All Mice;
+  `PUREMOUSE_DEV_OTHERS=1` opens Buttons' Other controls) and `PUREMOUSE_DEV_APP=<bundle id>` (Apps
   tab; adds the app without writing and opens its sheet) and `PUREMOUSE_DEV_SHEET=<name>` (a
   sheet: `presets` on Mouse › Pointer, or `advanced` on the pane shown, `DevSheet`) for screenshots
   (`Sources/PureMouseSettingsUI/DevHooks.swift`), and `PUREMOUSE_DEV_CAPTURE=<file.png>` saves its
@@ -265,9 +266,21 @@ one. This file covers how to work on it safely.
   `preferredContentSize` without telling the tab controller, so `SettingsTabs.refit()` copies it
   across (through `MouseTab.fit()`, which adds the strip). Advanced settings sit behind a pane's
   footer (`PaneFooter`: Restore Defaults, Advanced…) in an `AdvancedSheet`, which never opens
-  another sheet. A control the mouse lacks is hidden per control from the primary mouse's
-  reported capabilities (`ControlAvailability`; unknown or no mouse shows it, a value already set
-  keeps it with a caption), and Scrolling's rows from `ScrollingLayout`.
+  another sheet. A control the mouse lacks is hidden per control from the mice's
+  reported capabilities (`ControlAvailability`, over `MouseScope.deciding`: the chosen mouse, or for
+  All Mice every known mouse once all are connected; unknown or no mouse shows it, a value already
+  set keeps it with a caption), and Scrolling's rows from `ScrollingLayout`.
+- The Mouse tab's pop-up (`MousePopUp`, `AppModel.knownMice`, `MouseScope`) chooses the scope the
+  panes edit (`AppModel.scope`, `scopeTarget`, remembered per user in defaults; All Mice is the
+  default and the only scope without the pop-up). Panes read `resolved` and write through
+  `model.update(in: model.scopeTarget)`; a control with no value of its own is an `InheritedValue`
+  with source "All Mice" (`InheritedRow`, `InheritedChoiceRow`, `InheritedReset`; never a second
+  presentation), and `ScopeEditing.swift` holds the per-section helpers (`removeOverrides`,
+  `restore…Defaults(in:)`, smooth scrolling, feel, presets). Reset All and the status menu stay
+  global (`setDPI` without a target writes the top level); Settings' Pointer pane passes the mouse,
+  and Find by Pressing and "use configured DPI" carry its key (`Control.device`,
+  `Control.capture.device`), a press selecting that mouse's scope. Do not read `primaryDevice` in a
+  pane: `devices(in:)`, `liveDevice(in:)` and `primaryDevice(in:)` take the scope.
 - Settings notices (config error, unsaved change, status too new, PureMouse off, paused, Logi
   Options+, Accessibility on the panes that need it) come from `BannerPlan.items`, in that order.
   A pane shows only the first as its banner, with "N more notices" opening General, whose Status

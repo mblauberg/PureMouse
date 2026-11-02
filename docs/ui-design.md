@@ -32,6 +32,14 @@ answering a question people have, and a good default means most people never tou
   tab. The window title is the tab's name. Minimise and zoom are dimmed; the window has no resize
   handle and sizes to the pane, never taller than the screen.
 - It reopens on the last tab and segment (`SettingsSelection`) and remembers its position.
+- Mouse's header strip has a leading slot for the mouse pop-up (`MousePopUp`: All Mice, then each
+  known mouse), shown with two or more mice known or any `devices` entry. Its closed text is the
+  mouse's name, cut at 18 characters. The Apps note ("Apps are the same for every mouse.") is the
+  pop-up's last menu item, a tooltip and its accessibility hint rather than a line under it: a line
+  costs 15 pt in a strip every segment shares, and Scrolling has 6 pt to spare. A pane under a
+  chosen mouse shows an inherited row as `InheritedValue` does for an app: the value in effect,
+  dimmed, captioned "Same as All Mice", with "Use All Mice Setting" at the row's trailing edge when
+  it has its own.
 - ⌘W closes it, and closing it quits the helper. Esc dismisses a sheet; Return takes the sheet's
   default button.
 - Nothing is placed behind the toolbar or the tab bar: no backgrounds, materials or
@@ -100,8 +108,9 @@ Each level has one mechanism, and each label says what it reveals.
   elsewhere (keyboard shortcut, shell command) opens as a popover anchored to its row.
 - Every advanced control has a safe default that the pane's Restore Defaults covers.
 - **Hide or dim.** Dim a row when a switch above turns its feature off. Hide rows that do not apply
-  to the current mode or mouse. A control is hidden for the mouse only when the primary mouse,
-  online with PureMouse running, reports every capability it needs as false; unknown counts as
+  to the current mode or mouse. A control is hidden for the mouse only when the mice it describes (the chosen mouse; for All Mice
+  every known mouse, once all are connected), online with PureMouse running, report every capability
+  it needs as false (`MouseScope.deciding`); unknown counts as
   available, and with no mouse known every control shows. A control the config already sets stays,
   captioned "Not supported by this mouse." (`ControlAvailability`: Scrolling's rows from
   `ScrollingLayout`, Pointer's from `PointerLayout`, an app's thumb wheel and the picker's
@@ -167,7 +176,8 @@ Each level has one mechanism, and each label says what it reveals.
   reachable by Tab and by Full Keyboard Access, has a distinct accessibility label, and is at
   least 20 × 20 pt. Tooltips are under 75 characters and never repeat the control's name.
 - **Fit.** Each default view fits within 600 pt of content height at the 600 pt window width,
-  with one-mouse and two-mouse fixtures. A fresh install shows no advanced content.
+  with one-mouse and two-mouse fixtures (and with a mouse chosen). A fresh install shows no advanced
+  content.
 - **Test matrix** for a UI change: light and dark; Increase Contrast; Reduce Transparency; the
   Liquid Glass slider at both ends (clear and tinted); Reduce Motion; Show Borders; Full Keyboard
   Access; VoiceOver on every symbol-only control. Fix legibility with system settings, never by

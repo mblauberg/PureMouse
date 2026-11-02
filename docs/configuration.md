@@ -205,6 +205,37 @@ with only a `name` is not kept (keys Settings does not know are kept, and keep t
 written: a section the decoder would skip is refused, though inside a section a key is written
 as given. A JSON `null` in an entry or at the top level reads as absent, as the decoder reads it.
 
+### Settings and per-mouse values
+
+Mouse shows a pop-up, All Mice then each known mouse, when two or more mice are known or the config
+has any `devices` entry (so a lone mouse that has an entry gets it too: the entry's values would
+otherwise shadow edits made for All Mice with nothing to show it). Known mice are the daemon's
+devices that have a key, one per key, then each `devices` entry no connected mouse has, named from
+its `name`, else "Unknown mouse <key>". The last choice is remembered for the user, and All Mice is
+the default; a remembered mouse that is no longer listed is All Mice.
+
+Each Mouse pane reads the value in effect (`resolved`) and writes in the chosen scope. A control the
+mouse has no value for shows what All Mice sets, dimmed, with the caption "Same as All Mice"
+(`InheritedValue`, the same presentation an app uses for "Same as Everywhere"); one it sets shows its
+own value, and "Use All Mice Setting" removes it. A section's Restore Defaults removes that mouse's
+keys for the section, never its `name`. The Presets row of a mouse that uses All Mice's presets reads
+"Same as All Mice" in place of the list, and a mouse's own empty `dpiPresets: []` is kept, as it means
+no presets for that mouse. The mouse's Smooth scrolling "Same as All Mice" removes the mouse's
+`enabled`, and with no top-level `smoothScroll` its whole `smoothScroll` (an empty one means on); the
+generic edit leaves an emptied one in place. A mouse's rows are hidden by what it reports: a capability
+reported `false` hides its rows, an omitted one is unknown and shows them, and a value the mouse (or
+the top level) already sets keeps its row with "Not supported by this mouse.". For All Mice a section shows if
+any known mouse has the feature; while a mouse is not connected, or a `devices` entry names a mouse the
+daemon does not report, nothing is hidden, since that mouse may have it. With several spellings of one
+key (`MB…` and `mb…`) the last in sorted order is the entry, and giving back its last override leaves
+a name-only entry in its place, so the other spelling does not apply in its stead (Kit replaces an
+earlier entry whole). Reset All Settings, in General, resets every mouse and every app, not only the
+chosen mouse. Apps are the same for every mouse, so the Apps tab has no pop-up.
+
+A mouse that reports no 0x0003 identity is keyed by its product ID, which can differ between
+receivers and Bluetooth (`pb02c` over Bluetooth, an `m…` key over Bolt when the model ID is read).
+Settings treats them as two mice and does not alias them; copy the entry to share settings.
+
 A key that is neither form (a typo, or a mouse's name) matches no mouse: the log warns and the entry
 is skipped, though a bad value in it still fails the load. Keys that differ only in case warn, and
 the last one applies. A cycled DPI (`cycleDPI`) is kept on reload unless that mouse's own `dpi` or

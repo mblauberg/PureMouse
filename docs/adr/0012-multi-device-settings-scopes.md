@@ -2,9 +2,11 @@
 
 ## Status
 
-Accepted. The `ConfigTree` half is built (`ConfigScope`, `resolved`, `isOverridden`, `set(_:at:in:)`,
-`deviceEntries`, and a parity test against `Config.forDevice`); the device menu and the per-row
-inheritance in the panes are not.
+Accepted and built. The `ConfigTree` half (`ConfigScope`, `resolved`, `isOverridden`,
+`set(_:at:in:)`, `deviceEntries`, and a parity test against `Config.forDevice`) came first; the
+pop-up (`MousePopUp`, `MouseScope`) and the per-row inheritance in the Buttons, Scrolling and
+Pointer panes (`InheritedValue`, as for apps) followed (#54). The Apps note sits in the pop-up's
+menu rather than under it, for the height budget.
 
 ## Context
 
@@ -29,3 +31,5 @@ known mouse), shown when two or more mice are known or a `devices` entry exists.
 
 - Single-mouse users see no change and no new keys.
 - Buttons, Scrolling and Pointer rows gain per-row inheritance logic.
+- A mouse keyed by product ID alone can get another key over Bolt than over Bluetooth once 0x0003
+  answers: documented, not aliased.
