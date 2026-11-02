@@ -35,6 +35,7 @@ struct SessionNotchedWheelTests {
         #expect(recorder.dy == ScrollRecorder.upwardNotch && recorder.dx == 0)
         #expect(recorder.posts.count > 1)
         #expect(Double(frames) / 60 <= 0.12 * 2)  // spread over about the smoothing time, not longer
+        #expect(Double(frames) / 60 >= 0.12 / 2)  // and not collapsed into the first frames
         #expect(!recorder.frames.running)  // idle again: the clock runs only while gliding
     }
 
@@ -47,6 +48,25 @@ struct SessionNotchedWheelTests {
         h.fake.emit(0x2130, params: [0xFF])  // one notch down
         #expect(recorder.posts.count == 1 && recorder.dy == -ScrollRecorder.upwardNotch)
         #expect(!recorder.frames.running)
+    }
+
+    @Test func naturalScrollingFlipsTheDirectionAndItsAbsenceDoesNot() async throws {
+        let natural = ScrollRecorder()
+        let h = try await SessionHarness(.m750, config: SessionHarness.config(#"{"smoothScroll": {"smoothingMs": 0}}"#),
+                                         environment: natural.environment)
+        defer { h.close() }
+        try await h.session.apply()
+        h.fake.emit(0x2130, params: [0x01])
+        #expect(natural.dy == -Int(ScrollEngine.pixelsPerNotch))  // synthetic events skip the system's flip
+
+        let plain = ScrollRecorder()
+        plain.naturalScrolling = false
+        let g = try await SessionHarness(.m750, config: SessionHarness.config(#"{"smoothScroll": {"smoothingMs": 0}}"#),
+                                         environment: plain.environment)
+        defer { g.close() }
+        try await g.session.apply()
+        g.fake.emit(0x2130, params: [0x01])
+        #expect(plain.dy == Int(ScrollEngine.pixelsPerNotch))
     }
 
     @Test func severalNotchesInOneReportScrollThatManyNotches() async throws {
@@ -140,14 +160,18 @@ struct SessionNotchedWheelTests {
                                          environment: recorder.environment)
         defer { h.close() }
         try await h.session.apply()
+        h.fake.emit(0x2130, params: [0x01])  // control: at home, a notch scrolls
+        #expect(recorder.posts.count == 1)
         h.session.setAway(true)
         await h.session.diversion.drain()
         #expect(!h.fake.lowResWheelDiverted)
         h.fake.emit(0x2130, params: [0x01])
-        #expect(recorder.posts.isEmpty)
+        #expect(recorder.posts.count == 1)  // the late notch posted nothing
         h.session.setAway(false)
         await h.session.diversion.drain()
         #expect(h.fake.lowResWheelDiverted)
+        h.fake.emit(0x2130, params: [0x01])
+        #expect(recorder.posts.count == 2)  // and back at home it scrolls again
     }
 
     @Test func withoutAccessibilityTheWheelStaysNative() async throws {
@@ -179,5 +203,88 @@ struct SessionNotchedWheelTests {
         #expect(fake.mainWheelDiverted == false && fake.requests(feature: 0x2130, function: 0).isEmpty
                 && fake.requests(feature: 0x2130, function: 1).isEmpty)
         #expect(fake.requests(feature: 0x2121, function: 2).count > 0)
+    }
+
+    // MARK: The wheel does not take the write
+
+    private func refusingWheel() -> FakeDevice {
+        let fake = FakeDevice.m750
+        fake.ignoresLowResWheelWrites = true
+        return fake
+    }
+
+    @Test func aWheelThatDoesNotReportDivertedAfterAskingIsLeftNativeAndNotOffered() async throws {
+        let log = CapturedLog()
+        let fake = refusingWheel()
+        let h = try await SessionHarness(fake, config: SessionHarness.config(Self.smooth), identify: true)
+        defer { h.close() }
+        try await Log.$testOutput.withValue(.lines { log.append($0) }) {
+            try await h.session.apply()
+            try await h.session.apply()  // asked once: a refusal is not retried by this session
+        }
+        #expect(!fake.lowResWheelDiverted)
+        #expect(wheelWrites(fake) == [[0x01]])
+        #expect(h.session.status.capabilities?.smoothScroll == false)
+        #expect(log.lines.filter { $0.message.contains("does not report to PureMouse") }.count == 1)
+        // The mouse does have 0x2130: the "lacks the feature" notice would say something false.
+        #expect(log.lines.filter { $0.message.contains("smooth scrolling needs") }.isEmpty)
+    }
+
+    @Test func aWheelThatReportsDivertedIsOffered() async throws {
+        let fake = FakeDevice.m750
+        let h = try await SessionHarness(fake, config: SessionHarness.config(Self.smooth), identify: true)
+        defer { h.close() }
+        try await h.session.apply()
+        #expect(fake.lowResWheelDiverted && h.session.status.capabilities?.smoothScroll == true)
+    }
+
+    // MARK: A wheel left diverted
+
+    private func startingDiverted(_ fake: FakeDevice = .m750) -> FakeDevice {
+        fake.responses[.init(0x2130, 0)] = [0x01]
+        return fake
+    }
+
+    @Test func aWheelLeftDivertedWhoseFirstClearFailsStaysOwedUntilConfirmedNative() async throws {
+        let fake = startingDiverted()
+        fake.failures[.init(0x2130, 1)] = .timeout
+        let h = try await SessionHarness(fake, config: .empty)
+        defer { h.close() }
+        let controls = h.session.divertedControls.count
+        #expect(!h.session.wheelsMayBeDiverted && h.session.restoreSteps == controls)  // control: nothing owed yet
+        await #expect(throws: (any Error).self) { try await h.session.apply() }
+        #expect(fake.lowResWheelDiverted && h.session.wheelsMayBeDiverted)
+        #expect(h.session.restoreSteps > h.session.divertedControls.count)  // quitting waits for it
+        fake.failures[.init(0x2130, 1)] = nil
+        try await h.session.apply()  // the next apply clears it and, confirmed, stops owing it
+        #expect(!fake.lowResWheelDiverted && !h.session.wheelsMayBeDiverted)
+    }
+
+    @Test func aWheelLeftDivertedWhoseFirstClearFailsIsHandedBackOnQuit() async throws {
+        let fake = startingDiverted()
+        fake.failures[.init(0x2130, 1)] = .timeout
+        let h = try await SessionHarness(fake, config: .empty)
+        defer { h.close() }
+        await #expect(throws: (any Error).self) { try await h.session.apply() }
+        fake.failures[.init(0x2130, 1)] = nil
+        await h.session.restore()
+        #expect(!fake.lowResWheelDiverted)
+    }
+
+    @Test func aClearTheMouseAcknowledgesButDoesNotTakeIsNotConfirmedNative() async throws {
+        let fake = startingDiverted()
+        fake.ignoresLowResWheelWrites = true
+        let h = try await SessionHarness(fake, config: .empty)
+        defer { h.close() }
+        await #expect(throws: (any Error).self) { try await h.session.apply() }
+        #expect(fake.lowResWheelDiverted && h.session.wheelsMayBeDiverted)
+    }
+
+    @Test func aClearThatTakesConfirmsNativeAtOnce() async throws {
+        let fake = startingDiverted()
+        let h = try await SessionHarness(fake, config: .empty)
+        defer { h.close() }
+        try await h.session.apply()
+        #expect(!fake.lowResWheelDiverted && !h.session.wheelsMayBeDiverted)
     }
 }

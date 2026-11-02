@@ -85,14 +85,18 @@ final class ScrollRecorder {
     var dy: Int { posts.reduce(0) { $0 + $1.dy } }
     var dx: Int { posts.reduce(0) { $0 + $1.dx } }
 
+    /// The system's natural-scrolling setting as the engine reads it; fixed here so the flip
+    /// assertions do not depend on the machine running the tests.
+    var naturalScrolling = true
+
     var environment: SessionEnvironment {
         SessionEnvironment(canPostEvents: true, configureRetryDelay: .milliseconds(1),
-                           frameClock: { self.frames }, postScroll: { self.posts.append(($0, $1)) })
+                           frameClock: { self.frames }, postScroll: { self.posts.append(($0, $1)) },
+                           naturalScrolling: { self.naturalScrolling })
     }
 
-    /// The pixels one notch up moves, whichever way the system scrolls: the engine applies the
-    /// natural-scrolling flip itself.
-    static var upwardNotch: Int { (SystemScrollSettings.naturalScrolling ? -1 : 1) * Int(ScrollEngine.pixelsPerNotch) }
+    /// The pixels one notch up moves with natural scrolling on, as the engine flips it: down.
+    static var upwardNotch: Int { -Int(ScrollEngine.pixelsPerNotch) }
 }
 
 /// A daemon on a config file of its own, adopting fakes as it adopts mice.

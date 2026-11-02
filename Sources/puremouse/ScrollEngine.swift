@@ -37,16 +37,21 @@ final class ScrollEngine {
     /// Sub-pixel distance owed when scrolling unsmoothed, per axis.
     private var verticalCarry = PixelCarry()
     private var horizontalCarry = PixelCarry()
-    private var naturalScrolling = SystemScrollSettings.naturalScrolling
+    private var naturalScrolling: Bool
+    /// Where the system's natural-scrolling setting is read, at the start of each burst.
+    private let readNaturalScrolling: () -> Bool
     private var lastInput: ContinuousClock.Instant?
     private let clock: FrameClock
     /// Where whole-pixel scrolls go, as `dx`, `dy`.
     private let post: (Int, Int) -> Void
 
-    init(profile: Profile, clock: FrameClock, post: @escaping (Int, Int) -> Void) {
+    init(profile: Profile, clock: FrameClock, post: @escaping (Int, Int) -> Void,
+         naturalScrolling: @escaping () -> Bool = { SystemScrollSettings.naturalScrolling }) {
         self.profile = profile
         self.clock = clock
         self.post = post
+        readNaturalScrolling = naturalScrolling
+        self.naturalScrolling = naturalScrolling()
         // Smoothing is the time the glide takes to come to rest, about three time constants.
         let tau = profile.smoothing.seconds / 3
         vertical = ScrollAnimator(timeConstant: tau)
@@ -108,7 +113,7 @@ final class ScrollEngine {
     private func beginBurstIfIdle(_ now: ContinuousClock.Instant) {
         defer { lastInput = now }
         guard lastInput.map({ now - $0 >= Self.burstGap }) ?? true else { return }
-        naturalScrolling = SystemScrollSettings.naturalScrolling
+        naturalScrolling = readNaturalScrolling()
         if let profileForBurst { use(profileForBurst()) }
         Log.debug("scroll: new burst (natural scrolling \(naturalScrolling ? "on" : "off"))")
     }

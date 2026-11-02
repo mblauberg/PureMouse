@@ -159,7 +159,7 @@ extension Session {
         if scroll != nil && !accessibility && !hasNoWheels {
             Log.error("\(name): no Accessibility permission; leaving the wheels native")
         }
-        if smoothAnywhere, scrollsSmoothly == false { notice(.smoothScrollUnsupported, Self.smoothScrollUnsupported) }
+        if smoothAnywhere, scrollsSmoothly == false, !notchedRefused { notice(.smoothScrollUnsupported, Self.smoothScrollUnsupported) }
     }
 
     /// Said once per session when smooth scrolling is configured and the mouse has none of the
@@ -209,10 +209,28 @@ extension Session {
             guard try await hasNotchedMainWheel() else { return }
             try ensureOpen()
             if smooth {
+                guard !notchedRefused else { return }
                 try await LowResWheel.setDiverted(device, true)
-            } else if try await LowResWheel.diverted(device) {
                 try ensureOpen()
-                try await LowResWheel.setDiverted(device, false)  // left so by a previous process
+                // A mouse that does not report diverted afterwards still scrolls natively: it is
+                // left alone, and smooth scrolling is not offered for it.
+                guard try await LowResWheel.diverted(device) else {
+                    notchedRefused = true
+                    Log.error("\(name): the notched wheel does not report to PureMouse after asking; it scrolls natively")
+                    changed()
+                    return
+                }
+            } else if try await LowResWheel.diverted(device) {
+                // Left so by a previous process: owed a hand-back until the mouse confirms it,
+                // however the write below ends.
+                wheelsMayBeDiverted = true
+                try ensureOpen()
+                try await LowResWheel.setDiverted(device, false)
+                try ensureOpen()
+                guard try await !LowResWheel.diverted(device) else {
+                    Log.error("\(name): the notched wheel still reports to PureMouse after handing it back")
+                    throw HIDPPError.malformedResponse
+                }
             }
         case .thumb:
             guard try await device.hasFeature(wheel.feature) else { return }

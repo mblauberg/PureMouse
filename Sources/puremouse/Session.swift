@@ -53,6 +53,9 @@ final class Session {
     /// Whether the wheels may be diverted to PureMouse, by this session or one it replaced, so
     /// `restore` must hand them back even if this session's config never diverts them.
     var wheelsMayBeDiverted: Bool
+    /// The notched wheel did not report diverted when asked, so it scrolls natively and smooth
+    /// scrolling is not offered; not asked again by this session.
+    var notchedRefused = false
 
     /// Buttons down, the gesture held and native clicks posted (`HeldButtons`).
     var held = HeldButtons()
@@ -188,7 +191,8 @@ final class Session {
         // when any scope gives it actions. Either way scrolling then runs here.
         smoothAnywhere = scopes.contains { $0.smoothScroll?.enabled == true }
         let thumbActions = scopes.contains { $0.thumbWheel.mode != .scroll }
-        scroll = smoothAnywhere || thumbActions ? ScrollEngine(profile: globalProfile, clock: environment.frameClock(), post: environment.postScroll) : nil
+        scroll = smoothAnywhere || thumbActions ? ScrollEngine(profile: globalProfile, clock: environment.frameClock(), post: environment.postScroll,
+                                                       naturalScrolling: environment.naturalScrolling) : nil
         away = inherited.away
         diversion = SerialChain(after: inherited.diversionAfter)
         self.wheelsMayBeDiverted = inherited.wheelsMayBeDiverted || scroll != nil
@@ -254,7 +258,7 @@ final class Session {
 
     /// Whether the main wheel can scroll smoothly, from known presence (nil while unknown): it
     /// needs one of the features PureMouse takes the main wheel over through (`Wheel.mainWheels`).
-    var scrollsSmoothly: Bool? { hasAny(of: Wheel.mainWheels.map(\.feature)) }
+    var scrollsSmoothly: Bool? { notchedRefused ? false : hasAny(of: Wheel.mainWheels.map(\.feature)) }
 
     /// Publishes `capabilities` when a lookup after apply, such as a haptic action's, has changed
     /// them.
