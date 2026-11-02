@@ -50,20 +50,20 @@ final class LogFixture {
         #expect(fixture.contents().hasSuffix(" error first line\n"))
     }
 
-    /// Under `2>&-` the daemon starts with fd 2 closed, so opening the log takes 2 itself.
-    @Test func aClosedDescriptorIsReopenedAndKept() throws {
+    /// Under `2>&-` the daemon starts with fd 2 closed, so opening the log hands back 2 itself.
+    /// Closing a shared number here would race the other tests, so this drives `move` with a
+    /// descriptor the test owns, as `reopen` sees it in that case.
+    @Test func aDescriptorOpenedAtItsOwnNumberIsKept() throws {
         let fixture = try LogFixture()
-        // The lowest free number, as 2 is when closed: open() hands it straight back. (Another
-        // test may take it first; the checks below hold either way.)
-        let free = open("/dev/null", O_RDONLY)
-        try #require(free >= 0)
-        close(free)
+        let path = fixture.directory.appending(path: "own.log").path
+        let fd = open(path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0o644)
+        try #require(fd >= 0)
+        defer { close(fd) }
 
-        let file = try #require(LogFile.attachStderr(url: fixture.log, fd: free))
-        defer { close(free) }
-        #expect(fcntl(free, F_GETFD) == 0)  // open, and inherited across exec like stderr
-        Log.$testFile.withValue(file) { Log.info("still open") }
-        #expect(fixture.contents().hasSuffix(" info still open\n"))
+        #expect(LogFile.move(fd, onto: fd))
+        #expect(fcntl(fd, F_GETFD) == 0)  // still open, and inherited across exec like stderr
+        #expect(write(fd, "kept\n", 5) == 5)
+        #expect(fixture.contents(URL(fileURLWithPath: path)) == "kept\n")
     }
 
     @Test func aTerminalIsLeftAlone() throws {

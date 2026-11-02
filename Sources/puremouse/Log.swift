@@ -126,8 +126,13 @@ final class LogFile: @unchecked Sendable {
     private static func reopen(_ url: URL, onto fd: Int32) -> Bool {
         let new = open(url.path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0o644)
         guard new >= 0 else { return false }
-        // With `fd` closed (`2>&-`), open takes its number: keep it, and drop O_CLOEXEC as dup2
-        // would have done.
+        return move(new, onto: fd)
+    }
+
+    /// Puts the open descriptor `new` at `fd` and closes `new`. With `fd` closed (`2>&-`), open
+    /// already handed back `fd` itself: that one is kept, without the O_CLOEXEC that dup2 would
+    /// have dropped.
+    static func move(_ new: Int32, onto fd: Int32) -> Bool {
         if new == fd { return fcntl(fd, F_SETFD, 0) == 0 }
         defer { close(new) }
         return dup2(new, fd) >= 0
