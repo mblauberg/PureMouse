@@ -34,10 +34,7 @@ or remove it with Logitech's uninstaller.
 
 ## Permissions
 
-| Permission | Why |
-|---|---|
-| **Accessibility** | To post scrolls, keystrokes and swipes. Until granted, wheels stay native and actions that post events do nothing |
-| **Input Monitoring** | To read the mouse over Bluetooth. A receiver works without it |
+What Accessibility and Input Monitoring are used for is in [Privacy](privacy.md#permissions).
 
 macOS applies a grant only to processes started after it, so PureMouse checks in the background
 and restarts itself once a grant arrives. It checks only for a permission it needs now (Input

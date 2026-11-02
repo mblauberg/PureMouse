@@ -157,7 +157,7 @@ Requires macOS 14 or later.
 4. Open PureMouse. It opens Settings and starts at login from then on.
 5. In System Settings › Privacy & Security, allow **Accessibility** (for scrolling, shortcuts and
    swipes) and **Input Monitoring** (for Bluetooth). PureMouse picks up each grant by itself, and
-   Settings › General shows both.
+   Settings › General shows both. [Privacy](docs/privacy.md) says what each one is used for.
 
 **Updating:** download the new version, replace the app and open it. Your settings and
 permissions carry over.
@@ -169,14 +169,22 @@ permissions carry over.
 /Applications/PureMouse.app/Contents/MacOS/puremouse unregister
 ```
 
+## Privacy and security
+
+No account and no telemetry. PureMouse writes only to your home folder and goes online only when
+you press **Check for Updates**. [Privacy](docs/privacy.md) lists every permission, file and
+request; [Security](SECURITY.md) says how to report a vulnerability.
+
 ## Documentation
 
 - [Configuration](docs/configuration.md): every field, action and gesture
 - [Troubleshooting](docs/troubleshooting.md): logs, permissions, Gatekeeper, macOS upgrades
 - [How it works](docs/how-it-works.md): the two processes, scrolling, source layout
 - [Development](docs/development.md): building, testing, signing and releases
+- [Privacy](docs/privacy.md): permissions, files written and the one network request
 
-Bug reports and ideas are welcome in [Issues](https://github.com/mblauberg/PureMouse/issues).
+Bug reports and ideas are welcome in [Issues](https://github.com/mblauberg/PureMouse/issues);
+[Contributing](CONTRIBUTING.md) explains how to ask for a mouse and how to send a change.
 
 ## Licence
 
