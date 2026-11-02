@@ -16,16 +16,16 @@ import Testing
     #expect(try Companion.decoder.decode(Status.self, from: data) == status)
 }
 
-@Test func controlReadsWithoutNewerKeys() throws {
-    let old = try Companion.decoder.decode(Control.self, from: Data(#"{"paused": true}"#.utf8))
-    #expect(old == Control(paused: true))
+@Test func controlOptionalFieldsMayBeOmitted() throws {
+    let minimal = try Companion.decoder.decode(Control.self, from: Data(#"{"paused": true}"#.utf8))
+    #expect(minimal == Control(paused: true))
     let control = Control(paused: false, capture: .init(token: 7), useConfiguredDPI: 9)
     #expect(try Companion.decoder.decode(Control.self, from: Companion.encoder.encode(control)) == control)
 }
 
 // MARK: - Device identity, capabilities and aimed requests
 
-/// A status with every field the current types carry set, new ones included.
+/// A status with every field the current types carry set.
 private func fullStatus() -> Status {
     Status(
         pid: 7, startedAt: Date(timeIntervalSince1970: 1_800_000_000), version: "0.4.0", running: true,
