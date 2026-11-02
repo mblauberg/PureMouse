@@ -99,10 +99,6 @@ struct ButtonsPane: View {
         ButtonRows.others(deviceCIDs: model.devices.flatMap(\.controls).map(\.cid), configKeys: configKeys)
     }
 
-    private func title(_ key: String) -> String {
-        NamedButton(rawValue: key)?.label ?? "Control \(key)"
-    }
-
     /// Where an "Other controls" entry lives, for its help line.
     private func caption(_ key: String) -> String? {
         guard NamedButton(rawValue: key) == nil, let cid = NamedButton.cid(forKey: key) else { return nil }
@@ -121,7 +117,7 @@ struct ButtonsPane: View {
             LabeledContent {
                 actionButton(action, target: BindingTarget(button: key))
             } label: {
-                DisclosureLabel(title: title(key), help: model.config.gestureSummary(key), isExpanded: isExpanded)
+                DisclosureLabel(title: NamedButton.title(forKey: key), help: model.config.gestureSummary(key), isExpanded: isExpanded)
             }
             .padding(.leading, indented ? 16 : 0)
             .listRowBackground(rowFill(key))
@@ -141,7 +137,7 @@ struct ButtonsPane: View {
             LabeledContent {
                 actionButton(action, target: BindingTarget(button: key))
             } label: {
-                RowLabel(title(key), help: caption(key))
+                RowLabel(NamedButton.title(forKey: key), help: caption(key))
             }
             .padding(.leading, indented ? 16 : 0)
             .listRowBackground(rowFill(key))
