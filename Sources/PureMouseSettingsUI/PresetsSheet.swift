@@ -38,6 +38,10 @@ struct PresetsSheet: View {
                         Text("Up to \(DPIPresets.limit) presets.")
                     }
                 }
+                // Borderless, as under System Settings' lists: a section footer draws bordered
+                // buttons at mixed sizes (a disabled one full size, an enabled one a mini capsule).
+                .buttonStyle(.borderless)
+                .imageScale(.large)
             }
         }
     }
