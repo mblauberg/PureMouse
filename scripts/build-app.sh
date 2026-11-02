@@ -16,6 +16,11 @@ cd $root
 
 app=.build/app/PureMouse.app
 products=(puremouse PureMouseMenu)
+# Neither executable loads plugins or looks up its own symbols (dlsym finds only the system
+# frameworks'), so they export nothing; otherwise every `public` declaration is listed. Passed here,
+# not in Package.swift: there SwiftPM also applied it to debug links, and swift test then silently
+# dropped the tests of both executables.
+link=(-Xlinker -no_exported_symbols)
 universal=0
 while (( $# )); do
     case $1 in
@@ -38,7 +43,7 @@ if (( universal )); then
     mkdir -p .build/slices
     for arch in arm64 x86_64; do
         for product in $products; do
-            flags=(-c release --product $product --triple $arch-apple-macosx$minimum)
+            flags=(-c release --product $product --triple $arch-apple-macosx$minimum $link)
             swift build $flags
             cp "$(swift build $flags --show-bin-path)/$product" .build/slices/$product-$arch
         done
@@ -52,7 +57,7 @@ if (( universal )); then
     done
 else
     for product in $products; do
-        swift build -c release --product $product
+        swift build -c release --product $product $link
     done
     bin="$(swift build -c release --show-bin-path)"
 fi
