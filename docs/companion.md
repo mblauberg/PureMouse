@@ -28,9 +28,9 @@ The Swift types in `Sources/PureMouseKit/Companion.swift` are the schema.
 
 The table gives the doorbell names as shipped. When `PUREMOUSE_COMPANION_DIR` is set (tests,
 development, the footprint rig), both sides append `.` and an 8-digit hex FNV-1a hash of that
-string to all three doorbell names (`Companion.doorbell`), so a copy running on a fixture
-directory neither rings nor answers an installed app. Unset leaves the names above, so builds with
-and without the change still pair.
+directory's resolved path (symlinks followed, no trailing slash, so `/tmp/fx`, `/tmp/fx/` and
+`/private/tmp/fx` agree) to all three doorbell names (`Companion.doorbell`), so a copy running on a
+fixture directory neither rings nor answers an installed app. An empty value counts as unset. Unset leaves the names above.
 
 ### Status (daemon → menu)
 
@@ -157,15 +157,16 @@ The daemon's budget is unchanged: zero CPU while idle, about 10 MB. The menu app
 while idle, with no timers or polling. Its footprint is `phys_footprint` from `footprint(1)`, and
 the figures below are medians of 5 runs of `scripts/measure-menu.sh` (`docs/development.md`,
 "Footprint rig") on a spare Mac, macOS 27.0.1, arm64, on 2026-11-02. They move with the OS, so
-read them as "about" and repeat the rig after each macOS release.
+read them as "about" and repeat the rig after each macOS release. The bare AppKit column is
+`scripts/measure-bare-appkit.sh` (5 runs, the same Mac and day).
 
 | Menu app, release build | MB | Bare AppKit status item and menu, same Mac |
 |---|---|---|
-| fresh, 4 s after launch | 14.1 | 10.9 |
+| fresh, about 4.5 s after launch | 14.1 | 10.9 |
 | after 1 menu open | 19.9 | 15.2 |
 | after 3 menu opens | 20.1 | |
 | after 10 menu opens | 20.1 | 15.4 |
-| after 200 status doorbells, menu never opened | 13.8 | |
+| after 200 status doorbells, 10 ms apart, menu never opened | 13.8 | |
 | Settings open, in this process | 41.2 | |
 | Settings closed again, in this process | 37.8 | |
 
@@ -174,11 +175,12 @@ What the numbers say:
 - **The first menu open costs about 6 MB, once.** Later opens add almost nothing (19.9 to 20.1 MB
   over ten). A bare `NSStatusItem` with an `NSMenu` and nothing else grows by about 4 MB on its first
   open (10.9 to 15.2 MB), so most of the cost is AppKit's, not the menu's; the rest is ours.
-- **Status updates do not grow it.** 200 doorbells with a changed `status.json` each leave the
-  fresh figure where it was (13.8 against 14.1 MB).
-- **The menu does not leak.** The earlier question was a repeating 272 KB block per open. It was not
-  reproduced: after 30 opens under `MallocStackLogging`, `heap` found no live block of that size
-  (the largest live block was 64 KB), so no owner could be named. Run on 2026-11-02, with
+- **Status updates did not grow it.** 200 doorbells posted 10 ms apart, `status.json` changed
+  before each, left the fresh figure where it was (13.8 against 14.1 MB).
+- **No growth was seen across the measured opens and doorbells.** The earlier question was a
+  repeating 272 KB block per open. It was not reproduced: after 30 opens under
+  `MallocStackLogging`, `heap -addresses=all` listed no live block of that size (the largest live
+  block was 64 KB), so no owner could be named. One run on 2026-11-02, with
   `scripts/measure-menu.sh --blocks`.
 - **Settings is where the rest goes.** Opening it adds about 27 MB, and closing it gives back only
   about 3 MB, even after `malloc_zone_pressure_relief`: AppKit and SwiftUI keep the pages. Hence

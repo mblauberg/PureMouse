@@ -150,11 +150,10 @@ one. This file covers how to work on it safely.
   Its Settings window and view tree are built when shown (each pane on its first visit); once
   Settings closes the process starts over (`Relaunch`): the agent's copy exits 75 for launchd to
   restart, since AppKit and SwiftUI keep about 38 MB otherwise (against about 14 MB fresh;
-  `docs/companion.md`, Footprint). Never `exec` in place (LaunchServices then withholds the
-  status item). The
-  menu is rebuilt on open. Settings controls carry their own accessibility label where a `RowLabel`
-  (title plus caption) leaves them unnamed. Shortcut specs are parsed and named by Kit's `Keystroke` only; the menu adds
-  glyphs and spoken words.
+  `docs/companion.md`, Footprint). Never `exec` in place (LaunchServices then withholds the status
+  item). The menu is rebuilt on open. Settings controls carry their own accessibility label where a
+  `RowLabel` (title plus caption) leaves them unnamed. Shortcut specs are parsed and named by Kit's
+  `Keystroke` only; the menu adds glyphs and spoken words.
 - Notifications and the update check live in the menu app only (the daemon stays free of
   UserNotifications and the network). The low-battery notification (`BatteryAlert`,
   `Notifier`) is decided on each status the daemon writes, from the band already announced per

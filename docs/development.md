@@ -67,10 +67,13 @@ the same Swift release as the Mac's own) into a directory of its own there and p
 
 It exits 0 when every budget holds, 1 when a median exceeds its budget (the line names the
 scenario and both numbers) and 2 when the rig itself fails. Samples are in
-`.build/rig/results/measure-menu-<time>.tsv` (`--tsv` picks another path).
+`.build/rig/results/measure-menu-<time>.tsv` (`--tsv` picks another path), one row per sample with
+a `unit` column (MB, or ms for a cold start). `--blocks` exits 2 if `heap` fails or lists no blocks.
+A budgets file without a whole-number limit for `fresh`, `open-1`, `open-10` and `doorbells-200`
+is also exit 2. `scripts/measure-bare-appkit.sh` measures the bare AppKit comparison.
 
 The rig is isolated from the installed app. It builds the release menu with `-DDEVHOOKS` into
-`.build/rig`, wraps it in a bundle of its own (`io.github.mblauberg.puremouse.menu.rig`) and starts
+`.build/rig`, wraps it, with the function that `build-app.sh` uses for the shipped menu app (`scripts/menu-bundle.zsh`), in a bundle of its own (`io.github.mblauberg.puremouse.menu.rig`) and starts
 it against a throwaway companion directory (`PUREMOUSE_COMPANION_DIR`, `PUREMOUSE_CONFIG` and
 `PUREMOUSE_DAEMON` set), with a sleeping process standing in for the daemon and a one-mouse
 `status.json`. A companion directory also renames the doorbells (a short hash of it is appended,
@@ -79,8 +82,8 @@ installed agents' pids with `launchctl print`, before and after, and stops with 
 changed.
 
 `DevHooks.swift` compiles into a release build only with `-DDEVHOOKS`
-(`nm .build/release/PureMouseMenu | grep -c DevHooks` prints 0 without it; with it, check
-`strings` for `puremouse.rig`). The rig's part, `Rig`, acts only when `PUREMOUSE_COMPANION_DIR` is
+(`strings .build/release/PureMouseMenu | grep -c puremouse.rig` prints 0 without it and 1 with it;
+`nm` is no use, since the optimiser inlines the type away). The rig's part, `Rig`, acts only when `PUREMOUSE_COMPANION_DIR` is
 set. The script writes `rig-command` ("number verb") in that directory and rings the rig doorbell;
 the menu answers with the number in `rig-ack` once done. Verbs: `menu` (open the menu, close it
 again), `settings` and `settings-close` (the Settings window), `relief` (`malloc_zone_pressure_relief`).
@@ -89,9 +92,9 @@ Scenarios, each a median of the runs, in MB of physical footprint (`footprint`):
 
 | Scenario | What it measures |
 |---|---|
-| `fresh` | a new menu app, about four seconds after it reports ready |
+| `fresh` | a new menu app, about 4.5 s after it reports ready (a 3 s wait, then the 1.5 s settle) |
 | `open-1`, `open-3`, `open-10` | after that many opens of the menu |
-| `doorbells-200` | a new menu app after 200 status doorbells, each with a changed `status.json` |
+| `doorbells-200` | a new menu app after 200 status doorbells, 10 ms apart, each after a change to `status.json` (back-to-back posts can coalesce) |
 | `settings-open`, `settings-closed` | Settings in the menu app's own process, and after it closes (read after the rig runs `malloc_zone_pressure_relief`, and without the `Relaunch` the installed app does); informational, no budget |
 | `helper-open`, `helper-closed`, `helper-cold-start` | the Settings helper: the menu app's footprint while it is open and after, and the time (ms) from the open request to the helper's first visible window. They read "helper not built" until `PureMouseSettings` is in `Package.swift`. The helper writes a `settings-visible` file in the companion directory when its first window is visible; the cold start is that file's modification time minus the request. |
 
