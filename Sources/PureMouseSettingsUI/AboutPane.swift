@@ -10,8 +10,11 @@ struct AboutPane: View {
 
     var body: some View {
         VStack(spacing: 10) {
+            // The PNGs are the squircle edge to edge; an app icon's squircle is 824 of its 1024
+            // points, so it is drawn at that share of the slot, the size the Finder draws it.
             Image(nsImage: Self.icon(dark: colorScheme == .dark))
                 .resizable()
+                .frame(width: 112 * 824 / 1024, height: 112 * 824 / 1024)
                 .frame(width: 112, height: 112)
                 .accessibilityHidden(true)
             Text("PureMouse")
@@ -49,14 +52,16 @@ struct AboutPane: View {
 
     /// The app icon in the window's appearance. `NSWorkspace` hands back the light rendering of
     /// the Icon Composer file whatever the drawing appearance, so the bundle carries both as
-    /// 256 px PNGs (the README's).
+    /// 256 px PNGs (the README's). Named with their extension: by name alone, `AppIcon` is the
+    /// `.icns`, which has the icon grid's margin built in and the PNGs do not.
     private static func icon(dark: Bool) -> NSImage {
         let name = dark ? "AppIcon-dark" : "AppIcon"
         #if DEBUG
         // `swift run` from the repository has no bundle resources.
         if Bundle.main.bundleIdentifier == nil, let icon = NSImage(contentsOfFile: "assets/\(name).png") { return icon }
         #endif
-        return Bundle.main.image(forResource: name) ?? NSWorkspace.shared.icon(forFile: Bundle.main.bundlePath)
+        return Bundle.main.url(forResource: name, withExtension: "png").flatMap(NSImage.init(contentsOf:))
+            ?? NSWorkspace.shared.icon(forFile: Bundle.main.bundlePath)
     }
 }
 
