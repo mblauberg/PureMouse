@@ -40,7 +40,9 @@ one. This file covers how to work on it safely.
   `PUREMOUSE_DEV_APP` the app sheet's editor popover), `PUREMOUSE_DEV_APP=<bundle id>` (Apps
   tab; adds the app without writing and opens its sheet) and `PUREMOUSE_DEV_SHEET=<name>` (a
   sheet: `presets` on Mouse › Pointer, or `advanced` on the pane shown, `DevSheet`) for screenshots
-  (`Sources/PureMouseSettingsUI/DevHooks.swift`). `PUREMOUSE_DEV_MENU=1` puts a plain backdrop
+  (`Sources/PureMouseSettingsUI/DevHooks.swift`), and `PUREMOUSE_DEV_CAPTURE=<file.png>` saves its
+  own windows to that file and quits, which needs no Screen Recording permission, so it works over
+  SSH (`DevCapture`). `PUREMOUSE_DEV_MENU=1` puts a plain backdrop
   under the menu, since its glass shows whatever is behind it. A window capture
   (`screencapture -l`) leaves out that blur, so the README's menu shots take the shape and shadow
   from one and the body from a screen capture of the same rect. Check the menu's footprint with

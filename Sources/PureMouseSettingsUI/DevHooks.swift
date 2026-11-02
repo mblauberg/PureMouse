@@ -11,6 +11,7 @@ import PureMouseAppSupport
 /// `PUREMOUSE_DEV_SHORTCUT=<button>` opens that button's shortcut editor popover.
 /// `PUREMOUSE_DEV_SHEET=<name>` opens a sheet: `presets` (Mouse › Pointer) through a `ShowRequest`,
 /// or a sheet on the pane shown (`DevSheet`).
+/// `PUREMOUSE_DEV_CAPTURE=<file.png>` saves the windows to that file and quits (`DevCapture`).
 @MainActor
 public enum DevHooks {
     static var sheet: DevSheet? {
@@ -34,6 +35,7 @@ public enum DevHooks {
         case "presets": show(ShowRequest(sheet: .presets))
         default: break
         }
+        DevCapture.schedule(environment)
     }
 }
 

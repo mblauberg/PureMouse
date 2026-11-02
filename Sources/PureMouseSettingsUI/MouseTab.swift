@@ -47,6 +47,8 @@ final class MouseTab: NSViewController {
         let root = NSView()
         let header = makeHeader(selection)
         header.translatesAutoresizingMaskIntoConstraints = false
+        // When the window is capped below strip plus pane, the pane scrolls; the strip never shrinks.
+        header.setContentCompressionResistancePriority(.required, for: .vertical)
         root.addSubview(header)
         NSLayoutConstraint.activate([
             header.topAnchor.constraint(equalTo: root.topAnchor),
