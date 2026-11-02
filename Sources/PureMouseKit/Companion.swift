@@ -27,12 +27,24 @@ public enum Companion {
     public static var showSettingsURL: URL { directory.appending(path: "show-settings") }
 
     /// Posted by the daemon after writing `statusURL`.
-    public static let statusNotification = "io.github.mblauberg.puremouse.status"
+    public static let statusNotification = doorbell("io.github.mblauberg.puremouse.status")
     /// Posted by the menu bar app after writing `controlURL`.
-    public static let controlNotification = "io.github.mblauberg.puremouse.control"
+    public static let controlNotification = doorbell("io.github.mblauberg.puremouse.control")
     /// Posted by a second launch of the menu bar app (e.g. opened from the Finder) so the running
     /// one shows Settings before the second exits.
-    public static let showSettingsNotification = "io.github.mblauberg.puremouse.menu.show"
+    public static let showSettingsNotification = doorbell("io.github.mblauberg.puremouse.menu.show")
+
+    /// A doorbell's name: `base`, with a short hash of `PUREMOUSE_COMPANION_DIR` appended when that
+    /// is set, so a development copy on a fixture directory never rings an installed app's bell.
+    /// Unset leaves `base`, so builds with and without this still pair. The hash is FNV-1a, which
+    /// (unlike `hashValue`) is the same in every process.
+    public static func doorbell(_ base: String, directory: String? = ProcessInfo.processInfo.environment["PUREMOUSE_COMPANION_DIR"]) -> String {
+        guard let directory else { return base }
+        var hash: UInt32 = 2_166_136_261
+        for byte in directory.utf8 { hash = (hash ^ UInt32(byte)) &* 16_777_619 }
+        let digits = String(hash, radix: 16)
+        return base + "." + String(repeating: "0", count: 8 - digits.count) + digits
+    }
 
     public static let encoder: JSONEncoder = {
         let e = JSONEncoder()
