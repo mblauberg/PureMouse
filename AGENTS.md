@@ -7,8 +7,9 @@ one. This file covers how to work on it safely.
 
 ## Workflow
 
-- Build and test: `swift build && swift test`. The tests cover pure logic only; anything touching
-  the mouse needs a live check.
+- Build and test: `swift build && swift test`. Device behaviour is tested against `HIDPPTesting`
+  fakes (`FakeDevice`, `FakeTransport`) built from `puremouse probe` dumps in `Tests/Fixtures/probe`,
+  so the probe's output format is a fixture contract. Real mice still need a live check.
 - Live check: `.build/debug/puremouse probe` is read-only and safe alongside the daemon (it uses its
   own HID++ software IDs). To run a dev build, stop the agent first (two daemons fight over the
   mouse) with `/Applications/PureMouse.app/Contents/MacOS/puremouse unregister`, then run
@@ -86,11 +87,18 @@ one. This file covers how to work on it safely.
   that drains the main queue off the main thread, and on macOS 26 and earlier `assumeIsolated`
   then traps (it crashed on SIGTERM, before restoring the mouse).
 - Device settings are volatile: the mouse forgets them on every reconnect. Anything applied to
-  it belongs in `Session.apply()`, which runs on adoption, reconnect, wake and reload.
+  it belongs in `Session.apply()`, which runs on adoption, reconnect, wake and reload. A newer
+  `Session.configure()` supersedes one under way; only an offline mouse's other events
+  (`reconfigureIfOffline`) defer to a running one, and start one at most once per 30 s.
+- Feature absence is cached per endpoint in `HIDPPDevice` (`knownPresence`; only a definite
+  index-zero answer counts), while "missing feature" log flags stay per session.
+- The primary clicks 0x0050/0x0051 (`Config.reservedControls`) are never bound or diverted: the
+  decoder drops them with a warning and `Session.isDivertable` excludes them from binding,
+  capture and the stale-diversion scan.
 - Prefer SmartShift 0x2110 whenever present (the tested 3S path); only its absence selects
   Enhanced 0x2111. Enhanced writes always include mode, with torque 0 to leave torque unchanged.
   Haptic 0x19B0 is play-only, gated by its waveform capability mask: never write strength,
-  enable flags or configuration (persistence is unknown). Cache haptic absence per session.
+  enable flags or configuration (persistence is unknown). Log haptic absence once per session.
   Enhanced SmartShift may skip malformed/feature-error replies only; timeouts and transport
   failures must reach configure's retry handling. Feature summaries use already resolved
   indices after a successful apply, never extra adoption queries. The MX Master 3S is the
@@ -234,6 +242,12 @@ one. This file covers how to work on it safely.
   cancelled request fails at once instead of holding the endpoint until its timeout. Only events
   reach `onEvent` (`Report.isEvent`): software ID 0, or a short HID++ 1.0 notification (sub-ID
   0x40-0x7F); a long report at those indices with another software ID is another program's reply.
+- A slot whose ping gets a HID++ 1.0 answer (invalid sub-ID) is ignored, like a keyboard, and
+  not retried (`Daemon.adoption(for:)`).
+- A freshly adopted mouse (`Inherited.fresh`) is scanned once for temporary diversions a previous
+  process left (`Session.scanStaleDiversions`) and releases those not bound; a persistent diversion
+  (Logi Options+) is never written. A timeout keeps the scan pending, across reloads too; a device
+  error skips that control.
 - An endpoint that does not answer is retried after 1, 2, 4 and 8 s (`Daemon.adoptRetrying`,
   `Backoff.adoption`), one retry per endpoint whether attach, a connection notification, resume,
   wake or reload started it; pause, detach and shutdown cancel it. After that a receiver slot is
@@ -296,7 +310,8 @@ one. This file covers how to work on it safely.
   by getCapabilities (cleared when the mouse reports a percentage) and the highest wins, as in
   Linux.
 - DPI is snapped to the sensor's own list (0x2201 getSensorDpiList), read once per mouse and
-  inherited across reloads; if the list cannot be read, the configured value is sent unchanged.
+  inherited across reloads; if the mouse answers the list request with an error, the configured
+  value is sent unchanged, while a timeout fails the apply so configure retries.
   `cycleDPI` sets `Session.liveDPI`, which overrides `config.dpi` in `apply()`; `Daemon.reload`
   clears it only when `dpi` or `dpiPresets` changed, and `Control.useConfiguredDPI` clears it on
   request (`AppModel.setDPI` sends it, since choosing the saved value changes nothing on disk).
@@ -308,7 +323,8 @@ one. This file covers how to work on it safely.
 - New action: a case in `Action` and a name in `Action.named` (both in PureMouseKit), handling in
   `SystemActions.perform` (or `Session.perform` for device actions).
 - New device feature: a wrapper in `Sources/HIDPP/Features.swift`, applied in `Session.apply()`,
-  with event parsing routed in `Session.handle()`, and a parse test in `Tests/HIDPPTests`.
+  with event parsing routed in `Session.handle()`, a parse test in `Tests/HIDPPTests`, its
+  behaviour in `FakeDevice` and its readback in a probe fixture.
 - Per-app settings: a new per-app section needs a case in `Config.appSections`, decoding on top of
   the global value in `Config.decodeApps`, a `sets…` flag, and its lookup at the moment it applies.
   Every config section decodes on a `base` (`init(_:base:)`); a new section takes one, keeps
