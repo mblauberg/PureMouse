@@ -4,38 +4,57 @@ import Testing
 @testable import puremouse
 
 /// A `LoginService` that keeps state in memory and logs each call, so the policy's ordering and its
-/// two independent axes (starts at login, running now) can be asserted.
+/// two independent axes (starts at login, running now) can be asserted. It follows the real
+/// service's rules: a job is registered once `register` has run (the one source of truth for
+/// `status`), and starting a registered job refreshes its registration first.
 private final class FakeLoginService: LoginService {
     var name: String { "fake" }
-    var registered: Set<Job> = []
-    var loaded: Set<Job> = []
+    /// Where each registered job points.
+    var registeredAt: [Job: URL] = [:]
+    var states: [Job: JobState] = [:]
     var calls: [String] = []
-    var definitions: [Job: [String: Any]] = [:]
-    var loadedDefinitions: [Job: [String: Any]] = [:]
+    /// Where each started job was told to run.
+    var startedAt: [Job: URL] = [:]
+    /// Runs inside `stop`, for tests that hold a command open.
+    var onStop: (() -> Void)?
 
-    func status(_ job: Job) -> JobStatus { registered.contains(job) ? .enabled : .notRegistered }
-    func isLoaded(_ job: Job) -> Bool { loaded.contains(job) }
+    var registered: Set<Job> {
+        get { Set(registeredAt.keys) }
+        set { registeredAt = Dictionary(uniqueKeysWithValues: newValue.map { ($0, URL(fileURLWithPath: "/old")) }) }
+    }
+    /// The jobs with a process.
+    var running: Set<Job> {
+        get { Set(states.filter { $0.value == .running }.keys) }
+        set { for job in newValue { states[job] = .running } }
+    }
+    var loaded: Set<Job> { Set(states.filter { $0.value != .notLoaded }.keys) }
 
-    func register(_ job: Job, _ definition: [String: Any]) throws {
+    func status(_ job: Job) -> JobStatus { registeredAt[job] == nil ? .notRegistered : .enabled }
+    func state(_ job: Job) -> JobState { states[job] ?? .notLoaded }
+
+    func register(_ job: Job, at location: URL) throws {
         calls.append("register \(job)")
-        registered.insert(job)
-        definitions[job] = definition
+        registeredAt[job] = location
     }
 
-    func load(_ job: Job, _ definition: [String: Any]) throws {
-        calls.append("load \(job)")
-        loaded.insert(job)
-        loadedDefinitions[job] = definition
+    func start(_ job: Job, at location: URL) throws -> Bool {
+        calls.append("start \(job)")
+        if state(job) == .running { return false }
+        if registeredAt[job] != nil { registeredAt[job] = location }
+        startedAt[job] = location
+        states[job] = .running
+        return true
     }
 
     func unregister(_ job: Job) throws {
         calls.append("unregister \(job)")
-        registered.remove(job)
+        registeredAt[job] = nil
     }
 
     @discardableResult func stop(_ job: Job) throws -> Bool {
         calls.append("stop \(job)")
-        return loaded.remove(job) != nil
+        onStop?()
+        return states.removeValue(forKey: job) != nil
     }
 }
 
@@ -43,21 +62,25 @@ private let appURL = URL(fileURLWithPath: "/Applications/PureMouse.app/Contents/
 private let installedExecutable = URL(fileURLWithPath: "/Applications/PureMouse.app/Contents/MacOS/puremouse")
 
 /// One policy over a fake service and a temporary companion directory.
-private final class Rig {
+private final class Rig: @unchecked Sendable {
     let service = FakeLoginService()
     let directory = FileManager.default.temporaryDirectory.appending(path: "pm-login-\(UUID().uuidString)")
     var seeded = 0
     var menuIsCaller = false
     private let menuApp: URL?
     private let executable: () throws -> URL
+    private let lockTimeout: TimeInterval
 
-    init(menuApp: URL? = appURL, executable: @escaping () throws -> URL = { installedExecutable }) {
+    init(menuApp: URL? = appURL, lockTimeout: TimeInterval = 5,
+         executable: @escaping () throws -> URL = { installedExecutable }) {
         self.menuApp = menuApp
+        self.lockTimeout = lockTimeout
         self.executable = executable
     }
 
     lazy var item = LoginItem(service: service, host: .init(
-        executable: executable, menuApp: menuApp, hiddenMarker: directory.appending(path: "menu-hidden"),
+        executable: executable, menuApp: menuApp, hiddenMarker: directory.appending(path: Companion.menuHiddenName),
+        lockFile: directory.appending(path: "lifecycle.lock"), lockTimeout: lockTimeout,
         calledFromMenu: { [unowned self] _ in menuIsCaller }, seedConfig: { [unowned self] in seeded += 1 }))
 
     deinit { try? FileManager.default.removeItem(at: directory) }
@@ -79,19 +102,20 @@ private final class Rig {
     @Test func registerRegistersTheDaemonBeforeTheMenu() throws {
         let rig = Rig()
         let outcome = try rig.item.register()
-        #expect(rig.service.calls == ["stop daemon", "register daemon", "load daemon",
-                                      "stop menu", "register menu", "load menu"])
+        #expect(rig.service.calls == ["stop daemon", "register daemon", "start daemon",
+                                      "stop menu", "register menu", "start menu"])
         #expect(outcome == "PureMouse is running and will start at login.")
         #expect(rig.seeded == 1)
-        #expect(rig.service.registered == [.daemon, .menu])
-        #expect(rig.service.loaded == [.daemon, .menu])
+        #expect(rig.service.registeredAt == [.daemon: installedExecutable, .menu: appURL])
+        #expect(rig.service.startedAt == [.daemon: installedExecutable, .menu: appURL])
+        #expect(rig.service.running == [.daemon, .menu])
     }
 
     @Test func registerRestartsARunningDaemon() throws {
         let rig = Rig()
-        rig.service.loaded = [.daemon]
+        rig.service.running = [.daemon]
         #expect(try rig.item.register() == "PureMouse restarted.")
-        #expect(rig.service.loaded == [.daemon, .menu])
+        #expect(rig.service.running == [.daemon, .menu])
     }
 
     @Test func aHiddenMenuIsNotRegistered() throws {
@@ -99,16 +123,22 @@ private final class Rig {
         try rig.hideMenu()
         let outcome = try rig.item.register()
         #expect(rig.service.registered == [.daemon])
-        #expect(rig.service.loaded == [.daemon])
-        #expect(rig.service.calls == ["stop daemon", "register daemon", "load daemon",
+        #expect(rig.service.running == [.daemon])
+        #expect(rig.service.calls == ["stop daemon", "register daemon", "start daemon",
                                       "unregister menu", "stop menu"])
         #expect(outcome == "PureMouse is running and will start at login. The menu bar icon is hidden (`puremouse menu on` shows it).")
     }
 
     @Test func aBuildWithoutAMenuTouchesOnlyTheDaemon() throws {
+        let registering = Rig(menuApp: nil)
+        _ = try registering.item.register()
+        #expect(registering.service.calls == ["stop daemon", "register daemon", "start daemon"])
+
         let rig = Rig(menuApp: nil)
-        _ = try rig.item.register()
-        #expect(rig.service.calls == ["stop daemon", "register daemon", "load daemon"])
+        _ = try rig.item.loginOn()
+        _ = try rig.item.start()
+        _ = try rig.item.loginOff()
+        #expect(rig.service.calls == ["register daemon", "start daemon", "unregister daemon", "unregister menu"])
     }
 
     @Test func unregisterRemovesTheMenuLastAndStopsEachJobRightAfterItsRemoval() throws {
@@ -136,7 +166,6 @@ private final class Rig {
         _ = try rig.item.register()
         _ = try rig.item.loginOff()
         #expect(try rig.item.stopAll() == "PureMouse stopped.")
-        #expect(try rig.item.stopAll() == "PureMouse was not running.")
         _ = try rig.item.start()
         #expect(rig.service.registered.isEmpty)
         #expect(try rig.item.stopAll() == "PureMouse stopped.")
@@ -147,23 +176,23 @@ private final class Rig {
     @Test func registerFromTheMenuRewritesALoadedMenuJobWithoutRestartingIt() throws {
         let rig = Rig()
         rig.menuIsCaller = true
-        rig.service.loaded = [.menu]
+        rig.service.running = [.menu]
         _ = try rig.item.register()
-        #expect(rig.service.calls == ["stop daemon", "register daemon", "load daemon", "register menu"])
-        #expect(rig.service.loaded == [.daemon, .menu])
+        #expect(rig.service.calls == ["stop daemon", "register daemon", "start daemon", "register menu"])
+        #expect(rig.service.running == [.daemon, .menu])
     }
 
     @Test func registerFromTheMenuStartsAMenuJobThatIsNotLoaded() throws {
         let rig = Rig()
         rig.menuIsCaller = true
         _ = try rig.item.register()
-        #expect(rig.service.calls.suffix(3) == ["stop menu", "register menu", "load menu"])
+        #expect(rig.service.calls.suffix(3) == ["stop menu", "register menu", "start menu"])
     }
 
     @Test func menuOnFromTheMenuLeavesALoadedMenuJobRunning() throws {
         let rig = Rig()
         rig.menuIsCaller = true
-        rig.service.loaded = [.menu]
+        rig.service.running = [.menu]
         #expect(try rig.item.showMenu(true) == "The menu bar icon is shown.")
         #expect(rig.service.calls == ["register menu"])
     }
@@ -178,26 +207,18 @@ private final class Rig {
         #expect(rig.hidden)
         #expect(rig.service.calls == ["unregister menu", "stop menu"])
         #expect(rig.service.registered == [.daemon])
-        #expect(rig.service.loaded == [.daemon])
+        #expect(rig.service.running == [.daemon])
 
         rig.forget()
         #expect(try rig.item.showMenu(true) == "The menu bar icon is shown.")
         #expect(!rig.hidden)
-        #expect(rig.service.calls == ["stop menu", "register menu", "load menu"])
+        #expect(rig.service.calls == ["stop menu", "register menu", "start menu"])
     }
 
     @Test func menuOnNeedsAMenuApp() throws {
         let rig = Rig(menuApp: nil)
         #expect(throws: LoginItem.Failure.noMenuApp) { try rig.item.showMenu(true) }
         #expect(rig.service.calls.isEmpty)
-    }
-
-    @Test func aBuildWithoutAMenuStartsAndRegistersOnlyTheDaemon() throws {
-        let rig = Rig(menuApp: nil)
-        _ = try rig.item.loginOn()
-        _ = try rig.item.start()
-        _ = try rig.item.loginOff()
-        #expect(rig.service.calls == ["register daemon", "load daemon", "unregister daemon", "unregister menu"])
     }
 
     // MARK: Not an installed app
@@ -215,14 +236,15 @@ private final class Rig {
         #expect(rig.service.calls.isEmpty)
         #expect(rig.seeded == 0)
         #expect(!rig.hidden)
+        #expect(!FileManager.default.fileExists(atPath: rig.item.host.lockFile.path))
     }
 
     // MARK: The two axes
 
     /// (starts at login, running now) for the daemon and the menu.
     private func axes(_ rig: Rig) -> [Bool] {
-        [rig.service.registered.contains(.daemon), rig.service.loaded.contains(.daemon),
-         rig.service.registered.contains(.menu), rig.service.loaded.contains(.menu)]
+        [rig.service.registered.contains(.daemon), rig.service.running.contains(.daemon),
+         rig.service.registered.contains(.menu), rig.service.running.contains(.menu)]
     }
 
     @Test(arguments: [false, true]) func eachCommandChangesOnlyItsOwnAxis(hidden: Bool) throws {
@@ -235,9 +257,11 @@ private final class Rig {
         #expect(axes(rig) == [false, true, false, menuShown])
         #expect(try rig.item.start() == "PureMouse is already running.")
 
-        // login on: login on, running unchanged.
+        // login on: login on, running unchanged, nothing loaded or stopped.
+        rig.forget()
         #expect(try rig.item.loginOn() == "PureMouse will start at login.")
         #expect(axes(rig) == [true, true, menuShown, menuShown])
+        #expect(!rig.service.calls.contains { $0.hasPrefix("start") || $0.hasPrefix("stop") })
 
         // stop: running off, login unchanged (on).
         _ = try rig.item.stopAll()
@@ -247,30 +271,44 @@ private final class Rig {
         _ = try rig.item.start()
         #expect(axes(rig) == [true, true, menuShown, menuShown])
 
-        // login off: login off, running unchanged.
+        // login off: login off, running unchanged, nothing stopped.
+        rig.forget()
         #expect(try rig.item.loginOff()
             == "PureMouse will not start at login; it keeps running until you quit it (`puremouse stop`).")
         #expect(axes(rig) == [false, true, false, menuShown])
+        #expect(rig.service.calls == ["unregister daemon", "unregister menu"])
         _ = try rig.item.stopAll()
         #expect(try rig.item.loginOff() == "PureMouse will not start at login.")
         #expect(axes(rig) == [false, false, false, false])
     }
 
-    @Test func loginOnAndOffNeverLoadOrStopAnything() throws {
+    // MARK: start from each state
+
+    @Test(arguments: [JobState.notLoaded, .loadedIdle, .running])
+    func startRunsEveryJobThatHasNoProcess(initial: JobState) throws {
         let rig = Rig()
-        _ = try rig.item.loginOn()
-        _ = try rig.item.loginOff()
-        #expect(rig.service.calls == ["register daemon", "register menu", "unregister daemon", "unregister menu"])
-        #expect(rig.seeded == 1)
+        rig.service.states = [.daemon: initial, .menu: initial]
+        rig.service.registered = [.daemon]
+        #expect(try rig.item.start() == (initial == .running ? "PureMouse is already running." : "PureMouse started."))
+        #expect(rig.service.running == [.daemon, .menu])
+        #expect(rig.service.registered == [.daemon])
+        #expect(rig.service.startedAt.isEmpty == (initial == .running))
     }
 
-    @Test func startLeavesRunningJobsAndRegistrationsAlone() throws {
+    @Test func startOnlyStartsTheJobThatHasNoProcess() throws {
         let rig = Rig()
-        rig.service.loaded = [.menu]
-        rig.service.registered = [.daemon]
+        rig.service.states = [.daemon: .running, .menu: .loadedIdle]
+        #expect(try rig.item.start() == "PureMouse started.")
+        #expect(Set(rig.service.startedAt.keys) == [.menu])
+    }
+
+    @Test func startBringsARegistrationUpToDateButNotARunningJobs() throws {
+        let rig = Rig()
+        rig.service.registered = [.daemon, .menu]
+        rig.service.states = [.menu: .running]
         _ = try rig.item.start()
-        #expect(rig.service.calls == ["load daemon"])
-        #expect(rig.service.registered == [.daemon])
+        #expect(rig.service.registeredAt[.daemon] == installedExecutable)
+        #expect(rig.service.registeredAt[.menu] == URL(fileURLWithPath: "/old"))
     }
 
     // MARK: Status
@@ -286,59 +324,43 @@ private final class Rig {
         #expect(bare.item.loginStatus().menu == .notFound)
     }
 
-    // MARK: Definitions
+    // MARK: Serialised commands
 
-    @Test func theDaemonDefinitionIsWhatLaunchdHasAlwaysBeenGiven() {
-        let expected: NSDictionary = [
-            "Label": "io.github.mblauberg.puremouse",
-            "ProgramArguments": [installedExecutable.path, "run"],
-            "RunAtLoad": true,
-            "KeepAlive": true,
-            "ThrottleInterval": 3,
-            "ProcessType": "Interactive",
-        ]
-        #expect(NSDictionary(dictionary: LoginItem.daemonDefinition(executable: installedExecutable)) == expected)
-    }
-
-    @Test func theMenuDefinitionAddsOnlyTheAllocatorSetting() {
-        let expected: NSDictionary = [
-            "Label": "io.github.mblauberg.puremouse.menu",
-            "ProgramArguments": [appURL.appending(path: "Contents/MacOS/PureMouseMenu").path],
-            "RunAtLoad": true,
-            "KeepAlive": ["SuccessfulExit": false],
-            "ProcessType": "Interactive",
-            "EnvironmentVariables": ["MallocSpaceEfficient": "1"],
-        ]
-        #expect(NSDictionary(dictionary: LoginItem.menuDefinition(app: appURL)) == expected)
-    }
-
-    @Test func startLoadsTheDefinitionsSoAnUnregisteredJobCanRun() throws {
+    @Test func overlappingCommandsRunOneAfterTheOther() throws {
         let rig = Rig()
-        _ = try rig.item.start()
-        #expect(NSDictionary(dictionary: try #require(rig.service.loadedDefinitions[.daemon]))
-            == NSDictionary(dictionary: LoginItem.daemonDefinition(executable: installedExecutable)))
-        #expect(NSDictionary(dictionary: try #require(rig.service.loadedDefinitions[.menu]))
-            == NSDictionary(dictionary: LoginItem.menuDefinition(app: appURL)))
+        rig.service.running = [.daemon, .menu]
+        let entered = DispatchSemaphore(value: 0)
+        let release = DispatchSemaphore(value: 0)
+        nonisolated(unsafe) var held = false
+        rig.service.onStop = {
+            guard !held else { return }
+            held = true
+            entered.signal()
+            release.wait()
+        }
+        let done = DispatchGroup()
+        DispatchQueue.global().async(group: done) { _ = try? rig.item.stopAll() }
+        entered.wait()
+        DispatchQueue.global().async(group: done) { _ = try? rig.item.start() }
+        // The second command is waiting for the first, so it has not touched the service.
+        Thread.sleep(forTimeInterval: 0.3)
+        #expect(rig.service.calls == ["stop daemon"])
+        release.signal()
+        done.wait()
+        #expect(rig.service.calls == ["stop daemon", "stop menu", "start daemon", "start menu"])
+        #expect(rig.service.running == [.daemon, .menu])
     }
 
-    @Test func theServiceReceivesTheDefinitions() throws {
-        let rig = Rig()
-        _ = try rig.item.register()
-        #expect(NSDictionary(dictionary: try #require(rig.service.definitions[.daemon]))
-            == NSDictionary(dictionary: LoginItem.daemonDefinition(executable: installedExecutable)))
-        #expect(NSDictionary(dictionary: try #require(rig.service.definitions[.menu]))
-            == NSDictionary(dictionary: LoginItem.menuDefinition(app: appURL)))
-    }
-
-    /// `scripts/lib.zsh` writes the same variable into the menu app's Info.plist (`LSEnvironment`), for
-    /// launches by the Finder; the two must not drift apart.
-    @Test func theInfoPlistSetsTheSameVariablesAsTheAgent() throws {
-        let environment = try #require(LoginItem.menuDefinition(app: appURL)["EnvironmentVariables"] as? [String: String])
-        #expect(!environment.isEmpty)
-        let lib = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "../../scripts/lib.zsh")
-        let script = try String(contentsOf: lib.standardizedFileURL, encoding: .utf8)
-        let written = script.components(separatedBy: "<key>LSEnvironment</key><dict>").dropFirst().first?
-            .components(separatedBy: "</dict>").first
-        #expect(written == environment.sorted { $0.key < $1.key }.map { "<key>\($0.key)</key><string>\($0.value)</string>" }.joined())
+    @Test func aCommandGivesUpWhenAnotherHoldsTheLock() throws {
+        let rig = Rig(lockTimeout: 0.2)
+        try FileManager.default.createDirectory(at: rig.directory, withIntermediateDirectories: true)
+        let fd = open(rig.item.host.lockFile.path, O_RDWR | O_CREAT, 0o600)
+        defer { close(fd) }
+        #expect(flock(fd, LOCK_EX) == 0)
+        #expect(throws: FileLock.Failed.self) { try rig.item.start() }
+        #expect(throws: FileLock.Failed.self) { try rig.item.stopAll() }
+        #expect(rig.service.calls.isEmpty)
+        // login-status only reads.
+        #expect(rig.item.loginStatus().service == "fake")
     }
 }

@@ -7,8 +7,9 @@ Footprint), which fixes the budgets below, and the `MallocSpaceEfficient` gate p
 
 ## Context
 
-The README's 14 MB for the menu bar app is its fresh-launch figure. The rig measures about 6 MB
-more once the menu has been opened (about 20 MB). A bare AppKit app with a five-item `NSMenu` goes
+The README's 14 MB for the menu bar app was its fresh-launch figure. The rig measured about 6 MB
+more once the menu had been opened (about 20 MB) before `MallocSpaceEfficient` was set. A bare
+AppKit app with a five-item `NSMenu` goes
 from 10.8 to 15.2 MB on first open on the same Mac: most of the cost is AppKit's menu machinery, as
 dirty freed malloc memory. An earlier target of 10 MB is below that floor.
 

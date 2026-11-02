@@ -131,7 +131,7 @@ All optional; nil members are left out of the JSON.
 ## Login and lifecycle
 
 The daemon CLI owns every launchd change (`LoginItem.swift` holds the policy; a `LoginService`,
-`LaunchdAgentService` today, holds the mechanism, so the policy is tested against a fake). The menu
+`LaunchdAgentService`, holds the mechanism, so the policy is tested against a fake). The menu
 app runs these commands through the daemon binary at `Bundle.main.bundleURL/../../../MacOS/puremouse`.
 
 "Starts at login" and "is running now" are separate, and each command changes only the axis the
@@ -143,17 +143,23 @@ table gives:
 | `puremouse login off` | off | unchanged (a running job stays loaded until logout or `stop`) |
 | `puremouse start` | unchanged | on (daemon, and menu unless hidden) |
 | `puremouse stop` | unchanged | off |
-| `puremouse register` / `unregister` | on / off | restarted / off (as today) |
+| `puremouse register` / `unregister` | on / off | restarted / off |
 
 | Command | Effect |
 |---|---|
 | `puremouse register` | writes and boots both agents (daemon `KeepAlive`; menu `RunAtLoad`, `KeepAlive: {SuccessfulExit: false}`, `MallocSpaceEfficient`), unless the menu is hidden. Prints the outcome |
 | `puremouse unregister` | boots out both agents and removes both plists |
 | `puremouse login on` / `off` | writes both plists (the menu's unless hidden) without booting anything, or removes both without booting anything out. A running agent is left as it is |
-| `puremouse start` | boots the agents that are not running (the menu's unless hidden) and leaves the rest alone. An agent that is not registered runs from a plist in `launchd/` under `Companion.directory`, which launchd does not load at the next login |
+| `puremouse start` | starts the agents that have no process (the menu's unless hidden) and leaves running ones alone: a job that is not loaded is bootstrapped, one that is loaded without a process (the menu after Quit) is kickstarted. A registered job's plist is first rewritten for this copy of the app, so a moved app does not start from the old path; it stays registered. An agent that is not registered runs from a plist in `launchd/` under `Companion.directory`, which launchd does not load at the next login and which stays there until `stop` removes it |
 | `puremouse stop` | boots out both agents but keeps their plists: **Quit PureMouse**. Both start again at login if registered |
 | `puremouse menu on` / `off` | writes and boots, or boots out and removes, the menu agent only: **Show in menu bar** / **Hide Menu Bar Icon** |
 | `puremouse login-status` | prints one JSON object and changes nothing: `{"daemon":"enabled","hidden":false,"menu":"notRegistered","service":"launchd"}` |
+
+Every command that changes what is registered or running (`register`, `unregister`, `stop`, `start`,
+`login on|off`, `menu on|off`) holds an exclusive lock on `lifecycle.lock` in `Companion.directory`,
+so a `stop` and a `start` that overlap (the menu and a terminal, or a double click) run one after
+the other. A command that cannot take it within 30 s fails with a message naming the lock.
+`login-status` takes none.
 
 `login-status` fields: `service` names the mechanism (`launchd`); `daemon` and `menu` are the job's
 state: `notRegistered` (does not start at login), `enabled` (does), `requiresApproval` (registered,
@@ -204,18 +210,18 @@ What the numbers say:
   over ten, shipped; 19.8 to 19.9 without the variable). A bare `NSStatusItem` with an `NSMenu` and nothing else grows by about 4 MB on its first
   open (10.8 to 15.2 MB), so most of the cost is AppKit's, not the menu's; the rest is ours.
 - **Status updates did not grow it.** 200 doorbells posted 10 ms apart, `status.json` changed
-  before each, left the fresh figure where it was (13.8 against 13.8 MB).
+  before each, left the fresh figure where it was (10.0 against 10.1 MB shipped; 13.8 against 13.8 without the variable).
 - **No growth was seen across the measured opens and doorbells.** The earlier question was a
   repeating 272 KB block per open. It was not reproduced: after 30 opens under
   `MallocStackLogging`, `heap -addresses=all` listed no live block of that size (the largest live
   block was 64 KB), so no owner could be named. One run on 2026-11-02, with
   `scripts/measure-menu.sh --blocks`.
-- **Settings is where the rest goes.** Opening it adds about 29 MB, and closing it gives back only
-  about 4 MB, even after `malloc_zone_pressure_relief`: AppKit and SwiftUI keep the pages. Hence
+- **Settings is where the rest goes.** Opening it adds about 24 MB (29 without the variable), and closing it gives back only
+  about 9 MB (4 without), even after `malloc_zone_pressure_relief`: AppKit and SwiftUI keep the pages. Hence
   `Relaunch`: once Settings has closed, the app starts over as a fresh copy (the "closed" row above
   is the process without that restart; the rig does not restart it).
 - **Allocator.** The growth was freed small-malloc pages that stay resident and that
-  `malloc_zone_pressure_relief` does not return. The menu app now runs with
+  `malloc_zone_pressure_relief` does not return. The menu app runs with
   `MallocSpaceEfficient=1` (a preference for reusing freed space over speed), in its launchd
   environment and, for a launch by the Finder, `LSEnvironment` in its Info.plist. The gate ran on the
   branch build against main's, five runs each, side by side: 14.1 against 19.9 MB after 3 opens

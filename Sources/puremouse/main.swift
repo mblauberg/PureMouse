@@ -25,7 +25,7 @@ case nil where LoginItem.inBundle:
     do {
         let outcome = try login.register()
         // With the icon hidden, the app still opens for Settings and quits when they close.
-        if let menu = LoginItem.menuApp, LoginItem.openMenu(menu) { exit(0) }
+        if let menu = LoginItem.menuApp, login.openMenu(menu) { exit(0) }
         LoginItem.alert("PureMouse", outcome + """
 
 

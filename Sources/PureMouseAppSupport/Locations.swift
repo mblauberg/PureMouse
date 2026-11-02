@@ -54,7 +54,7 @@ public struct Locations: Sendable {
     /// The low-battery bands already announced (`BatteryAlertStore`).
     public var batteryAlerts: URL { companion.appending(path: "battery-alerts.json") }
     /// Left by the daemon's `menu off`, removed by `menu on`.
-    var menuHidden: URL { companion.appending(path: "menu-hidden") }
+    var menuHidden: URL { companion.appending(path: Companion.menuHiddenName) }
 
     /// Show in menu bar: the daemon's `menu off` leaves a `menu-hidden` marker beside the status
     /// file, and `menu on` removes it (docs/companion.md, "Daemon decisions"). A development build

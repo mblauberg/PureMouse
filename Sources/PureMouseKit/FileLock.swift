@@ -29,7 +29,10 @@ public enum FileLock {
     /// Runs `body` holding an exclusive lock on `lock` (created if needed), waiting while another
     /// writer holds it. Writers hold it for one read and one atomic write, so the wait is short
     /// and needs no timer. Closing the descriptor releases it, also when `body` throws.
-    public static func withLock<T>(_ lock: URL, _ body: () throws -> T) throws -> T {
+    ///
+    /// With a `timeout` the wait is bounded: a holder that outlasts it makes this throw `Failed`
+    /// without running `body`, for callers (lifecycle commands) that can hold the lock for seconds.
+    public static func withLock<T>(_ lock: URL, timeout: TimeInterval? = nil, _ body: () throws -> T) throws -> T {
         do {
             try FileManager.default.createDirectory(at: lock.deletingLastPathComponent(), withIntermediateDirectories: true)
         } catch {
@@ -38,8 +41,19 @@ public enum FileLock {
         let fd = open(lock.path, O_RDWR | O_CREAT | O_CLOEXEC, 0o600)
         guard fd >= 0 else { throw Failed(lock, errno: errno) }
         defer { close(fd) }
-        while flock(fd, LOCK_EX) != 0 {
-            guard errno == EINTR else { throw Failed(lock, errno: errno) }
+        if let timeout {
+            let deadline = Date(timeIntervalSinceNow: timeout)
+            while flock(fd, LOCK_EX | LOCK_NB) != 0 {
+                guard errno == EWOULDBLOCK || errno == EINTR else { throw Failed(lock, errno: errno) }
+                guard Date() < deadline else {
+                    throw Failed(path: lock.path, reason: "another PureMouse command was still running after \(Int(timeout.rounded(.up))) s")
+                }
+                usleep(50_000)
+            }
+        } else {
+            while flock(fd, LOCK_EX) != 0 {
+                guard errno == EINTR else { throw Failed(lock, errno: errno) }
+            }
         }
         return try body()
     }

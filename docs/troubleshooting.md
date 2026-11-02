@@ -104,5 +104,10 @@ that has Accessibility.
 | Front process lookup | Per-app button settings | Falls back to the app owning the frontmost window by itself |
 | Universal Control input-state notification | Handing the mouse back while the pointer is on another Mac | Pause PureMouse from the menu while using the other Mac |
 
+The menu bar app also relies on an undocumented allocator setting, `MallocSpaceEfficient`, that keeps
+about 6 MB off its footprint. If a macOS release ignores it the app still works but uses more
+memory; run `./scripts/measure-menu.sh` on a spare Mac after the upgrade (`docs/development.md`,
+"Footprint rig") and compare with `scripts/measure-menu.budgets`.
+
 macOS 27 stopped honouring the event fields for three-finger Dock swipes. PureMouse does not use
 them, and navigation swipes still work on macOS 27.

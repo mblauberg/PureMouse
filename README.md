@@ -33,7 +33,7 @@ the mouse is idle, so is PureMouse.
 
 ## Lightweight by design
 
-| | PureMouse 0.3.0, as measured |
+| | PureMouse (main), as measured |
 |---|---|
 | Download | 5.6 MB zip, 8.4 MB installed; universal (Apple silicon and Intel) |
 | Memory | Background process: 4-6 MB. Menu bar app: about 10 MB fresh, about 14 MB once its menu has been opened (medians of 5 on macOS 27.0.1) |
