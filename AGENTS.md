@@ -127,7 +127,9 @@ one. This file covers how to work on it safely.
   stops adopting once `shuttingDown` or `paused` (`Daemon.accepting`). Pausing from the menu
   (`Control.paused`) restores and drops every session; nothing is adopted until those restores
   finish, even after a resume (`PauseGate`), and quitting waits for them (`Daemon.pausing`). A
-  pause is never persisted.
+  different product announced in a slot meanwhile only records the product: nothing replaces an
+  endpoint a restore is using, and the slot's endpoint is replaced and identified afresh once the
+  restores are done (`Daemon.replacementsDue`, `adoptStragglers`). A pause is never persisted.
 - Device actions (`cycleDPI`, `toggleScrollMode`, haptics) and `apply()`'s DPI and SmartShift
   writes run on one chain (`Session.deviceActions`, a `SerialChain`), one at a time, each reading
   what is wanted (`liveDPI`, `scrollMode`) as it runs, so a press mid-apply is neither undone nor

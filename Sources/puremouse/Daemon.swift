@@ -51,6 +51,9 @@ final class Daemon {
     private var ignored: Set<Key> = []
     /// The wireless product ID last announced in each receiver slot.
     private var slotProducts: [Key: UInt16] = [:]
+    /// Slots announced a different device while not `accepting`: their endpoint is replaced once
+    /// the restores have finished (`adoptStragglers`).
+    private var replacementsDue: Set<Key> = []
     /// Receivers whose connection notifications are on, being turned on, and being retried
     /// (`retryNotifications`).
     private var notifying: Set<ObjectIdentifier> = []
@@ -439,6 +442,7 @@ final class Daemon {
         }
         ignored = ignored.filter { $0.interface != id }
         slotProducts = slotProducts.filter { $0.key.interface != id }
+        replacementsDue = replacementsDue.filter { $0.interface != id }
         interfaceNumbers[id] = nil
         statusChanged()
     }
@@ -508,12 +512,20 @@ final class Daemon {
     /// A connection notification for a slot with no session. A different device in the slot
     /// (say a mouse paired where a keyboard was) is identified afresh on a new endpoint even if
     /// the slot was ignored; the first notification after attach re-checks an ignored device once.
+    /// While quitting or paused (not `accepting`) a different device only has its product recorded:
+    /// a pause's restores may still be using the endpoint, so it is replaced after they finish.
     private func slotAnnounced(_ device: HIDPPDevice, _ report: Report) {
         let key = Key(device)
         var device = device
         if let product = Receiver.productID(report), slotProducts[key] != product {
             ignored.remove(key)
-            if productAnnounced(product, key) { device = replaceEndpoint(device) }
+            if productAnnounced(product, key) {
+                guard accepting else {
+                    replacementsDue.insert(key)
+                    return
+                }
+                device = replaceEndpoint(device)
+            }
         }
         guard Receiver.isLinkEstablished(report) else { return }
         Task { [device] in await adoptRetrying(device) }
@@ -558,9 +570,11 @@ final class Daemon {
     }
 
     /// Closes a receiver slot's endpoint, with its session and retry, and listens there afresh:
-    /// nothing learned about the old device (feature indices, DPI list, diversion) carries over.
+    /// nothing learned about the old device (feature indices, DPI list, diversion, that it was
+    /// no mouse) carries over.
     private func replaceEndpoint(_ device: HIDPPDevice) -> HIDPPDevice {
         let key = Key(device)
+        ignored.remove(key)
         cancelRetries { $0 == key }
         sessions.removeValue(forKey: key)?.close()
         device.close()  // before `listen`, whose subscription it would otherwise remove
@@ -696,8 +710,15 @@ final class Daemon {
         }
     }
 
-    /// Retries endpoints that answered nothing earlier, such as a mouse asleep at attach time.
+    /// Retries endpoints that answered nothing earlier, such as a mouse asleep at attach time,
+    /// after replacing those whose slot announced a different device while not `accepting`.
     private func adoptStragglers() async {
+        if accepting {
+            for key in replacementsDue {
+                if let endpoint = endpoints[key] { _ = replaceEndpoint(endpoint) }
+            }
+            replacementsDue = []
+        }
         for (key, endpoint) in endpoints where sessions[key] == nil {
             await adoptRetrying(endpoint)
         }
