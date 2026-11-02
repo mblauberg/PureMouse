@@ -1,15 +1,29 @@
-# partial: from the log, not a probe
-# Source: https://github.com/mblauberg/PureMouse/issues/1
-# Known: 0005 1004 1b04 1d4b 2201; no SmartShift or either divertable wheel.
-# Control metadata, feature indices, battery and DPI list are illustrative; 1650 snaps to 1600.
+# Signature Plus M750, a real `puremouse probe` dump by adlyzi in issue #1:
+# https://github.com/mblauberg/PureMouse/issues/1 (copied verbatim below).
+== Logi M750 pid=0xb02c page=0x0001 transport=Bluetooth Low Energy
+
+-- index 255: HID++ 4.5
   name: Signature Plus M750
-  features: 01:0001 02:0005 03:1004 04:1b04 05:1d4b 06:2201
+  device product IDs: bluetoothLE=0xb02c
+  features: 01:0001 02:0003 03:0005 04:1d4b 05:0020 06:0021 07:0007 08:1004 09:1b04 0a:1814 0b:1815 0c:2250 0d:2130 0e:2201 0f:00c3 10:1802 11:1803 12:1806 13:1816 14:1805 15:1830 16:1891 17:18a1 18:1e00 19:1e02 1a:1e22 1b:1602 1c:1eb0 1d:1861 1e:18b1 1f:920a
   controls (0x1B04 getCidInfo / getCidReporting):
-    cid=0x0052 info=00 52 00 00 20 00 00 00 00 reporting=00 52 00 00 00 00
-    cid=0x0053 info=00 53 00 00 20 00 00 00 00 reporting=00 53 00 00 00 00
-    cid=0x0056 info=00 56 00 00 20 00 00 00 00 reporting=00 56 00 00 00 00
-    cid=0x00fd info=00 fd 00 00 20 00 00 00 00 reporting=00 fd 00 00 00 00
+    cid=0x0050 info=00 50 00 38 01 00 01 00 04 reporting=00 50 00 00 00 00
+    cid=0x0051 info=00 51 00 39 01 00 01 00 04 reporting=00 51 00 00 00 00
+    cid=0x0052 info=00 52 00 3a 31 00 03 07 05 reporting=00 52 00 00 00 00
+    cid=0x0053 info=00 53 00 3c 31 00 02 03 0d reporting=00 53 00 00 00 00
+    cid=0x0056 info=00 56 00 3e 31 00 02 03 0d reporting=00 56 00 00 00 00
+    cid=0x00fd info=00 fd 00 d2 31 00 03 07 05 reporting=00 fd 11 00 00 00
+    cid=0x00d7 info=00 d7 00 b4 a0 00 04 00 03 reporting=00 d7 00 00 00 00
+  smartshift 0x2110 get: feature 0x2110 not supported
+  smartshift 0x2111 caps: feature 0x2111 not supported
+  smartshift 0x2111 get: feature 0x2111 not supported
   dpi 0x2201 sensors: 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
   dpi 0x2201 list: 00 01 90 e0 64 0f a0 00 00 00 00 00 00 00 00 00
-  dpi 0x2201 get: 00 06 40 00 00 00 00 00 00 00 00 00 00 00 00 00
-  battery 0x1004 status: 50 04 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  dpi 0x2201 get: 00 06 40 03 e8 00 00 00 00 00 00 00 00 00 00 00
+  hires 0x2121 caps: feature 0x2121 not supported
+  hires 0x2121 mode: feature 0x2121 not supported
+  thumb 0x2150 info: feature 0x2150 not supported
+  thumb 0x2150 status: feature 0x2150 not supported
+  battery 0x1004 status: 5f 08 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  battery 0x1000 status: feature 0x1000 not supported
+  haptic 0x19B0 caps: feature 0x19b0 not supported

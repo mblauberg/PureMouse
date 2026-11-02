@@ -5,7 +5,7 @@ import HIDPP
 public final class FakeTransport: HIDPPTransport {
     public enum Timing { case nextTurn, synchronous, never }
     public let product: String
-    public let productID: Int
+    public var productID: Int
     public let isReceiver: Bool
     public var timing: Timing = .nextTurn
     public var sent: [Report] = []

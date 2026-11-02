@@ -26,7 +26,9 @@ public final class FakeDevice {
         }
     }
 
-    public let transport: FakeTransport
+    public private(set) var transport: FakeTransport
+    /// The device index it answers at: `directDeviceIndex`, or its receiver slot (`onReceiver`).
+    public private(set) var index = directDeviceIndex
     public var name: String
     public var ping: Ping = .hidpp20(4, 5)
     public var features: [UInt8: UInt16]
@@ -35,6 +37,11 @@ public final class FakeDevice {
     /// A failure remains until removed; useful for retry and offline tests.
     public var failures: [Call: Failure] = [:]
     public var playedWaveforms: [UInt8] = []
+    /// getDeviceType's answer (0x0005 function 2): 3 is a mouse.
+    public var kind: UInt8 = 3
+    /// Features whose next root lookup goes unanswered (`dropFirstLookup`), and those dropped.
+    private var lookupsToDrop: Set<UInt16> = []
+    public private(set) var droppedLookups: Set<UInt16> = []
 
     public init(name: String = "Fake mouse", features: [UInt8: UInt16] = [:]) {
         self.name = name
@@ -43,8 +50,21 @@ public final class FakeDevice {
         transport.answer = { [weak self] in try self?.answer($0) }
     }
 
+    /// Puts the mouse in `slot` of a receiver, on a transport of its own; before any endpoint.
+    public func onReceiver(slot: UInt8) {
+        transport = FakeTransport(product: "Fake receiver", productID: 0xC548, isReceiver: true)
+        transport.answer = { [weak self] in try self?.answer($0) }
+        index = slot
+    }
+
+    /// The receiver's connection notification (0x41) for the slot: `product` linked up or down.
+    public func announce(product: UInt16, linked: Bool = true) {
+        transport.deliver(Report(bytes: [0x10, index, 0x41, 0x10, linked ? 0 : 0x40,
+                                         UInt8(product & 0xFF), UInt8(product >> 8)])!)
+    }
+
     public func endpoint(softwareIDs: ClosedRange<UInt8> = HIDPPDevice.defaultSoftwareIDs) -> HIDPPDevice {
-        HIDPPDevice(interface: transport, index: directDeviceIndex, softwareIDs: softwareIDs)
+        HIDPPDevice(interface: transport, index: index, softwareIDs: softwareIDs)
     }
 
     public var mainWheelDiverted: Bool { (responses[Call(0x2121, 1)]?.first ?? 0) & 1 != 0 }
@@ -57,7 +77,7 @@ public final class FakeDevice {
 
     public func emit(_ feature: UInt16, function: UInt8 = 0, params: [UInt8]) {
         guard let index = features.first(where: { $0.value == feature })?.key else { return }
-        transport.deliver(Report(deviceIndex: directDeviceIndex, featureIndex: index,
+        transport.deliver(Report(deviceIndex: self.index, featureIndex: index,
                                  function: function, softwareID: 0, params: params))
     }
 
@@ -77,10 +97,22 @@ public final class FakeDevice {
 
     public func control(_ cid: UInt16) -> Control? { controls.first { $0.cid == cid } }
 
+    /// Every control back to native reporting, as a mouse comes up: for a dump taken while
+    /// another program had diverted some.
+    public func resetReporting() {
+        for control in controls { setReporting(control.cid) }
+    }
+
     /// Sets the reporting flags `cid` reads back with, as left by another program or process.
     public func setReporting(_ cid: UInt16, diverted: Bool = false, persistent: Bool = false, rawXY: Bool = false) {
         guard let i = controls.firstIndex(where: { $0.cid == cid }) else { preconditionFailure("no control \(cid)") }
         controls[i].reporting[2] = (diverted ? 1 : 0) | (persistent ? 4 : 0) | (rawXY ? 0x10 : 0)
+    }
+
+    /// The next root lookup of `feature` goes unanswered, as a request lost to a busy receiver
+    /// does; the ones after it are answered. Recorded in `droppedLookups` once dropped.
+    public func dropFirstLookup(of feature: UInt16) {
+        lookupsToDrop.insert(feature)
     }
 
     private func answer(_ r: Report) throws -> Report? {
@@ -104,6 +136,10 @@ public final class FakeDevice {
             }
             guard p.count >= 2 else { return FakeTransport.error(to: r, code: 2) }
             let id = UInt16(p[0]) << 8 | UInt16(p[1])
+            if r.function == 0, lookupsToDrop.remove(id) != nil {
+                droppedLookups.insert(id)
+                return nil
+            }
             return reply([features.first { $0.value == id }?.key ?? 0])
         }
         switch (feature, r.function) {
@@ -113,6 +149,7 @@ public final class FakeDevice {
             return reply([UInt8(id >> 8), UInt8(id & 0xFF)])
         case (0x0005, 0): return reply([UInt8(name.utf8.count)])
         case (0x0005, 1): return reply(Array(name.utf8.dropFirst(Int(p.first ?? 0)).prefix(16)))
+        case (0x0005, 2): return reply([kind])
         case (0x1B04, 0): return reply([UInt8(controls.count)])
         case (0x1B04, 1):
             guard let i = p.first, Int(i) < controls.count else { return FakeTransport.error(to: r, code: 2) }
@@ -149,6 +186,10 @@ public final class FakeDevice {
     public static func probe(_ text: String) -> FakeDevice {
         let fake = FakeDevice()
         for line in text.components(separatedBy: .newlines).map({ $0.trimmingCharacters(in: .whitespaces) }) {
+            if line.hasPrefix("== "), let pid = line.split(separator: " ").first(where: { $0.hasPrefix("pid=0x") }),
+               let id = Int(pid.dropFirst(6), radix: 16) {
+                fake.transport.productID = id
+            }
             if line.hasPrefix("name: ") { fake.name = String(line.dropFirst(6)) }
             if line.hasPrefix("device product IDs: ") {
                 let pairs = line.dropFirst(20).split(separator: " ").map { $0.split(separator: "=") }

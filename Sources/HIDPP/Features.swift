@@ -466,12 +466,50 @@ public enum DeviceName {
         }
         return String(decoding: bytes, as: UTF8.self)
     }
+
+    /// getDeviceType's answer (Solaar `DEVICE_KIND`).
+    public enum Kind: UInt8, CaseIterable, Sendable {
+        case keyboard, remote, numpad, mouse, touchpad, trackball, presenter, receiver
+
+        /// The word for it, as the status reports it.
+        public var name: String { "\(self)" }
+    }
+
+    /// Function 2, getDeviceType; nil for a type this table does not name.
+    public static func kind(_ d: HIDPPDevice) async throws -> Kind? {
+        guard let code = try await d.call(id, 2).first else { throw HIDPPError.malformedResponse }
+        return Kind(rawValue: code)
+    }
 }
 
-/// 0x0003 DEVICE_FW_VERSION getDeviceInfo: product IDs for the device's transports.
-/// Solaar Hidpp20.get_ids: transport flags at byte 6, up to three IDs at bytes 7–12.
+/// 0x0003 DEVICE_FW_VERSION getDeviceInfo: the unit ID and the product IDs for the device's
+/// transports. Solaar Hidpp20.get_ids: unit ID at bytes 1–4, transport flags at byte 6, up to
+/// three IDs at bytes 7–12, which together are the model ID.
 public enum DeviceIdentity {
     public static let id: UInt16 = 0x0003
+
+    /// The identity fields of a getDeviceInfo reply, as the device sends them.
+    public struct Info: Equatable, Sendable {
+        /// Stable for one physical device.
+        public var unitID: [UInt8]
+        /// Bytes 7–12: the same for every device of one model, whatever the connection.
+        public var modelID: [UInt8]
+
+        public init(unitID: [UInt8], modelID: [UInt8]) {
+            self.unitID = unitID
+            self.modelID = modelID
+        }
+    }
+
+    public static func info(_ d: HIDPPDevice) async throws -> Info {
+        guard let info = parseInfo(try await d.call(id, 0)) else { throw HIDPPError.malformedResponse }
+        return info
+    }
+
+    public static func parseInfo(_ params: [UInt8]) -> Info? {
+        guard params.count >= 13 else { return nil }
+        return Info(unitID: Array(params[1...4]), modelID: Array(params[7...12]))
+    }
 
     public enum Transport: UInt8, CaseIterable, Sendable {
         case bluetooth = 1, bluetoothLE = 2, wireless = 4, usb = 8

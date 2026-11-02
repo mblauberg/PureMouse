@@ -91,7 +91,7 @@ public enum Companion {
 public struct Status: Codable, Equatable, Sendable {
     /// Bumped when the status or control shape changes; a reader seeing a newer version shows
     /// "update PureMouse".
-    public static let currentSchema = 1
+    public static let currentSchema = 2
 
     public var schema = Status.currentSchema
     public var pid: Int32
@@ -161,8 +161,6 @@ public struct Status: Codable, Equatable, Sendable {
         /// Every DPI the sensor accepts, ascending; empty if it could not be read.
         public var dpiSteps: [Int]
         public var wheelMode: WheelMode?
-        public var hasSmartShift: Bool
-        public var hasThumbWheel: Bool
         /// Controls (buttons) the mouse can hand to PureMouse.
         public var controls: [Control]
         /// The key of this mouse in the config's `devices` section: `m` plus the 12 lowercase hex
@@ -174,13 +172,13 @@ public struct Status: Codable, Equatable, Sendable {
         public var unit: String?
         /// A word such as "mouse", "trackball" or "keyboard".
         public var kind: String?
-        /// What the mouse reports it can do; nil when not published. A member that is nil is
-        /// unknown (not false).
+        /// What the mouse reports it can do, once it has been configured; nil before. A member
+        /// that is nil is unknown (not false), and a reader treats it as available.
         public var capabilities: Capabilities?
 
         public init(id: String, name: String, connection: Connection, online: Bool, battery: Battery?,
-                    dpi: Int?, dpiSteps: [Int], wheelMode: WheelMode?, hasSmartShift: Bool,
-                    hasThumbWheel: Bool, controls: [Control], model: String? = nil, unit: String? = nil,
+                    dpi: Int?, dpiSteps: [Int], wheelMode: WheelMode?, controls: [Control],
+                    model: String? = nil, unit: String? = nil,
                     kind: String? = nil, capabilities: Capabilities? = nil) {
             self.id = id
             self.name = name
@@ -190,13 +188,17 @@ public struct Status: Codable, Equatable, Sendable {
             self.dpi = dpi
             self.dpiSteps = dpiSteps
             self.wheelMode = wheelMode
-            self.hasSmartShift = hasSmartShift
-            self.hasThumbWheel = hasThumbWheel
             self.controls = controls
             self.model = model
             self.unit = unit
             self.kind = kind
             self.capabilities = capabilities
+        }
+
+        /// Whether a setting that needs `capability` applies to this mouse: unless it is known to
+        /// lack it, so an unknown capability shows as available.
+        public func offers(_ capability: KeyPath<Capabilities, Bool?>) -> Bool {
+            capabilities?[keyPath: capability] != false
         }
 
         public enum Connection: String, Codable, Sendable { case receiver, bluetooth }
@@ -224,19 +226,15 @@ public struct Status: Codable, Equatable, Sendable {
             public var thumbWheel: Bool?
             public var haptics: Bool?
             public var battery: Bool?
-            /// HID++ feature IDs the mouse reports, as 4-digit lowercase hex strings, for support.
-            public var features: [String]?
 
             public init(dpi: Bool? = nil, smartShift: Bool? = nil, smoothScroll: Bool? = nil,
-                        thumbWheel: Bool? = nil, haptics: Bool? = nil, battery: Bool? = nil,
-                        features: [String]? = nil) {
+                        thumbWheel: Bool? = nil, haptics: Bool? = nil, battery: Bool? = nil) {
                 self.dpi = dpi
                 self.smartShift = smartShift
                 self.smoothScroll = smoothScroll
                 self.thumbWheel = thumbWheel
                 self.haptics = haptics
                 self.battery = battery
-                self.features = features
             }
         }
 
@@ -287,7 +285,8 @@ public struct Control: Codable, Equatable, Sendable {
     /// choosing the saved value leaves the file unchanged, so no reload would.
     public var useConfiguredDPI: Int?
     /// Aims `useConfiguredDPI` at the one mouse with this device key (`Status.Device.model`),
-    /// leaving the others as they are. Nil means every mouse.
+    /// leaving the others as they are. Nil means every mouse. Lowercased when set or decoded, as
+    /// device keys are, so it compares exactly.
     public var device: String?
 
     public init(paused: Bool = false, capture: Capture? = nil, useConfiguredDPI: Int? = nil,
@@ -295,16 +294,31 @@ public struct Control: Codable, Equatable, Sendable {
         self.paused = paused
         self.capture = capture
         self.useConfiguredDPI = useConfiguredDPI
-        self.device = device
+        self.device = device?.lowercased()
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(paused: try c.decode(Bool.self, forKey: .paused),
+                  capture: try c.decodeIfPresent(Capture.self, forKey: .capture),
+                  useConfiguredDPI: try c.decodeIfPresent(Int.self, forKey: .useConfiguredDPI),
+                  device: try c.decodeIfPresent(String.self, forKey: .device))
     }
 
     public struct Capture: Codable, Equatable, Sendable {
         public var token: Int
-        /// Listens on the one mouse with this device key only; nil means every mouse.
+        /// Listens on the one mouse with this device key only; nil means every mouse. Lowercased
+        /// as `Control.device` is.
         public var device: String?
         public init(token: Int, device: String? = nil) {
             self.token = token
-            self.device = device
+            self.device = device?.lowercased()
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            self.init(token: try c.decode(Int.self, forKey: .token),
+                      device: try c.decodeIfPresent(String.self, forKey: .device))
         }
     }
 }

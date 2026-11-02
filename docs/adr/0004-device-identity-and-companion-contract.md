@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted, not built
+Accepted. The daemon publishes the key, unit, kind and capabilities (`Identification`,
+`Session.status`); the menu's use of them beyond the SmartShift and thumb-wheel rows comes with the
+multi-device Settings ([ADR 12](0012-multi-device-settings-scopes.md)).
 
 ## Context
 

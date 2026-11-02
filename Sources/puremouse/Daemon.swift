@@ -34,7 +34,9 @@ final class Daemon {
     private var nextInterfaceNumber = 1
     /// Every endpoint we listen on, keyed by interface and device index.
     private var endpoints: [Key: HIDPPDevice] = [:]
-    private var sessions: [Key: Session] = [:]
+    private(set) var sessions: [Key: Session] = [:]
+    /// What sessions are made with: live permissions, or a test's.
+    private let environment: SessionEnvironment
     /// Receiver setup, cancelled when the receiver goes away.
     private var interfaceTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
     /// Endpoints whose device did not answer, being tried again: at most one retry each, however
@@ -67,6 +69,8 @@ final class Daemon {
     private var pauseRestoreSteps: [Int: Int] = [:]
     /// The current or last select-by-pressing request, as reported.
     private var capture: Status.Capture?
+    /// The device key a listening capture is aimed at (`Control.Capture.device`); nil for every mouse.
+    private var captureDevice: String?
     private var captureTimeout: Task<Void, Never>?
     /// The last capture token acted on, so re-reading `control.json` does not restart it.
     private var lastCaptureToken: Int?
@@ -84,7 +88,7 @@ final class Daemon {
         Handoff.handingOff(pointerAway: pointerAway, enabled: config.universalControl.handOff)
     }
 
-    private struct Key: Hashable {
+    struct Key: Hashable {
         let interface: ObjectIdentifier
         let index: UInt8
         init(_ device: HIDPPDevice) {
@@ -105,8 +109,9 @@ final class Daemon {
         }
     }
 
-    init(configURL: URL) {
+    init(configURL: URL, environment: SessionEnvironment = .live) {
         self.configURL = configURL
+        self.environment = environment
         config = .empty
         if !loadConfig() {
             // Stay up with nothing configured rather than crash-loop under launchd; fixing the
@@ -172,7 +177,7 @@ final class Daemon {
 
     // MARK: Status
 
-    private func status(running: Bool) -> Status {
+    func status(running: Bool) -> Status {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
         return Status(
             pid: getpid(), startedAt: startedAt, version: version, running: running, paused: paused,
@@ -205,26 +210,39 @@ final class Daemon {
         } else {
             control = Control()
         }
+        handle(control)
+    }
+
+    /// Acts on the menu bar app's requests: the ones whose token is new, and a pause that differs.
+    func handle(_ control: Control) {
         if control.paused != paused { control.paused ? pause() : resume() }
         if let request = control.capture {
-            if request.token != lastCaptureToken { startCapture(request.token) }
+            if request.token != lastCaptureToken { startCapture(request.token, device: request.device) }
         } else {
             endCapture(.cancelled)
         }
         if let token = control.useConfiguredDPI, token != lastDPIToken {
             lastDPIToken = token
-            sessions.values.forEach { $0.useConfiguredDPI() }
+            sessions.values.filter { Self.targets(control.device, $0) }.forEach { $0.useConfiguredDPI() }
         }
     }
 
-    /// Select by pressing: for up to `captureDuration`, every control of every mouse reports its
-    /// press here instead of acting.
-    private func startCapture(_ token: Int) {
+    /// Whether a request aimed at `device` (a device key; nil for every mouse) covers `session`.
+    /// Mice of one model share a key, so both are covered; a mouse without a key only by nil.
+    /// `Control` lowercases the key, as device keys are.
+    static func targets(_ device: String?, _ session: Session) -> Bool {
+        device.map { $0 == session.deviceKey } ?? true
+    }
+
+    /// Select by pressing: for up to `captureDuration`, every control of every mouse (or of the
+    /// mice with key `device`) reports its press here instead of acting.
+    private func startCapture(_ token: Int, device: String?) {
         endCapture(.cancelled)
         Log.info("listening for a button press")
         lastCaptureToken = token
+        captureDevice = device
         capture = Status.Capture(token: token, state: .listening, cid: nil, deviceID: nil)
-        sessions.values.forEach(beginCapture)
+        sessions.values.filter { Self.targets(device, $0) }.forEach(beginCapture)
         captureTimeout = Task {
             try? await Task.sleep(for: Self.captureDuration)
             guard !Task.isCancelled, capture?.token == token else { return }
@@ -235,20 +253,23 @@ final class Daemon {
 
     private func beginCapture(_ session: Session) {
         session.onCapture = { [weak self, unowned session] cid in
-            self?.endCapture(.pressed, cid: cid, deviceID: session.id)
+            self?.endCapture(.pressed, cid: cid, deviceID: session.id, model: session.deviceKey)
         }
         session.beginCapture()
     }
 
     /// Ends a capture that is listening, reporting `state`, and restores normal diversion.
-    private func endCapture(_ state: Status.Capture.State, cid: UInt16? = nil, deviceID: String? = nil) {
+    private func endCapture(_ state: Status.Capture.State, cid: UInt16? = nil, deviceID: String? = nil,
+                            model: String? = nil) {
         guard var current = capture, current.state == .listening else { return }
         captureTimeout?.cancel()
         captureTimeout = nil
         current.state = state
         current.cid = cid
         current.deviceID = deviceID
+        current.model = model
         capture = current
+        captureDevice = nil
         sessions.values.forEach { $0.endCapture() }
         statusChanged()
     }
@@ -327,11 +348,16 @@ final class Daemon {
 
     /// The permissions PureMouse needs for its config and mice now but lacks.
     private var missingPermissions: Permissions {
-        let scopes = [config.global] + Array(config.apps.values)
-        let postsEvents = !config.boundControls.isEmpty
-            || scopes.contains { $0.smoothScroll?.enabled == true || $0.thumbWheel.mode != .scroll }
-        return Permissions.needed(postsEvents: postsEvents, bluetooth: monitor.interfaces.contains { !$0.isReceiver },
-                                  hidOpenFailed: hidOpenFailed).subtracting(permissions)
+        Permissions.needed(postsEvents: Self.postsEvents(config), bluetooth: monitor.interfaces.contains { !$0.isReceiver },
+                           hidOpenFailed: hidOpenFailed).subtracting(permissions)
+    }
+
+    /// Whether some mouse may need to post events (Accessibility): any scope of the top level or
+    /// of a device entry binds a control, scrolls smoothly or gives the thumb wheel actions.
+    static func postsEvents(_ config: Config) -> Bool {
+        config.everyScope.contains {
+            !$0.bindings.isEmpty || $0.smoothScroll?.enabled == true || $0.thumbWheel.mode != .scroll
+        }
     }
 
     /// A fresh child process (`puremouse permissions`) sees new grants that this one cannot. While
@@ -464,7 +490,7 @@ final class Daemon {
 
     /// Starts listening on a device index. Until a session adopts it, a receiver slot only
     /// watches for its device connecting.
-    private func listen(_ interface: any HIDPPTransport, index: UInt8) -> HIDPPDevice {
+    func listen(_ interface: any HIDPPTransport, index: UInt8) -> HIDPPDevice {
         let device = HIDPPDevice(interface: interface, index: index)
         endpoints[Key(device)] = device
         watch(device)
@@ -495,11 +521,24 @@ final class Daemon {
 
     /// A connection notification for a slot with a session (`Session.onConnection`). A different
     /// device there retires the session, as if its mouse had gone, and is adopted afresh on a new
-    /// endpoint. Returns whether that happened.
+    /// endpoint. A mouse adopted before the slot's product was known, and keyed by its product,
+    /// gets its key when it next links up, with a session on that key's settings in place of this
+    /// one. While quitting or paused (not `accepting`) it only records the product: the session
+    /// may already be in a restore's snapshot, so nothing replaces or configures it. Returns
+    /// whether it dealt with the announcement, so the session does nothing more with it.
     private func sessionSlotAnnounced(_ session: Session, _ report: Report) -> Bool {
         let key = Key(session.device)
-        guard sessions[key] === session, let product = Receiver.productID(report),
-              productAnnounced(product, key) else { return false }
+        guard sessions[key] === session, let product = Receiver.productID(report) else { return false }
+        let isNewDevice = productAnnounced(product, key)
+        guard accepting else { return true }
+        guard isNewDevice else {
+            let identity = session.identity.keyed(byProduct: product)
+            guard identity != session.identity, Receiver.isLinkEstablished(report) else { return false }
+            Log.info("\(session.name): model=\(identity.deviceKey ?? "unknown") from its slot's pid=\(String(format: "0x%04x", product))")
+            replace(session, at: key, identity: identity, keepingLiveDPI: Self.keepsLiveDPI(
+                config.forDevice(session.deviceKey), config.forDevice(identity.deviceKey)))
+            return true
+        }
         Log.info("\(session.name): a different device (pid=\(String(format: "0x%04x", product))) is in its slot")
         let device = replaceEndpoint(session.device)
         if Receiver.isLinkEstablished(report) { Task { await adoptRetrying(device) } }
@@ -561,8 +600,8 @@ final class Daemon {
     }
 
     /// Creates a session if the endpoint is an awake HID++ 2.0 device with adjustable DPI or a
-    /// configured control, so keyboards and other Logitech devices are left alone.
-    private func adopt(_ device: HIDPPDevice) async -> Adoption {
+    /// control configured for it (`gates`).
+    func adopt(_ device: HIDPPDevice) async -> Adoption {
         let key = Key(device)
         guard sessions[key] == nil else { return .adopted }
         guard !ignored.contains(key) else { return .notAMouse }
@@ -589,20 +628,31 @@ final class Daemon {
         } catch {
             return .noAnswer
         }
-        let configured = config.boundControls
-        guard hasDPI || controls.contains(where: { configured.contains($0.cid) }) else { return .notAMouse }
-        let name = (try? await DeviceName.get(device)) ?? "device \(device.index)"
+        // Before identification the key is unknown, so a control bound for any mouse lets it on;
+        // the settings for its own key then decide (`gates`). Neither asks a keyboard more.
+        guard Self.gates(hasDPI: hasDPI, controls: controls, bound: config.everyBoundControl) else { return .notAMouse }
         let pid: UInt16? = device.interface.isReceiver
             ? slotProducts[key] : UInt16(exactly: device.interface.productID)
+        let name = (try? await DeviceName.get(device)).flatMap { $0.isEmpty ? nil : $0 } ?? "device \(device.index)"
+        let identity = await Identification.read(device, productID: pid)
+        guard Self.gates(hasDPI: hasDPI, controls: controls, bound: config.forDevice(identity.deviceKey).boundControls)
+        else { return .notAMouse }
         let pidLabel = pid.map { String(format: "0x%04x", $0) } ?? "unknown"
         // The device may have gone, or the daemon paused or begun quitting, while we were asking.
         guard accepting else { return .stopped }
         guard endpoints[key] === device, sessions[key] == nil else { return .noAnswer }
-        Log.info("adopting \(name) pid=\(pidLabel) on \(device.interface.product) index \(device.index)")
-        let session = Session(device: device, name: name, id: deviceID(key), controls: controls, config: config,
-                              inheriting: Session.Inherited(fresh: true, away: handingOff))
+        Log.info("adopting \(name) pid=\(pidLabel) model=\(identity.deviceKey ?? "unknown") on \(device.interface.product) index \(device.index)")
+        let session = Session(device: device, name: name, identity: identity, id: deviceID(key), controls: controls,
+                              config: config.forDevice(identity.deviceKey),
+                              inheriting: Session.Inherited(fresh: true, away: handingOff), environment: environment)
         add(session, key)
         return .adopted
+    }
+
+    /// Whether a device is a mouse PureMouse configures: it has adjustable DPI, or a control
+    /// `bound` binds, so keyboards and other Logitech devices are left alone.
+    static func gates(hasDPI: Bool, controls: [ReprogControls.Control], bound: Set<UInt16>) -> Bool {
+        hasDPI || controls.contains { bound.contains($0.cid) }
     }
 
     private func deviceID(_ key: Key) -> String {
@@ -615,7 +665,7 @@ final class Daemon {
         if session.device.interface.isReceiver {
             session.onConnection = { [weak self, unowned session] in self?.sessionSlotAnnounced(session, $0) ?? false }
         }
-        if capture?.state == .listening { beginCapture(session) }
+        if capture?.state == .listening, Self.targets(captureDevice, session) { beginCapture(session) }
         session.configure()
         statusChanged()
     }
@@ -648,7 +698,7 @@ final class Daemon {
         reload()
     }
 
-    private func reload() {
+    func reload() {
         guard !shuttingDown else { return }
         defer { statusChanged() }
         let previous = config
@@ -659,17 +709,10 @@ final class Daemon {
         }
         Log.info("config reloaded")
         endCapture(.cancelled)
-        // A DPI picked by cycleDPI lasts until the configured DPI or presets change.
-        let keepLiveDPI = previous.dpi == config.dpi && previous.dpiPresets == config.dpiPresets
         ignored = []
         for (key, old) in sessions {
-            old.close()
-            var inherited = old.inheritance
-            if !keepLiveDPI { inherited.state.liveDPI = nil }
-            inherited.away = handingOff
-            inherited.diversionAfter = old.diversionEnd
-            add(Session(device: old.device, name: old.name, id: old.id, controls: Array(old.controls.values),
-                        config: config, inheriting: inherited), key)
+            replace(old, at: key, identity: old.identity, keepingLiveDPI: Self.keepsLiveDPI(
+                previous.forDevice(old.deviceKey), config.forDevice(old.deviceKey)))
         }
         if handingOff != wasHandingOff {
             // The replacements already start in the new state; this only logs it.
@@ -679,10 +722,46 @@ final class Daemon {
         Task { await adoptStragglers() }
     }
 
+    /// Closes `old` and adds a session in its place with `identity` and the settings for its key,
+    /// inheriting `old`'s state (`Session.inheritance`); the DPI `cycleDPI` picked only when
+    /// `keepingLiveDPI`.
+    private func replace(_ old: Session, at key: Key, identity: Identification, keepingLiveDPI: Bool) {
+        old.close()
+        var inherited = old.inheritance
+        if !keepingLiveDPI { inherited.state.liveDPI = nil }
+        inherited.away = handingOff
+        inherited.diversionAfter = old.diversionEnd
+        add(Session(device: old.device, name: old.name, identity: identity, id: old.id,
+                    controls: Array(old.controls.values), config: config.forDevice(identity.deviceKey),
+                    inheriting: inherited, environment: environment), key)
+    }
+
+    /// A DPI picked by `cycleDPI` lasts until the mouse's configured DPI or presets change: from
+    /// `before` to `after`, each resolved for its device key (`Config.forDevice`).
+    static func keepsLiveDPI(_ before: Config, _ after: Config) -> Bool {
+        before.dpi == after.dpi && before.dpiPresets == after.dpiPresets
+    }
+
     /// Restores every mouse to native behaviour, then exits. Gives up after `shutdownDeadline` so
     /// a sleeping mouse cannot hold up logout; it resets itself on its next reconnect anyway.
     private func shutdown() {
-        guard !shuttingDown else { return }
+        guard let (restoring, deadline) = quit() else { return }
+        Task {
+            await restoring.value
+            exitReporting()
+        }
+        Task {
+            try? await Task.sleep(for: deadline)
+            Log.error("restore timed out")
+            exitReporting()
+        }
+    }
+
+    /// `shutdown` short of exiting, so tests can run it: stops adopting and restores every mouse,
+    /// alongside the pauses still restoring. Returns that restore and how long quitting waits for
+    /// it; nil when already quitting.
+    func quit() -> (restoring: Task<Void, Never>, deadline: Duration)? {
+        guard !shuttingDown else { return nil }
         shuttingDown = true
         Log.info("quitting")
         universalControl?.stop()
@@ -691,18 +770,13 @@ final class Daemon {
         let all = Array(sessions.values)
         let deadline = Self.shutdownDeadline(restoreSteps: Self.restoreSteps(
             quitting: all.map(\.restoreSteps), pausing: Array(pauseRestoreSteps.values)))
-        Task { [pausing] in
+        let restoring = Task { [pausing] in
             await withTaskGroup(of: Void.self) { group in
                 for session in all { group.addTask { await session.restore() } }
                 if let pausing { group.addTask { await pausing.value } }
             }
-            exitReporting()
         }
-        Task {
-            try? await Task.sleep(for: deadline)
-            Log.error("restore timed out")
-            exitReporting()
-        }
+        return (restoring, deadline)
     }
 
     /// The restore steps quitting must allow for: the mice restore side by side, alongside the

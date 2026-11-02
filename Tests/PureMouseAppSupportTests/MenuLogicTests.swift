@@ -209,7 +209,7 @@ private func text(_ tree: ConfigTree) -> String { String(decoding: tree.data(), 
 
 private func mouse(_ id: String, online: Bool, dpi: Int?, steps: [Int] = []) -> Status.Device {
     Status.Device(id: id, name: id, connection: .receiver, online: online, battery: nil, dpi: dpi, dpiSteps: steps,
-                  wheelMode: nil, hasSmartShift: false, hasThumbWheel: false, controls: [])
+                  wheelMode: nil, controls: [])
 }
 
 @Test func dpiShowsTheLiveValueOverTheConfiguredOne() {

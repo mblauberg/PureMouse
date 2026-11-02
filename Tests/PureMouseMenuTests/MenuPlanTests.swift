@@ -46,7 +46,7 @@ struct MenuPlanTests {
                       wheel: Status.Device.WheelMode? = .ratchet) -> Status.Device {
         Status.Device(id: id, name: name, connection: connection, online: online,
                       battery: percent.map { .init(percent: $0, level: .good, charging: false) }, dpi: dpi,
-                      dpiSteps: steps, wheelMode: wheel, hasSmartShift: true, hasThumbWheel: true, controls: [])
+                      dpiSteps: steps, wheelMode: wheel, controls: [])
     }
 
     static func running(_ devices: [Status.Device] = [mouse("a")]) -> MenuState {

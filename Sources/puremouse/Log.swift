@@ -34,8 +34,10 @@ enum Log {
         write("info", message())
     }
 
+    /// Written with `--verbose`, and always to a test's `.lines` capture, so tests can see them.
     static func debug(_ message: @autoclosure () -> String) {
-        if verbose { write("debug", message()) }
+        let capturing = if case .lines? = testOutput { true } else { false }
+        if verbose || capturing { write("debug", message()) }
     }
 
     static func error(_ message: @autoclosure () -> String) {

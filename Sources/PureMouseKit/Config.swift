@@ -29,36 +29,44 @@ public struct Config: Decodable, Sendable {
     public private(set) var bindings: [UInt16: Binding] = [:]
     /// Names in `buttons` that are neither a `Button` nor a hex control ID; skipped. The daemon
     /// logs them once, at load.
-    public private(set) var unknownButtons: [String] = []
+    public internal(set) var unknownButtons: [String] = []
     /// Per-app settings by lowercased bundle ID, each already merged onto the global ones
     /// (`Config+Apps.swift`).
     public internal(set) var apps: [String: AppSettings] = [:]
+    /// Per-device settings by device key (`Config+Devices.swift`), each resolved: the top level,
+    /// the entry on top, then `apps` merged onto that.
+    public internal(set) var devices: [String: Config] = [:]
     /// Problems that do not fail the load, such as a per-app key that is global only, worded
     /// for the log. The daemon logs them once, at load.
     public internal(set) var warnings: [String] = []
 
-    private init() {}
+    init() {}
 
     public init(from decoder: Decoder) throws {
-        try self.init(decoder.container(keyedBy: AnyKey.self), base: nil)
+        try self.init(decoder.container(keyedBy: AnyKey.self))
     }
 
-    /// The top-level sections `c` names, each decoded on top of the same section of `base` (or of
-    /// the defaults), so a caller can layer one set of settings over another. A section `c` leaves
-    /// out is `base`'s; `dpiPresets` replaces `base`'s whole and a binding replaces `base`'s for
-    /// that control.
-    ///
-    /// `apps`, `warnings` and `unknownButtons` are never taken from `base`: they start empty, and
-    /// `apps` in `c` is decoded against the layered result. Per-app settings snapshot the globals
-    /// they inherit, so a caller that owns precedence (top level, then device, then app) layers
-    /// the device sections first and decodes the top-level `apps` against that result.
-    init(_ c: KeyedDecodingContainer<AnyKey>, base: Config?) throws {
-        let base = base ?? Config()
-        self = base
-        apps = [:]
-        warnings = []
-        unknownButtons = []
-        dpi = try c.decodeIfPresent(Int.self, forKey: AnyKey("dpi"), in: Self.dpiRange) ?? base.dpi
+    /// The top level, then `apps` decoded against it, then each `devices` entry. `decodeSections`
+    /// is the one layering point: a device entry decodes its sections on top of the top level's
+    /// (`Config+Devices.swift`).
+    init(_ c: KeyedDecodingContainer<AnyKey>) throws {
+        try decodeSections(c)
+        if let section = try c.nestedContainerIfPresent(forKey: AnyKey("universalControl")) {
+            universalControl = try UniversalControl(section, base: universalControl)
+        }
+        let appsSection = c.contains(AnyKey("apps"))
+            ? try c.nestedContainer(keyedBy: AnyKey.self, forKey: AnyKey("apps")) : nil
+        if let appsSection { try decodeApps(appsSection) }
+        if let section = try c.nestedContainerIfPresent(forKey: AnyKey("devices")) {
+            try decodeDevices(section, apps: appsSection)
+        }
+    }
+
+    /// The sections a device entry may set too (`deviceSections`), each on top of the same
+    /// section of `self`: a section `c` leaves out stays as it is, `dpiPresets` replaces the whole
+    /// list and a binding replaces the one for its control.
+    mutating func decodeSections(_ c: KeyedDecodingContainer<AnyKey>) throws {
+        dpi = try c.decodeIfPresent(Int.self, forKey: AnyKey("dpi"), in: Self.dpiRange) ?? dpi
         if c.contains(AnyKey("dpiPresets")) {
             let key = AnyKey("dpiPresets")
             var presets: [Int] = []
@@ -78,25 +86,19 @@ public struct Config: Decodable, Sendable {
             dpiPresets = presets
         }
         if let section = try c.nestedContainerIfPresent(forKey: AnyKey("scrollWheel")) {
-            scrollWheel = try ScrollWheel(section, base: base.scrollWheel)
+            scrollWheel = try ScrollWheel(section, base: scrollWheel)
         }
         if let section = try c.nestedContainerIfPresent(forKey: AnyKey("thumbWheel")) {
-            thumbWheel = try ThumbWheel(global: section, base: base.thumbWheel ?? ThumbWheel())
+            thumbWheel = try ThumbWheel(global: section, base: thumbWheel ?? ThumbWheel())
         }
         if let section = try c.nestedContainerIfPresent(forKey: AnyKey("smoothScroll")) {
-            smoothScroll = try SmoothScroll(section, base: base.smoothScroll ?? SmoothScroll())
+            smoothScroll = try SmoothScroll(section, base: smoothScroll ?? SmoothScroll())
         }
         if let section = try c.nestedContainerIfPresent(forKey: AnyKey("buttons")) {
             try decodeButtons(section)
         }
         if let section = try c.nestedContainerIfPresent(forKey: AnyKey("gesture")) {
-            gesture = try GestureSettings(section, base: base.gesture)
-        }
-        if let section = try c.nestedContainerIfPresent(forKey: AnyKey("universalControl")) {
-            universalControl = try UniversalControl(section, base: base.universalControl)
-        }
-        if c.contains(AnyKey("apps")) {
-            try decodeApps(try c.nestedContainer(keyedBy: AnyKey.self, forKey: AnyKey("apps")))
+            gesture = try GestureSettings(section, base: gesture)
         }
     }
 

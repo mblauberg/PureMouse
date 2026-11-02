@@ -2,7 +2,13 @@ import Foundation
 
 extension FakeDevice {
     public static var mxMaster3S: FakeDevice { fixture("mx-master-3s") }
-    public static var m750: FakeDevice { fixture("m750") }
+    /// adlyzi's dump from issue #1, taken while PureMouse had diverted 0x00FD; the fake starts
+    /// with every control native.
+    public static var m750: FakeDevice {
+        let fake = fixture("m750")
+        fake.resetReporting()
+        return fake
+    }
 
     private static func fixture(_ name: String) -> FakeDevice {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()

@@ -124,16 +124,17 @@ as you save it; see [Configuration](docs/configuration.md).
 ## Supported mice
 
 PureMouse is developed and tested with the **MX Master 3S**. Rather than relying on a fixed list
-of models, it turns on each feature a mouse reports over HID++, so the rest of the MX family is
-covered too:
+of models, it turns on each feature a mouse reports over HID++, so the rest of the MX family
+should work too. Only the MX Master 3S has been tested on a real mouse; the others are untested:
 
-| Mouse | What PureMouse uses |
-|---|---|
-| MX Master 3S | Buttons, gestures, DPI, both wheels, SmartShift and battery |
-| MX Master 3 / 3 for Business | The same, including older firmware's battery reporting |
-| MX Master 4 | The same, plus haptic feedback as an action |
-| MX Anywhere 3 / 3S | Buttons, DPI, smooth scrolling, SmartShift and battery |
-| MX Vertical / Lift | Buttons, DPI and battery |
+| Mouse | What PureMouse uses | Tested |
+|---|---|---|
+| MX Master 3S | Buttons, gestures, DPI, both wheels, SmartShift and battery | Yes |
+| MX Master 3 / 3 for Business | The same, including older firmware's battery reporting | Untested |
+| MX Master 4 | The same, plus haptic feedback as an action | Untested |
+| MX Anywhere 3 / 3S | Buttons, DPI, smooth scrolling, SmartShift and battery | Untested |
+| MX Vertical / Lift | Buttons, DPI and battery | Untested |
+| Signature Plus M750 | Buttons, DPI and battery | Untested |
 
 Bluetooth and Logi Bolt or Unifying receivers are picked up automatically. Using a different
 Logitech mouse? Attaching [`puremouse probe` output](docs/troubleshooting.md#inspecting-a-mouse)

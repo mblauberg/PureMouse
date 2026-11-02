@@ -8,8 +8,21 @@ import Testing
         let decoder = JSONDecoder()
         struct Layer: Decodable {
             let config: Config
+            /// Without a base, the top level as loaded; on one, a layer as a device entry is
+            /// decoded on the top level (`Config.decodeDevices`): its sections, then its `apps`.
             init(from decoder: Decoder) throws {
-                config = try Config(decoder.container(keyedBy: AnyKey.self), base: decoder.userInfo[.base] as? Config)
+                let container = try decoder.container(keyedBy: AnyKey.self)
+                guard let base = decoder.userInfo[.base] as? Config else {
+                    config = try Config(container)
+                    return
+                }
+                var c = base
+                c.apps = [:]
+                c.warnings = []
+                c.unknownButtons = []
+                try c.decodeSections(container)
+                if let apps = try container.nestedContainerIfPresent(forKey: AnyKey("apps")) { try c.decodeApps(apps) }
+                config = c
             }
         }
         decoder.userInfo[.base] = base
