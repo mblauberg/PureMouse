@@ -58,9 +58,11 @@ public final class CaptureController {
         cancelTimeout = clock.after(Self.timeout) { [weak self] in self?.timedOut() }
     }
 
+    /// Ends a capture under way, and forgets how an earlier one ended: leaving Buttons by any
+    /// route calls this, and a "No button detected" left from a timeout must not outlive it.
     public func cancel() {
-        guard listening else { return }
-        end()
+        if listening { end() }
+        outcome = nil
     }
 
     /// The daemon never answered: stop it, and say nothing was pressed.

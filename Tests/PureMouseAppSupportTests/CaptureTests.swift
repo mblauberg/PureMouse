@@ -135,3 +135,16 @@ private func running(_ sandbox: Sandbox, status: Status = daemonStatus()) throws
     capture.handle(Status.Capture(token: 6, state: .cancelled, cid: nil, deviceID: nil))
     #expect(capture.outcome == nil)
 }
+
+@MainActor @Test func cancellingAfterATimeoutForgetsTheOutcome() throws {
+    let sandbox = try Sandbox()
+    let daemon = try running(sandbox)
+    let manual = ManualClock()
+    let capture = CaptureController(link: daemon, clock: manual.clock, newToken: { 5 })
+    capture.start()
+    manual.advance(11)
+    #expect(!capture.listening && capture.outcome == .noButtonDetected)
+    // Leaving Buttons cancels, though nothing is listening any more.
+    capture.cancel()
+    #expect(capture.outcome == nil)
+}
