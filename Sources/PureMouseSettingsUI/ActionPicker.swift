@@ -15,13 +15,13 @@ struct PickerEntry: Identifiable, Equatable {
     var symbol: String?
 
     /// The picker's entries, in order. Gesture directions get neither Mouse Default nor Hold and
-    /// Move. In an app, `sameAsEverywhere` (what applies elsewhere) adds the entry that removes the
-    /// app's own binding. `haptics`: whether to list the haptic waveforms (`ControlAvailability`).
-    static func all(allowsDefault: Bool, allowsGesture: Bool, sameAsEverywhere: String? = nil,
+    /// Move. In an app, `inherited` (what applies elsewhere, and where from) adds the entry that
+    /// removes the app's own binding, worded by its source. `haptics`: whether to list the haptic waveforms (`ControlAvailability`).
+    static func all(allowsDefault: Bool, allowsGesture: Bool, inherited: InheritedValue<String>? = nil,
                     haptics: Bool = true) -> [PickerEntry] {
         var entries: [PickerEntry] = []
-        if let inherited = sameAsEverywhere {
-            entries.append(PickerEntry(id: "inherit", label: "Same as Everywhere", detail: "(\(inherited))", group: nil,
+        if let inherited {
+            entries.append(PickerEntry(id: "inherit", label: inherited.entry, detail: "(\(inherited.inherited))", group: nil,
                                        kind: .set(.standard), symbol: "globe"))
         }
         if allowsDefault {
@@ -379,7 +379,7 @@ struct ActionButton: View {
 
     /// An app's binding as its row shows it: `.standard` leaves it to `everywhere`.
     static func inherited(_ action: ButtonAction, everywhere: String) -> InheritedValue<String> {
-        InheritedValue(own: action == .standard ? nil : action.label, inherited: everywhere, source: "Everywhere")
+        InheritedValue(own: action == .standard ? nil : action.label, inherited: everywhere, source: InheritedScope.everywhere)
     }
 
     private var inherited: InheritedValue<String>? { sameAsEverywhere.map { Self.inherited(action, everywhere: $0) } }
@@ -418,7 +418,7 @@ struct ActionButton: View {
         .popover(isPresented: $isPresented, arrowEdge: .bottom) {
             ActionPicker(current: action,
                          entries: PickerEntry.all(allowsDefault: allowsDefault, allowsGesture: allowsGesture,
-                                                  sameAsEverywhere: sameAsEverywhere, haptics: offersHaptics),
+                                                  inherited: inherited, haptics: offersHaptics),
                          focusSearch: openedFromKeyboard) { entry in
                 isPresented = false
                 choose(entry)

@@ -1,5 +1,15 @@
 import SwiftUI
 
+/// The names of the scopes a setting may be left to, and how a row says it follows one
+/// (docs/ui-language.md, "App scope"): the one place the words live.
+enum InheritedScope {
+    static let everywhere = "Everywhere"
+    static let allMice = "All Mice"
+
+    /// "Same as Everywhere": a row's caption and a picker's entry.
+    static func sameAs(_ source: String) -> String { "Same as \(source)" }
+}
+
 /// A setting one scope may leave to a wider one: an app to everywhere, a mouse to all mice. One
 /// presentation for every such row (docs/ui-language.md, "A value left to a wider scope"):
 /// - left unset, the row shows the value in effect in `.secondary`, with the caption "Same as
@@ -17,9 +27,9 @@ struct InheritedValue<Value> {
     var isInherited: Bool { own == nil }
     var effective: Value { own ?? inherited }
     /// The row's caption: "Same as Everywhere" while inherited, else none.
-    var caption: String? { isInherited ? "Same as \(source)" : nil }
+    var caption: String? { isInherited ? InheritedScope.sameAs(source) : nil }
     /// The picker entry that removes the own value, without the value it keeps.
-    var entry: String { "Same as \(source)" }
+    var entry: String { InheritedScope.sameAs(source) }
     var style: HierarchicalShapeStyle { isInherited ? .secondary : .primary }
 }
 

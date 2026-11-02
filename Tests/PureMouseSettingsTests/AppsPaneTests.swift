@@ -30,8 +30,17 @@ import Testing
     let set = ActionButton.inherited(.named("missionControl"), everywhere: "Default")
     #expect(set.effective == ButtonAction.named("missionControl").label && set.caption == nil)
     // The picker keeps the entry that removes the app's own binding.
-    let entry = PickerEntry.all(allowsDefault: false, allowsGesture: true, sameAsEverywhere: "Mission Control").first
+    let entry = PickerEntry.all(allowsDefault: false, allowsGesture: true, inherited: ActionButton.inherited(.standard, everywhere: "Mission Control")).first
     #expect(entry?.label == "Same as Everywhere" && entry?.detail == "(Mission Control)")
+}
+
+@Test func anAppsEditorSubtitleNamesTheApp() {
+    let target = BindingTarget(button: "top", app: "com.apple.Safari", appName: "Safari")
+    #expect(target.subtitle == "For the top button in Safari.")
+    let turning = BindingTarget(button: "thumbWheel", direction: "left", app: "com.apple.Safari",
+                                label: "turning the thumb wheel left", appName: "Safari")
+    #expect(turning.subtitle == "For turning the thumb wheel left in Safari.")
+    #expect(BindingTarget(button: "top").subtitle == "For the top button.")
 }
 
 @Suite struct AppsPaneSources {

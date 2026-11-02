@@ -18,10 +18,13 @@ struct ThumbWheelRows: View {
     var base: ThumbWheelState = .initial
     /// In an app: the choice everywhere, which "Same as Everywhere" keeps (`InheritedValue`).
     var inherited: ThumbWheelChoice?
-    /// Names the controls for VoiceOver where several panes' rows read alike ("in Safari").
-    var spokenSuffix = ""
+    /// In an app: its display name, which names the controls where several panes' rows read alike
+    /// ("in Safari") and the editors that open from them.
+    var appName: String?
     /// The mouse lacks a thumb wheel but a value is set: the Action row says so.
     var availability = ControlAvailability.available
+
+    private var spokenSuffix: String { appName.map { " in \($0)" } ?? "" }
 
     @State private var presented: String?
     @State private var sheet: SheetRequest?
@@ -54,7 +57,7 @@ struct ThumbWheelRows: View {
             if let inherited {
                 InheritedPicker(title: "Thumb wheel action\(spokenSuffix)",
                                 value: InheritedValue(own: choice == .inherit ? nil : choice, inherited: inherited,
-                                                      source: "Everywhere"),
+                                                      source: InheritedScope.everywhere),
                                 options: ThumbWheelChoice.menu, label: \.label) { set($0 ?? .inherit) }
             } else {
                 Picker("Thumb wheel action\(spokenSuffix)", selection: Binding(get: { choice }, set: { set($0) })) {
@@ -145,7 +148,7 @@ struct ThumbWheelRows: View {
             .accessibilityLabel("Swap thumb wheel directions\(spokenSuffix)")
         } else {
             let value = InheritedValue(own: model.config.thumbWheelReversed(at: path), inherited: base.reversed,
-                                       source: "Everywhere")
+                                       source: InheritedScope.everywhere)
             LabeledContent {
                 InheritedPicker(title: "Swap thumb wheel directions\(spokenSuffix)", value: value, options: [false, true],
                                 label: { $0 ? "Swapped" : "Normal" }) { new in
@@ -160,7 +163,7 @@ struct ThumbWheelRows: View {
     private func help(_ choice: ThumbWheelChoice, reversed: Bool) -> String {
         switch choice {
         // An app leaving it to everywhere: the `InheritedValue` caption.
-        case .inherit: "Same as Everywhere"
+        case .inherit: InheritedScope.sameAs(InheritedScope.everywhere)
         case .scroll: "Scrolls sideways."
         case .preset("zoom"): reversed ? "Turn left to zoom in, right to zoom out." : "Turn left to zoom out, right to zoom in."
         case .preset("volume"): reversed ? "Turn left for louder, right for quieter." : "Turn left for quieter, right for louder."
@@ -177,8 +180,8 @@ struct ThumbWheelRows: View {
     private func direction(_ direction: String, _ action: ButtonAction, reversed: Bool) -> some View {
         let title = direction == "left" ? "Turn left" : "Turn right"
         let key = ConfigTree.thumbWheelKey(turning: direction, reversed: reversed)
-        let target = BindingTarget(button: "thumbWheel", direction: key,
-                                   label: "turning the thumb wheel \(direction)")
+        let target = BindingTarget(button: "thumbWheel", direction: key, app: path.first == "apps" && path.count > 1 ? path[1] : nil,
+                                   label: "turning the thumb wheel \(direction)", appName: appName)
         return LabeledContent(title) {
             ActionButton(action: action == .standard ? .named("none") : action,
                          allowsDefault: false, allowsGesture: false,

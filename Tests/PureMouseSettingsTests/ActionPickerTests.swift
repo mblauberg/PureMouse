@@ -6,7 +6,7 @@ import Testing
 // The action picker's entries (`PickerEntry`, in the Settings view code).
 
 @Test func anAppPickerOffersSameAsEverywhereInsteadOfDefault() {
-    let entries = PickerEntry.all(allowsDefault: false, allowsGesture: true, sameAsEverywhere: "Mission Control")
+    let entries = PickerEntry.all(allowsDefault: false, allowsGesture: true, inherited: ActionButton.inherited(.standard, everywhere: "Mission Control"))
     #expect(entries.first?.label == "Same as Everywhere")
     #expect(entries.first?.detail == "(Mission Control)")
     #expect(entries.first?.matches(.standard) == true)

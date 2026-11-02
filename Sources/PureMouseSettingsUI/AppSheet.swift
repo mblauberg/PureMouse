@@ -25,6 +25,12 @@ struct AppSheet: View {
     private var scope: [String] { ConfigTree.appScope(key) }
     private var spoken: String { " in \(identity.name)" }
 
+    /// The binding of `button` (or one `direction` of it) in this app, which names the app in
+    /// the editors' subtitles ("in Safari").
+    private func bindingTarget(_ button: String, direction: String? = nil) -> BindingTarget {
+        BindingTarget(button: button, direction: direction, app: key, appName: identity.name)
+    }
+
     var body: some View {
         let config = model.config
         AdvancedSheet(title: identity.name) {
@@ -60,10 +66,13 @@ struct AppSheet: View {
             }
             .disabled(model.readOnly)
 
-            if model.primaryDevice?.offers(\.thumbWheel) != false || config.contains(scope + ["thumbWheel"]) {
+            let thumbWheel = ControlAvailability.of([\.thumbWheel], devices: model.capabilityDevices,
+                                                    configured: config.contains(scope + ["thumbWheel"]))
+            if thumbWheel.isShown {
                 Section("Thumb Wheel") {
                     ThumbWheelRows(path: scope + ["thumbWheel"], base: globalThumbWheel(config),
-                                   inherited: config.thumbWheelChoice(at: ["thumbWheel"]), spokenSuffix: spoken)
+                                   inherited: config.thumbWheelChoice(at: ["thumbWheel"]), appName: identity.name,
+                                   availability: thumbWheel)
                 }
                 .disabled(model.readOnly)
             }
@@ -82,7 +91,7 @@ struct AppSheet: View {
             // With PUREMOUSE_DEV_APP: opens a button's shortcut editor over the sheet.
             if let button = ProcessInfo.processInfo.environment["PUREMOUSE_DEV_SHORTCUT"] {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    editor = SheetRequest(kind: .shortcut, target: BindingTarget(button: button, app: key), initial: "cmd+w")
+                    editor = SheetRequest(kind: .shortcut, target: bindingTarget(button), initial: "cmd+w")
                 }
             }
         }
@@ -141,7 +150,7 @@ struct AppSheet: View {
     @ViewBuilder
     private func row(_ button: String, _ config: ConfigTree, indented: Bool = false) -> some View {
         let state = config.appButton(key, button: button)
-        let target = BindingTarget(button: button, app: key)
+        let target = bindingTarget(button)
         let everywhere = everywhereLabel(state.everywhere)
         let caption = ActionButton.inherited(state.own, everywhere: everywhere).caption
         if state.directions.isEmpty {
@@ -166,7 +175,7 @@ struct AppSheet: View {
             .actionEditorPopover($editor, for: target, save: apply)
             if isExpanded.wrappedValue {
                 ForEach(state.directions, id: \.name) { direction in
-                    let target = BindingTarget(button: button, direction: direction.name, app: key)
+                    let target = bindingTarget(button, direction: direction.name)
                     // A direction the app leaves out follows the global gesture, if there is one;
                     // else it does nothing.
                     let inherited = direction.everywhere.map { everywhereLabel($0, direction: true) }
