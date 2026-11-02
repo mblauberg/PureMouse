@@ -171,9 +171,17 @@ one. This file covers how to work on it safely.
   glyphs and spoken words.
 - Notifications live in the menu app and the update check in the Settings helper (the daemon
   stays free of UserNotifications and the network). The low-battery notification (`BatteryAlert`,
-  `Notifier`) is decided on each status the daemon writes, from the band already announced per
-  mouse (keyed by status device id), kept in `battery-alerts.json` in the companion directory so a restart cannot repeat it;
-  the first reading of a mouse after it connects (or this process starts) only records. It does not run while the icon is hidden. Permission
+  `Notifier`) is decided on each status the daemon writes, and on each config change, from the band
+  already announced per mouse, kept in `battery-alerts.json` in the companion directory so a restart
+  cannot repeat it. A mouse is keyed by its device key plus its 0x0003 unit ID when the status has
+  both (`Status.Device.unit`), else by its status device id. With a stable key and a recorded band, a
+  reconnect (or this process starting) is judged against that band, so a mouse that drained while
+  away still warns once; otherwise the first reading after it connects only records, since a
+  reconnect cannot be told from a different mouse. `BatteryAlertStore.process` is the pure decision:
+  it returns the alerts to post and the notification ids (`battery.<key>.<band>`) to take down
+  (`Notifier.removeDelivered`) when the mouse recharges (charging, or 25% and up), when a deeper band
+  replaces a shallower one, and once when the switch is turned off. A post still waiting for permission is cancelled by a withdrawal of its id (`NotificationDelivery`). The file is versioned; one in
+  any other format is discarded and alerts start fresh. It does not run while the icon is hidden (a hidden-icon run gets no notification callbacks, so it neither posts nor consumes a band, and never asks for permission; `AppController`). Permission
   is requested lazily (first notification, or the menu app seeing the switch turned on in the
   config: macOS asks per app, so the helper cannot ask for it). The menu app records a denial in
   its own defaults domain as it learns it (`NotificationPermission`, read at launch and as Settings

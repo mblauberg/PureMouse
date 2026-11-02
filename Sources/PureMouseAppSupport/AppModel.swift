@@ -12,6 +12,8 @@ public final class AppModel {
     public typealias Alert = @MainActor (_ message: String, _ info: String) -> Void
     /// Posts a notification under an identifier, replacing one already posted with it.
     public typealias Announce = @MainActor (_ id: String, _ title: String, _ body: String) -> Void
+    /// Takes down delivered notifications by identifier; one no longer there is ignored.
+    public typealias Withdraw = @MainActor (_ ids: [String]) -> Void
 
     @ObservationIgnored let link: DaemonLink
     @ObservationIgnored let store: ConfigStore
@@ -23,20 +25,25 @@ public final class AppModel {
     @ObservationIgnored private let alert: Alert
     @ObservationIgnored private var wantsConfiguredDPI = false
     /// Only a model that announces low battery keeps the bands announced (the menu app's).
-    @ObservationIgnored private var batteryAlerts: (store: BatteryAlertStore, announce: Announce)?
+    @ObservationIgnored private var batteryAlerts: (store: BatteryAlertStore, announce: Announce, withdraw: Withdraw)?
 
-    /// `announce`: post low-battery notifications (`BatteryAlert`); nil for a model that never does.
-    public init(locations: Locations = .live, alert: @escaping Alert, announce: Announce? = nil) {
+    /// `notifications`: post and take down low-battery notifications (`BatteryAlert`); nil for a
+    /// model that never does.
+    public init(locations: Locations = .live, alert: @escaping Alert,
+                notifications: (announce: Announce, withdraw: Withdraw)? = nil) {
         link = DaemonLink(locations: locations)
         store = ConfigStore(locations: locations)
         capture = CaptureController(link: link)
         self.alert = alert
-        batteryAlerts = announce.map { (BatteryAlertStore(url: locations.batteryAlerts), $0) }
+        batteryAlerts = notifications.map { (BatteryAlertStore(url: locations.batteryAlerts), $0.announce, $0.withdraw) }
         link.changed = { [weak self, capture] in
             capture.checkDaemon()  // a capture ends with the daemon
             self?.statusChanged()
         }
-        store.changed = { [weak self] in self?.statusChanged() }
+        store.changed = { [weak self] in
+            self?.announceLowBattery()  // the switch may have been turned off
+            self?.statusChanged()
+        }
         link.statusLoaded = { [weak self] in self?.statusLoaded() }
         link.controlFailed = { alert("PureMouse could not be reached", $0.localizedDescription) }
         store.daemonConfigError = { [link] in link.configError }
@@ -81,17 +88,22 @@ public final class AppModel {
         announceLowBattery()
     }
 
-    /// Posts a notification when a live mouse's battery falls through 20% or 5% (`BatteryAlert`).
-    /// Runs on each status the daemon writes, with no timer.
+    /// Posts a notification when a live mouse's battery falls through 20% or 5% (`BatteryAlert`),
+    /// and takes down the ones that stopped being true. Runs on each status the daemon writes and
+    /// on each config change, with no timer.
     private func announceLowBattery() {
         guard var batteryAlerts else { return }
         defer { self.batteryAlerts = batteryAlerts }
         let readings = !daemonRunning ? [] : devices.filter(\.online).compactMap { device in
-            device.battery.map { BatteryAlertStore.Reading(id: device.id, name: device.name, battery: $0) }
+            device.battery.map {
+                BatteryAlertStore.Reading(id: device.id, name: device.name, battery: $0, model: device.model, unit: device.unit)
+            }
         }
-        for alert in batteryAlerts.store.process(readings, enabled: lowBatteryNotificationsOn) {
+        let outcome = batteryAlerts.store.process(readings, enabled: lowBatteryNotificationsOn)
+        if !outcome.remove.isEmpty { batteryAlerts.withdraw(outcome.remove) }
+        for alert in outcome.alerts {
             let text = BatteryAlert.message(for: alert.band, device: alert.name, battery: alert.battery)
-            batteryAlerts.announce( "battery.\(alert.id).\(alert.band.rawValue)", text.title, text.body)
+            batteryAlerts.announce(alert.notificationID, text.title, text.body)
         }
     }
 

@@ -6,16 +6,35 @@ import PureMouseKit
 /// (`SettingsLauncher`), so this process never holds a window.
 @MainActor
 final class AppController: NSObject, NSApplicationDelegate {
-    let model = AppModel(alert: Alerts.show, announce: Notifier.post)
+    let model: AppModel
+    /// Whether this run shows its icon: notifications run only then. A hidden-icon run gets no
+    /// notification callbacks, so it neither announces nor consumes a band (`BatteryAlertStore`),
+    /// and never asks for permission.
+    private let iconShown: Bool
+    private let requestPermission: @MainActor () -> Void
     private var statusMenu: StatusMenu?
-    private var lowBatteryNotificationsOn = true
+    private var lowBatteryNotificationsOn: Bool
+
+    /// The defaults are the live app; a test passes a sandbox and spies for what reaches the
+    /// notification centre.
+    init(locations: Locations = .live,
+         iconShown: Bool = Locations.live.showsInMenuBar,
+         announce: @escaping AppModel.Announce = Notifier.post,
+         withdraw: @escaping AppModel.Withdraw = Notifier.removeDelivered,
+         requestPermission: @escaping @MainActor () -> Void = { Task { await Notifier.requestIfNeeded() } }) {
+        model = AppModel(locations: locations, alert: Alerts.show,
+                         notifications: iconShown ? (announce, withdraw) : nil)
+        self.iconShown = iconShown
+        self.requestPermission = requestPermission
+        lowBatteryNotificationsOn = model.lowBatteryNotificationsOn
+        super.init()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        lowBatteryNotificationsOn = model.lowBatteryNotificationsOn
         Task { await Notifier.refresh() }
         model.statusChanged = { [weak self] in self?.statusChanged() }
         model.startWatching()
-        if Locations.live.showsInMenuBar { statusMenu = StatusMenu(model: model, app: self) }
+        if iconShown { statusMenu = StatusMenu(model: model, app: self) }
         // Opened by hand, or asked for Settings while starting (`puremouse` opened from the Finder
         // restarts this agent, then opens it), or with no icon to show: open Settings. With no
         // icon there is nothing left to do once it is open.
@@ -45,13 +64,13 @@ final class AppController: NSObject, NSApplicationDelegate {
         SettingsLauncher.shared.open(pane: pane, then: done)
     }
 
-    private func statusChanged() {
+    func statusChanged() {
         statusMenu?.updateIcon()
         // macOS asks per app, and this app posts the notifications: when the switch is turned on
         // in Settings (another app), ask for permission here.
         let on = model.lowBatteryNotificationsOn
-        if NotificationPermission.shouldRequest(wasOn: lowBatteryNotificationsOn, isOn: on) {
-            Task { await Notifier.requestIfNeeded() }
+        if iconShown, NotificationPermission.shouldRequest(wasOn: lowBatteryNotificationsOn, isOn: on) {
+            requestPermission()
         }
         lowBatteryNotificationsOn = on
     }

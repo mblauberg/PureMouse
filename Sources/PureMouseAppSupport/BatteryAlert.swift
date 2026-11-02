@@ -6,7 +6,7 @@ import PureMouseKit
 /// (through 20%, then through 5%) and a re-read of the same level never repeats it.
 public enum BatteryAlert {
     /// The band already announced for a mouse. Ordered: `none` < `low` < `critical`.
-    public enum Band: String, Codable, Comparable, Sendable {
+    public enum Band: String, Codable, Comparable, CaseIterable, Sendable {
         case none, low, critical
 
         private var rank: Int { self == .none ? 0 : self == .low ? 1 : 2 }
@@ -62,63 +62,122 @@ public enum BatteryAlert {
 }
 
 /// The announced bands, kept in the companion directory so they outlive this process (it starts
-/// over after Settings closes, and a restart must not announce the same crossing again). Keyed by
-/// the daemon's device id (interface plus index), so two mice with one name stay apart.
+/// over after Settings closes, and a restart must not announce the same crossing again). A mouse
+/// that reports a stable identity (its device key and 0x0003 unit ID) is keyed by it, so a
+/// reconnect is judged against the band announced before it left; any other is keyed by the
+/// daemon's device id (interface plus index), which a reconnect cannot tell from another mouse.
 public struct BatteryAlertStore {
     public struct Reading {
         public var id: String
         public var name: String
         public var battery: Status.Device.Battery
+        public var model: String?
+        public var unit: String?
 
-        public init(id: String, name: String, battery: Status.Device.Battery) {
+        public init(id: String, name: String, battery: Status.Device.Battery, model: String? = nil, unit: String? = nil) {
             self.id = id
             self.name = name
             self.battery = battery
+            self.model = model
+            self.unit = unit
+        }
+
+        /// Whether the status names this unit of this model, so it is the same mouse across
+        /// reconnects and restarts.
+        var hasStableIdentity: Bool { model != nil && unit != nil }
+
+        /// What the band is kept under.
+        var key: String {
+            guard let model, let unit else { return id }
+            return "unit:\(model):\(unit)"
         }
     }
 
     public struct Alert: Equatable {
-        public var id: String
+        public var key: String
         public var name: String
         public var band: BatteryAlert.Band
         public var battery: Status.Device.Battery
+
+        /// The notification's identifier: stable per mouse and band, so it can be removed later.
+        public var notificationID: String { BatteryAlertStore.notificationID(key: key, band: band) }
+    }
+
+    /// What to do after one status: notifications to post and delivered ones to take down.
+    public struct Outcome: Equatable {
+        public var alerts: [Alert] = []
+        public var remove: [String] = []
+    }
+
+    /// The file's format. A file in any other shape (an older one, a damaged one) is discarded.
+    private struct File: Codable {
+        static let version = 2
+        var version = File.version
+        var bands: [String: BatteryAlert.Band]
     }
 
     var url: URL
     private(set) var bands: [String: BatteryAlert.Band]
     /// Mice seen live in the previous status. One not in it has just connected (or this process
-    /// just started): its first reading only records, however far it moved while away.
+    /// just started): without a stable identity and a recorded band, its first reading only
+    /// records, however far it moved while away.
     private var live: Set<String> = []
+    /// The setting as of the previous status; nil before the first.
+    private var wasEnabled: Bool?
 
     public init(url: URL) {
         self.url = url
-        let data = try? Data(contentsOf: url)
-        bands = data.flatMap { try? JSONDecoder().decode([String: BatteryAlert.Band].self, from: $0) } ?? [:]
+        let file = (try? Data(contentsOf: url)).flatMap { try? JSONDecoder().decode(File.self, from: $0) }
+        bands = file?.version == File.version ? file?.bands ?? [:] : [:]
     }
+
+    static func notificationID(key: String, band: BatteryAlert.Band) -> String { "battery.\(key).\(band.rawValue)" }
 
     /// Evaluates the live mice of one status (none when the daemon is off); saves only when a
     /// state changed. With `enabled` false the state still advances, so turning it on later does
-    /// not announce an old crossing.
-    public mutating func process(_ readings: [Reading], enabled: Bool = true) -> [Alert] {
-        var alerts: [Alert] = []
+    /// not announce an old crossing, and every notification this store may have delivered is
+    /// taken down once.
+    public mutating func process(_ readings: [Reading], enabled: Bool = true) -> Outcome {
+        var outcome = Outcome()
+        var remove: Set<String> = []
         var changed = false
+        if !enabled, wasEnabled != false {
+            for (key, band) in bands where band != .none { remove.insert(Self.notificationID(key: key, band: band)) }
+        }
         for reading in readings {
-            let result = BatteryAlert.evaluate(previous: bands[reading.id], battery: reading.battery)
-            if bands[reading.id] != result.state {
-                bands[reading.id] = result.state
+            let key = reading.key
+            let previous = bands[key]
+            let result = BatteryAlert.evaluate(previous: previous, battery: reading.battery)
+            // A band left behind (recharged, or recovered a step) no longer holds.
+            if let previous {
+                for band in BatteryAlert.Band.allCases where band > result.state && band <= previous {
+                    remove.insert(Self.notificationID(key: key, band: band))
+                }
+            }
+            if previous != result.state {
+                bands[key] = result.state
                 changed = true
             }
-            if enabled, live.contains(reading.id), let band = result.alert {
-                alerts.append(Alert(id: reading.id, name: reading.name, band: band, battery: reading.battery))
+            guard let band = result.alert else { continue }
+            // A deeper band replaces the shallower one.
+            for shallower in BatteryAlert.Band.allCases where shallower > .none && shallower < band {
+                remove.insert(Self.notificationID(key: key, band: shallower))
+            }
+            let reconnected = live.contains(key) || (reading.hasStableIdentity && previous != nil)
+            if enabled, reconnected {
+                outcome.alerts.append(Alert(key: key, name: reading.name, band: band, battery: reading.battery))
             }
         }
-        live = Set(readings.map(\.id))
+        live = Set(readings.map(\.key))
+        wasEnabled = enabled
         if changed { save() }
-        return alerts
+        remove.subtract(outcome.alerts.map(\.notificationID))
+        outcome.remove = remove.sorted()
+        return outcome
     }
 
     private func save() {
-        guard let data = try? JSONEncoder().encode(bands) else { return }
+        guard let data = try? JSONEncoder().encode(File(bands: bands)) else { return }
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? data.write(to: url, options: .atomic)
     }
