@@ -1,7 +1,9 @@
 # PureMouse: agent notes
 
 Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for its layout and
-`docs/configuration.md` for the config. This file covers how to work on it safely.
+`docs/configuration.md` for the config. Architecture decisions, with their status and the
+alternatives rejected, are in `docs/adr/`: cite them, and amend the record when a change alters
+one. This file covers how to work on it safely.
 
 ## Workflow
 
