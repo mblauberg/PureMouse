@@ -107,7 +107,7 @@ struct ButtonsPane: View {
         // No devices: none connected, or paused (the daemon then reports none).
         guard !model.devices.isEmpty else { return nil }
         let owners = model.devices.filter { $0.controls.contains { $0.cid == cid } }.map(\.name)
-        return owners.isEmpty ? "Not on the connected mouse" : owners.joined(separator: ", ")
+        return owners.isEmpty ? ControlAvailability.unsupportedCaption : owners.joined(separator: ", ")
     }
 
     @ViewBuilder
