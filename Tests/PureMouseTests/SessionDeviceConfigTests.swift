@@ -72,7 +72,7 @@ struct SessionDeviceConfigTests {
             await session.deviceActions.drain()
         }
         #expect(mx.dpi == 2400 && other.dpi == 2400)
-        h.daemon.handle(Control(useConfiguredDPI: 1, device: Self.m1))
+        h.daemon.handle(Control(useConfiguredDPI: 1, device: Self.m1.uppercased()))  // matched without case
         await s1.deviceActions.drain()
         await s2.deviceActions.drain()
         #expect(mx.dpi == 1200 && s1.state.liveDPI == nil)

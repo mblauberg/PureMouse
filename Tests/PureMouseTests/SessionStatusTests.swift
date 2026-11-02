@@ -113,6 +113,38 @@ struct SessionStatusTests {
         #expect(!json.contains("haptics") && json.contains("\"smartShift\" : true"))
     }
 
+    @Test func aMouseWithOnlyTheFallbackFeaturesHasThoseCapabilities() async throws {
+        let fake = FakeDevice.mxMaster3S
+        fake.features[5] = 0x2111  // Enhanced SmartShift in place of 0x2110
+        fake.features[9] = 0x1000  // legacy battery in place of 0x1004
+        let h = try await SessionHarness(fake)
+        defer { h.close() }
+        try await h.session.apply()
+        let capabilities = try #require(h.session.status.capabilities)
+        #expect(capabilities.smartShift == true && capabilities.battery == true)
+    }
+
+    @Test func aFallbackLookupThatFailsLeavesThatCapabilityOutNotFalse() async throws {
+        let fake = FakeDevice.mxMaster3S
+        fake.features[9] = nil  // no 0x1004, so 0x1000 is looked up
+        let answer = fake.transport.answer
+        var dropped = false
+        fake.transport.answer = { request in
+            if !dropped, request.featureIndex == 0, request.function == 0, request.params.starts(with: [0x10, 0x00]) {
+                dropped = true
+                return nil
+            }
+            return try answer?(request)
+        }
+        let h = try await SessionHarness(fake)
+        defer { h.close() }
+        try await h.session.apply()
+        #expect(dropped)
+        #expect(h.device.knownPresence(of: 0x1004) == false)
+        let capabilities = try #require(h.session.status.capabilities)
+        #expect(capabilities.battery == nil && capabilities.smartShift == true)
+    }
+
     @Test func buildingCapabilitiesSendsNothing() async throws {
         let h = try await SessionHarness(.m750, identify: true)
         defer { h.close() }

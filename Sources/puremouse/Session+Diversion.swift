@@ -143,15 +143,13 @@ extension Session {
     /// without it), inverted in hardware.
     private func applyWheels() async throws {
         try ensureOpen()
-        // Only wheels the mouse has (or may have, until their lookup answers) are taken over.
         let wheels = [HiResWheel.id, ThumbWheel.id]
-        let mayHaveWheels = wheels.contains { device.knownPresence(of: $0) != false }
         // Taking the wheels over without permission to post scroll events would silence them.
         let accessibility = environment.canPostEvents
         let takeOver = Handoff.wheelsDiverted(scrolling: scroll != nil, accessibility: accessibility, away: away)
         let smooth = takeOver && smoothAnywhere
         // Set before diverting, so `restore` hands them back even if a write below fails.
-        if takeOver && mayHaveWheels { wheelsMayBeDiverted = true }
+        if takeOver { wheelsMayBeDiverted = true }
         // Each wheel stands alone: a main wheel that times out must not leave the thumb wheel diverted.
         try await Independently.each([Wheel.main, .thumb], stopsOn: { self.stops($0) }) {
             try await applyWheel($0, takeOver: takeOver, smooth: smooth)
