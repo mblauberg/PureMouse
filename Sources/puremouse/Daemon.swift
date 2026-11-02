@@ -456,7 +456,7 @@ final class Daemon {
 
     /// Starts listening on a device index. Until a session adopts it, a receiver slot only
     /// watches for its device connecting.
-    private func listen(_ interface: HIDInterface, index: UInt8) -> HIDPPDevice {
+    private func listen(_ interface: any HIDPPTransport, index: UInt8) -> HIDPPDevice {
         let device = HIDPPDevice(interface: interface, index: index)
         endpoints[Key(device)] = device
         watch(device)
