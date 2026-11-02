@@ -56,7 +56,7 @@ struct InheritedPicker<Value: Hashable>: View {
     let choose: (Value?) -> Void
 
     var body: some View {
-        Menu {
+        PopUpMenu(text: label(value.effective), style: value.style) {
             Picker(title, selection: Binding(get: { value.own }, set: { choose($0) })) {
                 Text("\(value.entry) (\(label(value.inherited)))").tag(nil as Value?)
                 Divider()
@@ -64,11 +64,7 @@ struct InheritedPicker<Value: Hashable>: View {
             }
             .pickerStyle(.inline)
             .labelsHidden()
-        } label: {
-            Text(label(value.effective))
-                .foregroundStyle(value.style)
         }
-        .fixedSize()
         .accessibilityLabel(title)
         .accessibilityValue(InheritedValue(own: value.own.map(label), inherited: label(value.inherited),
                                            source: value.source).spoken)

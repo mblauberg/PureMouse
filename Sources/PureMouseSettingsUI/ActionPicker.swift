@@ -400,15 +400,7 @@ struct ActionButton: View {
             openedFromKeyboard = NSApp.currentEvent?.type == .keyDown
             isPresented = true
         } label: {
-            HStack(spacing: 4) {
-                Text(Self.shortened(label))
-                    .lineLimit(1)
-                    .foregroundStyle(inherited?.style ?? .primary)
-                Image(systemName: "chevron.up.chevron.down")
-                    .imageScale(.small)
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-            }
+            PopUpLabel(text: Self.shortened(label), style: inherited?.style ?? .primary)
         }
         .fixedSize()
         .help(helpText)

@@ -60,11 +60,15 @@ struct ThumbWheelRows: View {
                                                       source: InheritedScope.everywhere),
                                 options: ThumbWheelChoice.menu, label: \.label) { set($0 ?? .inherit) }
             } else {
-                Picker("Thumb wheel action\(spokenSuffix)", selection: Binding(get: { choice }, set: { set($0) })) {
-                    ForEach(ThumbWheelChoice.menu) { Text($0.label).tag($0) }
+                PopUpMenu(text: choice.label) {
+                    Picker("Thumb wheel action\(spokenSuffix)", selection: Binding(get: { choice }, set: { set($0) })) {
+                        ForEach(ThumbWheelChoice.menu) { Text($0.label).tag($0) }
+                    }
+                    .pickerStyle(.inline)
+                    .labelsHidden()
                 }
-                .labelsHidden()
-                .fixedSize()
+                .accessibilityLabel("Thumb wheel action\(spokenSuffix)")
+                .accessibilityValue(choice.label)
             }
         } label: {
             RowLabel("Action", help: help(choice, reversed: state.reversed), availability: availability)

@@ -93,8 +93,10 @@ struct AppsPane: View {
                 }
             }
         }
-        // A bordered pull-down, not a borderless one that reads as a link.
+        // A bordered pull-down, as System Settings draws an empty state's button, not a borderless
+        // one that reads as a link; the same in the empty state and the footer.
         .menuStyle(.button)
+        .buttonStyle(.bordered)
         .fixedSize()
         .accessibilityHint("Choose an app to give its own settings")
     }

@@ -32,6 +32,45 @@ struct RowLabel: View {
     }
 }
 
+/// A pop-up's closed face as the form's own pop-up menus draw it: the value, then the up/down
+/// chevrons. One drawing for every pop-up in Settings (`PopUpMenu`, `ActionButton`), so the
+/// action rows on Buttons, Scrolling and an app's sheet read alike.
+struct PopUpLabel: View {
+    let text: String
+    var style: HierarchicalShapeStyle = .primary
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(text)
+                .lineLimit(1)
+                .foregroundStyle(style)
+            Image(systemName: "chevron.up.chevron.down")
+                .imageScale(.small)
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+        }
+    }
+}
+
+/// A standard pop-up for a short list of choices: a `Menu` drawn as `PopUpLabel`. A bare `Picker`
+/// in a grouped form can draw as a borderless pull-down with a circled chevron instead.
+struct PopUpMenu<Content: View>: View {
+    let text: String
+    var style: HierarchicalShapeStyle = .primary
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        Menu {
+            content
+        } label: {
+            PopUpLabel(text: text, style: style)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+    }
+}
+
 extension String {
     var nilIfEmpty: String? { isEmpty ? nil : self }
 }
