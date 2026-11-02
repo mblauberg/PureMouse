@@ -49,8 +49,9 @@ low-battery warning to show, or when you turn the warning on
 All of them are in your home folder.
 
 While it runs, the background process changes settings on the mouse that it forgets when it
-reconnects: which buttons it sends to PureMouse, how the wheels report, DPI and SmartShift. It puts
-them back when it quits or pauses, and stores nothing on the mouse or the receiver.
+reconnects: which buttons it sends to PureMouse, how the wheels report, DPI and SmartShift. When it
+quits or pauses it hands the buttons and wheels back; DPI and SmartShift stay as set until the mouse
+reconnects. It stores nothing on the mouse or the receiver.
 
 | File | Written by | What it holds |
 |---|---|---|

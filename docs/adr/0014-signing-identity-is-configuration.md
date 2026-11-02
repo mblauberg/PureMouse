@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted
+Accepted. The identity order and hardened runtime are built; notarisation, stapling and the
+notary-credential checks are not built yet (#46).
 
 ## Context
 
