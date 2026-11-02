@@ -15,6 +15,8 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         self.model = model
         self.app = app
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        // macOS remembers where the user put the icon under this name.
+        statusItem.autosaveName = "PureMouseStatusItem"
         super.init()
         menu.delegate = self
         menu.autoenablesItems = false
