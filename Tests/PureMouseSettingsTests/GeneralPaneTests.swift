@@ -18,7 +18,7 @@ import Testing
     @Test func noRetiredWordsInGeneralOrTheBanners() throws {
         for file in Self.files {
             let text = try Self.source(file)
-            for retired in ["Open Settings…", "isn't", "Not Allowed", "Open Login Items…", "Open Config\"",
+            for retired in ["Open Settings…", "PureMouse isn't running", "Not Allowed", "Open Login Items…", "Open Config\"",
                             "Restore Last Working", "Unknown While Off"] {
                 #expect(!text.contains(retired), "\(file) says \(retired)")
             }
@@ -42,7 +42,7 @@ import Testing
     }
 
     /// The only call that replaces the config file with the last working one is the confirming
-    /// button of its dialog.
+    /// button of its dialog, a verb without the destructive style (docs/ui-design.md).
     @Test func useLastWorkingConfigAsksBeforeWriting() throws {
         let enumerator = FileManager.default.enumerator(at: Self.ui, includingPropertiesForKeys: nil)
         let files = (enumerator?.allObjects as? [URL] ?? []).filter { $0.pathExtension == "swift" }
@@ -53,7 +53,7 @@ import Testing
                 calls.append(line.trimmingCharacters(in: .whitespaces))
             }
         }
-        #expect(calls == [#"Button(UseLastWorkingConfirmation.button, role: .destructive) { model.restoreLastWorking() }"#])
+        #expect(calls == [#"Button(UseLastWorkingConfirmation.button) { model.restoreLastWorking() }"#])
         let notices = try Self.source("Notices.swift")
         #expect(notices.contains(#"Button("Use Last Working Config…") { confirmingLastWorking = true }"#))
     }
