@@ -52,7 +52,8 @@ struct PopUpLabel: View {
     }
 }
 
-/// A standard pop-up for a short list of choices: a `Menu` drawn as `PopUpLabel`. A bare `Picker`
+/// A standard pop-up for a short list of choices: a `Menu` drawn as a push button around
+/// `PopUpLabel`, the same bezel as `ActionButton`. A bare `Picker`
 /// in a grouped form can draw as a borderless pull-down with a circled chevron instead.
 struct PopUpMenu<Content: View>: View {
     let text: String
@@ -65,7 +66,7 @@ struct PopUpMenu<Content: View>: View {
         } label: {
             PopUpLabel(text: text, style: style)
         }
-        .menuStyle(.borderlessButton)
+        .menuStyle(.button)
         .menuIndicator(.hidden)
         .fixedSize()
     }
