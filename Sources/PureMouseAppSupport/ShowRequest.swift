@@ -21,23 +21,13 @@ public struct ShowRequest: Equatable, Sendable {
         consume(from: Companion.showSettingsURL, now: Date())
     }
 
-    /// Writing and consuming take `show-settings.lock`: a request written while another is being
-    /// read and removed would otherwise be read half written or removed unread.
+    /// Through `SettingsRequest`, under the lock the daemon's writer takes too.
     static func write(pane: SettingsPane?, to file: URL) {
-        try? FileLock.withLock(FileLock.url(for: file)) {
-            try Data((pane?.rawValue ?? "").utf8).write(to: file, options: .atomic)
-        }
+        SettingsRequest.write(pane?.rawValue ?? "", to: file)
     }
 
     static func consume(from file: URL, now: Date) -> ShowRequest? {
-        let taken = try? FileLock.withLock(FileLock.url(for: file)) { () -> (Date, String)? in
-            guard let date = (try? FileManager.default.attributesOfItem(atPath: file.path))?[.modificationDate] as? Date
-            else { return nil }
-            let body = (try? Data(contentsOf: file)).map { String(decoding: $0, as: UTF8.self) } ?? ""
-            try? FileManager.default.removeItem(at: file)
-            return (date, body)
-        }
-        guard let (date, body) = taken ?? nil, now.timeIntervalSince(date) < freshness else { return nil }
+        guard let (date, body) = SettingsRequest.take(from: file), now.timeIntervalSince(date) < freshness else { return nil }
         return ShowRequest(pane: SettingsPane(rawValue: body.trimmingCharacters(in: .whitespacesAndNewlines)))
     }
 }

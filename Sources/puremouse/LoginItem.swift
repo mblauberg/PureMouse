@@ -184,13 +184,12 @@ struct LoginItem {
     /// Opens the menu bar app, which then opens Settings (a second launch hands over to the
     /// running one). `register` has just restarted the menu agent, and `open` can fail (-600)
     /// while launchd is starting the app, so the request is also left in
-    /// `Companion.showSettingsURL` for it to read on launch, and `open` is tried once more. If the
+    /// `Companion.showSettingsURL` (`SettingsRequest`, under its lock) for it to read on launch, and `open` is tried once more. If the
     /// menu app still cannot be reached, the Settings helper is opened itself; it reads the same
     /// request, and it is the one listening on the doorbell, not the menu app. False if neither
     /// opened.
     func openMenu(_ app: URL) -> Bool {
-        try? FileManager.default.createDirectory(at: Companion.directory, withIntermediateDirectories: true)
-        FileManager.default.createFile(atPath: Companion.showSettingsURL.path, contents: nil)
+        SettingsRequest.write("")
         if Self.open(app, attempts: 2) { return true }
         guard let settings = Self.settingsApp else { return false }
         return Self.open(settings, attempts: 1)
