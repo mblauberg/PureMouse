@@ -35,7 +35,7 @@ launchctl kill HUP gui/$UID/io.github.mblauberg.puremouse
 |---|---|
 | `dpi` | Sensor resolution, 50–25600. PureMouse uses the nearest value the mouse supports (200–8000 in steps of 50 on the MX Master 3S) and logs when it differs |
 | `dpiPresets` | Up to 8 resolutions, each 50–25600, that the `cycleDPI` action steps through and the menu offers |
-| `scrollWheel.inverted` | Invert the main wheel in hardware. With natural scrolling on, `true` gives classic wheel direction and leaves the trackpad alone |
+| `scrollWheel.inverted` | Invert the main wheel: in hardware, or in software with smooth scrolling on (a notched wheel has no hardware setting). With natural scrolling on, `true` gives classic wheel direction and leaves the trackpad alone |
 | `scrollWheel.mode` | `"ratchet"` or `"freespin"` on first connect. Later toggles are kept. Requires SmartShift (0x2110 or Enhanced 0x2111); ratchet torque is left unchanged |
 | `scrollWheel.smartShiftThreshold` | 1–50 enables SmartShift's automatic free-spin; 255 disables it. Must be 1–255. Requires 0x2110 or 0x2111 |
 | `thumbWheel.inverted` | Invert the thumb wheel's scrolling: in hardware, or in software while PureMouse handles the wheel. Scrolling only: actions follow `reversed`. Global only |
@@ -166,14 +166,14 @@ the file applies to every mouse.
 ```json
 "dpi": 1600,
 "devices": {
-  "mb03440910000": { "name": "MX Master 3S", "dpi": 1200, "buttons": { "top": "launchpad" } },
+  "mb03400000000": { "name": "MX Master 3S", "dpi": 1200, "buttons": { "top": "launchpad" } },
   "pb02c": { "dpi": 1000 }
 }
 ```
 
 A device key is `m` plus the 12 hex digits of the model ID the mouse reports, or, for a mouse
 that reports none, `p` plus the 4 hex digits of its product ID. The daemon logs each mouse's key
-when it adopts it (`adopting MX Master 3S pid=0xb034 model=mb03440910000 ...`), and `status.json`
+when it adopts it (`adopting MX Master 3S pid=0xb034 model=mb03400000000 ...`), and `status.json`
 shows it as `model` ([companion.md](companion.md)). Keys are matched regardless of case. Two mice
 of the same model share a key, and so share its settings. A model ID of all zeros or all `f` is
 never a key.

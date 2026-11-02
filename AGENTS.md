@@ -218,7 +218,10 @@ one. This file covers how to work on it safely.
   main wheel: 0x2121, else the notched 0x2130 (`Wheel.mainWheels`; `capabilities.smoothScroll`
   follows them); a mouse with neither scrolls natively, with one info line per session
   (`Session.smoothScrollUnsupported`). 0x2130 is diverted with its temporary reporting bit only,
-  has no persistent form, and is handed back like the rest (`restoreSteps` counts it). A new wheel
+  has no persistent form, and is handed back like the rest (`restoreSteps` counts it). It is read
+  back after diverting: a wheel that does not report diverted stays native and is not offered smooth
+  scrolling (`Session.notchedRefused`). One found diverted at apply is owed a hand-back
+  (`wheelsMayBeDiverted`) until the mouse reads back native. A new wheel
   feature is a `Wheel` case, not a second list.
 - Per-device settings (`devices.<key>`, `Config+Devices.swift`) are resolved by the Kit decoder:
   each entry is decoded on top of the top level, then `apps` on top of that, so precedence is top
@@ -369,6 +372,9 @@ one. This file covers how to work on it safely.
   and `Control.useConfiguredDPI` clears it on request, for every mouse or those whose key is
   `Control.device` (`AppModel.setDPI` sends it, since choosing the saved value changes nothing on
   disk). A snapped DPI is logged once per mouse (`DeviceState.snapLogged`), not per reload.
+  The DPI written is read back on every axis written (0x2202's Y too); a mouse that shows another
+  value, or whose X and Y lists share none, is refused (`DeviceState.dpiRefused`): nothing more is
+  written, once logged, until a reload changes `dpi` or `dpiPresets`.
 
 ## Extending
 

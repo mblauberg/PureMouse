@@ -131,8 +131,15 @@ and its function-0 broadcast handler. SmartShift parse tests use response parame
 available under its [MIT licence](https://github.com/AprilNEA/OpenLogi/blob/master/LICENSE-MIT).
 These layouts have not been tested on those mice by this project.
 
-The 0x2130 (low-resolution wheel), 0x2202 (extended adjustable DPI) and 0x1001 (battery voltage)
-layouts were checked against Solaar the same way. The MX Master 3S, MX Master 4 and MX Ergo
-fixtures are raw captures from OpenLogi; the G305 and Superstrike fixtures are built from Solaar's
-device listings, and say so in their headers. Layouts were read for protocol facts, and no code
-was copied.
+The 0x2130 (low-resolution wheel) and 0x2202 (extended adjustable DPI) layouts are inferred from
+Solaar's settings templates (`LowresMode`, `ExtendedAdjustableDpi`, `produce_dpi_list`), not checked
+against a capture: no raw reply of either from a real mouse is public, and the Linux driver has no
+code for them. The 0x1001 (battery voltage) layout follows Solaar's `decipher_battery_voltage` and
+the driver's `hidpp20_battery_map_status_voltage`, which agree, and one raw sample (a G915). The
+direction of a positive 0x2130 notch count rests on Solaar alone and awaits an owner with an M750
+or MX Ergo. Because a write cannot be assumed to take, PureMouse reads the 0x2130 reporting byte
+back after diverting it and leaves a wheel that does not confirm scrolling natively, and reads the
+DPI back from every axis it wrote. The MX Master 3S, MX Master 4 and MX Ergo fixtures are raw
+captures from OpenLogi; the G305 and Superstrike fixtures are hand-built from Solaar's device
+listings, and say so in their headers. Layouts were read for protocol facts, and no code was
+copied.
