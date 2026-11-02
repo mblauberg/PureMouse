@@ -8,7 +8,7 @@
 <h1 align="center">PureMouse</h1>
 
 <p align="center">
-  A lightweight, native alternative to Logi Options+ for Logitech MX mice on macOS.<br>
+  A lightweight, native alternative to Logi Options+ for Logitech mice on macOS, developed with the MX Master 3S.<br>
   Buttons, gestures, smooth scrolling, DPI and per-app settings, in about 5 MB of memory (about 20 MB with the menu bar app).
 </p>
 
@@ -43,8 +43,9 @@ the mouse is idle, so is PureMouse.
 | Privacy | No account, no telemetry, nothing stored on the mouse |
 
 The background process uses only system frameworks and no UI toolkit. Settings is a separate app
-that runs only while its window is open, so the menu bar app stays small. Smooth scrolling runs in
-step with the display, and only while the wheel is moving.
+that runs only while its window is open (it shows in the Dock meanwhile, and quits when you close
+it), so the menu bar app stays small. Smooth scrolling runs in step with the display, and only
+while the wheel is moving.
 
 <sub>* Two exceptions, both short-lived: while a permission is still to be granted, PureMouse checks
 for it with growing gaps for up to ten minutes; and a Bluetooth mouse that does not answer when it
@@ -73,7 +74,11 @@ connects is retried once a minute until it does.</sub>
 
 **Everything else**
 - DPI with presets you can cycle from a button or the menu.
-- Battery level in the menu, with a notification at 20% and 5%.
+- Battery level in the menu, with a notification at 20% and 5%. It follows each mouse across
+  reconnects, warns once if a mouse it recognises comes back already low, and goes away when the
+  mouse is charging or back at 25%. It needs the menu bar icon shown.
+- **Open at login** is a switch of its own in Settings › General, apart from whether PureMouse
+  is running: **Stop** returns the mouse to normal and leaves login as it is.
 - **Universal Control:** when the pointer moves to another Mac, the wheels and buttons carry on
   working there.
 - **Check for Updates** in Settings › About, only when you ask.
@@ -83,7 +88,8 @@ connects is retried once a minute until it does.</sub>
 ## Settings
 
 The menu bar shows the mouse and its battery, and switches smooth scrolling, pointer speed and
-pause. **Settings…** covers everything else, and changes apply as you make them.
+pause. **Settings…** covers everything else, and changes apply as you make them. Opening
+PureMouse from Applications opens Settings too, even with the menu bar icon hidden.
 
 <p align="center">
   <picture>
@@ -105,7 +111,7 @@ pause. **Settings…** covers everything else, and changes apply as you make the
   </picture>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-general-dark.png">
-    <img src="docs/images/settings-general-light.png" width="400" align="top" alt="General settings: login, menu bar icon, low battery notification, Universal Control, permissions and files">
+    <img src="docs/images/settings-general-light.png" width="400" align="top" alt="General settings: open at login, whether PureMouse is running, menu bar icon, low battery notification, Universal Control, permissions and files">
   </picture>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-apps-dark.png">
@@ -119,13 +125,16 @@ pause. **Settings…** covers everything else, and changes apply as you make the
 </details>
 
 Prefer a text file? Everything is also in `~/.config/puremouse/config.json`, which applies as soon
-as you save it; see [Configuration](docs/configuration.md).
+as you save it, and which can give each model of mouse its own settings; see
+[Configuration](docs/configuration.md).
 
 ## Supported mice
 
 PureMouse is developed and tested with the **MX Master 3S**. Rather than relying on a fixed list
-of models, it turns on each feature a mouse reports over HID++, so the rest of the MX family
-should work too. Only the MX Master 3S has been tested on a real mouse; the others are untested:
+of models, it adopts a device that says it is a mouse or trackball, or that has adjustable DPI,
+and turns on each feature that mouse reports over HID++. Keyboards, numpads, presenters and
+receivers are left alone. Only the MX Master 3S has been tested on a real mouse; the others are
+untested:
 
 | Mouse | What PureMouse uses | Tested |
 |---|---|---|
@@ -138,6 +147,13 @@ should work too. Only the MX Master 3S has been tested on a real mouse; the othe
 | MX Ergo | Buttons, smooth scrolling on its notched wheel and battery; no DPI control | Untested |
 | G305 and other G-series mice in onboard mode | Battery and, where the mouse accepts it, DPI; in onboard mode DPI cannot be set and the status says so | Untested |
 | G Pro X 2 Superstrike | DPI and battery | Untested |
+
+The untested rows are what each mouse reports, not what PureMouse has done on it: they come from
+`puremouse probe` captures and device listings kept as test fixtures (the MX Master 4 and MX Ergo
+from raw captures, the M750 from a user's probe, the G305 and Superstrike from Solaar's listings),
+and from the families' usual features for the rest. PureMouse never writes the settings a mouse
+keeps through a power cycle, such as onboard profiles, which is why a G305 in onboard mode does
+not get DPI control. A mouse that reports only a battery level shows that level, not a percentage.
 
 Bluetooth and Logi Bolt or Unifying receivers are picked up automatically. Using a different
 Logitech mouse? Attaching [`puremouse probe` output](docs/troubleshooting.md#inspecting-a-mouse)
@@ -163,8 +179,8 @@ Requires macOS 14 or later.
    swipes) and **Input Monitoring** (for Bluetooth). PureMouse picks up each grant by itself, and
    Settings › General shows both. [Privacy](docs/privacy.md) says what each one is used for.
 
-**Updating:** download the new version, replace the app and open it. Your settings and
-permissions carry over.
+**Updating:** download the new version, replace the app and open it; it replaces the running
+copy. Your settings and permissions carry over.
 
 **Removing:** run the command below, then move the app to the Bin. Your config stays in
 `~/.config/puremouse`.
@@ -183,7 +199,9 @@ request; [Security](SECURITY.md) says how to report a vulnerability.
 
 - [Configuration](docs/configuration.md): every field, action and gesture
 - [Troubleshooting](docs/troubleshooting.md): logs, permissions, Gatekeeper, macOS upgrades
-- [How it works](docs/how-it-works.md): the two processes, scrolling, source layout
+- [How it works](docs/how-it-works.md): the background process, menu bar app and Settings,
+  device support, scrolling, source layout
+- [Architecture decisions](docs/adr/README.md): why it is built this way
 - [Development](docs/development.md): building, testing, signing and releases
 - [Privacy](docs/privacy.md): permissions, files written and the one network request
 
