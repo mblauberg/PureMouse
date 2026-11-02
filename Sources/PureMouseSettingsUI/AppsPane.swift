@@ -59,6 +59,9 @@ struct AppsPane: View {
         }
         // A row added or removed changes the pane's height; opening an app does not.
         .onChange(of: apps.count) { settings?.refit() }
+        // "Settings for <app>…" in the status menu: the request may arrive before the pane is built.
+        .onChange(of: settings?.app) { openRequested() }
+        .onAppear { openRequested() }
         .sheet(isPresented: Binding(get: { list.open != nil }, set: { if !$0 { list.open = nil } })) {
             if let key = list.open {
                 AppSheet(key: key, identity: identities.identity(key)) { remove(key) }
@@ -75,6 +78,13 @@ struct AppsPane: View {
             if let id = ProcessInfo.processInfo.environment["PUREMOUSE_DEV_APP"] { list.add(id, in: model.config) }
         }
         #endif
+    }
+
+    /// Opens the sheet of the app a request named, listing it first when it is not there.
+    private func openRequested() {
+        guard let id = settings?.app else { return }
+        settings?.app = nil
+        list.add(id, in: model.config)
     }
 
     /// The configured apps and those added here, by name.

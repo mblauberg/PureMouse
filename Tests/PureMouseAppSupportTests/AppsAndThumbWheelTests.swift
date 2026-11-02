@@ -416,6 +416,23 @@ private func resolved(_ wheel: Config.ThumbWheel) -> Resolved {
     #expect(list.open == nil && list.ids(in: config).isEmpty)
 }
 
+/// "Settings for <app>…": the helper hands the request's identifier to `AppList.add`.
+@Test func anAppRequestedFromTheMenuOpensItsSheetWithoutWriting() throws {
+    let config = try tree(#"{"apps": {"com.apple.Safari": {"buttons": {"back": "mute"}}}}"#)
+    let before = config.data()
+    // Unlisted: listed and opened, nothing written.
+    var list = AppList()
+    list.add("com.example.Notes", in: config)
+    #expect(list.open == "com.example.Notes" && list.added == ["com.example.Notes"])
+    #expect(list.summary("com.example.Notes", in: config) == AppList.noCustomSettings)
+    #expect(config.data() == before)
+    // Configured: its own sheet opens, by the key the config holds, with its values.
+    list.add("com.apple.safari", in: config)
+    #expect(list.open == "com.apple.Safari" && list.added == ["com.example.Notes"])
+    #expect(config.hasApp("com.apple.safari") && list.summary("com.apple.Safari", in: config) != AppList.noCustomSettings)
+    #expect(config.appButton("com.apple.Safari", button: "back").own == .named("mute"))
+}
+
 @Test func anAppWithoutABundleIdentifierCantBeAdded() {
     let alert = AppList.cannotAdd(URL(fileURLWithPath: "/Applications/Foo.app"))
     #expect(alert.title == "Foo can't be added.")

@@ -24,6 +24,8 @@ struct MenuState {
     var currentDPI: Int?
     /// The live mouse's sensor steps (empty when unknown).
     var dpiSteps: [Int] = []
+    /// The app in front as the menu opened (read once, never watched); nil when not read.
+    var frontmost: FrontmostApp?
 
     /// The status item badges exactly what the menu flags.
     var needsAttention: Bool { !MenuPlan.attentionRows(self).isEmpty }
@@ -53,9 +55,40 @@ enum Standby {
     }
 }
 
+/// The frontmost app as the menu opens: its bundle identifier and name, passed in so the plan needs
+/// no `NSWorkspace`. A status item's menu does not activate PureMouse, so this is still the app the
+/// person was using.
+struct FrontmostApp: Equatable {
+    var bundleID: String?
+    var name: String?
+
+    /// Apps with no settings of their own to offer: the Finder and the Dock never own the buttons or
+    /// the scroll wheel the way a document app does, and PureMouse's own bundles (the daemon, the menu
+    /// app and the Settings helper) are what the menu belongs to.
+    private static let excluded: Set<String> = ["com.apple.finder", "com.apple.dock"]
+    private static let pureMouse = "io.github.mblauberg.puremouse"
+
+    /// The bundle identifier "Settings for <app>…" would configure; nil when the app is excluded or
+    /// has none.
+    var configurable: String? {
+        guard let id = bundleID?.trimmingCharacters(in: .whitespacesAndNewlines), !id.isEmpty else { return nil }
+        let key = id.lowercased()
+        if Self.excluded.contains(key) || key == Self.pureMouse || key.hasPrefix(Self.pureMouse + ".") { return nil }
+        return id
+    }
+
+    /// The name the row shows: the app's name, else its bundle identifier.
+    var title: String {
+        let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? (bundleID ?? "") : trimmed
+    }
+}
+
 /// What choosing a row does; `StatusMenu` maps each to the model or `AppController`.
 enum MenuAction {
     case openSettings(SettingsPane?)
+    /// Apps, on the sheet of the app with this bundle identifier.
+    case openAppSettings(String)
     /// Pointer's presets sheet.
     case editPresets
     case openReleases
@@ -139,6 +172,9 @@ enum MenuPlan {
 
         rows.append(.separator)
         rows.append(.item(MenuItem(title: "Settings…", key: ",", action: .openSettings(nil))))
+        if let id = state.frontmost?.configurable, let app = state.frontmost {
+            rows.append(.item(MenuItem(title: "Settings for \(app.title)…", action: .openAppSettings(id))))
+        }
         rows.append(.item(MenuItem(title: "Quit PureMouse", key: "q", action: .quit)))
         // ⌥⌘Q: AppKit pairs an alternate with Quit only when both share "q" (docs/ui-language.md).
         rows.append(.item(MenuItem(title: "Hide Menu Bar Icon", key: "q", alternate: true, action: .hideMenuBarIcon)))

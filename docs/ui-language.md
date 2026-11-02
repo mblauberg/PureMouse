@@ -86,6 +86,7 @@ One term per concept. "Retire" lists words that must not appear in UI text for t
 | A value left to a wider scope (an app to everywhere, a mouse to all mice) | the value in effect, dimmed, with the caption "Same as Everywhere" ("Same as All Mice"); the picker's entry "Same as Everywhere (Mission Control)" removes the own value | "Everywhere: …" caption, "Same as Everywhere" as the shown value |
 | An app's own speed and glide | Custom scrolling (switch and row summary) | Own scrolling speed, Scrolling speed (summary) |
 | An app with nothing set yet | No custom settings (row summary) | "No settings yet, so not saved" |
+| One app's settings from the status menu | "Settings for <app name>…" (opens its sheet in Apps) | App Settings…, Configure <app>… |
 | Adding an app | Add App (a pull-down menu, so no ellipsis; its "Choose from Applications…" entry opens the panel); the empty state's button, which opens the panel, is Add App… | Add Application, "+" alone |
 | Scroll animation | glide (slider), Smooth Scrolling (feature) | smoothing |
 | Wheel modes | Ratchet, Free Spin | free-spin, ratchet (lower case in a label) |

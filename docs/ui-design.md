@@ -118,7 +118,8 @@ Each level has one mechanism, and each label says what it reveals.
   except low-battery notifications, which live in the menu app and stop while the icon is hidden.
   With the icon hidden, opening PureMouse from the Finder opens Settings.
 - Order: device header, attention rows (only while active), then the most used items, Settings…,
-  Quit PureMouse. Separators between groups; submenus only for presets, one level deep.
+  "Settings for <app>…" (for the app in use, when there is one), Quit PureMouse. Separators between
+  groups; submenus only for presets, one level deep.
 - Unavailable **commands** are disabled, not hidden; **status** rows that do not apply are hidden.
 - **Symbols.** None by default. macOS 27 shows menu icons only for key items: the device header is
   the one key item, set with `preferredImageVisibility = .visible` on macOS 27. Within a group, all
@@ -196,15 +197,18 @@ Each level has one mechanism, and each label says what it reveals.
 System Settings › Mouse adjusts blind: a slider with no sample, no undo, nothing tied to the app in
 use. PureMouse goes further only where the HIG's own principles (feedback, forgiveness, direct
 manipulation) lead and the system still draws everything: standard controls, no new chrome, no idle
-cost. Planned (epic #114):
+cost. Planned or built (epic #114):
 
 - **Try it.** A collapsed "Try it" disclosure under Feel and Speed on Scrolling reveals a short
   plain-text scroll area, so smoothing is felt where it is set. Trackpad shows its gestures; Mouse
   shows nothing.
 - **Undo.** ⌘Z and ⇧⌘Z undo and redo each settings change, named in the Edit menu ("Undo Pointer
   Speed"). One slider drag is one step.
-- **Settings for the app in use.** The status menu offers "Settings for <app>…" for the frontmost
-  app (not Finder or PureMouse), opening its sheet in Apps. It is read once as the menu opens.
+- **Settings for the app in use** (built). The status menu offers "Settings for <app>…" below
+  Settings… for the frontmost app (not Finder, the Dock or any PureMouse bundle, nor one without a
+  bundle identifier), opening its sheet in Apps. `NSWorkspace.shared.frontmostApplication` is read
+  once as the menu opens, with no observer or timer; opening a status item's menu does not
+  activate PureMouse, so it still names the app in use.
 - **Feel a haptic.** Choosing a haptic action in the picker plays it once on a mouse with haptics,
   as Trackpad's Click slider does.
 
@@ -224,7 +228,7 @@ display-density DPI hints and live gesture highlighting (more text and motion th
 | Mouse › Pointer | Pointer Speed slider with its value; Presets summary row; both only when the mouse can adjust its speed (else one "Not supported by this mouse." row, unless a value is set) | Exact value (disclosure); Edit Presets… sheet (also opened from the menu) |
 | Apps | App list with summaries, Add App (bordered pull-down) in the footer, routing note; empty state with an Add App… button that opens the Applications panel | Each app opens in a sheet; inside it, gesture directions, other controls and more thumb wheel options are disclosures |
 | About | Icon, name, version, Check for Updates, links, Support PureMouse | — |
-| Status menu | Device header, attention rows when active, Smooth Scrolling, Pointer Speed, Start/Pause/Resume, Settings…, Quit PureMouse | ⌥: detail line, Show Log in Finder, Hide Menu Bar Icon |
+| Status menu | Device header, attention rows when active, Smooth Scrolling, Pointer Speed, Start/Pause/Resume, Settings…, Settings for <app>… (the frontmost app, if any), Quit PureMouse | ⌥: detail line, Show Log in Finder, Hide Menu Bar Icon |
 
 ## Sources
 
