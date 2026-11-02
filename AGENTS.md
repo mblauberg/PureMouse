@@ -66,6 +66,11 @@ one. This file covers how to work on it safely.
   `release.sh --dry-run` (universal bundle signed ad hoc, signatures verified, both size budgets in
   `scripts/size-budget.env` checked, dmg and checksum made) and `scripts/tests/run.sh` on each push
   to `main` and each pull request, and uploads the dmg; its actions are pinned to full SHAs.
+  App builds use SwiftPM's native build system with the active SDK (26 or later) and a macOS 14.0
+  triple, because the default build system records the deployment target as the SDK, and an app
+  linked against SDK 14 gets the pre-macOS 26 appearance (ADR 20). `verify-bundle.sh` checks
+  `minos` and the SDK of every architecture of every binary; CI also builds on the oldest hosted
+  macOS and launches the CLI there.
 - The icon is an Icon Composer document, `assets/AppIcon.icon`: a top-down mouse in three
   monochrome glass layers (buttons with the centre seam, palm, floating wheel), grey fills with
   light and dark specializations, on the system's light/dark background, so macOS 26+ renders
