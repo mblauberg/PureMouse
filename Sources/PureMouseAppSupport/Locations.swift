@@ -41,7 +41,7 @@ public struct Locations: Sendable {
             let url = bundle.appending(path: "../../../MacOS/puremouse").standardizedFileURL
             daemon = isExecutable(url) ? url : nil
         }
-        companion = environment["PUREMOUSE_COMPANION_DIR"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+        companion = Companion.overrideDirectory(in: environment).map { URL(fileURLWithPath: $0, isDirectory: true) }
             ?? home.appending(path: "Library/Application Support/PureMouse")
         launchAgents = home.appending(path: "Library/LaunchAgents")
         daemonOverridden = environment["PUREMOUSE_DAEMON"] != nil

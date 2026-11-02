@@ -10,12 +10,19 @@ public enum Companion {
     public static let daemonLabel = "io.github.mblauberg.puremouse"
     public static let menuLabel = "io.github.mblauberg.puremouse.menu"
 
-    /// `~/Library/Application Support/PureMouse`, or `PUREMOUSE_COMPANION_DIR` when set (tests and
+    /// `PUREMOUSE_COMPANION_DIR` in `environment`, the one place it is parsed; empty counts as unset.
+    public static func overrideDirectory(in environment: [String: String]) -> String? {
+        guard let dir = environment["PUREMOUSE_COMPANION_DIR"], !dir.isEmpty else { return nil }
+        return dir
+    }
+
+    /// This process's `overrideDirectory(in:)`.
+    public static let overrideDirectory = overrideDirectory(in: ProcessInfo.processInfo.environment)
+
+    /// `~/Library/Application Support/PureMouse`, or `overrideDirectory` when set (tests and
     /// development, so a fixture never collides with an installed daemon).
     public static var directory: URL {
-        if let dir = ProcessInfo.processInfo.environment["PUREMOUSE_COMPANION_DIR"] {
-            return URL(fileURLWithPath: dir, isDirectory: true)
-        }
+        if let dir = overrideDirectory { return URL(fileURLWithPath: dir, isDirectory: true) }
         return FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Application Support/PureMouse")
     }
     /// Written by the daemon: `Status`.
@@ -27,12 +34,29 @@ public enum Companion {
     public static var showSettingsURL: URL { directory.appending(path: "show-settings") }
 
     /// Posted by the daemon after writing `statusURL`.
-    public static let statusNotification = "io.github.mblauberg.puremouse.status"
+    public static let statusNotification = doorbell("io.github.mblauberg.puremouse.status")
     /// Posted by the menu bar app after writing `controlURL`.
-    public static let controlNotification = "io.github.mblauberg.puremouse.control"
+    public static let controlNotification = doorbell("io.github.mblauberg.puremouse.control")
     /// Posted by a second launch of the menu bar app (e.g. opened from the Finder) so the running
     /// one shows Settings before the second exits.
-    public static let showSettingsNotification = "io.github.mblauberg.puremouse.menu.show"
+    public static let showSettingsNotification = doorbell("io.github.mblauberg.puremouse.menu.show")
+
+    /// A doorbell's name: `base`, with a short hash of the fixture directory appended when there is
+    /// one, so a development copy never rings an installed app's bell. The hash is of the resolved
+    /// path (symlinks followed, no trailing slash), so every spelling of a directory rings the same
+    /// bell. Without a directory the name is `base`. The hash is FNV-1a, which (unlike `hashValue`)
+    /// is the same in every process.
+    public static func doorbell(_ base: String, directory: String? = overrideDirectory) -> String {
+        guard let directory else { return base }
+        let resolved = URL(fileURLWithPath: directory).resolvingSymlinksInPath().standardizedFileURL.path
+        return base + "." + fnv1a(resolved)
+    }
+
+    static func fnv1a(_ text: String) -> String {
+        var hash: UInt32 = 2_166_136_261
+        for byte in text.utf8 { hash = (hash ^ UInt32(byte)) &* 16_777_619 }
+        return String(format: "%08x", hash)
+    }
 
     public static let encoder: JSONEncoder = {
         let e = JSONEncoder()

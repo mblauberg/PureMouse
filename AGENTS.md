@@ -37,7 +37,11 @@ one. This file covers how to work on it safely.
   since its glass shows whatever is behind it. A window capture (`screencapture -l`) leaves out
   that blur, so the README's menu shots take the shape and shadow from one and the body from a
   screen capture of the same rect. Check its footprint with `footprint <pid>` before and after
-  opening Settings.
+  opening Settings, or reproduce the published figures with `scripts/measure-menu.sh` on a spare
+  Mac (never the one whose PureMouse you use; `docs/development.md`, "Footprint rig"). Its release
+  build carries `DevHooks` only with `-DDEVHOOKS`, and acts only when `PUREMOUSE_COMPANION_DIR` is
+  set, which also gives the doorbells names of their own (`Companion.doorbell`), so a debug build
+  with `PUREMOUSE_COMPANION_DIR` set no longer hears the installed daemon's bell.
 - The user's live config is `~/.config/puremouse/config.json`; keep `config.example.json` in step
   with it (its test checks shape, not values). Config changes apply on save (`ConfigWatcher`
   watches the file and its directory, reloading when the bytes change) or with
@@ -145,10 +149,11 @@ one. This file covers how to work on it safely.
   of it. It must not poll: it wakes on notifications, file events and the daemon's process exit.
   Its Settings window and view tree are built when shown (each pane on its first visit); once
   Settings closes the process starts over (`Relaunch`): the agent's copy exits 75 for launchd to
-  restart, since AppKit and SwiftUI keep about 35 MB otherwise. Never `exec` in place (LaunchServices then withholds the status item). The
-  menu is rebuilt on open. Settings controls carry their own accessibility label where a `RowLabel`
-  (title plus caption) leaves them unnamed. Shortcut specs are parsed and named by Kit's `Keystroke` only; the menu adds
-  glyphs and spoken words.
+  restart, since AppKit and SwiftUI keep about 39 MB otherwise (against about 14 MB fresh;
+  `docs/companion.md`, Footprint). Never `exec` in place (LaunchServices then withholds the status
+  item). The menu is rebuilt on open. Settings controls carry their own accessibility label where a
+  `RowLabel` (title plus caption) leaves them unnamed. Shortcut specs are parsed and named by Kit's
+  `Keystroke` only; the menu adds glyphs and spoken words.
 - Notifications and the update check live in the menu app only (the daemon stays free of
   UserNotifications and the network). The low-battery notification (`BatteryAlert`,
   `Notifier`) is decided on each status the daemon writes, from the band already announced per

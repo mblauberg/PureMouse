@@ -88,3 +88,51 @@ private func fullStatus() -> Status {
         #expect(fullStatus().schema == 1)
     }
 }
+
+@Test(.enabled(if: Companion.overrideDirectory == nil))
+func doorbellsKeepTheirNamesWithoutACompanionDirectory() {
+    // Unset leaves the shipped names.
+    #expect(Companion.doorbell("io.github.mblauberg.puremouse.status", directory: nil) == "io.github.mblauberg.puremouse.status")
+    // This test run has no fixture directory, so the shipped names are the plain ones.
+    #expect(Companion.statusNotification == "io.github.mblauberg.puremouse.status")
+    #expect(Companion.controlNotification == "io.github.mblauberg.puremouse.control")
+    #expect(Companion.showSettingsNotification == "io.github.mblauberg.puremouse.menu.show")
+}
+
+private let bells = [
+    "io.github.mblauberg.puremouse.status",
+    "io.github.mblauberg.puremouse.control",
+    "io.github.mblauberg.puremouse.menu.show",
+]
+
+@Test func doorbellsDifferPerCompanionDirectory() {
+    var seen = Set<String>()
+    for base in bells {
+        let a = Companion.doorbell(base, directory: "/tmp/rig-a")
+        #expect(a != base)
+        #expect(a.hasPrefix(base + "."))
+        #expect(a == Companion.doorbell(base, directory: "/tmp/rig-a")) // the daemon and the menu agree
+        #expect(a != Companion.doorbell(base, directory: "/tmp/rig-b"))
+        seen.insert(a)
+    }
+    #expect(seen.count == bells.count)
+}
+
+@Test func doorbellsIgnoreHowADirectoryIsSpelled() throws {
+    let directory = "/tmp/puremouse-bell-\(UUID().uuidString)"
+    try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(atPath: directory) }
+    for base in bells {
+        let expected = Companion.doorbell(base, directory: directory)
+        #expect(Companion.doorbell(base, directory: directory + "/") == expected)
+        #expect(Companion.doorbell(base, directory: "/private" + directory) == expected)
+        #expect(Companion.doorbell(base, directory: directory + "/./") == expected)
+    }
+}
+
+@Test func doorbellHashIsStable() {
+    // Fixed values pin the hash (FNV-1a, 32 bits): it must not change between builds or processes.
+    #expect(Companion.fnv1a("") == "811c9dc5")
+    #expect(Companion.fnv1a("a") == "e40c292c")
+    #expect(Companion.fnv1a("foobar") == "bf9cf968")
+}

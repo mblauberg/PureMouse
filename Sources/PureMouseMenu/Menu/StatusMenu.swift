@@ -28,11 +28,13 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         NSStatusBar.system.removeStatusItem(statusItem)
     }
 
-    #if DEBUG
+    #if DEBUG || DEVHOOKS
     func open(appearance: NSAppearance?) {
         menu.appearance = appearance
         statusItem.button?.performClick(nil)
     }
+
+    func close() { menu.cancelTracking() }
     #endif
 
     private(set) var isOpen = false

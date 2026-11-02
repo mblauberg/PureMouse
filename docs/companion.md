@@ -26,6 +26,12 @@ atomically (`Companion.write`, mode 0600) and are followed by a Darwin notificat
 
 The Swift types in `Sources/PureMouseKit/Companion.swift` are the schema.
 
+The table gives the doorbell names as shipped. When `PUREMOUSE_COMPANION_DIR` is set (tests,
+development, the footprint rig), both sides append `.` and an 8-digit hex FNV-1a hash of that
+directory's resolved path (symlinks followed, no trailing slash, so `/tmp/fx`, `/tmp/fx/` and
+`/private/tmp/fx` agree) to all three doorbell names (`Companion.doorbell`), so a copy running on a
+fixture directory neither rings nor answers an installed app. An empty value counts as unset. Unset leaves the names above.
+
 ### Status (daemon → menu)
 
 The daemon rewrites `status.json` when anything in it changes:
@@ -148,18 +154,61 @@ under System Settings › Menu Bar, opening the app still reaches Settings.
 ## Footprint
 
 The daemon's budget is unchanged: zero CPU while idle, about 10 MB. The menu app must use zero CPU
-while idle, with no timers or polling. Its target is under 25 MB resident with Settings closed
-(a bare AppKit status item is about 12 MB, so idle is about 15 MB). The Settings window and its
-view tree are created when shown; once Settings has closed, the app starts over as a fresh copy
-(`Relaunch`), because AppKit and SwiftUI keep about 35 MB after the window is released. The agent's
-copy exits with 75 (EX_TEMPFAIL) and launchd restarts it (`KeepAlive` unless successful) within a
-second, in the same place in the menu bar; it waits until 11 s after its own start (launchd's
-respawn throttle), and while the menu is open or a lifecycle command runs. A copy the Finder
-started (the icon was hidden, then shown again in Settings) exits and has launchd start the agent,
-so the icon is supervised again. `exec` in place does not work: LaunchServices keeps the old
-image's registration for the pid and the new image never gets its status item. The menu itself is
-a plain `NSMenu` built on open (`menuNeedsUpdate`). Measure both apps with
-`footprint`/`vmmap --summary` before and after each change.
+while idle, with no timers or polling. Its footprint is `phys_footprint` from `footprint(1)`, and
+the figures below are medians of 5 runs of `scripts/measure-menu.sh` (`docs/development.md`,
+"Footprint rig") on a spare Mac, macOS 27.0.1, arm64, on 2026-11-02. They move with the OS, so
+read them as "about" and repeat the rig after each macOS release. The bare AppKit column is
+`scripts/measure-bare-appkit.sh` (5 runs, the same Mac and day).
+
+| Menu app, release build | MB | Bare AppKit status item and menu, same Mac |
+|---|---|---|
+| fresh, about 4.5 s after launch | 13.8 | 10.8 |
+| after 1 menu open | 19.8 | 15.2 |
+| after 3 menu opens | 19.8 | 15.4 |
+| after 10 menu opens | 20.2 | 15.6 |
+| after 200 status doorbells, 10 ms apart, menu never opened | 13.8 | |
+| Settings open, in this process | 42.9 | |
+| Settings closed again, in this process | 38.7 | |
+
+What the numbers say:
+
+- **The first menu open costs about 6 MB, once.** Later opens add almost nothing (19.8 to 20.2 MB
+  over ten). A bare `NSStatusItem` with an `NSMenu` and nothing else grows by about 4 MB on its first
+  open (10.8 to 15.2 MB), so most of the cost is AppKit's, not the menu's; the rest is ours.
+- **Status updates did not grow it.** 200 doorbells posted 10 ms apart, `status.json` changed
+  before each, left the fresh figure where it was (13.8 against 13.8 MB).
+- **No growth was seen across the measured opens and doorbells.** The earlier question was a
+  repeating 272 KB block per open. It was not reproduced: after 30 opens under
+  `MallocStackLogging`, `heap -addresses=all` listed no live block of that size (the largest live
+  block was 64 KB), so no owner could be named. One run on 2026-11-02, with
+  `scripts/measure-menu.sh --blocks`.
+- **Settings is where the rest goes.** Opening it adds about 29 MB, and closing it gives back only
+  about 4 MB, even after `malloc_zone_pressure_relief`: AppKit and SwiftUI keep the pages. Hence
+  `Relaunch`: once Settings has closed, the app starts over as a fresh copy (the "closed" row above
+  is the process without that restart; the rig does not restart it).
+- **Allocator.** The growth looks like freed small-malloc pages that stay resident and that
+  `malloc_zone_pressure_relief` does not return. Running the same rig with
+  `MallocSpaceEfficient=1` (a preference for reusing freed space over speed) gave: fresh 10.1,
+  after 1 open 14.3, after 3 opens 14.2, after 10 opens 14.2, 200 doorbells 10.1, Settings open
+  32.3 and closed 23.9 MB. That is 0.71 times the baseline at 3 opens (20.1 MB in the run beside it, before the rig took
+  the shipped bundle's Info.plist; the table above is from after), and fresh was lower, not
+  higher. This is a measurement only: whether to adopt it is a separate decision.
+- **The prefs-domain caveat.** For a while the rig's numbers were bimodal: some launches started
+  about 4 MB higher, even for the fresh and doorbell scenarios, and a fresh bundle id or
+  `defaults delete` of the rig's domain brought them back. The cause is a transient state of the
+  preferences domain that we could not reproduce on demand, so the rig clears its domain before
+  every launch. An installed app that carries that state may read several MB above these figures.
+
+The Settings window and its view tree are created when shown. Once Settings has closed, the app
+starts over as a fresh copy (`Relaunch`): the agent's copy exits with 75 (EX_TEMPFAIL) and launchd
+restarts it (`KeepAlive` unless successful) within a second, in the same place in the menu bar; it
+waits until 11 s after its own start (launchd's respawn throttle), and while the menu is open or a
+lifecycle command runs. A copy the Finder started (the icon was hidden, then shown again in
+Settings) exits and has launchd start the agent, so the icon is supervised again. `exec` in place
+does not work: LaunchServices keeps the old image's registration for the pid and the new image
+never gets its status item. The menu itself is a plain `NSMenu` built on open (`menuNeedsUpdate`).
+`scripts/measure-menu.budgets` holds the limits the rig checks; measure with the rig, or
+`footprint`/`vmmap --summary`, before and after each change.
 
 ## Daemon decisions
 
