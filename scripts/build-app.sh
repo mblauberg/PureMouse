@@ -5,6 +5,7 @@
 #   --universal      one stripped binary for Apple silicon and Intel (releases); otherwise this
 #                    Mac's only, unstripped
 #   --version X.Y.Z  the bundle version (or PUREMOUSE_VERSION); otherwise from `git describe`
+#   --timestamp      sign with Apple's secure timestamp (releases; needs the network)
 #
 # Signing (sign-bundle.sh, always with the hardened runtime) uses lib.zsh's signing_identity; the
 # order is in docs/development.md#signing. macOS ties PureMouse's Accessibility and Input Monitoring
@@ -21,12 +22,13 @@ products=(puremouse PureMouseMenu)
 # not in Package.swift: there SwiftPM also applied it to debug links, and swift test then silently
 # dropped the tests of both executables.
 link=(-Xlinker -no_exported_symbols)
-universal=0
+universal=0 timestamp=()
 while (( $# )); do
     case $1 in
         --universal) universal=1; shift ;;
+        --timestamp) timestamp=(--timestamp); shift ;;
         --version) (( $# >= 2 )) || die "--version needs a value"; PUREMOUSE_VERSION=$2; shift 2 ;;
-        *) die "usage: build-app.sh [--universal] [--version X.Y.Z]" ;;
+        *) die "usage: build-app.sh [--universal] [--version X.Y.Z] [--timestamp]" ;;
     esac
 done
 version=$(resolve_version)
@@ -63,5 +65,5 @@ else
 fi
 
 assemble_bundle $bin $app $version $build
-scripts/sign-bundle.sh $app --identity "$identity"
+scripts/sign-bundle.sh $app --identity "$identity" $timestamp
 echo "built $app ($version, build $build, $(lipo -archs $app/Contents/MacOS/puremouse), signed by $identity)"

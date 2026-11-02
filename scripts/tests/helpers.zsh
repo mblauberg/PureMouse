@@ -55,8 +55,8 @@ script_repo() {
 # stub_build_app <repo> [wrong-identifier]: replaces the repo's build-app.sh with one that lays out
 # a stand-in bundle around /usr/bin/true, signed ad hoc by the repo's sign-bundle.sh and carrying a
 # NEW marker file. With wrong-identifier the menu app is signed as another identifier, which
-# codesign accepts and verify-bundle.sh does not. The bundle version is a trailing `--version V`
-# (release.sh's), else 9.9.9.
+# codesign accepts and verify-bundle.sh does not. It logs its arguments to build-args.log, takes the bundle version from `--version V`
+# (release.sh's), else 9.9.9, and ignores other arguments.
 stub_build_app() {
     local repo=$1 mode=${2:-}
     cat > $repo/scripts/build-app.sh <<STUB
@@ -64,8 +64,12 @@ stub_build_app() {
 set -euo pipefail
 source "\${0:A:h}/lib.zsh"
 cd \$root
+print -r -- "\$*" >> \$root/build-args.log
 version=9.9.9
-(( \$# >= 2 )) && [[ \${@[-2]} == --version ]] && version=\${@[-1]}
+while (( \$# )); do
+    [[ \$1 == --version ]] && version=\$2
+    shift
+done
 mkdir -p .build/stub
 cp /usr/bin/true .build/stub/puremouse
 cp /usr/bin/true .build/stub/PureMouseMenu

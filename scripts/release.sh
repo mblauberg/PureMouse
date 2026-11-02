@@ -108,14 +108,15 @@ dmg=$dist/PureMouse-$version.dmg
 identity=$(signing_identity)
 release_opts=()
 
-scripts/build-app.sh --universal --version $version
-[[ $(plist_value $app/Contents/Info.plist CFBundleShortVersionString) == $version ]] ||
-    die "the built app is not version $version"
+build_options=(--universal --version $version)
 if (( ! dry_run )); then
-    # build-app.sh signs without a timestamp; Apple's notary service and a release need one.
-    scripts/sign-bundle.sh $app --identity "$identity" --timestamp
+    # Apple's notary service and a release need the secure timestamp; a dry run stays offline.
+    build_options+=(--timestamp)
     release_opts=(--release)
 fi
+scripts/build-app.sh $build_options
+[[ $(plist_value $app/Contents/Info.plist CFBundleShortVersionString) == $version ]] ||
+    die "the built app is not version $version"
 scripts/verify-bundle.sh $app $release_opts
 scripts/check-size.sh $app
 

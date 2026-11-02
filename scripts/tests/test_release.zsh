@@ -138,6 +138,7 @@ test_release_notarises_and_staples_the_app_then_the_dmg() {
     [[ $calls[3] == "notarytool submit .build/dist/PureMouse-1.2.3.dmg --key "* ]] || { print -u2 -- $calls[3]; return 1; }
     [[ $calls[4] == "stapler staple .build/dist/PureMouse-1.2.3.dmg" ]] || { print -u2 -- $calls[4]; return 1; }
     (cd $repo/.build/dist && shasum -a 256 -c SHA256SUMS >/dev/null)
+    [[ $(<$repo/build-args.log) == "--universal --version 1.2.3 --timestamp" ]] || { print -u2 -- "build ran with: $(<$repo/build-args.log)"; return 1; }
     # The app went into the dmg after it was stapled: the dmg's copy carries what stapling left.
     mkdir $tmp/mount
     hdiutil attach -nobrowse -readonly -noverify -mountpoint $tmp/mount $repo/.build/dist/PureMouse-1.2.3.dmg >/dev/null
@@ -195,6 +196,7 @@ test_dry_run_on_an_untagged_tree_makes_the_dmg_and_checksum_without_notarising()
     output=$($repo/scripts/release.sh --dry-run --version 0.0.0-ci.abc1234 2>&1) || { print -u2 -- $output; return 1; }
     expect "xcrun was not run" test ! -e $tmp/fakes/xcrun.log
     expect "the dmg exists" test -f $repo/.build/dist/PureMouse-0.0.0-ci.abc1234.dmg
+    [[ $(<$repo/build-args.log) == "--universal --version 0.0.0-ci.abc1234" ]] || { print -u2 -- "build ran with: $(<$repo/build-args.log)"; return 1; }
     (cd $repo/.build/dist && shasum -a 256 -c SHA256SUMS >/dev/null)
 }
 

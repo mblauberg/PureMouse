@@ -15,7 +15,7 @@ device features are in [`AGENTS.md`](../AGENTS.md).
 `install.sh` and `release.sh` build with `build-app.sh`; `release.sh` also runs these, and so can you:
 
 ```sh
-./scripts/build-app.sh [--universal] [--version X.Y.Z]   # sign and assemble .build/app/PureMouse.app
+./scripts/build-app.sh [--universal] [--version X.Y.Z] [--timestamp]   # sign and assemble .build/app/PureMouse.app
 ./scripts/verify-bundle.sh .build/app/PureMouse.app      # signatures, identifiers, plists
 ./scripts/check-size.sh .build/app/PureMouse.app         # installed size against the budget
 ./scripts/make-dmg.sh .build/app/PureMouse.app out.dmg   # the release dmg alone
@@ -120,9 +120,9 @@ first of:
 3. the self-signed identity named `PureMouse` (`scripts/make-cert.sh`);
 4. ad hoc (`-`).
 
-Local builds sign with `--timestamp=none`; `sign-bundle.sh --timestamp` asks for a secure
-timestamp, which `release.sh` does for a release (it needs the network, and notarisation needs it). macOS ties permission grants to the
-signature, so an ad-hoc build needs them granted again after every install, and every release must
+Local builds sign with `--timestamp=none`; `build-app.sh --timestamp` (and `sign-bundle.sh
+--timestamp`) asks for a secure timestamp, which `release.sh` does for a release (it needs the
+network, and notarisation needs it). macOS ties permission grants to the signature, so an ad-hoc build needs them granted again after every install, and every release must
 be signed with the same identity. Keep a backup of it.
 
 `scripts/verify-bundle.sh <app>` checks each component: Info.plist present and valid, identifier
@@ -143,7 +143,7 @@ signature from that team.
 
 `release.sh` takes no version: it refuses unless `HEAD` is tagged exactly `vX.Y.Z` or `vX.Y.Z-rc.N`
 (one such tag) on a clean tree, and rejects `--version` without `--dry-run`. It builds the universal
-app, re-signs it with a secure timestamp, runs `verify-bundle.sh --release`, checks the size budgets
+app signed once, with a secure timestamp, runs `verify-bundle.sh --release`, checks the size budgets
 (`INSTALLED_MAX_BYTES`, `DMG_MAX_BYTES`), makes and signs the dmg (`make-dmg.sh`: ULFO, with
 `PureMouse.app` and an `Applications` link), mounts it read-only to verify its contents, and writes
 `SHA256SUMS`. `scripts/release.env` holds `PUREMOUSE_TEAM_ID`, empty until there is a Developer ID.
