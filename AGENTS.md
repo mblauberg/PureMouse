@@ -42,7 +42,10 @@ one. This file covers how to work on it safely.
   sheet: `presets` on Mouse › Pointer, or `advanced` on the pane shown, `DevSheet`) for screenshots
   (`Sources/PureMouseSettingsUI/DevHooks.swift`), and `PUREMOUSE_DEV_CAPTURE=<file.png>` saves its
   own windows to that file and quits, which needs no Screen Recording permission, so it works over
-  SSH (`DevCapture`). `PUREMOUSE_DEV_MENU=1` puts a plain backdrop
+  SSH (`DevCapture`). `PUREMOUSE_DEV_AX_DUMP=1` prints each control's accessibility role, label and
+  size for every tab and Mouse segment (or, with `PUREMOUSE_DEV_PANE`, for what the sheet, picker
+  and shortcut hooks open) and exits 1 on an unlabelled or duplicate control or one under 20 × 20 pt
+  (`DevAXDump`; the workshop Mac, not the one in use). `PUREMOUSE_DEV_MENU=1` puts a plain backdrop
   under the menu, since its glass shows whatever is behind it. A window capture
   (`screencapture -l`) leaves out that blur, so the README's menu shots take the shape and shadow
   from one and the body from a screen capture of the same rect. Check the menu's footprint with
@@ -265,6 +268,11 @@ one. This file covers how to work on it safely.
   follows `docs/ui-language.md`: its casing rules and glossary. Layout, controls and what shows by
   default versus behind Advanced… follow `docs/ui-design.md`. Change either page in the same PR as
   the UI it governs.
+- Settings text and controls are the system's: semantic text styles, no fixed font size, control
+  size, background or colour literal in `Sources/PureMouseSettingsUI`. `UIChromeScanTests` fails on
+  them outside its allow-list (five entries at most, each with a reason, a stale one fails);
+  docs/ui-design.md, "Forms and controls", lists the patterns. A shortcut binding's accessibility
+  value is `Shortcut.spoken`, a tooltip is under 75 characters, and each control has its own label.
 - Settings shows no focus ring until the keyboard is used: windows, panes, the action picker and
   the shortcut sheet open with nothing focused (the picker's search takes the first keystroke).
   Check with keyboard navigation (`AppleKeyboardUIMode`) both on and off.

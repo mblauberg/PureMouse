@@ -53,9 +53,20 @@ answering a question people have, and a good default means most people never tou
 - **Let the system draw.** No explicit font sizes, control widths or heights, literal corner radii,
   materials, `glassEffect`, `.buttonStyle(.glass)`, backgrounds or colour literals. No
   `.controlSize` overrides except `.mini` on a switch, if a grouped form's default ever renders
-  larger than System Settings' (check it in a capture), and never `.extraLarge`. Scan-tested:
-  `.system(size:`, numeric `.frame(width:`/`height:` on controls, `Color.<name>`, `.white`,
-  `.black` outside symbol rendering, `glassEffect`.
+  larger than System Settings' (check it in a capture), and never `.extraLarge`. Text is a
+  semantic style (`.title3`, `.body`, `.callout`, `.subheadline`) and a symbol is sized with
+  `.imageScale`. A slider's end words are its own `minimumValueLabel` and `maximumValueLabel`, and
+  its width comes from the form (`ValueSlider` has no width). A shortcut recorder is a `.bordered`
+  button with the shortcut in `.title3` and the recording state as a symbol and a word (no system
+  control records a ⌘ chord). Scan-tested by `UIChromeScanTests`, which reads
+  `Sources/PureMouseSettingsUI` and fails on `.system(size:`, a `.frame` with a numeric size,
+  `.controlSize` other than `.mini` on a switch, `.background(`, `Material`,
+  `NSVisualEffectView`, `glassEffect`, `.buttonStyle(.glass`, `cornerRadius`, `RoundedRectangle(`,
+  `Color.<name>` other than `clear`, `primary` and `secondary`, and named colours (`.white`,
+  `.black`, `.red` and the rest). Its allow-list holds at most five lines, each a file, a source
+  fragment and a reason, and an entry that no longer matches fails: today the About icon's
+  artwork frame and the action picker popover's size (a `List` has none of its own). Sheets share
+  one width (`SettingsWindowController.sheetWidth`) and take their height from their content.
 - **Custom shapes are concentric.** Prefer a system container (form section, `GroupBox`). A custom
   rounded view, such as the device card, uses `ConcentricRectangle` (macOS 26+) so it follows the
   window's radius; the macOS 14–15 branch may use one named radius constant.
@@ -154,7 +165,16 @@ Each level has one mechanism, and each label says what it reveals.
 - **Test matrix** for a UI change: light and dark; Increase Contrast; Reduce Transparency; the
   Liquid Glass slider at both ends (clear and tinted); Reduce Motion; Show Borders; Full Keyboard
   Access; VoiceOver on every symbol-only control. Fix legibility with system settings, never by
-  adding a background.
+  adding a background. A capture matrix needs the system settings changed by a person at the
+  Mac; light and dark captures of every default view and sheet run over SSH (AGENTS.md).
+- **Checks that run without a person.** `UIChromeScanTests` (above), `MenuPlanTests` (the status
+  item's spoken label), and `PUREMOUSE_DEV_AX_DUMP=1` on a macOS 27 Mac, which lists every
+  control's role, label and size for each tab, Mouse segment and (through the other
+  `PUREMOUSE_DEV_*` hooks) each sheet and popover, and fails on a control with no label, an unnamed
+  button, two controls with one label in a window, or a control under 20 × 20 pt. It does not hold
+  the system's own parts to the size or the label: a slider and a mini switch (16-18 pt, drawn by
+  AppKit; the row takes the click), the words at a slider's ends, the window's close, zoom and
+  minimise buttons, and a scroll bar's arrows and pages.
 - **Captures** and README screenshots come from a macOS 27 host running a build linked against
   the macOS 27 SDK (`scripts/verify-bundle.sh` checks the SDK), since the system restyles at run
   time.
