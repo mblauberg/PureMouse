@@ -242,10 +242,17 @@ extension NSApplication {
     /// attached, so a quit from outside (the menu bar app's Quit PureMouse, SIGTERM, a capture)
     /// would leave the helper running. Edits are already saved as they are made, and
     /// `applicationWillTerminate` flushes the rest.
+    ///
+    /// Ending the sheets is not always enough: a SwiftUI sheet whose state still says it is shown
+    /// is attached again while `terminate(_:)` runs, which then returns without quitting (seen in
+    /// the bundled helper with an app's sheet open). So when it returns, finish the quit as it
+    /// would have: announce `willTerminate` (the delegate saves) and exit.
     public func terminateClosingSheets() {
         for window in windows {
             for sheet in window.sheets.reversed() { window.endSheet(sheet) }
         }
         terminate(nil)
+        NotificationCenter.default.post(name: NSApplication.willTerminateNotification, object: self)
+        exit(0)
     }
 }
