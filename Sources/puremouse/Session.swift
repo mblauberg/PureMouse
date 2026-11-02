@@ -64,6 +64,9 @@ final class Session {
     var hapticMissingLogged = false
     var unsupportedHaptics: Set<HapticWaveform> = []
     private var configuring: Task<Void, Never>?
+    var isConfiguring: Bool { configuring != nil }
+    private var lastConfigureEnded: ContinuousClock.Instant?
+    static let offlineReconfigureGap: Duration = .seconds(30)
     /// Device actions (toggle scroll mode, cycle DPI, haptics) and `apply`'s DPI and scroll mode
     /// writes, one at a time in the order asked, each reading what is wanted (`liveDPI`,
     /// `scrollMode`) as it runs, so a press and a reconfiguration cannot overwrite each other.
@@ -259,12 +262,15 @@ final class Session {
     // MARK: Configuration
 
     /// (Re)applies all settings after `delay`, retrying a few times if the device does not
-    /// answer. Safe to call repeatedly; a newer call supersedes an older one.
+    /// answer. Safe to call repeatedly; only one configure runs at a time.
     func configure(after delay: Duration = .zero) {
-        guard !finished else { return }
-        configuring?.cancel()
+        guard !finished, !isConfiguring else { return }
         dropHeld()
         configuring = Task {
+            defer {
+                configuring = nil
+                lastConfigureEnded = environment.now()
+            }
             try? await Task.sleep(for: delay)
             for attempt in 1...3 {
                 guard !Task.isCancelled else { return }
@@ -289,6 +295,14 @@ final class Session {
             state.online = false
             changed()
         }
+    }
+
+    /// An offline mouse can return without either reconnect notification. Events drive this
+    /// throttle; there is no periodic work while the device is idle.
+    func reconfigureIfOffline() {
+        guard !finished, !state.online, !isConfiguring,
+              lastConfigureEnded.map({ environment.now() - $0 >= Self.offlineReconfigureGap }) ?? true else { return }
+        configure()
     }
 
     func apply() async throws {

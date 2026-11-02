@@ -3,6 +3,7 @@
 struct SessionEnvironment {
     var canPostEvents: Bool
     var configureRetryDelay: Duration = .seconds(5)
+    var now: () -> ContinuousClock.Instant = { .now }
 
     static var live: Self { Self(canPostEvents: Permissions.current.contains(.accessibility)) }
 }

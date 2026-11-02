@@ -34,6 +34,7 @@ extension Session {
             }
             return
         }
+        reconfigureIfOffline()
         let feature = device.feature(at: report.featureIndex)
         // Late wheel and button reports from before a handoff: the pointer is on another Mac.
         if away, let feature, [HiResWheel.id, ThumbWheel.id, ReprogControls.id].contains(feature) { return }
