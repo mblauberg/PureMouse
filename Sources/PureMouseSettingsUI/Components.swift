@@ -166,6 +166,11 @@ struct AdvancedSheet<Content: View, Leading: View>: View {
             Form { content }
                 .formStyle(.grouped)
                 .scrollBounceBehavior(.basedOnSize)
+                // As tall as its rows, up to what the screen leaves, then it scrolls. Proposed the
+                // parent window's height instead, a long sheet over a short pane (one app in Apps)
+                // squeezed its form to nothing.
+                .frame(maxHeight: Self.maxFormHeight)
+                .fixedSize(horizontal: false, vertical: true)
             HStack {
                 leading
                 Spacer()
@@ -176,6 +181,9 @@ struct AdvancedSheet<Content: View, Leading: View>: View {
         }
         .frame(width: SettingsWindowController.sheetWidth)
     }
+
+    /// The screen's height less the window's toolbar and the sheet's title and buttons.
+    private static var maxFormHeight: CGFloat { LazyPane.fitted(NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)).height - 160 }
 }
 
 extension AdvancedSheet where Leading == EmptyView {
@@ -218,3 +226,4 @@ extension View {
     /// Indents a disclosed child row past its parent's triangle.
     func disclosedRow() -> some View { padding(.leading, 22) }
 }
+
