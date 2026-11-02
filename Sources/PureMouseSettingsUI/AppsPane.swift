@@ -85,18 +85,15 @@ struct AppsPane: View {
                         }
                     }
                 }
-            } header: {
-                HStack {
-                    Text("Apps")
-                    Spacer()
+            } footer: {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Buttons follow the frontmost app.\nScrolling and the thumb wheel follow the app under the pointer.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     addMenu
                 }
-            } footer: {
-                Text("Buttons follow the frontmost app.\nScrolling and the thumb wheel follow the app under the pointer.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             .disabled(model.readOnly)
         }
@@ -114,6 +111,8 @@ struct AppsPane: View {
                 }
             }
         }
+        // A bordered pull-down, not a borderless one that reads as a link.
+        .menuStyle(.button)
         .fixedSize()
         .accessibilityHint("Choose an app to give its own settings")
     }

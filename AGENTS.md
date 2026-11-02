@@ -34,9 +34,10 @@ one. This file covers how to work on it safely.
   the sibling `PureMouseSettings` binary) and passes it the `PUREMOUSE_*` variables. Debug builds
   of the menu take `PUREMOUSE_DEV_MENU=1` and `PUREMOUSE_DEV_APPEARANCE=light|dark`
   (`Sources/PureMouseMenu/DevHooks.swift`); `--login` launches it as launchd does (no Settings).
-  Debug builds of the helper take `PUREMOUSE_DEV_PANE=<pane>`, `PUREMOUSE_DEV_APPEARANCE`,
-  `PUREMOUSE_DEV_PICKER=<button>`, `PUREMOUSE_DEV_SHORTCUT=<button>` (Buttons pane) and
-  `PUREMOUSE_DEV_APP=<bundle id>` (Apps pane; adds the app without writing) for screenshots
+  Debug builds of the helper take `PUREMOUSE_DEV_PANE=<pane>` (a tab, `general`, `mouse`, `apps`,
+  `about`, or a Mouse segment, `buttons`, `scrolling`, `pointer`), `PUREMOUSE_DEV_APPEARANCE`,
+  `PUREMOUSE_DEV_PICKER=<button>`, `PUREMOUSE_DEV_SHORTCUT=<button>` (Mouse › Buttons) and
+  `PUREMOUSE_DEV_APP=<bundle id>` (Apps tab; adds the app without writing) for screenshots
   (`Sources/PureMouseSettingsUI/DevHooks.swift`). `PUREMOUSE_DEV_MENU=1` puts a plain backdrop
   under the menu, since its glass shows whatever is behind it. A window capture
   (`screencapture -l`) leaves out that blur, so the README's menu shots take the shape and shadow
@@ -193,7 +194,7 @@ one. This file covers how to work on it safely.
   observing) while that pane shows;
   `UNUserNotificationCenter` needs a bundle, so a bare dev run posts nothing. "Check for Updates" (About pane, `UpdateCheck`) makes
   one GET of the latest GitHub release per press: no background checks.
-- The DPI the menu and the Pointer pane show is the mouse's live value (a `cycleDPI` press
+- The DPI the menu and Mouse › Pointer show is the mouse's live value (a `cycleDPI` press
   changes it without touching the config), then the configured one; a change made in the pane
   shows until the mouse reports it (`DPIReading`).
 - The menu bar app writes only the keys a control owns (`ConfigTree`) and keeps every other key,
@@ -210,7 +211,7 @@ one. This file covers how to work on it safely.
   `config.json.lock` beside the resolved config, and `control.json` writes under
   `control.json.lock`, changing only the fields that request sets; the daemon's startup delete of
   it takes the same lock (`docs/companion.md`).
-- The Buttons and Apps panes list a named button when a connected mouse reports it or the config
+- Mouse › Buttons and the Apps tab list a named button when a connected mouse reports it or the config
   binds it; with no report, those `NamedButton.listedByDefault` (not the MX Master 4's thumb panel)
   (`ButtonRows.named`). Haptic picker entries come from Kit's `HapticWaveform.allCases`; the menu
   only words them (`ActionCatalog.hapticLabel`).
@@ -220,10 +221,19 @@ one. This file covers how to work on it safely.
   (`AppIdentities`); an icon loads when its frame meets the scroll view's visible bounds (`AppIcon`;
   a grouped form builds every row, so `onAppear` is not enough, and macOS 14 lacks
   `onScrollVisibilityChange`), and Applications is never listed (adding goes through an
-  open panel or the running apps). A pane is no taller than the screen (`LazyPane.fitted`). A pane
-  whose height changes while shown calls `SettingsContext.refit()`: a nested
-  `NSHostingController` updates its `preferredContentSize` without telling the tab controller, so
-  `SettingsTabs.refit()` copies it across.
+  open panel or the running apps).
+- Settings has four tabs, General, Mouse, Apps and About (`SettingsTab.shown`, so a new tab is one
+  entry). Mouse is a fixed header strip (segments, Find by Pressing… on Buttons, a leading slot for
+  the mouse pop-up) over its Buttons, Scrolling and Pointer segments (`MouseTab`); it holds only
+  per-mouse settings. A request for `buttons`, `scrolling` or `pointer` opens Mouse on that segment
+  (`SettingsPane`, `SettingsSelection`); a first run, or a stored tab not understood, opens Mouse
+  (on Buttons the first time). Tabs and segments are built the first time they show (`LazyPane`,
+  `MouseTab`). A pane is no taller than the screen (`LazyPane.fitted`). A pane whose height changes
+  while shown calls `SettingsContext.refit()`: a nested `NSHostingController` updates its
+  `preferredContentSize` without telling the tab controller, so `SettingsTabs.refit()` copies it
+  across (through `MouseTab.fit()`, which adds the strip). Advanced settings sit behind a pane's
+  footer (`PaneFooter`: Restore Defaults, Advanced…) in an `AdvancedSheet`, which never opens
+  another sheet.
 - User-facing text (menu, Settings, alerts, notifications, accessibility labels, CLI output)
   follows `docs/ui-language.md`: its casing rules and glossary. Layout, controls and what shows by
   default versus behind Advanced… follow `docs/ui-design.md`. Change either page in the same PR as

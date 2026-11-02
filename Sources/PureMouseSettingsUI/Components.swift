@@ -221,6 +221,58 @@ struct FooterButton: View {
     }
 }
 
+/// The row under a pane's last group (docs/ui-design.md): Restore Defaults at the leading edge,
+/// Advanced… at the trailing edge, either optional. Advanced… opens the pane's `AdvancedSheet`.
+/// Goes in the last section's footer.
+struct PaneFooter: View {
+    var restoreDefaults: (() -> Void)?
+    var advanced: (() -> Void)?
+
+    var body: some View {
+        HStack {
+            if let restoreDefaults { Button("Restore Defaults", action: restoreDefaults) }
+            Spacer()
+            if let advanced { Button("Advanced…", action: advanced) }
+        }
+        .padding(.top, 4)
+    }
+}
+
+/// A pane's Advanced… sheet: a title, a grouped form, and Done as the default button, with an
+/// optional button at the bottom-leading edge (General's Reset All Settings…). A sheet never opens
+/// another sheet: anything that needs more room inside it is a disclosure (docs/ui-design.md).
+struct AdvancedSheet<Content: View, Leading: View>: View {
+    let title: String
+    @ViewBuilder var content: Content
+    @ViewBuilder var leading: Leading
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text(title)
+                .font(.headline)
+                .padding(.top)
+            Form { content }
+                .formStyle(.grouped)
+                .scrollBounceBehavior(.basedOnSize)
+            HStack {
+                leading
+                Spacer()
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+            .padding([.horizontal, .bottom])
+        }
+        .frame(width: SettingsWindowController.sheetWidth)
+    }
+}
+
+extension AdvancedSheet where Leading == EmptyView {
+    init(title: String, @ViewBuilder content: () -> Content) {
+        self.init(title: title, content: content, leading: { EmptyView() })
+    }
+}
+
 /// A disclosure triangle and title for a form row whose children follow as rows of their own,
 /// so each child keeps the grouped form's height and separators (a `DisclosureGroup` packs them).
 struct DisclosureLabel: View {

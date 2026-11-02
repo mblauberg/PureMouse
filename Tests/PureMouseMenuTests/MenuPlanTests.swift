@@ -64,7 +64,7 @@ struct MenuPlanTests {
               400 DPI [-> setDPI(400)]
               800 DPI [on, -> setDPI(800)]
               ---
-              Edit Presets… [-> openSettings(Optional(PureMouseAppSupport.SettingsPane.pointer))]
+              Edit Presets… [-> openSettings(Optional(PureMouseAppSupport.SettingsPane.mouse(PureMouseAppSupport.MouseSegment.pointer)))]
             ---
             Start PureMouse [-> start]
             \(Self.footer)
@@ -93,7 +93,7 @@ struct MenuPlanTests {
               400 DPI [-> setDPI(400)]
               800 DPI [on, -> setDPI(800)]
               ---
-              Edit Presets… [-> openSettings(Optional(PureMouseAppSupport.SettingsPane.pointer))]
+              Edit Presets… [-> openSettings(Optional(PureMouseAppSupport.SettingsPane.mouse(PureMouseAppSupport.MouseSegment.pointer)))]
             ---
             Pause PureMouse [-> setPaused(true)]
             \(Self.footer)
@@ -142,7 +142,7 @@ struct MenuPlanTests {
               400 DPI [-> setDPI(400)]
               800 DPI [-> setDPI(800)]
               ---
-              Edit Presets… [-> openSettings(Optional(PureMouseAppSupport.SettingsPane.pointer))]
+              Edit Presets… [-> openSettings(Optional(PureMouseAppSupport.SettingsPane.mouse(PureMouseAppSupport.MouseSegment.pointer)))]
             ---
             Pause PureMouse [-> setPaused(true)]
             \(Self.footer)
@@ -204,8 +204,8 @@ struct MenuPlanTests {
             Update PureMouse… [attention, -> openReleases]
             Allow Accessibility Access… [attention, -> openPrivacy(PureMouseAppSupport.PrivacyPane.accessibility)]
             Allow Input Monitoring… [attention, -> openPrivacy(PureMouseAppSupport.PrivacyPane.inputMonitoring)]
-            Fix Config File… [attention, -> openSettings(Optional(PureMouseAppSupport.SettingsPane.general))]
-            Logi Options+ Is Running… [attention, -> openSettings(Optional(PureMouseAppSupport.SettingsPane.general))]
+            Fix Config File… [attention, -> openSettings(Optional(PureMouseAppSupport.SettingsPane.tab(PureMouseAppSupport.SettingsTab.general)))]
+            Logi Options+ Is Running… [attention, -> openSettings(Optional(PureMouseAppSupport.SettingsPane.tab(PureMouseAppSupport.SettingsTab.general)))]
             ---
             """))
     }
@@ -262,7 +262,7 @@ struct MenuPlanTests {
             Pointer Speed
               \(Format.dpi(1600)) [on, disabled]
               ---
-              Add Presets… [-> openSettings(Optional(PureMouseAppSupport.SettingsPane.pointer))]
+              Add Presets… [-> openSettings(Optional(PureMouseAppSupport.SettingsPane.mouse(PureMouseAppSupport.MouseSegment.pointer)))]
             """))
         state.currentDPI = nil
         #expect(lines(state).contains("""
