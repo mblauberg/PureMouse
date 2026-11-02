@@ -6,16 +6,24 @@ import PureMouseKit
 /// (`SettingsLauncher`), so this process never holds a window.
 @MainActor
 final class AppController: NSObject, NSApplicationDelegate {
-    let model = AppModel(alert: Alerts.show, notifications: (Notifier.post, Notifier.removeDelivered))
+    /// Whether this run shows its icon, decided once: notifications run only then.
+    private static let iconShown = Locations.live.showsInMenuBar
+    let model = AppModel(alert: Alerts.show, notifications: notifications(iconShown: iconShown))
     private var statusMenu: StatusMenu?
     private var lowBatteryNotificationsOn = true
+
+    /// The low-battery notification callbacks: none for a run with its icon hidden, which then
+    /// neither announces nor consumes a band (`BatteryAlertStore`).
+    static func notifications(iconShown: Bool) -> (announce: AppModel.Announce, withdraw: AppModel.Withdraw)? {
+        iconShown ? (Notifier.post, Notifier.removeDelivered) : nil
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         lowBatteryNotificationsOn = model.lowBatteryNotificationsOn
         Task { await Notifier.refresh() }
         model.statusChanged = { [weak self] in self?.statusChanged() }
         model.startWatching()
-        if Locations.live.showsInMenuBar { statusMenu = StatusMenu(model: model, app: self) }
+        if Self.iconShown { statusMenu = StatusMenu(model: model, app: self) }
         // Opened by hand, or asked for Settings while starting (`puremouse` opened from the Finder
         // restarts this agent, then opens it), or with no icon to show: open Settings. With no
         // icon there is nothing left to do once it is open.
@@ -50,7 +58,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         // macOS asks per app, and this app posts the notifications: when the switch is turned on
         // in Settings (another app), ask for permission here.
         let on = model.lowBatteryNotificationsOn
-        if NotificationPermission.shouldRequest(wasOn: lowBatteryNotificationsOn, isOn: on) {
+        if Self.iconShown, NotificationPermission.shouldRequest(wasOn: lowBatteryNotificationsOn, isOn: on) {
             Task { await Notifier.requestIfNeeded() }
         }
         lowBatteryNotificationsOn = on

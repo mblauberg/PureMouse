@@ -178,8 +178,8 @@ one. This file covers how to work on it safely.
   reconnect cannot be told from a different mouse. `BatteryAlertStore.process` is the pure decision:
   it returns the alerts to post and the notification ids (`battery.<key>.<band>`) to take down
   (`Notifier.removeDelivered`) when the mouse recharges (charging, or 25% and up), when a deeper band
-  replaces a shallower one, and once when the switch is turned off. The file is versioned; one in
-  any other format is discarded and alerts start fresh. It does not run while the icon is hidden. Permission
+  replaces a shallower one, and once when the switch is turned off. A post still waiting for permission is cancelled by a withdrawal of its id (`NotificationDelivery`). The file is versioned; one in
+  any other format is discarded and alerts start fresh. It does not run while the icon is hidden (a hidden-icon run gets no notification callbacks, so it neither posts nor consumes a band; `AppController.notifications(iconShown:)`). Permission
   is requested lazily (first notification, or the menu app seeing the switch turned on in the
   config: macOS asks per app, so the helper cannot ask for it). The menu app records a denial in
   its own defaults domain as it learns it (`NotificationPermission`, read at launch and as Settings
