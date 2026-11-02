@@ -1,13 +1,13 @@
 import Foundation
 
 /// Scroll feel presets: each sets `smoothScroll.acceleration` and `smoothScroll.smoothingMs`.
-enum Feel: String, CaseIterable, Identifiable {
+public enum Feel: String, CaseIterable, Identifiable, Sendable {
     case precise, balanced, gliding, custom
-    var id: Self { self }
+    public var id: Self { self }
 
-    static let presets: [Feel] = [.precise, .balanced, .gliding]
+    public static let presets: [Feel] = [.precise, .balanced, .gliding]
 
-    var label: String {
+    public var label: String {
         switch self {
         case .precise: "Precise"
         case .balanced: "Balanced"
@@ -16,7 +16,7 @@ enum Feel: String, CaseIterable, Identifiable {
         }
     }
 
-    var values: (acceleration: Double, smoothingMs: Double)? {
+    public var values: (acceleration: Double, smoothingMs: Double)? {
         switch self {
         case .precise: (0.5, 60)
         case .balanced: (1.0, 125)
@@ -26,7 +26,7 @@ enum Feel: String, CaseIterable, Identifiable {
     }
 
     /// The preset matching these values (absent keys take the daemon's defaults), else `.custom`.
-    static func matching(acceleration: Double?, smoothingMs: Double?) -> Feel {
+    public static func matching(acceleration: Double?, smoothingMs: Double?) -> Feel {
         let a = acceleration ?? 1.0, s = smoothingMs ?? 125
         return presets.first {
             guard let v = $0.values else { return false }
@@ -36,18 +36,18 @@ enum Feel: String, CaseIterable, Identifiable {
 }
 
 /// DPI preset lists: sorted, unique, at most `limit` (the daemon accepts 0–8).
-enum DPIPresets {
-    static let limit = 8
+public enum DPIPresets {
+    public static let limit = 8
 
-    static func adding(_ dpi: Int, to presets: [Int]) -> [Int] {
+    public static func adding(_ dpi: Int, to presets: [Int]) -> [Int] {
         guard !presets.contains(dpi), presets.count < limit else { return presets }
         return (presets + [dpi]).sorted()
     }
 
-    static func removing(_ dpi: Int, from presets: [Int]) -> [Int] { presets.filter { $0 != dpi } }
+    public static func removing(_ dpi: Int, from presets: [Int]) -> [Int] { presets.filter { $0 != dpi } }
 
     /// The step of `steps` nearest to `dpi` (the sensor's own list; the daemon snaps the same way).
-    static func snap(_ dpi: Int, to steps: [Int]) -> Int {
+    public static func snap(_ dpi: Int, to steps: [Int]) -> Int {
         steps.min { abs($0 - dpi) < abs($1 - dpi) } ?? dpi
     }
 }
@@ -55,23 +55,25 @@ enum DPIPresets {
 /// The resolution the Pointer pane and the menu show. Three values stay apart: a change made here
 /// and not yet reported back, the mouse's live value (which a Cycle Pointer Speed press changes
 /// without touching the config), and the config's default.
-struct DPIReading: Equatable {
-    private(set) var requested: Int?
+public struct DPIReading: Equatable {
+    public private(set) var requested: Int?
     private var requestedAt = Date.distantPast
 
-    /// How long a request may wait for the mouse to report it before a different report wins.
-    static let settle: TimeInterval = 1.5
+    public init() {}
 
-    mutating func request(_ dpi: Int, at now: Date = .now) {
+    /// How long a request may wait for the mouse to report it before a different report wins.
+    public static let settle: TimeInterval = 1.5
+
+    public mutating func request(_ dpi: Int, at now: Date = .now) {
         requested = dpi
         requestedAt = now
     }
 
-    mutating func clear() { requested = nil }
+    public mutating func clear() { requested = nil }
 
     /// The mouse reported `live`. It confirms the request, or once the request has had time to
     /// land, replaces it (a button press changed the resolution).
-    mutating func reported(_ live: Int?, steps: [Int], at now: Date = .now) {
+    public mutating func reported(_ live: Int?, steps: [Int], at now: Date = .now) {
         guard let pending = requested, let live else { return }
         if live == DPIPresets.snap(pending, to: steps) || now.timeIntervalSince(requestedAt) > Self.settle {
             requested = nil
@@ -79,44 +81,44 @@ struct DPIReading: Equatable {
     }
 
     /// A pending change, else the live value, else the configured one, else the sensor's default.
-    func current(live: Int?, configured: Int?) -> Int { requested ?? live ?? configured ?? 1000 }
+    public func current(live: Int?, configured: Int?) -> Int { requested ?? live ?? configured ?? 1000 }
 
     /// The slider position of `dpi`: its nearest step, always a valid index (0 for an empty list).
-    static func index(of dpi: Int, in steps: [Int]) -> Int {
+    public static func index(of dpi: Int, in steps: [Int]) -> Int {
         steps.indices.min { abs(steps[$0] - dpi) < abs(steps[$1] - dpi) } ?? 0
     }
 
     /// The step at a slider position, clamped into the list.
-    static func step(at position: Double, in steps: [Int]) -> Int? {
+    public static func step(at position: Double, in steps: [Int]) -> Int? {
         guard !steps.isEmpty else { return nil }
         return steps[min(max(Int(position.rounded()), 0), steps.count - 1)]
     }
 }
 
-enum Format {
-    static func dpi(_ value: Int) -> String {
+public enum Format {
+    public static func dpi(_ value: Int) -> String {
         value.formatted(.number.grouping(.automatic)) + " DPI"
     }
 
-    static func number(_ value: Int) -> String { value.formatted(.number.grouping(.automatic)) }
+    public static func number(_ value: Int) -> String { value.formatted(.number.grouping(.automatic)) }
 
-    static func multiplier(_ value: Double) -> String {
+    public static func multiplier(_ value: Double) -> String {
         value.formatted(.number.precision(.fractionLength(value * 10 == (value * 10).rounded() ? 1 : 2))) + "×"
     }
 
-    static func millimetres(_ value: Double) -> String {
+    public static func millimetres(_ value: Double) -> String {
         value.formatted(.number.precision(.fractionLength(0...1))) + " mm"
     }
 
-    static func milliseconds(_ value: Double) -> String { "\(Int(value.rounded())) ms" }
+    public static func milliseconds(_ value: Double) -> String { "\(Int(value.rounded())) ms" }
 
     /// Rounds a slider value to its step, so the config holds 0.75, not 0.7500000001.
-    static func snap(_ value: Double, step: Double) -> Double {
+    public static func snap(_ value: Double, step: Double) -> Double {
         let snapped = (value / step).rounded() * step
         return (snapped * 1000).rounded() / 1000
     }
 
-    static func tildePath(_ path: String) -> String {
+    public static func tildePath(_ path: String) -> String {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         return path.hasPrefix(home + "/") ? "~" + path.dropFirst(home.count) : path
     }

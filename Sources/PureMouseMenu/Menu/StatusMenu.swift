@@ -1,4 +1,5 @@
 import AppKit
+import PureMouseAppSupport
 import PureMouseKit
 
 /// The status item and its plain `NSMenu`, rebuilt each time it opens (`menuNeedsUpdate`), so it
@@ -112,7 +113,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             if option {
                 menu.addItem(item("Reload Config") { [model] in model.reloadDaemonConfig() })
                 menu.addItem(item("Show Log in Finder") {
-                    NSWorkspace.shared.activateFileViewerSelecting([Paths.log])
+                    NSWorkspace.shared.activateFileViewerSelecting([Locations.live.log])
                 })
             }
         }

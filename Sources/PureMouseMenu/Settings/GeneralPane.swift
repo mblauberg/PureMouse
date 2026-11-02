@@ -1,10 +1,11 @@
 import AppKit
+import PureMouseAppSupport
 import SwiftUI
 
 struct GeneralPane: View {
     @Environment(AppModel.self) private var model
     let app: AppController
-    @State private var startsAtLogin = Paths.startsAtLogin
+    @State private var startsAtLogin = Locations.live.startsAtLogin
     @State private var showsInMenuBar = true
     @State private var confirmingReset = false
     @State private var notificationsDenied = false
@@ -22,7 +23,7 @@ struct GeneralPane: View {
                 }
                 .accessibilityLabel("Show in menu bar")
             }
-            .disabled(Paths.daemon == nil)
+            .disabled(Locations.live.daemon == nil)
 
             Section {
                 Toggle(isOn: Binding(get: { model.config.bool(["notifications", "lowBattery"]) ?? true },
@@ -68,14 +69,14 @@ struct GeneralPane: View {
                 LabeledContent {
                     HStack {
                         Button("Open") { openConfig() }
-                        Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([Paths.config]) }
+                        Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([Locations.live.config]) }
                     }
                 } label: {
                     Text("Config file")
-                    Text(Format.tildePath(Paths.config.path))
+                    Text(Format.tildePath(Locations.live.config.path))
                         .lineLimit(1)
                         .truncationMode(.middle)
-                        .help(Paths.config.path)
+                        .help(Locations.live.config.path)
                 }
                 LabeledContent {
                     Button("Show Log") { showLog() }
@@ -89,7 +90,7 @@ struct GeneralPane: View {
             }
         }
         .onAppear {
-            startsAtLogin = Paths.startsAtLogin
+            startsAtLogin = Locations.live.startsAtLogin
             showsInMenuBar = app.showsStatusItem
             Task { notificationsDenied = await Notifier.isAllowed() == false }
         }
@@ -102,12 +103,12 @@ struct GeneralPane: View {
 
     private func setStartsAtLogin(_ on: Bool) {
         if on {
-            Lifecycle.perform(.register) { startsAtLogin = Paths.startsAtLogin }
+            Lifecycle.perform(.register) { startsAtLogin = Locations.live.startsAtLogin }
         } else if Alerts.confirm("Stop PureMouse?",
                                  "The mouse returns to normal, the menu bar icon goes, and PureMouse no longer starts at login. Open PureMouse from Applications to start it again.",
                                  action: "Stop PureMouse") {
             model.flush()
-            Lifecycle.perform(.unregister) { startsAtLogin = Paths.startsAtLogin }
+            Lifecycle.perform(.unregister) { startsAtLogin = Locations.live.startsAtLogin }
         }
     }
 
@@ -127,16 +128,16 @@ struct GeneralPane: View {
     }
 
     private func openConfig() {
-        if !FileManager.default.fileExists(atPath: Paths.config.path) { model.resetAll() }
-        NSWorkspace.shared.open(Paths.config)
+        if !FileManager.default.fileExists(atPath: Locations.live.config.path) { model.resetAll() }
+        NSWorkspace.shared.open(Locations.live.config)
     }
 
     private func showLog() {
         let console = URL(fileURLWithPath: "/System/Applications/Utilities/Console.app")
-        if FileManager.default.fileExists(atPath: Paths.log.path) {
-            NSWorkspace.shared.open([Paths.log], withApplicationAt: console, configuration: NSWorkspace.OpenConfiguration())
+        if FileManager.default.fileExists(atPath: Locations.live.log.path) {
+            NSWorkspace.shared.open([Locations.live.log], withApplicationAt: console, configuration: NSWorkspace.OpenConfiguration())
         } else {
-            NSWorkspace.shared.activateFileViewerSelecting([Paths.log.deletingLastPathComponent()])
+            NSWorkspace.shared.activateFileViewerSelecting([Locations.live.log.deletingLastPathComponent()])
         }
     }
 }

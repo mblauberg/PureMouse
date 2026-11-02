@@ -139,7 +139,10 @@ one. This file covers how to work on it safely.
   change or Bluetooth attach (`Daemon.pollPermissions`). The display link runs only while a
   scroll is gliding, never with `smoothingMs` 0 (`PixelCarry` posts at once).
 - The menu bar app never opens HID devices: it edits the config file and talks to the daemon only
-  through the companion channel and the daemon CLI (`docs/companion.md`). It must not poll: it
+  through the companion channel and the daemon CLI (`docs/companion.md`). Its logic that needs no
+  AppKit or SwiftUI lives in `Sources/PureMouseAppSupport` (config editing and saving,
+  `Locations`, status words), tested in `Tests/PureMouseAppSupportTests`; keep UI frameworks out
+  of it. It must not poll: it
   wakes on notifications, file events and the daemon's process exit. Its Settings window and view
   tree are built when shown (each pane on its first visit); once Settings closes the process starts
   over (`Relaunch`): the agent's copy exits 75 for launchd to restart, since AppKit and SwiftUI keep
@@ -333,7 +336,7 @@ one. This file covers how to work on it safely.
   rotation into steps (remainder kept, reset at each movement's start), paced per action
   (`ThumbStepper.pacing`: media keys free, shortcuts 50 ms, zoom 40 ms, animated actions 300 ms
   with the turns between discarded).
-- Thumb wheel presets in Settings: `ThumbWheelChoice` (`Logic/ThumbWheel.swift`) lists Kit's
+- Thumb wheel presets in Settings: `ThumbWheelChoice` (`PureMouseAppSupport/ThumbWheel.swift`) lists Kit's
   presets in `presetOrder`, with a label each; `ThumbWheelState` mirrors Kit's
   `Config.ThumbWheel.init(_:base:)` and a test checks it against the decoder. App suggestions are
   `AppSuggestion.table`.

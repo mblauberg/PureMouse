@@ -4,24 +4,24 @@ import PureMouseKit
 /// When to tell the user a mouse battery is running out. Pure logic: the state it keeps per mouse
 /// is the most severe band already announced, so one notification fires per downward crossing
 /// (through 20%, then through 5%) and a re-read of the same level never repeats it.
-enum BatteryAlert {
+public enum BatteryAlert {
     /// The band already announced for a mouse. Ordered: `none` < `low` < `critical`.
-    enum Band: String, Codable, Comparable, Sendable {
+    public enum Band: String, Codable, Comparable, Sendable {
         case none, low, critical
 
         private var rank: Int { self == .none ? 0 : self == .low ? 1 : 2 }
-        static func < (a: Band, b: Band) -> Bool { a.rank < b.rank }
+        public static func < (a: Band, b: Band) -> Bool { a.rank < b.rank }
     }
 
-    static let lowPercent = 20
-    static let criticalPercent = 5
+    public static let lowPercent = 20
+    public static let criticalPercent = 5
     /// A band is left again only this far above its edge, so a reading hovering at 20% does not
     /// notify on every dip.
-    static let hysteresis = 5
+    public static let hysteresis = 5
 
     /// The notification to post, if any, and the state to keep. `previous` is nil the first time
     /// this mouse is seen: that reading sets the state and never notifies.
-    static func evaluate(previous: Band?, battery: Status.Device.Battery) -> (alert: Band?, state: Band) {
+    public static func evaluate(previous: Band?, battery: Status.Device.Battery) -> (alert: Band?, state: Band) {
         if battery.charging { return (nil, .none) }
         let percent = effectivePercent(battery)
         guard let previous else { return (nil, band(at: percent)) }
@@ -39,7 +39,7 @@ enum BatteryAlert {
     }
 
     /// Level-only mice report no percentage: their low and critical levels stand at the edges.
-    static func effectivePercent(_ battery: Status.Device.Battery) -> Int {
+    public static func effectivePercent(_ battery: Status.Device.Battery) -> Int {
         if let percent = battery.percent { return percent }
         switch battery.level {
         case .critical: return criticalPercent
@@ -48,11 +48,11 @@ enum BatteryAlert {
         }
     }
 
-    static func band(at percent: Int) -> Band {
+    public static func band(at percent: Int) -> Band {
         percent <= criticalPercent ? .critical : percent <= lowPercent ? .low : .none
     }
 
-    static func message(for band: Band, device: String, battery: Status.Device.Battery) -> (title: String, body: String) {
+    public static func message(for band: Band, device: String, battery: Status.Device.Battery) -> (title: String, body: String) {
         let detail = battery.percent.map { "\(device) is at \($0)%." } ?? "\(device)'s battery is \(band == .critical ? "critical" : "low")."
         switch band {
         case .critical: return ("Mouse battery critical", detail + " Charge it now.")
@@ -64,27 +64,33 @@ enum BatteryAlert {
 /// The announced bands, kept in the companion directory so they outlive this process (it starts
 /// over after Settings closes, and a restart must not announce the same crossing again). Keyed by
 /// the daemon's device id (interface plus index), so two mice with one name stay apart.
-struct BatteryAlertStore {
-    struct Reading {
-        var id: String
-        var name: String
-        var battery: Status.Device.Battery
+public struct BatteryAlertStore {
+    public struct Reading {
+        public var id: String
+        public var name: String
+        public var battery: Status.Device.Battery
+
+        public init(id: String, name: String, battery: Status.Device.Battery) {
+            self.id = id
+            self.name = name
+            self.battery = battery
+        }
     }
 
-    struct Alert: Equatable {
-        var id: String
-        var name: String
-        var band: BatteryAlert.Band
-        var battery: Status.Device.Battery
+    public struct Alert: Equatable {
+        public var id: String
+        public var name: String
+        public var band: BatteryAlert.Band
+        public var battery: Status.Device.Battery
     }
 
-    var url: URL
-    private(set) var bands: [String: BatteryAlert.Band]
+    public var url: URL
+    public private(set) var bands: [String: BatteryAlert.Band]
     /// Mice seen live in the previous status. One not in it has just connected (or this process
     /// just started): its first reading only records, however far it moved while away.
     private var live: Set<String> = []
 
-    init(url: URL) {
+    public init(url: URL) {
         self.url = url
         let data = try? Data(contentsOf: url)
         bands = data.flatMap { try? JSONDecoder().decode([String: BatteryAlert.Band].self, from: $0) } ?? [:]
@@ -93,7 +99,7 @@ struct BatteryAlertStore {
     /// Evaluates the live mice of one status (none when the daemon is off); saves only when a
     /// state changed. With `enabled` false the state still advances, so turning it on later does
     /// not announce an old crossing.
-    mutating func process(_ readings: [Reading], enabled: Bool = true) -> [Alert] {
+    public mutating func process(_ readings: [Reading], enabled: Bool = true) -> [Alert] {
         var alerts: [Alert] = []
         var changed = false
         for reading in readings {

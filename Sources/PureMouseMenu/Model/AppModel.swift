@@ -1,5 +1,6 @@
 import AppKit
 import Observation
+import PureMouseAppSupport
 import PureMouseKit
 import notify
 
@@ -71,16 +72,10 @@ final class AppModel {
     var devices: [Status.Device] { status?.devices ?? [] }
 
     /// The mouse the menu and the Pointer pane describe: the first one online, else the last seen.
-    var primaryDevice: Status.Device? { Self.primary(of: devices) }
+    var primaryDevice: Status.Device? { Status.Device.primary(of: devices) }
 
     /// A device that is connected now and answering (live values come from it).
-    var liveDevice: Status.Device? { daemonRunning ? Self.live(of: devices) : nil }
-
-    nonisolated static func primary(of devices: [Status.Device]) -> Status.Device? {
-        live(of: devices) ?? devices.first
-    }
-
-    nonisolated static func live(of devices: [Status.Device]) -> Status.Device? { devices.first(where: \.online) }
+    var liveDevice: Status.Device? { daemonRunning ? Status.Device.live(of: devices) : nil }
 
     var paused: Bool { daemonRunning && (requestedPaused ?? status?.paused ?? false) }
 
@@ -260,7 +255,7 @@ final class AppModel {
 
     /// Re-reads the config file. Our own writes come back as no-ops (same bytes).
     func reloadConfig() {
-        let url = Paths.config
+        let url = Locations.live.config
         guard FileManager.default.fileExists(atPath: url.path) else {
             // Deleted while a change of ours waits: save it as a new file now.
             if !pendingChanges.isEmpty {
@@ -330,7 +325,7 @@ final class AppModel {
         let changes = pendingChanges
         pendingChanges = []
         do {
-            let saved = try ConfigFile(url: Paths.config).save(changes)
+            let saved = try ConfigFile(url: Locations.live.config).save(changes)
             config = saved.tree
             diskBytes = saved.data
             if let data = saved.data { lastGood = data }
@@ -389,7 +384,7 @@ final class AppModel {
 
     private func write(_ data: Data) {
         do {
-            try ConfigFile(url: Paths.config).write(data)
+            try ConfigFile(url: Locations.live.config).write(data)
             diskBytes = data
             lastGood = data
             writeError = nil
@@ -406,7 +401,7 @@ final class AppModel {
         case ConfigFile.SaveError.rejected(let reason):
             ConfigCheck.message(for: reason)
         case ConfigFile.SaveError.writeFailed(let reason):
-            "PureMouse could not save \(Format.tildePath(Paths.config.path)): \(reason.localizedDescription)"
+            "PureMouse could not save \(Format.tildePath(Locations.live.config.path)): \(reason.localizedDescription)"
         default:
             error.localizedDescription
         }
@@ -419,7 +414,7 @@ final class AppModel {
     private func watchConfigDirectory() {
         directoryWatch?.cancel()
         directoryWatch = nil
-        let directory = Paths.config.resolvingSymlinksInPath().deletingLastPathComponent()
+        let directory = Locations.live.config.resolvingSymlinksInPath().deletingLastPathComponent()
         directoryWatch = watch(directory.path, [.write, .delete, .rename]) { model, events in
             if !events.isDisjoint(with: [.delete, .rename]) { model.watchConfigDirectory() }
             model.configChanged()
@@ -429,7 +424,7 @@ final class AppModel {
 
     private func watchConfigFile() {
         fileWatch?.cancel()
-        fileWatch = watch(Paths.config.resolvingSymlinksInPath().path, [.write, .extend, .delete, .rename]) { model, _ in
+        fileWatch = watch(Locations.live.config.resolvingSymlinksInPath().path, [.write, .extend, .delete, .rename]) { model, _ in
             model.configChanged()
         }
     }

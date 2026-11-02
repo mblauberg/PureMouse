@@ -2,13 +2,13 @@ import Foundation
 
 /// The config as a JSON tree. The app edits only the keys a control owns and keeps every other
 /// key, including ones it does not know, so hand edits and the UI coexist (docs/companion.md).
-struct ConfigTree {
-    var root: [String: Any]
+public struct ConfigTree {
+    public var root: [String: Any]
 
-    init(_ root: [String: Any] = [:]) { self.root = root }
+    public init(_ root: [String: Any] = [:]) { self.root = root }
 
     /// Parses config JSON; an empty or whitespace-only file is an empty config.
-    init(data: Data) throws {
+    public init(data: Data) throws {
         if data.allSatisfy({ [0x20, 0x0A, 0x0D, 0x09].contains($0) }) {
             root = [:]
             return
@@ -20,9 +20,9 @@ struct ConfigTree {
     }
 
     /// Objects that mean something even when empty: `smoothScroll: {}` turns smooth scrolling on.
-    static let keptWhenEmpty: Set<String> = ["smoothScroll"]
+    public static let keptWhenEmpty: Set<String> = ["smoothScroll"]
 
-    subscript(path: [String]) -> Any? {
+    public subscript(path: [String]) -> Any? {
         var node: Any = root
         for key in path {
             guard let dict = node as? [String: Any], let next = dict[key] else { return nil }
@@ -31,13 +31,13 @@ struct ConfigTree {
         return node
     }
 
-    func contains(_ path: [String]) -> Bool { self[path] != nil }
+    public func contains(_ path: [String]) -> Bool { self[path] != nil }
 
     /// Sets the value at `path`, or removes it when `value` is nil. Intermediate values that are
     /// not objects are replaced by objects. Objects left empty by a removal are pruned, except
     /// those in `keptWhenEmpty`. Removing a key that is not there changes nothing, so it cannot
     /// prune an empty object it passes through (which `changes(to:)` would then record).
-    mutating func set(_ value: Any?, at path: [String]) {
+    public mutating func set(_ value: Any?, at path: [String]) {
         guard !path.isEmpty, value != nil || contains(path) else { return }
         root = Self.setting(value, at: path[...], in: root, prefix: [])
     }
@@ -64,17 +64,17 @@ struct ConfigTree {
 
     // MARK: Typed reads
 
-    func bool(_ path: [String]) -> Bool? {
+    public func bool(_ path: [String]) -> Bool? {
         guard let value = self[path] as? NSNumber, JSON.isBool(value) else { return nil }
         return value.boolValue
     }
 
-    func double(_ path: [String]) -> Double? {
+    public func double(_ path: [String]) -> Double? {
         guard let value = self[path] as? NSNumber, !JSON.isBool(value) else { return nil }
         return value.doubleValue
     }
 
-    func int(_ path: [String]) -> Int? {
+    public func int(_ path: [String]) -> Int? {
         guard let value = self[path] as? NSNumber, !JSON.isBool(value) else { return nil }
         // Whole numbers and big ones (NSDecimalNumber) read exactly from their digits.
         if value is NSDecimalNumber || !JSON.isFloatingPoint(value) { return Int(value.stringValue) }
@@ -83,16 +83,21 @@ struct ConfigTree {
         return Int(double)
     }
 
-    func string(_ path: [String]) -> String? { self[path] as? String }
+    public func string(_ path: [String]) -> String? { self[path] as? String }
 
-    func data() -> Data { JSON.encode(root) }
+    public func data() -> Data { JSON.encode(root) }
 
     // MARK: Changes
 
     /// One key set to a value, or removed (nil).
-    struct Change {
-        let path: [String]
-        let value: Any?
+    public struct Change {
+        public let path: [String]
+        public let value: Any?
+
+        public init(path: [String], value: Any?) {
+            self.path = path
+            self.value = value
+        }
     }
 
     /// The keys `after` changed relative to `self`, as leaf-level changes. Replayed with `apply`
@@ -101,13 +106,13 @@ struct ConfigTree {
     /// one is set whole). An object that disappeared is removed key by key (it may only have been
     /// pruned as empty), except one that means something when empty (`keptWhenEmpty`) or that was
     /// empty, which is removed whole.
-    func changes(to after: ConfigTree) -> [Change] {
+    public func changes(to after: ConfigTree) -> [Change] {
         var out: [Change] = []
         Self.diff(root, after.root, path: [], into: &out)
         return out
     }
 
-    mutating func apply(_ changes: [Change]) {
+    public mutating func apply(_ changes: [Change]) {
         for change in changes { set(change.value, at: change.path) }
     }
 
@@ -132,33 +137,33 @@ struct ConfigTree {
     }
 }
 
-enum ConfigTreeError: Error, CustomStringConvertible {
+public enum ConfigTreeError: Error, CustomStringConvertible {
     case notAnObject
-    var description: String { "The config must be a JSON object: { … }" }
+    public var description: String { "The config must be a JSON object: { … }" }
 }
 
 /// A small JSON writer: two-space indents, sorted keys, `"key": value`, and the shortest decimal
 /// that round-trips each number (`0.7`, not `0.69999999999999996` as JSONSerialization writes).
-enum JSON {
-    static func encode(_ value: Any) -> Data {
+public enum JSON {
+    public static func encode(_ value: Any) -> Data {
         var out = ""
         write(value, indent: 0, to: &out)
         out += "\n"
         return Data(out.utf8)
     }
 
-    static func isBool(_ number: NSNumber) -> Bool {
+    public static func isBool(_ number: NSNumber) -> Bool {
         CFGetTypeID(number as CFTypeRef) == CFBooleanGetTypeID()
     }
 
     /// A binary floating-point number (not a whole number, and not an exact NSDecimalNumber).
-    static func isFloatingPoint(_ number: NSNumber) -> Bool {
+    public static func isFloatingPoint(_ number: NSNumber) -> Bool {
         guard !(number is NSDecimalNumber) else { return false }
         let type = String(cString: number.objCType)
         return type == "d" || type == "f"
     }
 
-    static func number(_ value: Double) -> String {
+    public static func number(_ value: Double) -> String {
         guard value.isFinite else { return "0" }
         if value.rounded() == value, abs(value) < 1e15 { return String(Int64(value)) }
         return String(value)
@@ -214,7 +219,7 @@ enum JSON {
         }
     }
 
-    static func quoted(_ string: String) -> String {
+    public static func quoted(_ string: String) -> String {
         var out = "\""
         for scalar in string.unicodeScalars {
             switch scalar {

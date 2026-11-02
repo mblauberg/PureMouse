@@ -70,6 +70,9 @@ Sources/HIDPP/          protocol only: framing, IOKit transport, request/respons
 Sources/PureMouseKit/   shared by both apps: config model and decoder, status/control channel
 Sources/puremouse/      the daemon: applying config, actions, gestures, smooth scrolling, one
                         session per mouse, discovery, reconnects, wake, reload, permissions
+Sources/PureMouseAppSupport/
+                        the menu side's logic, without AppKit or SwiftUI: config editing and
+                        saving, where files live, status words, update check, battery alerts
 Sources/PureMouseMenu/  the menu bar app (AppKit status item and menu, SwiftUI Settings panes)
 Sources/HIDPPTesting/   test support only: in-memory transport and stateful HID++ mouse from probe dumps
 Tests/                  request handling and device behaviour against fakes, framing and event parsing,

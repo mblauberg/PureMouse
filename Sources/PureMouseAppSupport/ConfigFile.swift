@@ -4,10 +4,12 @@ import PureMouseKit
 /// The config file on disk. Saving replays the app's edits onto the file as it is at that moment,
 /// so a hand edit made since it was loaded is kept (docs/companion.md: the app owns only the keys
 /// it changes).
-struct ConfigFile {
-    let url: URL
+public struct ConfigFile {
+    public let url: URL
 
-    enum SaveError: Error {
+    public init(url: URL) { self.url = url }
+
+    public enum SaveError: Error {
         /// The file on disk does not load now; nothing is built on it.
         case fileHasError
         /// The edited config would not load (the daemon's own check).
@@ -17,7 +19,7 @@ struct ConfigFile {
 
     /// Replays `changes` onto the current file and writes the result when it differs. Returns
     /// the tree and the bytes now on disk (nil when there is still no file).
-    func save(_ changes: [ConfigTree.Change]) throws -> (tree: ConfigTree, data: Data?) {
+    public func save(_ changes: [ConfigTree.Change]) throws -> (tree: ConfigTree, data: Data?) {
         let current: Data?
         var tree: ConfigTree
         do {
@@ -40,7 +42,7 @@ struct ConfigFile {
     }
 
     /// Replaces the file. A symlinked config (dotfiles) has its target replaced, not the link.
-    func write(_ data: Data) throws {
+    public func write(_ data: Data) throws {
         let target = url.resolvingSymlinksInPath()
         do {
             try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)

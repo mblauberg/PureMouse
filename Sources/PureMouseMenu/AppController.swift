@@ -1,4 +1,5 @@
 import AppKit
+import PureMouseAppSupport
 import PureMouseKit
 import notify
 
@@ -15,6 +16,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.mainMenu = MainMenu.make(app: self)
         model.statusChanged = { [weak self] in self?.statusMenu?.updateIcon() }
+        Lifecycle.finished = { [weak self] in self?.relaunchIfIdle() }
         model.startWatching()
         // A second launch (the Finder, `open`) asks this one to show Settings, then exits.
         notify_register_dispatch(Companion.showSettingsNotification, &showToken, .main) { [weak self] _ in
@@ -23,11 +25,11 @@ final class AppController: NSObject, NSApplicationDelegate {
                 self?.showSettings()
             }
         }
-        if Paths.showsInMenuBar { statusMenu = StatusMenu(model: model, app: self) }
+        if Locations.live.showsInMenuBar { statusMenu = StatusMenu(model: model, app: self) }
         // A request posted while this instance was still starting (opening the app from the
         // Finder restarts the menu agent, then opens it) counts too. Consumed either way.
         let requested = ShowRequest.consume()
-        if !Paths.launchedByLaunchd || statusMenu == nil || requested { showSettings() }
+        if !Locations.launchedByLaunchd || statusMenu == nil || requested { showSettings() }
         #if DEBUG
         DevHooks.run(app: self)
         #endif
@@ -107,7 +109,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     /// at login. `stop` boots out this app's agent too, so launchd may end us first.
     func quitAll() {
         model.flush()
-        guard Paths.daemon != nil else { NSApp.terminate(nil); return }
+        guard Locations.live.daemon != nil else { NSApp.terminate(nil); return }
         Lifecycle.run(.stop) { result in
             if case .failure(let error) = result {
                 Alerts.show("PureMouse could not stop", error.description)
@@ -153,7 +155,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         } else if pendingMenuOff {
             pendingMenuOff = false
             setShowsInMenuBar(true)
-        } else if !Paths.showsInMenuBar {
+        } else if !Locations.live.showsInMenuBar {
             Lifecycle.perform(.menuOn) { [self] in setShowsInMenuBar(true) }
         } else {
             setShowsInMenuBar(true)

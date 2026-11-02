@@ -1,4 +1,5 @@
 import AppKit
+import PureMouseAppSupport
 import SwiftUI
 
 struct AboutPane: View {
@@ -15,11 +16,11 @@ struct AboutPane: View {
                 .accessibilityHidden(true)
             Text("PureMouse")
                 .font(.system(size: 22, weight: .semibold))
-            Text("Version \(Paths.version)")
+            Text("Version \(Locations.version)")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
-            if let daemonVersion, daemonVersion != Paths.version, Paths.version != "dev" {
+            if let daemonVersion, daemonVersion != Locations.version, Locations.version != "dev" {
                 Label("The running PureMouse is version \(daemonVersion). Reinstall to match.",
                       systemImage: "exclamationmark.triangle.fill")
                     .symbolRenderingMode(.multicolor)
@@ -91,7 +92,7 @@ private struct UpdateRow: View {
         checking = true
         outcome = nil
         Task {
-            let result = await UpdateCheck.fetch(current: Paths.version)
+            let result = await UpdateCheck.fetch(current: Locations.version)
             outcome = result
             checking = false
         }
