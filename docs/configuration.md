@@ -66,9 +66,11 @@ in effect) and the log names the field.
 `scrollWheel.inverted` and `thumbWheel.inverted` keep their meaning relative to the system's
 natural-scrolling setting.
 
-Smooth scrolling needs a wheel PureMouse can take over; for now that is a high-resolution wheel
-(HID++ 0x2121, and 0x2150 for a thumb wheel). On a mouse without 0x2121, such as the Signature
-Plus M750, the wheel keeps scrolling natively and the log says so once.
+Smooth scrolling needs a wheel PureMouse can take over: a high-resolution wheel (HID++ 0x2121, and
+0x2150 for a thumb wheel) or a notched one (0x2130, as on the Signature Plus M750 and the MX
+Ergo). A notched wheel has no ratchet or direction setting in hardware, so `scrollWheel.inverted`
+is applied by PureMouse and the ratchet settings do not apply. On a mouse with neither wheel
+feature the wheel keeps scrolling natively and the log says so once.
 
 ## Thumb wheel
 
