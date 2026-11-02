@@ -137,9 +137,16 @@ public final class AppModel {
 
     public func flush() { store.flush() }
 
-    /// Runs a login or lifecycle command, then `success`; if it fails, `failure`, then an alert.
-    public func perform(_ command: Lifecycle.Command, then success: @escaping @MainActor () -> Void = {},
-                        otherwise failure: @escaping @MainActor () -> Void = {}) {
+    /// Runs a login or lifecycle command, then `success`; if it fails, an alert. A trailing
+    /// closure is `success`: this form has no other closure it could bind to.
+    public func perform(_ command: Lifecycle.Command, then success: @escaping @MainActor () -> Void = {}) {
+        perform(command, then: success, otherwise: {})
+    }
+
+    /// The same, running `failure` before the alert. Neither closure has a default, so a call
+    /// with one trailing closure never reaches this form and can never bind it to `failure`.
+    public func perform(_ command: Lifecycle.Command, then success: @escaping @MainActor () -> Void,
+                        otherwise failure: @escaping @MainActor () -> Void) {
         Lifecycle.run(command, daemon: locations.daemon) { [alert] result in
             switch result {
             case .success: success()

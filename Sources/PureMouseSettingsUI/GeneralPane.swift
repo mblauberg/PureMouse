@@ -133,7 +133,7 @@ struct GeneralPane: View {
         showsInMenuBar = on
         guard on != model.locations.showsInMenuBar else { return }
         model.flush()
-        model.perform(on ? .menuOn : .menuOff, otherwise: { showsInMenuBar = model.locations.showsInMenuBar })
+        model.perform(on ? .menuOn : .menuOff, then: {}, otherwise: { showsInMenuBar = model.locations.showsInMenuBar })
     }
 
     private func openConfig() {
