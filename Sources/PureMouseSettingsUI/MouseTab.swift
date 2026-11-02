@@ -125,7 +125,7 @@ struct MouseHeader: View {
                 Spacer()
                 if selection.segment == .buttons { findByPressing }
             }
-            Picker("Mouse settings", selection: Binding(get: { selection.segment }, set: choose)) {
+            Picker("Mouse settings", selection: Binding(get: { selection.segment }, set: { selection.select($0) })) {
                 ForEach(MouseSegment.allCases, id: \.self) { Text($0.title).tag($0) }
             }
             .pickerStyle(.segmented)
@@ -135,10 +135,6 @@ struct MouseHeader: View {
         // In line with the grouped boxes below, whose form insets them by the same margin.
         .padding(.horizontal, 20)
         .padding(.top)
-    }
-
-    private func choose(_ segment: MouseSegment) {
-        selection.select(segment)
     }
 
     @ViewBuilder private var findByPressing: some View {
