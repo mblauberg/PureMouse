@@ -50,9 +50,10 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     /// Redraws the glyph and relabels it only when what they show has changed.
     func updateIcon() {
         guard let button = statusItem.button else { return }
-        let badge: StatusIcon.Badge = model.needsAttention ? .attention : model.lowBattery ? .battery : .none
-        let dimmed = !model.daemonRunning || model.paused
-        let label = StatusText.accessibilityLabel(model: model)
+        let state = MenuState(model: model)
+        let badge: StatusIcon.Badge = state.needsAttention ? .attention : model.lowBattery ? .battery : .none
+        let dimmed = !state.daemonRunning || state.paused
+        let label = StatusText.accessibilityLabel(state, primary: model.primaryDevice)
         if shown?.dimmed != dimmed || shown?.badge != badge {
             button.image = StatusIcon.image(dimmed: dimmed, badge: badge)
         }
@@ -83,7 +84,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         case .start: Lifecycle.perform(.register)
         case .setPaused(let paused): model.setPaused(paused)
         case .reloadConfig: model.reloadDaemonConfig()
-        case .showLog: NSWorkspace.shared.activateFileViewerSelecting([Locations.live.log])
+        case .showLog: NSWorkspace.shared.activateFileViewerSelecting([model.locations.log])
         case .quit: app.quitAll()
         case .hideMenuBarIcon: app.hideMenuBarIcon()
         }

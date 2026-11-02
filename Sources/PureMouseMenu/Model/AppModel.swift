@@ -57,12 +57,6 @@ final class AppModel {
     var logiOptionsRunning: Bool { link.logiOptionsRunning }
     var hasBluetoothDevice: Bool { link.hasBluetoothDevice }
 
-    /// Something needs the user: a missing permission, a config error, Options+, or a newer daemon.
-    var needsAttention: Bool {
-        statusTooNew || (daemonRunning && (accessibilityMissing || (inputMonitoringMissing && hasBluetoothDevice)
-            || logiOptionsRunning || configError != nil))
-    }
-
     var lowBattery: Bool {
         guard let battery = liveDevice?.battery, !battery.charging else { return false }
         if let percent = battery.percent { return percent <= 10 }
@@ -137,7 +131,9 @@ final class AppModel {
     func createConfigIfMissing() { store.createIfMissing() }
 
     /// The file Reset All Settings and Restore Last Working keep the previous config in.
-    var backupName: String { ConfigFile(url: store.locations.config).backupURL.lastPathComponent }
+    var backupName: String { store.backupName }
+
+    var locations: Locations { store.locations }
 
     /// Sets the saved DPI and puts every mouse on it. A mouse on a DPI chosen by Cycle Pointer
     /// Speed keeps it through a reload that leaves `dpi` alone, and choosing the value already

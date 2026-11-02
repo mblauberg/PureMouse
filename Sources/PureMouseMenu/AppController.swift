@@ -162,12 +162,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
     }
 
-    enum Privacy: String {
-        case accessibility = "Privacy_Accessibility"
-        case inputMonitoring = "Privacy_ListenEvent"
-    }
-
-    func openPrivacy(_ pane: Privacy) {
+    func openPrivacy(_ pane: PrivacyPane) {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane.rawValue)") {
             NSWorkspace.shared.open(url)
         }

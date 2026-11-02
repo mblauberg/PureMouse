@@ -41,6 +41,9 @@ public final class ConfigStore {
 
     private var file: ConfigFile { ConfigFile(url: locations.config) }
 
+    /// The file Reset All Settings and Restore Last Working keep the previous config in.
+    public var backupName: String { file.backupURL.lastPathComponent }
+
     /// The daemon's or this side's complaint about the config file.
     public var configError: String? { configProblem ?? daemonConfigError() }
 
@@ -199,7 +202,7 @@ public final class ConfigStore {
         case ConfigFile.SaveError.writeFailed(let reason):
             "PureMouse could not save \(Format.tildePath(locations.config.path)): \(reason.localizedDescription)"
         case ConfigFile.SaveError.backupFailed(let reason):
-            "PureMouse could not keep the current file as \(ConfigFile(url: locations.config).backupURL.lastPathComponent), "
+            "PureMouse could not keep the current file as \(backupName), "
                 + "so this change was not saved: \(reason.localizedDescription)"
         default:
             error.localizedDescription

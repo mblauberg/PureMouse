@@ -166,6 +166,31 @@ struct MenuPlanTests {
         #expect(lines(state).hasPrefix("header MX Master 3S, On another Mac · USB receiver · Battery 80%\n"))
     }
 
+    /// The spoken label names the same state as the header, paused before away.
+    @Test func theSpokenLabelSaysPausedBeforeAway() {
+        var state = Self.running()
+        state.away = true
+        let mouse = state.devices.first
+        #expect(StatusText.accessibilityLabel(state, primary: mouse) == "PureMouse, MX Master 3S, battery 80 percent, on another Mac")
+        state.paused = true
+        #expect(StatusText.accessibilityLabel(state, primary: mouse) == "PureMouse, MX Master 3S, battery 80 percent, paused")
+    }
+
+    /// The status item badges exactly when the menu shows an attention row.
+    @Test func theBadgeFollowsTheAttentionRows() {
+        var off = MenuState()
+        off.accessibilityMissing = true
+        #expect(!off.needsAttention)
+        off.statusTooNew = true
+        #expect(off.needsAttention)
+        var state = Self.running()
+        state.inputMonitoringMissing = true
+        #expect(!state.needsAttention)
+        state.hasBluetoothDevice = true
+        #expect(state.needsAttention)
+        #expect(StatusText.accessibilityLabel(state, primary: state.devices.first).hasSuffix(", needs attention"))
+    }
+
     @Test func everyAttentionRowInOrder() {
         var state = Self.running()
         state.statusTooNew = true
@@ -177,8 +202,8 @@ struct MenuPlanTests {
         #expect(lines(state).contains("""
             v0.3.0
             Update the Menu Bar App… [attention, -> openReleases]
-            Allow Accessibility Access… [attention, -> openPrivacy(PureMouseMenu.AppController.Privacy.accessibility)]
-            Allow Input Monitoring… [attention, -> openPrivacy(PureMouseMenu.AppController.Privacy.inputMonitoring)]
+            Allow Accessibility Access… [attention, -> openPrivacy(PureMouseMenu.PrivacyPane.accessibility)]
+            Allow Input Monitoring… [attention, -> openPrivacy(PureMouseMenu.PrivacyPane.inputMonitoring)]
             Fix Config Error… [attention, -> openSettings(Optional(PureMouseMenu.SettingsPane.general))]
             Quit Logi Options+… [attention, -> openSettings(Optional(PureMouseMenu.SettingsPane.general))]
             ---

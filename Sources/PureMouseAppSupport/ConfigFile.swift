@@ -24,7 +24,7 @@ public struct ConfigFile {
 
     /// Where `replace(with:keepingBackup:)` keeps the previous file: beside the target, one
     /// generation (`config.json.bak`).
-    public var backupURL: URL { target.deletingLastPathComponent().appending(path: target.lastPathComponent + ".bak") }
+    var backupURL: URL { target.deletingLastPathComponent().appending(path: target.lastPathComponent + ".bak") }
 
     /// Every write (save, replace, create) is one read-merge-replace under an exclusive `flock` on
     /// `config.json.lock` beside the target, so writers in other processes never drop each
@@ -95,7 +95,7 @@ public struct ConfigFile {
     /// touches an existing file and keeps no backup. Returns the bytes written, or nil when the
     /// file was already there.
     @discardableResult
-    public func createIfMissing() throws -> Data? {
+    func createIfMissing() throws -> Data? {
         try locked {
             guard !FileManager.default.fileExists(atPath: url.path) else { return nil }
             let data = ConfigTree().data()

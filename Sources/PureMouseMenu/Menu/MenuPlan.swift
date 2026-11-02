@@ -3,7 +3,7 @@ import PureMouseKit
 
 /// What the status menu shows, decided without AppKit so every row can be tested. `StatusMenu`
 /// renders the rows into `NSMenuItem`s each time the menu opens.
-struct MenuState: Equatable {
+struct MenuState {
     var daemonRunning = false
     var paused = false
     /// The pointer is on another Mac (Universal Control).
@@ -24,13 +24,46 @@ struct MenuState: Equatable {
     var currentDPI: Int?
     /// The live mouse's sensor steps (empty when unknown).
     var dpiSteps: [Int] = []
+
+    /// The status item badges exactly what the menu flags.
+    var needsAttention: Bool { !MenuPlan.attentionRows(self).isEmpty }
+}
+
+/// Why a running PureMouse leaves the mouse alone, paused before away. The menu's device header
+/// and the status item's spoken label both say it.
+enum Standby {
+    case paused, away
+
+    init?(paused: Bool, away: Bool) {
+        if paused { self = .paused } else if away { self = .away } else { return nil }
+    }
+
+    var title: String {
+        switch self {
+        case .paused: "Paused"
+        case .away: "On another Mac"
+        }
+    }
+
+    var spoken: String {
+        switch self {
+        case .paused: "paused"
+        case .away: "on another Mac"
+        }
+    }
+}
+
+/// The System Settings privacy pane an attention row opens.
+enum PrivacyPane: String {
+    case accessibility = "Privacy_Accessibility"
+    case inputMonitoring = "Privacy_ListenEvent"
 }
 
 /// What choosing a row does; `StatusMenu` maps each to the model or `AppController`.
-enum MenuAction: Equatable {
+enum MenuAction {
     case openSettings(SettingsPane?)
     case openReleases
-    case openPrivacy(AppController.Privacy)
+    case openPrivacy(PrivacyPane)
     case toggleSmoothScrolling
     case setDPI(Int)
     case start
@@ -41,7 +74,7 @@ enum MenuAction: Equatable {
     case hideMenuBarIcon
 }
 
-enum MenuRow: Equatable {
+enum MenuRow {
     /// A device header: bold title, secondary lines, glyph; choosing it opens Settings. An
     /// alternate (⌥) adds the detail line.
     case header(title: String, lines: [String], alternate: Bool)
@@ -49,7 +82,7 @@ enum MenuRow: Equatable {
     case item(MenuItem)
 }
 
-struct MenuItem: Equatable {
+struct MenuItem {
     var title: String
     /// A key equivalent with ⌘ (and ⌥ when `withOption`).
     var key = ""
@@ -74,7 +107,6 @@ enum MenuPlan {
         let running = state.daemonRunning
         if !running {
             rows += header(title: "PureMouse Is Off", subtitle: offSubtitle)
-            if state.statusTooNew { rows.append(attention("Update the Menu Bar App…", .openReleases)) }
         } else {
             if state.devices.isEmpty {
                 // While paused the daemon drops its sessions, so it reports no devices.
@@ -83,12 +115,12 @@ enum MenuPlan {
                     : header(title: "No Mouse Connected", subtitle: "Turn on your mouse or check the receiver")
             }
             for device in state.devices {
-                let prefix = state.paused ? "Paused · " : state.away ? "On another Mac · " : ""
+                let prefix = Standby(paused: state.paused, away: state.away).map { "\($0.title) · " } ?? ""
                 rows += header(title: device.name, subtitle: prefix + StatusText.subtitle(device),
                                detail: StatusText.detail(device, version: state.version))
             }
-            rows += attentionRows(state)
         }
+        rows += attentionRows(state)
 
         rows.append(.separator)
         rows.append(.item(MenuItem(title: "Smooth Scrolling", checked: state.smoothScrolling,
@@ -116,9 +148,11 @@ enum MenuPlan {
         return rows
     }
 
-    private static func attentionRows(_ state: MenuState) -> [MenuRow] {
+    /// The warning rows; with PureMouse off, only a status too new to read.
+    static func attentionRows(_ state: MenuState) -> [MenuRow] {
         var rows: [MenuRow] = []
         if state.statusTooNew { rows.append(attention("Update the Menu Bar App…", .openReleases)) }
+        guard state.daemonRunning else { return rows }
         if state.accessibilityMissing {
             rows.append(attention("Allow Accessibility Access…", .openPrivacy(.accessibility)))
         }
