@@ -101,20 +101,19 @@ struct MenuPlanTests {
     }
 
     /// Hide Menu Bar Icon is always there as Quit's alternate (AppKit shows it while ⌥ is held,
-    /// also when ⌥ is pressed after the menu opens); Reload Config and Show Log only when ⌥ was
-    /// held as it opened.
-    @Test func optionAddsReloadAndShowLog() {
-        #expect(!lines(Self.running()).contains("Reload Config"))
+    /// also when ⌥ is pressed after the menu opens); Show Log only when ⌥ was held as it opened.
+    /// There is no Reload Config: the config applies on save.
+    @Test func optionAddsShowLog() {
         #expect(!lines(Self.running()).contains("Show Log"))
         #expect(lines(Self.running()).hasSuffix(Self.footer))
         #expect(lines(Self.running(), option: true).hasSuffix(Self.footer))
         #expect(lines(Self.running(), option: true).contains("""
             Pause PureMouse [-> setPaused(true)]
-            Reload Config [-> reloadConfig]
             Show Log in Finder [-> showLog]
             ---
             Settings…
             """))
+        #expect(!lines(Self.running(), option: true).contains("Reload"))
     }
 
     @Test func twoMiceEachGetAHeader() {

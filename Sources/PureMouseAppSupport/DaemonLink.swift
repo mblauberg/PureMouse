@@ -171,12 +171,6 @@ public final class DaemonLink {
             return false
         }
     }
-
-    /// Asks the daemon to reload the config now (it also reloads on its own when the file changes).
-    public func reloadDaemonConfig() {
-        guard daemonRunning, let pid = status?.pid else { return }
-        kill(pid, SIGHUP)
-    }
 }
 
 /// A fresh token for a control request (`Control.capture`, `Control.useConfiguredDPI`).
