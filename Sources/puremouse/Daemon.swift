@@ -94,7 +94,16 @@ final class Daemon {
     }
 
     /// `stopped`: not adopting now (paused or quitting) or the endpoint was replaced, so do not retry.
-    private enum Adoption { case adopted, noAnswer, notAMouse, stopped }
+    enum Adoption { case adopted, noAnswer, notAMouse, stopped }
+
+    /// A nil result continues identification; a legacy answer is final, silence is retried.
+    static func adoption(for ping: HIDPPDevice.Ping) -> Adoption? {
+        switch ping {
+        case .hidpp10: .notAMouse
+        case .noAnswer: .noAnswer
+        case .hidpp20(let major, _): major >= 2 ? nil : .notAMouse
+        }
+    }
 
     init(configURL: URL) {
         self.configURL = configURL
@@ -572,8 +581,7 @@ final class Daemon {
 
     private func identify(_ device: HIDPPDevice) async -> Adoption {
         let key = Key(device)
-        guard let version = await device.protocolVersion() else { return .noAnswer }
-        guard version.major >= 2 else { return .notAMouse }
+        if let result = Self.adoption(for: await device.ping()) { return result }
         let controls: [ReprogControls.Control]
         let hasDPI: Bool
         do {

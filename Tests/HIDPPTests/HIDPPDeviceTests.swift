@@ -4,6 +4,23 @@ import Testing
 
 @MainActor
 struct HIDPPDeviceTests {
+    @Test func pingClassifiesLegacySlotsAndModernVersions() async {
+        let fake = FakeDevice()
+        let device = fake.endpoint()
+        defer { device.close() }
+        device.timeout = .milliseconds(10)
+        fake.ping = .hidpp10(1)
+        #expect(await device.ping() == .hidpp10)
+        for code: UInt8 in [8, 9] {
+            fake.ping = .hidpp10(code)
+            #expect(await device.ping() == .noAnswer)
+        }
+        fake.ping = .silent
+        #expect(await device.ping() == .noAnswer)
+        fake.ping = .hidpp20(4, 5)
+        #expect(await device.ping() == .hidpp20(major: 4, minor: 5))
+    }
+
     @Test func absentFeatureIsLookedUpOnlyOnce() async throws {
         let fake = FakeDevice()
         let device = fake.endpoint()

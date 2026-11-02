@@ -151,11 +151,29 @@ public final class HIDPPDevice {
         }
     }
 
-    /// HID++ protocol version, or nil if the slot is empty or the device is asleep.
+    public enum Ping: Equatable, Sendable {
+        case hidpp20(major: UInt8, minor: UInt8)
+        case hidpp10
+        case noAnswer
+    }
+
+    /// Invalid sub-ID is a definite HID++ 1.0 answer. Empty/sleeping slots (0x08/0x09),
+    /// malformed replies and transport failures remain retryable by the caller.
+    public func ping() async -> Ping {
+        do {
+            let r = try await request(featureIndex: 0, function: 1, params: [0, 0, 0x5A])
+            guard r.count >= 2 else { return .noAnswer }
+            return .hidpp20(major: r[0], minor: r[1])
+        } catch HIDPPError.protocol10(code: 1) {
+            return .hidpp10
+        } catch {
+            return .noAnswer
+        }
+    }
+
     public func protocolVersion() async -> (major: UInt8, minor: UInt8)? {
-        guard let r = try? await request(featureIndex: 0, function: 1, params: [0, 0, 0x5A]),
-              r.count >= 2 else { return nil }
-        return (r[0], r[1])
+        guard case .hidpp20(let major, let minor) = await ping() else { return nil }
+        return (major, minor)
     }
 
     // MARK: Plumbing

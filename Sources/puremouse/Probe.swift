@@ -16,12 +16,17 @@ enum Probe {
                 // Its own software IDs, so replies cannot be confused with the daemon's.
                 let device = HIDPPDevice(interface: interface, index: index, softwareIDs: 0x2...0x7)
                 defer { device.close() }
-                guard let version = await device.protocolVersion() else {
+                switch await device.ping() {
+                case .noAnswer:
                     if !interface.isReceiver { print("  no response") }
                     continue
+                case .hidpp10:
+                    print("\n-- index \(index): HID++ 1.0")
+                    continue
+                case .hidpp20(let major, let minor):
+                    print("\n-- index \(index): HID++ \(major).\(minor)")
+                    guard major >= 2 else { continue }
                 }
-                print("\n-- index \(index): HID++ \(version.major).\(version.minor)")
-                guard version.major >= 2 else { continue }
                 await dump(device)
             }
         }
