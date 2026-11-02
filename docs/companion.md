@@ -162,27 +162,27 @@ read them as "about" and repeat the rig after each macOS release. The bare AppKi
 
 | Menu app, release build | MB | Bare AppKit status item and menu, same Mac |
 |---|---|---|
-| fresh, about 4.5 s after launch | 13.7 | 10.8 |
+| fresh, about 4.5 s after launch | 13.8 | 10.8 |
 | after 1 menu open | 19.8 | 15.2 |
 | after 3 menu opens | 19.8 | 15.4 |
-| after 10 menu opens | 20.0 | 15.6 |
-| after 200 status doorbells, 10 ms apart, menu never opened | 13.5 | |
-| Settings open, in this process | 41.9 | |
-| Settings closed again, in this process | 38.1 | |
+| after 10 menu opens | 20.2 | 15.6 |
+| after 200 status doorbells, 10 ms apart, menu never opened | 13.8 | |
+| Settings open, in this process | 42.9 | |
+| Settings closed again, in this process | 38.7 | |
 
 What the numbers say:
 
-- **The first menu open costs about 6 MB, once.** Later opens add almost nothing (19.8 to 20.0 MB
+- **The first menu open costs about 6 MB, once.** Later opens add almost nothing (19.8 to 20.2 MB
   over ten). A bare `NSStatusItem` with an `NSMenu` and nothing else grows by about 4 MB on its first
   open (10.8 to 15.2 MB), so most of the cost is AppKit's, not the menu's; the rest is ours.
 - **Status updates did not grow it.** 200 doorbells posted 10 ms apart, `status.json` changed
-  before each, left the fresh figure where it was (13.5 against 13.7 MB).
+  before each, left the fresh figure where it was (13.8 against 13.8 MB).
 - **No growth was seen across the measured opens and doorbells.** The earlier question was a
   repeating 272 KB block per open. It was not reproduced: after 30 opens under
   `MallocStackLogging`, `heap -addresses=all` listed no live block of that size (the largest live
   block was 64 KB), so no owner could be named. One run on 2026-11-02, with
   `scripts/measure-menu.sh --blocks`.
-- **Settings is where the rest goes.** Opening it adds about 28 MB, and closing it gives back only
+- **Settings is where the rest goes.** Opening it adds about 29 MB, and closing it gives back only
   about 4 MB, even after `malloc_zone_pressure_relief`: AppKit and SwiftUI keep the pages. Hence
   `Relaunch`: once Settings has closed, the app starts over as a fresh copy (the "closed" row above
   is the process without that restart; the rig does not restart it).

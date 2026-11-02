@@ -149,7 +149,7 @@ one. This file covers how to work on it safely.
   of it. It must not poll: it wakes on notifications, file events and the daemon's process exit.
   Its Settings window and view tree are built when shown (each pane on its first visit); once
   Settings closes the process starts over (`Relaunch`): the agent's copy exits 75 for launchd to
-  restart, since AppKit and SwiftUI keep about 38 MB otherwise (against about 14 MB fresh;
+  restart, since AppKit and SwiftUI keep about 39 MB otherwise (against about 14 MB fresh;
   `docs/companion.md`, Footprint). Never `exec` in place (LaunchServices then withholds the status
   item). The menu is rebuilt on open. Settings controls carry their own accessibility label where a
   `RowLabel` (title plus caption) leaves them unnamed. Shortcut specs are parsed and named by Kit's
