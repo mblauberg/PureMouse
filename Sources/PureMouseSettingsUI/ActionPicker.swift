@@ -165,7 +165,7 @@ struct ActionPicker: View {
                         onMove: move, onSubmit: submit)
                 .frame(height: 22)
             ScrollViewReader { proxy in
-                List(selection: Binding(get: { highlighted }, set: select)) {
+                List(selection: Binding(get: { highlighted }, set: { select($0) })) {
                     ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
                         Section {
                             ForEach(section.items) { item in

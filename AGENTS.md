@@ -52,6 +52,10 @@ one. This file covers how to work on it safely.
   `-DDEVHOOKS`, and acts only when `PUREMOUSE_COMPANION_DIR` is set, which also gives the
   doorbells names of their own (`Companion.doorbell`), so a debug build with
   `PUREMOUSE_COMPANION_DIR` set no longer hears the installed daemon's bell.
+- CI builds with Xcode 26 (Swift 6.3); a local Xcode 27 can pass what CI cannot. A macOS 27-only
+  API goes inside `#if compiler(>=6.4)`. Never pass a method as a SwiftUI closure argument
+  (`Binding(get:set: select)`): Swift 6.3 crashes in IRGen on its `@isolated(any)` thunk, so write
+  `set: { select($0) }`.
 - The user's live config is `~/.config/puremouse/config.json`; keep `config.example.json` in step
   with it (its test checks shape, not values). Config changes apply on save (`ConfigWatcher`
   watches the file and its directory, reloading when the bytes change) or with
