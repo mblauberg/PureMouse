@@ -1,6 +1,7 @@
 # Development
 
-Needs Xcode or its command line tools. Design invariants, pitfalls and how to add actions or
+Needs Xcode with macOS SDK 26 or later (including the SwiftUI macro plugin used by Settings).
+Design invariants, pitfalls and how to add actions or
 device features are in [`AGENTS.md`](../AGENTS.md).
 
 ## Build and install
@@ -16,7 +17,7 @@ device features are in [`AGENTS.md`](../AGENTS.md).
 
 ```sh
 ./scripts/build-app.sh [--universal] [--version X.Y.Z] [--timestamp]   # sign and assemble .build/app/PureMouse.app
-./scripts/verify-bundle.sh .build/app/PureMouse.app      # signatures, identifiers, plists
+./scripts/verify-bundle.sh .build/app/PureMouse.app      # signatures, identifiers, plists, SDK and minimum
 ./scripts/check-size.sh .build/app/PureMouse.app         # installed size against the budget
 ./scripts/make-dmg.sh .build/app/PureMouse.app out.dmg   # the release dmg alone
 ```
@@ -30,6 +31,21 @@ against a temporary directory, a stubbed build and a fake `launchctl`.
 releases do. The bundle version is `--version` or `PUREMOUSE_VERSION` if given, else
 `git describe` without the `v` (`0.3.0-2-gabc1234` past a tag); `CFBundleVersion` is the commit
 count. Bundle layout, identifiers and the Info.plist writer live in `scripts/lib.zsh`.
+
+App builds explicitly use SwiftPM's `--build-system native` and the selected macOS SDK
+(`xcrun --sdk macosx --show-sdk-path`), with a deployment triple of macOS 14.0 for each slice.
+This records the actual SDK in `LC_BUILD_VERSION` so macOS 26+ uses the current system design,
+while keeping macOS 14 as the minimum. Swift Build currently records the deployment target as
+the SDK; do not remove the backend choice without checking every slice with `vtool -show-build`
+([ADR 0020](adr/0020-linked-sdk-and-deployment-target.md)). The native backend is deprecated in
+Swift 6.4 but still supported; revisit when Swift Build records the correct SDK.
+
+`verify-bundle.sh` rejects a recorded SDK below 26 or a `minos` other than `lib.zsh`'s `minimum`,
+for every architecture of every component. Signing and size budgets apply as before. CI checks
+the selected Xcode SDK before building on macOS 26, including the release dry run. A separate
+macOS 15 job (the oldest hosted image now available) builds and verifies the universal app and
+launches its daemon with `--help`; a macOS 14 launch and Settings appearance still need a spare
+Mac. No new API availability follows from the SDK stamp alone.
 
 ## Test
 

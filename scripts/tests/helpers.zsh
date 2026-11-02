@@ -21,7 +21,12 @@ stand_in_app() {
     local dir=$1 version=$2
     mkdir -p $dir/bin
     local component
-    for component in $components; do cp /usr/bin/true $dir/bin/$(component_executable $component); done
+    for component in $components; do
+        # System tools carry the host's minimum. Give this non-running fixture our bundle's
+        # contract before signing it; production binaries get these values from the linker.
+        /usr/bin/xcrun vtool -set-build-version macos $minimum $minimum_sdk.0 -replace \
+            -output $dir/bin/$(component_executable $component) /usr/bin/true
+    done
     assemble_bundle $dir/bin $dir/PureMouse.app $version 42 >/dev/null
     print -r -- $dir/PureMouse.app
 }
@@ -71,7 +76,10 @@ while (( \$# )); do
     shift
 done
 mkdir -p .build/stub
-for component in \$components; do cp /usr/bin/true .build/stub/\$(component_executable \$component); done
+for component in \$components; do
+    /usr/bin/xcrun vtool -set-build-version macos \$minimum \$minimum_sdk.0 -replace \\
+        -output .build/stub/\$(component_executable \$component) /usr/bin/true
+done
 assemble_bundle .build/stub .build/app/PureMouse.app \$version 1
 touch .build/app/PureMouse.app/Contents/Resources/NEW
 scripts/sign-bundle.sh .build/app/PureMouse.app --identity - 2>/dev/null

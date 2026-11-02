@@ -3,7 +3,8 @@
 # fails. For each bundle in lib.zsh's `components`: its Info.plist is present and valid, its
 # identifier is the frozen label (in the plist and the signature), its signature verifies strictly,
 # every architecture of its executable is signed with that identifier and the hardened runtime, and
-# its version matches the app's.
+# its version matches the app's. Every slice must record the configured deployment minimum and
+# macOS SDK 26 or later, so supported systems get the current native appearance.
 #
 #   verify-bundle.sh <app> [--release]
 #
@@ -68,6 +69,18 @@ for component in $components; do
     fi
     signed_ok=1
     for arch in $archs; do
+        if build_info=$(xcrun vtool -arch $arch -show-build $executable 2>&1); then
+            platform=$(print -r -- $build_info | awk '$1 == "platform" {print $2}')
+            minos=$(print -r -- $build_info | awk '$1 == "minos" {print $2}')
+            sdk=$(print -r -- $build_info | awk '$1 == "sdk" {print $2}')
+            [[ $platform == MACOS ]] || fail "$executable ($arch): platform is '$platform', not MACOS"
+            [[ $minos == $minimum ]] || fail "$executable ($arch): minos is '$minos', not $minimum"
+            if [[ ! $sdk =~ '^[0-9]+\.[0-9]+(\.[0-9]+)?$' ]] || (( ${sdk%%.*} < minimum_sdk )); then
+                fail "$executable ($arch): SDK is '$sdk', needs macOS $minimum_sdk or later"
+            fi
+        else
+            fail "$executable ($arch): cannot read build version ($build_info)"
+        fi
         details=$(codesign -dvv --architecture $arch $bundle 2>&1) || { fail "$name ($arch): not signed"; signed_ok=0; continue; }
         signed_as=$(print -r -- $details | sed -n 's/^Identifier=//p')
         [[ $signed_as == "$expected" ]] || fail "$name ($arch): signed as '$signed_as', not $expected"
