@@ -212,42 +212,57 @@ read them as "about" and repeat the rig after each macOS release. The bare AppKi
 
 | Menu app, release build | Without the variable, MB | Shipped (`MallocSpaceEfficient=1`), MB | Bare AppKit status item and menu, same Mac |
 |---|---|---|---|
-| fresh, about 4.5 s after launch | 13.8 | 10.1 | 10.8 |
-| after 1 menu open | 19.8 | 14.1 | 15.2 |
-| after 3 menu opens | 19.9 | 14.1 | 15.4 |
-| after 10 menu opens | 19.9 | 14.2 | 15.6 |
-| after 200 status doorbells, 10 ms apart, menu never opened | 13.8 | 10.0 | |
-| Settings open, in this process | 43.1 | 33.9 | |
-| Settings closed again, in this process | 38.9 | 24.9 | |
+| fresh, about 4.5 s after launch | 11.9 | 8.6 | 10.8 |
+| after 1 menu open | 18.4 | 12.9 | 15.2 |
+| after 3 menu opens | 18.6 | 13.0 | 15.4 |
+| after 10 menu opens | 18.8 | 12.9 | 15.6 |
+| after 200 status doorbells, 10 ms apart, menu never opened | 12.1 | 8.8 | |
+| while the Settings helper is open | 12.0 | 8.6 | |
+| 1.5 s after the Settings helper quits | 12.1 | 8.6 | |
+| after 5 opens and quits of the Settings helper | 12.1 | 8.5 | |
+
+| Settings helper, release build | Without the variable | Shipped |
+|---|---|---|
+| its own footprint, 2 s after its window is on screen | 44.0 MB | 34.4 MB |
+| cold start, from the menu being asked for Settings to the window on screen | 518 ms | 526 ms |
 
 The shipped column is the rig, which passes on the Info.plist's `LSEnvironment` (the agent's plist
-sets the same variable); the other column is main's build without it (same Mac, same day).
-After 3 opens that is 0.71 times the baseline, and fresh is lower, which passes the adoption rule
-(at most 0.75 times, fresh no worse).
+sets the same variable); the other column is the same build without it (same Mac, same day). The
+helper has no variable of its own: LaunchServices passes the menu app's environment on to the app
+it opens, so the helper the menu opens runs with it too. The cold start's slowest run was each
+time the first (1154 and 972 ms).
 
 What the numbers say:
 
-- **The first menu open costs about 4 to 6 MB, once.** Later opens add almost nothing (14.1 to 14.2 MB
-  over ten, shipped; 19.8 to 19.9 without the variable). A bare `NSStatusItem` with an `NSMenu` and nothing else grows by about 4 MB on its first
-  open (10.8 to 15.2 MB), so most of the cost is AppKit's, not the menu's; the rest is ours.
-- **Status updates did not grow it.** 200 doorbells posted 10 ms apart, `status.json` changed
-  before each, left the fresh figure where it was (10.0 against 10.1 MB shipped; 13.8 against 13.8 without the variable).
+- **The first menu open costs about 4 MB, once** (8.6 to 12.9 MB shipped; 11.9 to 18.4 without
+  the variable). Later opens add nothing (12.9 MB after ten). A bare `NSStatusItem` with an
+  `NSMenu` and nothing else grows by about 4 MB on its first open (10.8 to 15.2 MB), so the cost
+  is AppKit's.
+- **Fresh is about 1.5 MB lower than with Settings in the menu's own process** (8.6 against 10.1 MB
+  shipped; 11.9 against 13.8 without the variable). The menu no longer links SwiftUI, which is the
+  likely difference.
+- **Status updates barely moved it.** 200 doorbells posted 10 ms apart, `status.json` changed
+  before each, left it 0.2 MB above fresh (8.8 against 8.6 MB shipped; 12.1 against 11.9 without
+  the variable).
 - **No growth was seen across the measured opens and doorbells.** The earlier question was a
   repeating 272 KB block per open. It was not reproduced: after 30 opens under
   `MallocStackLogging`, `heap -addresses=all` listed no live block of that size (the largest live
   block was 64 KB), so no owner could be named. One run on 2026-11-02, with
   `scripts/measure-menu.sh --blocks`.
-- **Settings is where the rest goes.** Opening it adds about 24 MB (29 without the variable), and closing it gives back only
-  about 9 MB (4 without), even after `malloc_zone_pressure_relief`: AppKit and SwiftUI keep the pages. Hence
-  `Relaunch`: once Settings has closed, the app starts over as a fresh copy (the "closed" row above
-  is the process without that restart; the rig does not restart it).
+- **Settings costs the menu nothing.** With the helper open the menu stays at its fresh figure
+  (8.6 MB shipped), and it is there again after the helper quits, once or five times. The helper's
+  34 MB is its own and goes when it quits. Before the helper, Settings in the menu's own process
+  added about 24 MB on opening (to 33.9 MB shipped; about 29 MB, to 43.1, without the variable)
+  and gave back only about 9 MB on closing (to 24.9 MB; about 4 MB, to 38.9, without), even after
+  `malloc_zone_pressure_relief`: AppKit and SwiftUI keep the pages. Hence the helper
+  ([ADR 9](adr/0009-settings-helper-app.md)).
 - **Allocator.** The growth was freed small-malloc pages that stay resident and that
   `malloc_zone_pressure_relief` does not return. The menu app runs with
   `MallocSpaceEfficient=1` (a preference for reusing freed space over speed), in its launchd
   environment and, for a launch by the Finder, `LSEnvironment` in its Info.plist. The gate ran on the
-  branch build against main's, five runs each, side by side: 14.1 against 19.9 MB after 3 opens
-  (0.71 times) and 10.1 against 13.8 fresh. The variable is undocumented, so a macOS release may
-  ignore it; the rig is repeated after each one.
+  branch build against main's, five runs each, side by side, with Settings still in the menu's
+  process: 14.1 against 19.9 MB after 3 opens (0.71 times) and 10.1 against 13.8 fresh. The
+  variable is undocumented, so a macOS release may ignore it; the rig is repeated after each one.
 - **The prefs-domain caveat.** For a while the rig's numbers were bimodal: some launches started
   about 4 MB higher, even for the fresh and doorbell scenarios, and a fresh bundle id or
   `defaults delete` of the rig's domain brought them back. The cause is a transient state of the
