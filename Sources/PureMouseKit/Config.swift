@@ -98,21 +98,11 @@ public struct Config: Decodable, Sendable {
         if c.contains(AnyKey("apps")) {
             try decodeApps(try c.nestedContainer(keyedBy: AnyKey.self, forKey: AnyKey("apps")))
         }
-        // Keep this guard independent of section decoding: app entries must obey the same
-        // safety rule regardless of how they merge onto global bindings.
-        for id in apps.keys.sorted() {
-            guard var app = apps[id] else { continue }
-            for cid in Self.reservedControls.sorted() where app.bindings[cid] != nil {
-                app.bindings.removeValue(forKey: cid)
-                app.buttons.remove(cid)
-                warnings.append(Self.reservedWarning(cid, at: "apps.\(id).buttons"))
-            }
-            apps[id] = app
-        }
     }
 
-    private static func reservedWarning(_ cid: UInt16, at path: String) -> String {
-        String(format: "%@.0x%04x: the left and right buttons always click; ignored", path, cid)
+    /// For a binding of a primary click (`reservedControls`), keyed as the user spelled it.
+    static func reservedWarning(_ path: String) -> String {
+        "\(path): the left and right buttons always click; ignored"
     }
 
     /// Adds the bindings `c` names to `buttons` and `bindings`. A name for a control that `buttons`
@@ -129,7 +119,7 @@ public struct Config: Decodable, Sendable {
             let cid = Button.cid(for: name.stringValue)
             let binding = try Binding.decode(c, forKey: name, base: cid.flatMap { before[$0] })
             if let cid, Self.reservedControls.contains(cid) {
-                warnings.append(Self.reservedWarning(cid, at: "buttons"))
+                warnings.append(Self.reservedWarning("buttons.\(name.stringValue)"))
                 continue
             }
             named[name.stringValue] = binding
