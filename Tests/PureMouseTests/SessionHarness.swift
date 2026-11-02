@@ -24,7 +24,16 @@ struct SessionHarness {
         let identity = identify
             ? await Identification.read(device, productID: UInt16(exactly: fake.transport.productID)) : Identification()
         session = Session(device: device, name: fake.name, identity: identity, id: "fake", controls: controls,
-                          config: config.forDevice(identity.model), inheriting: inherited, environment: environment)
+                          config: config.forDevice(identity.deviceKey), inheriting: inherited, environment: environment)
+    }
+
+    /// A session taking over from `session` on the same endpoint, as a reload makes one: by
+    /// default with what `session` hands down now.
+    func replacement(config: Config = .empty, inheriting inherited: Session.Inherited? = nil,
+                     environment: SessionEnvironment = .init(canPostEvents: true)) -> Session {
+        Session(device: device, name: fake.name, identity: session.identity, id: "replacement",
+                controls: Array(session.controls.values), config: config.forDevice(session.deviceKey),
+                inheriting: inherited ?? session.inheritance, environment: environment)
     }
 
     static func config(_ json: String) throws -> Config {
@@ -40,6 +49,51 @@ struct SessionHarness {
     func close() {
         session.close()
         device.close()
+    }
+}
+
+/// A daemon on a config file of its own, adopting fakes as it adopts mice.
+@MainActor
+final class DaemonHarness {
+    let url: URL
+    let daemon: Daemon
+    private var endpoints: [HIDPPDevice] = []
+
+    init(_ json: String) throws {
+        url = FileManager.default.temporaryDirectory.appending(path: "puremouse-\(UUID().uuidString).json")
+        try Data(json.utf8).write(to: url)
+        daemon = Daemon(configURL: url, environment: .init(canPostEvents: true, configureRetryDelay: .milliseconds(1)))
+    }
+
+    /// Adopts `fake` and waits for its first configure to end.
+    func adopt(_ fake: FakeDevice) async throws -> Session {
+        let endpoint = daemon.listen(fake.transport, index: fake.index)
+        endpoint.timeout = .milliseconds(100)
+        endpoints.append(endpoint)
+        #expect(await daemon.adopt(endpoint) == .adopted)
+        return try await settled(fake)
+    }
+
+    /// The session for `fake` once it has finished configuring.
+    func settled(_ fake: FakeDevice) async throws -> Session {
+        var session: Session?
+        try await eventually {
+            session = daemon.sessions.values.first { $0.device.interface === fake.transport }
+            return session.map { !$0.isConfiguring } ?? false
+        }
+        return try #require(session)
+    }
+
+    /// Rewrites the config file and reloads, as a save does.
+    func reload(_ json: String? = nil) throws {
+        if let json { try Data(json.utf8).write(to: url) }
+        daemon.reload()
+    }
+
+    func close() {
+        daemon.sessions.values.forEach { $0.close() }
+        endpoints.forEach { $0.close() }
+        try? FileManager.default.removeItem(at: url)
     }
 }
 

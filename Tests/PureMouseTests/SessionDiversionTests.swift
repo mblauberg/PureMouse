@@ -43,11 +43,8 @@ struct SessionDiversionTests {
         try await h.session.apply()
         let inherited = h.session.inheritance
         h.session.close()
-        let controls = try await ReprogControls.controls(h.device)
         h.fake.transport.sent.removeAll()
-        let replacement = Session(device: h.device, name: h.fake.name, id: "replacement",
-            controls: controls, config: .empty, inheriting: inherited,
-            environment: .init(canPostEvents: true))
+        let replacement = h.replacement(inheriting: inherited)
         defer { replacement.close() }
         try await replacement.apply()
         #expect(reportingReads(h.fake).isEmpty)
@@ -111,9 +108,7 @@ struct SessionDiversionTests {
         #expect(inherited.fresh)
         h.session.close()
         fake.failures.removeAll()
-        let controls = try await ReprogControls.controls(h.device)
-        let replacement = Session(device: h.device, name: fake.name, id: "replacement", controls: controls,
-                                  config: .empty, inheriting: inherited, environment: .init(canPostEvents: true))
+        let replacement = h.replacement(inheriting: inherited)
         defer { replacement.close(); h.device.close() }
         try await replacement.apply()
         #expect(fake.control(0x56)?.diverted == false)

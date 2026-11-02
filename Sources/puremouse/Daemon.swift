@@ -229,8 +229,9 @@ final class Daemon {
 
     /// Whether a request aimed at `device` (a device key; nil for every mouse) covers `session`.
     /// Mice of one model share a key, so both are covered; a mouse without a key only by nil.
+    /// `Control` lowercases the key, as device keys are.
     static func targets(_ device: String?, _ session: Session) -> Bool {
-        device.map { $0.lowercased() == session.model } ?? true
+        device.map { $0 == session.deviceKey } ?? true
     }
 
     /// Select by pressing: for up to `captureDuration`, every control of every mouse (or of the
@@ -252,7 +253,7 @@ final class Daemon {
 
     private func beginCapture(_ session: Session) {
         session.onCapture = { [weak self, unowned session] cid in
-            self?.endCapture(.pressed, cid: cid, deviceID: session.id, model: session.model)
+            self?.endCapture(.pressed, cid: cid, deviceID: session.id, model: session.deviceKey)
         }
         session.beginCapture()
     }
@@ -520,11 +521,20 @@ final class Daemon {
 
     /// A connection notification for a slot with a session (`Session.onConnection`). A different
     /// device there retires the session, as if its mouse had gone, and is adopted afresh on a new
-    /// endpoint. Returns whether that happened.
+    /// endpoint. A mouse adopted before the slot's product was known, and keyed by its product,
+    /// gets its key when it next links up, with a session on that key's settings in place of this
+    /// one. Returns whether the session was replaced either way.
     private func sessionSlotAnnounced(_ session: Session, _ report: Report) -> Bool {
         let key = Key(session.device)
-        guard sessions[key] === session, let product = Receiver.productID(report),
-              productAnnounced(product, key) else { return false }
+        guard sessions[key] === session, let product = Receiver.productID(report) else { return false }
+        guard productAnnounced(product, key) else {
+            let identity = session.identity.keyed(byProduct: product)
+            guard identity != session.identity, Receiver.isLinkEstablished(report) else { return false }
+            Log.info("\(session.name): model=\(identity.deviceKey ?? "unknown") from its slot's pid=\(String(format: "0x%04x", product))")
+            replace(session, at: key, identity: identity, keepingLiveDPI: Self.keepsLiveDPI(
+                config.forDevice(session.deviceKey), config.forDevice(identity.deviceKey)))
+            return true
+        }
         Log.info("\(session.name): a different device (pid=\(String(format: "0x%04x", product))) is in its slot")
         let device = replaceEndpoint(session.device)
         if Receiver.isLinkEstablished(report) { Task { await adoptRetrying(device) } }
@@ -586,7 +596,7 @@ final class Daemon {
     }
 
     /// Creates a session if the endpoint is an awake HID++ 2.0 device with adjustable DPI or a
-    /// configured control, so keyboards and other Logitech devices are left alone.
+    /// control configured for it (`gates`).
     func adopt(_ device: HIDPPDevice) async -> Adoption {
         let key = Key(device)
         guard sessions[key] == nil else { return .adopted }
@@ -614,23 +624,31 @@ final class Daemon {
         } catch {
             return .noAnswer
         }
-        // Before identification the model is unknown, so a control bound in any scope counts.
-        let configured = Set(config.everyScope.flatMap(\.bindings.keys))
-        guard hasDPI || controls.contains(where: { configured.contains($0.cid) }) else { return .notAMouse }
+        // Before identification the key is unknown, so a control bound for any mouse lets it on;
+        // the settings for its own key then decide (`gates`). Neither asks a keyboard more.
+        guard Self.gates(hasDPI: hasDPI, controls: controls, bound: config.everyBoundControl) else { return .notAMouse }
         let pid: UInt16? = device.interface.isReceiver
             ? slotProducts[key] : UInt16(exactly: device.interface.productID)
+        let name = (try? await DeviceName.get(device)).flatMap { $0.isEmpty ? nil : $0 } ?? "device \(device.index)"
         let identity = await Identification.read(device, productID: pid)
-        let name = identity.name.flatMap { $0.isEmpty ? nil : $0 } ?? "device \(device.index)"
+        guard Self.gates(hasDPI: hasDPI, controls: controls, bound: config.forDevice(identity.deviceKey).boundControls)
+        else { return .notAMouse }
         let pidLabel = pid.map { String(format: "0x%04x", $0) } ?? "unknown"
         // The device may have gone, or the daemon paused or begun quitting, while we were asking.
         guard accepting else { return .stopped }
         guard endpoints[key] === device, sessions[key] == nil else { return .noAnswer }
-        Log.info("adopting \(name) pid=\(pidLabel) model=\(identity.model ?? "unknown") on \(device.interface.product) index \(device.index)")
+        Log.info("adopting \(name) pid=\(pidLabel) model=\(identity.deviceKey ?? "unknown") on \(device.interface.product) index \(device.index)")
         let session = Session(device: device, name: name, identity: identity, id: deviceID(key), controls: controls,
-                              config: config.forDevice(identity.model),
+                              config: config.forDevice(identity.deviceKey),
                               inheriting: Session.Inherited(fresh: true, away: handingOff), environment: environment)
         add(session, key)
         return .adopted
+    }
+
+    /// Whether a device is a mouse PureMouse configures: it has adjustable DPI, or a control
+    /// `bound` binds, so keyboards and other Logitech devices are left alone.
+    static func gates(hasDPI: Bool, controls: [ReprogControls.Control], bound: Set<UInt16>) -> Bool {
+        hasDPI || controls.contains { bound.contains($0.cid) }
     }
 
     private func deviceID(_ key: Key) -> String {
@@ -689,14 +707,8 @@ final class Daemon {
         endCapture(.cancelled)
         ignored = []
         for (key, old) in sessions {
-            old.close()
-            var inherited = old.inheritance
-            if !Self.keepsLiveDPI(previous: previous, current: config, model: old.model) { inherited.state.liveDPI = nil }
-            inherited.away = handingOff
-            inherited.diversionAfter = old.diversionEnd
-            add(Session(device: old.device, name: old.name, identity: old.identity, id: old.id,
-                        controls: Array(old.controls.values), config: config.forDevice(old.model),
-                        inheriting: inherited, environment: environment), key)
+            replace(old, at: key, identity: old.identity, keepingLiveDPI: Self.keepsLiveDPI(
+                previous.forDevice(old.deviceKey), config.forDevice(old.deviceKey)))
         }
         if handingOff != wasHandingOff {
             // The replacements already start in the new state; this only logs it.
@@ -706,11 +718,24 @@ final class Daemon {
         Task { await adoptStragglers() }
     }
 
-    /// A DPI picked by `cycleDPI` lasts until the mouse's configured DPI or presets change, as
-    /// resolved for its device key.
-    static func keepsLiveDPI(previous: Config, current: Config, model: String?) -> Bool {
-        let before = previous.forDevice(model), after = current.forDevice(model)
-        return before.dpi == after.dpi && before.dpiPresets == after.dpiPresets
+    /// Closes `old` and adds a session in its place with `identity` and the settings for its key,
+    /// inheriting `old`'s state (`Session.inheritance`); the DPI `cycleDPI` picked only when
+    /// `keepingLiveDPI`.
+    private func replace(_ old: Session, at key: Key, identity: Identification, keepingLiveDPI: Bool) {
+        old.close()
+        var inherited = old.inheritance
+        if !keepingLiveDPI { inherited.state.liveDPI = nil }
+        inherited.away = handingOff
+        inherited.diversionAfter = old.diversionEnd
+        add(Session(device: old.device, name: old.name, identity: identity, id: old.id,
+                    controls: Array(old.controls.values), config: config.forDevice(identity.deviceKey),
+                    inheriting: inherited, environment: environment), key)
+    }
+
+    /// A DPI picked by `cycleDPI` lasts until the mouse's configured DPI or presets change: from
+    /// `before` to `after`, each resolved for its device key (`Config.forDevice`).
+    static func keepsLiveDPI(_ before: Config, _ after: Config) -> Bool {
+        before.dpi == after.dpi && before.dpiPresets == after.dpiPresets
     }
 
     /// Restores every mouse to native behaviour, then exits. Gives up after `shutdownDeadline` so

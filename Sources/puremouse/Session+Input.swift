@@ -186,15 +186,16 @@ extension Session {
             case .haptic(let waveform): await playHaptic(waveform)
             default: break
             }
+            // An action's lookup may be the first answer about a feature apply never needed.
+            capabilitiesMayHaveChanged()
         }
     }
 
     private func playHaptic(_ waveform: HapticWaveform) async {
-        guard !hapticMissingLogged else { return }
+        guard !noticed.contains(.hapticMissing) else { return }
         do {
             guard try await device.hasFeature(Haptic.id) else {
-                Log.info("\(name): haptic action ignored; no 0x19B0 feature")
-                hapticMissingLogged = true
+                notice(.hapticMissing, "haptic action ignored; no 0x19B0 feature")
                 return
             }
             try ensureOpen()
@@ -253,10 +254,7 @@ extension Session {
     private func toggleScrollMode() async {
         do {
             guard let clutch = try await clutch() else {
-                if !toggleUnsupportedLogged {
-                    toggleUnsupportedLogged = true
-                    Log.info("\(name): toggleScrollMode needs SmartShift, which this mouse lacks")
-                }
+                notice(.toggleUnsupported, "toggleScrollMode needs SmartShift, which this mouse lacks")
                 return
             }
             let next: SmartShift.Mode = try await scrollMode(of: clutch) == .ratchet ? .freespin : .ratchet

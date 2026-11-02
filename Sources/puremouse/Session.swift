@@ -12,7 +12,7 @@ final class Session {
     /// Read once at adoption and kept by replacement sessions; reported in `status`.
     let identity: Identification
     /// The device key: which `devices` entry of the config applies (`Config.forDevice`).
-    var model: String? { identity.model }
+    var deviceKey: String? { identity.deviceKey }
     var unit: String? { identity.unit }
     var kind: DeviceName.Kind? { identity.kind }
     /// Reported in `Status.Device.id`: stable while the daemon runs.
@@ -68,11 +68,13 @@ final class Session {
     /// Device state that outlives a config (see `DeviceState`).
     var state: DeviceState
     var hapticCapabilities: Haptic.Capabilities?
-    var hapticMissingLogged = false
-    /// Logged once per session: smooth scrolling configured on a mouse whose wheel cannot, and
-    /// `toggleScrollMode` on one without SmartShift.
-    var smoothScrollUnsupportedLogged = false
-    var toggleUnsupportedLogged = false
+    /// Something the mouse lacks for the config, said once per session (`notice`); a replacement
+    /// session says it again. A snapped DPI is once per mouse instead (`DeviceState.snapLogged`).
+    enum Notice: Hashable { case hapticMissing, smoothScrollUnsupported, toggleUnsupported }
+    var noticed: Set<Notice> = []
+    /// The capabilities last published in `status`, so a lookup resolving after apply can
+    /// publish its answer (`capabilitiesMayHaveChanged`).
+    private var publishedCapabilities: Status.Device.Capabilities?
     var unsupportedHaptics: Set<HapticWaveform> = []
     private var configuring: Task<Void, Never>?
     private var configureGeneration = 0
@@ -117,7 +119,8 @@ final class Session {
         /// An apply has succeeded, so feature lookups have been made and `capabilities` can be
         /// reported from them.
         var applied = false
-        /// Targets already reported as snapped to a supported resolution, so each is logged once.
+        /// Targets already reported as snapped to a supported resolution, so each is logged once
+        /// per mouse: kept, like the rest of `DeviceState`, by the sessions replacing this one.
         var snapLogged: Set<Int> = []
     }
 
@@ -138,7 +141,7 @@ final class Session {
         var diversionAfter: Task<Void, Never>?
     }
 
-    init(device: HIDPPDevice, name: String, identity: Identification = Identification(), id: String,
+    init(device: HIDPPDevice, name: String, identity: Identification, id: String,
          controls: [ReprogControls.Control], config: Config,
          inheriting inherited: Inherited = Inherited(), environment: SessionEnvironment = .live) {
         self.device = device
@@ -205,7 +208,7 @@ final class Session {
 
     /// Whether `error` is the device answering (an error code or a malformed reply) rather than
     /// a timeout, transport failure or cancellation, which must reach configure's retry.
-    static func isDeviceAnswer(_ error: any Error) -> Bool {
+    nonisolated static func isDeviceAnswer(_ error: any Error) -> Bool {
         (error as? HIDPPError)?.isDeviceAnswer == true
     }
 
@@ -225,7 +228,7 @@ final class Session {
             online: state.online, battery: state.battery.flatMap(Self.status), dpi: state.dpi,
             dpiSteps: state.resolutions?.values ?? [],
             wheelMode: state.wheelMode.map { $0 == .ratchet ? .ratchet : .freespin },
-            controls: pressable, model: model, unit: unit, kind: kind?.name, capabilities: capabilities)
+            controls: pressable, model: deviceKey, unit: unit, kind: kind?.name, capabilities: capabilities)
     }
 
     /// What the mouse has, from the lookups an apply made (`HIDPPDevice.knownPresence`), so
@@ -241,13 +244,15 @@ final class Session {
             battery: hasAny(of: [UnifiedBattery.id, LegacyBattery.id]))
     }
 
-    /// The main-wheel features PureMouse can take over to scroll smoothly. Supporting another
-    /// kind of wheel adds its feature here.
-    static let smoothScrollWheels = [HiResWheel.id]
+    /// Whether the main wheel can scroll smoothly, from known presence (nil while unknown): it
+    /// needs the feature PureMouse takes the main wheel over through (`Wheel.main`).
+    var scrollsSmoothly: Bool? { device.knownPresence(of: Wheel.main.feature) }
 
-    /// Whether the main wheel can scroll smoothly, from known presence: true when it has one of
-    /// `smoothScrollWheels`, false when all are known absent, nil while unknown.
-    var scrollsSmoothly: Bool? { hasAny(of: Self.smoothScrollWheels) }
+    /// Publishes `capabilities` when a lookup after apply, such as a haptic action's, has changed
+    /// them.
+    func capabilitiesMayHaveChanged() {
+        if capabilities != publishedCapabilities { changed() }
+    }
 
     private func hasAny(of features: [UInt16]) -> Bool? {
         let presence = features.map { device.knownPresence(of: $0) }
@@ -269,7 +274,13 @@ final class Session {
     }
 
     func changed() {
+        publishedCapabilities = capabilities
         onChange?()
+    }
+
+    /// Logs `message` at info, once per session for each `notice`.
+    func notice(_ notice: Notice, _ message: @autoclosure () -> String) {
+        if noticed.insert(notice).inserted { Log.info("\(name): \(message())") }
     }
 
     /// Ends once every diversion change asked for so far has; see `Inherited.diversionAfter`.
@@ -393,8 +404,6 @@ final class Session {
                 state.legacyBatterySelected = try await device.hasFeature(LegacyBattery.id)
             }
         } catch { }
-        // Looked up for `capabilities` only; a failure leaves it unknown.
-        _ = try? await device.hasFeature(Haptic.id)
 
         // One step in the chain, so a handoff (`setAway`) cannot interleave with it.
         try await serialised(on: diversion) { try await $0.applyInputs(wheels: true) }

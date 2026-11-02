@@ -48,9 +48,7 @@ struct DaemonTests {
         #expect(Permissions.needed(postsEvents: true, bluetooth: true, hidOpenFailed: false) == .all)
     }
 
-    func config(_ json: String) throws -> Config {
-        try JSONDecoder().decode(Config.self, from: Data(json.utf8))
-    }
+    func config(_ json: String) throws -> Config { try SessionHarness.config(json) }
 
     /// Accessibility is needed when any device entry, not only the top level, posts events.
     @Test func aDeviceEntryThatPostsEventsNeedsAccessibility() throws {
@@ -63,15 +61,18 @@ struct DaemonTests {
 
     /// A reload keeps a mouse's live DPI unless its own resolved dpi or dpiPresets changed.
     @Test func liveDPIIsKeptUnlessThatMousesDPIChanged() throws {
+        func keeps(_ before: Config, _ after: Config, _ key: String?) -> Bool {
+            Daemon.keepsLiveDPI(before.forDevice(key), after.forDevice(key))
+        }
         let before = try config(#"{"dpi": 1600, "devices": {"pb02c": {"dpi": 1200}}}"#)
         let otherEntry = try config(#"{"dpi": 1600, "devices": {"pb02c": {"dpi": 1000}}}"#)
-        #expect(!Daemon.keepsLiveDPI(previous: before, current: otherEntry, model: "pb02c"))
-        #expect(Daemon.keepsLiveDPI(previous: before, current: otherEntry, model: "mb03440910000"))
-        #expect(Daemon.keepsLiveDPI(previous: before, current: otherEntry, model: nil))
+        #expect(!keeps(before, otherEntry, "pb02c"))
+        #expect(keeps(before, otherEntry, "mb03440910000"))
+        #expect(keeps(before, otherEntry, nil))
         let topLevel = try config(#"{"dpi": 1400, "devices": {"pb02c": {"dpi": 1200}}}"#)
-        #expect(Daemon.keepsLiveDPI(previous: before, current: topLevel, model: "pb02c"))
-        #expect(!Daemon.keepsLiveDPI(previous: before, current: topLevel, model: nil))
+        #expect(keeps(before, topLevel, "pb02c"))
+        #expect(!keeps(before, topLevel, nil))
         let presets = try config(#"{"dpi": 1600, "devices": {"pb02c": {"dpi": 1200, "dpiPresets": [800]}}}"#)
-        #expect(!Daemon.keepsLiveDPI(previous: before, current: presets, model: "pb02c"))
+        #expect(!keeps(before, presets, "pb02c"))
     }
 }

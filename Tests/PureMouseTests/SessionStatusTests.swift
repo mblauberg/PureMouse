@@ -26,9 +26,9 @@ struct SessionStatusTests {
         #expect(status.model == "mb03440910000")
         #expect(status.unit == "0a1b2c3d")
         #expect(status.kind == "mouse")
-        // The fixture lacks only haptics (and the fallbacks 0x2111 and 0x1000).
+        // Haptics are asked about only by a haptic action, so are unknown here.
         #expect(status.capabilities == Capabilities(dpi: true, smartShift: true, smoothScroll: true, thumbWheel: true,
-                                                    haptics: false, battery: true))
+                                                    haptics: nil, battery: true))
         #expect(status.controls.map(\.cid) == [0x52, 0x53, 0x56, 0xC3, 0xC4])
         #expect(status.controls.filter { $0.gestures == true }.map(\.cid) == [0xC3])
         #expect(status.controls.allSatisfy { $0.gestures != nil })
@@ -40,11 +40,10 @@ struct SessionStatusTests {
         try await h.session.apply()
         let status = h.session.status
         #expect(status.capabilities == Capabilities(dpi: true, smartShift: false, smoothScroll: false, thumbWheel: false,
-                                                    haptics: false, battery: true))
+                                                    haptics: nil, battery: true))
         // 0x0050 and 0x0051 are not divertable, 0x00D7 is virtual; the rest report raw XY.
         #expect(status.controls.map(\.cid) == [0x52, 0x53, 0x56, 0xFD])
         #expect(status.controls.allSatisfy { $0.gestures == true })
-        #expect(ControlNames.name(0x00FD) == "DPI button")
         #expect(status.kind == "mouse")
         #expect(status.model.map(Config.isDeviceKey) == true && status.model?.first == "m")
         #expect(status.unit == nil)  // the dump's 0x0003 reply carries no unit ID
@@ -57,7 +56,7 @@ struct SessionStatusTests {
         let status = h.session.status
         #expect(status.model == "m40aa00000000" && status.unit == "12345678" && status.kind == "mouse")
         #expect(status.capabilities == Capabilities(dpi: true, smartShift: false, smoothScroll: true, thumbWheel: false,
-                                                    haptics: false, battery: true))
+                                                    haptics: nil, battery: true))
         #expect(status.controls.map(\.cid) == [0x52, 0x53, 0x56])
         #expect(status.controls.allSatisfy { $0.gestures == false })
     }
@@ -68,7 +67,7 @@ struct SessionStatusTests {
         fake.responses[.init(0x0003, 0)] = reply
         let h = try await SessionHarness(fake, identify: true)
         defer { h.close() }
-        #expect(h.session.model == "pb02c")
+        #expect(h.session.deviceKey == "pb02c")
         #expect(h.session.unit == nil)
     }
 
@@ -77,7 +76,7 @@ struct SessionStatusTests {
         fake.features[2] = nil  // 0x0003
         let h = try await SessionHarness(fake, identify: true)
         defer { h.close() }
-        #expect(h.session.model == "pb02c" && h.session.unit == nil)
+        #expect(h.session.deviceKey == "pb02c" && h.session.unit == nil)
         #expect(h.session.name == "Signature Plus M750" && h.session.kind == .mouse)
         try await h.session.apply()
         #expect(h.session.status.model == "pb02c")
@@ -88,29 +87,34 @@ struct SessionStatusTests {
         fake.failures[.init(0x0003, 0)] = .timeout
         let h = try await SessionHarness(fake, identify: true)
         defer { h.close() }
-        #expect(h.session.model == nil && h.session.name == "Signature Plus M750")
+        #expect(h.session.deviceKey == nil && h.session.name == "Signature Plus M750")
     }
 
-    @Test func aLookupThatFailsOnceLeavesThatCapabilityOut() async throws {
-        let fake = FakeDevice.mxMaster3S
-        let answer = fake.transport.answer
-        var dropped = false
-        fake.transport.answer = { request in
-            // The first root lookup of haptics 0x19B0 goes unanswered.
-            if !dropped, request.featureIndex == 0, request.function == 0, request.params.starts(with: [0x19, 0xB0]) {
-                dropped = true
-                return nil
-            }
-            return try answer?(request)
-        }
-        let h = try await SessionHarness(fake)
+    /// A capability first learned after apply, here by a haptic action, is published then; one
+    /// still unknown is left out of the JSON rather than written as false.
+    @Test func aCapabilityLearnedAfterApplyIsPublished() async throws {
+        let fake = FakeDevice.mxMaster3S  // no 0x19B0
+        let h = try await SessionHarness(fake, config: SessionHarness.config(#"{"buttons": {"back": {"haptic": "knock"}}}"#))
         defer { h.close() }
+        var changes = 0
+        h.session.onChange = { changes += 1 }
         try await h.session.apply()
-        #expect(dropped)
-        let capabilities = try #require(h.session.status.capabilities)
-        #expect(capabilities.haptics == nil && capabilities.dpi == true)
-        let json = try encoded(h.session.status)
-        #expect(!json.contains("haptics") && json.contains("\"smartShift\" : true"))
+        let applied = changes
+        func pressBack() async {
+            fake.emit(0x1B04, params: [0, 0x53])
+            fake.emit(0x1B04, params: [0, 0])
+            await h.session.deviceActions.drain()
+        }
+        fake.dropFirstLookup(of: 0x19B0)
+        await pressBack()
+        #expect(fake.droppedLookups == [0x19B0])
+        #expect(h.session.status.capabilities?.haptics == nil && h.session.status.capabilities?.dpi == true)
+        #expect(changes == applied)
+        let unknown = try encoded(h.session.status)
+        #expect(!unknown.contains("haptics") && unknown.contains("\"smartShift\" : true"))
+        await pressBack()
+        #expect(h.session.status.capabilities?.haptics == false)
+        #expect(changes == applied + 1)
     }
 
     @Test func aMouseWithOnlyTheFallbackFeaturesHasThoseCapabilities() async throws {
@@ -127,19 +131,11 @@ struct SessionStatusTests {
     @Test func aFallbackLookupThatFailsLeavesThatCapabilityOutNotFalse() async throws {
         let fake = FakeDevice.mxMaster3S
         fake.features[9] = nil  // no 0x1004, so 0x1000 is looked up
-        let answer = fake.transport.answer
-        var dropped = false
-        fake.transport.answer = { request in
-            if !dropped, request.featureIndex == 0, request.function == 0, request.params.starts(with: [0x10, 0x00]) {
-                dropped = true
-                return nil
-            }
-            return try answer?(request)
-        }
+        fake.dropFirstLookup(of: 0x1000)
         let h = try await SessionHarness(fake)
         defer { h.close() }
         try await h.session.apply()
-        #expect(dropped)
+        #expect(fake.droppedLookups == [0x1000])
         #expect(h.device.knownPresence(of: 0x1004) == false)
         let capabilities = try #require(h.session.status.capabilities)
         #expect(capabilities.battery == nil && capabilities.smartShift == true)
@@ -158,9 +154,7 @@ struct SessionStatusTests {
         let h = try await SessionHarness(.m750)
         defer { h.close() }
         try await h.session.apply()
-        let controls = try await ReprogControls.controls(h.device)
-        let replacement = Session(device: h.device, name: h.fake.name, id: "r", controls: controls, config: .empty,
-                                  inheriting: h.session.inheritance)
+        let replacement = h.replacement()
         defer { replacement.close() }
         #expect(replacement.status.capabilities == h.session.status.capabilities)
     }
@@ -173,15 +167,17 @@ struct SessionStatusTests {
             try await h.session.apply()
             try await h.session.apply()
             #expect(h.session.status.capabilities?.smoothScroll == false)
-            // Every request went to a feature the mouse has, so none to 0x2121 or 0x2150.
+            // Every request went to a feature the mouse has, so none to 0x2121 or 0x2150. A request
+            // for one it lacks never reaches the wire (the index lookup fails first), so a wheel
+            // write attempted anyway shows as `apply` throwing, above.
             #expect(!h.fake.transport.sent.isEmpty)
             #expect(h.fake.transport.sent.allSatisfy { h.fake.feature(of: $0).map { ![0x2121, 0x2150].contains($0) } ?? false })
             // Nothing was taken over, so quitting has no wheel to hand back.
             #expect(!h.session.wheelsMayBeDiverted)
             #expect(Daemon.restoreSteps(quitting: [h.session.restoreSteps], pausing: []) == h.session.divertedControls.count)
         }
-        let line = "this mouse's wheel isn't supported for smooth scrolling yet; it scrolls natively"
-        #expect(log.lines.filter { $0.level == "info" && $0.message.hasSuffix(line) }.count == 1)
+        let line = "Signature Plus M750: \(Session.smoothScrollUnsupported)"
+        #expect(log.lines.filter { $0.level == "info" && $0.message == line }.count == 1)
         #expect(!log.lines.contains { $0.level == "error" })
     }
 

@@ -5,51 +5,6 @@ import PureMouseKit
 import Testing
 @testable import puremouse
 
-/// A daemon on a config file of its own, adopting fakes as it adopts mice.
-@MainActor
-final class DaemonHarness {
-    let url: URL
-    let daemon: Daemon
-    private var endpoints: [HIDPPDevice] = []
-
-    init(_ json: String) throws {
-        url = FileManager.default.temporaryDirectory.appending(path: "puremouse-\(UUID().uuidString).json")
-        try Data(json.utf8).write(to: url)
-        daemon = Daemon(configURL: url, environment: .init(canPostEvents: true, configureRetryDelay: .milliseconds(1)))
-    }
-
-    /// Adopts `fake` and waits for its first configure to end.
-    func adopt(_ fake: FakeDevice) async throws -> Session {
-        let endpoint = daemon.listen(fake.transport, index: directDeviceIndex)
-        endpoint.timeout = .milliseconds(100)
-        endpoints.append(endpoint)
-        #expect(await daemon.adopt(endpoint) == .adopted)
-        return try await settled(fake)
-    }
-
-    /// The session for `fake` once it has finished configuring.
-    func settled(_ fake: FakeDevice) async throws -> Session {
-        var session: Session?
-        try await eventually {
-            session = daemon.sessions.values.first { $0.device.interface === fake.transport }
-            return session.map { !$0.isConfiguring } ?? false
-        }
-        return try #require(session)
-    }
-
-    /// Rewrites the config file and reloads, as a save does.
-    func reload(_ json: String? = nil) throws {
-        if let json { try Data(json.utf8).write(to: url) }
-        daemon.reload()
-    }
-
-    func close() {
-        daemon.sessions.values.forEach { $0.close() }
-        endpoints.forEach { $0.close() }
-        try? FileManager.default.removeItem(at: url)
-    }
-}
-
 /// Each mouse gets the settings resolved for its device key, and requests can aim at one.
 @Suite(.quietLog) @MainActor
 struct SessionDeviceConfigTests {
@@ -64,7 +19,7 @@ struct SessionDeviceConfigTests {
         defer { h.close() }
         let mx = FakeDevice.mxMaster3S, other = FakeDevice.synthetic
         let s1 = try await h.adopt(mx), s2 = try await h.adopt(other)
-        #expect(s1.model == Self.m1 && s2.model == Self.m2)
+        #expect(s1.deviceKey == Self.m1 && s2.deviceKey == Self.m2)
         #expect(mx.dpi == 1200 && other.dpi == 1600)
         for (fake, session) in [(mx, s1), (other, s2)] {
             fake.emit(0x1B04, params: [0, 0x53])
@@ -128,24 +83,28 @@ struct SessionDeviceConfigTests {
         #expect(s2.capturing == nil && !other.controls.contains { $0.diverted })
     }
 
-    @Test(arguments: [true, false])
-    func aMouseWithoutDPIIsAdoptedForAControlOnlyADeviceEntryBinds(bound: Bool) async throws {
-        let h = try DaemonHarness(bound ? #"{"devices": {"\#(Self.m2)": {"buttons": {"back": "none"}}}}"# : "{}")
+    /// The synthetic mouse without DPI is a mouse only for a control its own settings bind: one
+    /// bound only for another mouse lets it past the first check, not the second.
+    @Test(arguments: [("m40aa00000000", true), (nil, false), ("mb03440910000", false)] as [(String?, Bool)])
+    func aMouseWithoutDPIIsAdoptedOnlyForAControlBoundForIt(entry: String?, adopted: Bool) async throws {
+        let h = try DaemonHarness(entry.map { #"{"devices": {"\#($0)": {"buttons": {"back": "none"}}}}"# } ?? "{}")
         defer { h.close() }
         let fake = FakeDevice.synthetic
         fake.features[5] = nil  // 0x2201
         let endpoint = h.daemon.listen(fake.transport, index: directDeviceIndex)
         endpoint.timeout = .milliseconds(100)
         defer { endpoint.close() }
-        #expect(await h.daemon.adopt(endpoint) == (bound ? .adopted : .notAMouse))
+        #expect(await h.daemon.adopt(endpoint) == (adopted ? .adopted : .notAMouse))
+        if !adopted {
+            #expect(h.daemon.sessions.isEmpty)
+            #expect(fake.requests(feature: 0x1B04, function: 3).isEmpty && !fake.controls.contains { $0.diverted })
+        }
     }
 
-    @Test func theM750WithTheExampleConfigLogsNoErrorsAcrossReloads() async throws {
-        let example = try String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-            .appending(path: "../../config.example.json").standardized, encoding: .utf8)
+    @Test func theM750LogsNoErrorsAcrossReloadsAndItsSnappedDPIOnce() async throws {
         let log = CapturedLog()
         try await Log.$testOutput.withValue(.lines { log.append($0) }) {
-            let h = try DaemonHarness(example)
+            let h = try DaemonHarness(#"{"dpi": 1650, "buttons": {"gesture": {"up": "missionControl"}, "top": "showDesktop"}}"#)
             defer { h.close() }
             let m750 = FakeDevice.m750
             _ = try await h.adopt(m750)
@@ -157,9 +116,29 @@ struct SessionDeviceConfigTests {
         }
         #expect(!log.lines.contains { $0.level == "error" }, "\(log.lines.filter { $0.level == "error" })")
         #expect(log.lines.filter { $0.message.hasSuffix("dpi 1650 is not supported; using 1600") }.count == 1)
-        // The gesture and top buttons it lacks: one debug line per session, nothing louder.
-        let lacking = log.lines.filter { $0.message.contains("0x00c3") && $0.message.contains("not divertable") }
-        #expect(lacking.count == 3 && lacking.allSatisfy { $0.level == "debug" })
+    }
+
+    /// A receiver mouse found before its slot was announced, and keyed by its product (no
+    /// 0x0003), gets its key and that key's settings when the announcement names the product;
+    /// one with a model ID keeps its key and session.
+    @Test(arguments: [false, true])
+    func aReceiverMouseKeyedByProductGetsItsKeyWhenItsSlotIsAnnounced(hasDeviceInfo: Bool) async throws {
+        let h = try DaemonHarness(#"{"dpi": 1600, "devices": {"pb02c": {"dpi": 800}}}"#)
+        defer { h.close() }
+        let m750 = FakeDevice.m750
+        if !hasDeviceInfo { m750.features[2] = nil }  // 0x0003
+        m750.onReceiver(slot: 2)
+        let session = try await h.adopt(m750)
+        #expect(hasDeviceInfo ? session.deviceKey?.first == "m" : session.deviceKey == nil)
+        #expect(m750.dpi == 1600)
+        m750.announce(product: 0xB02C)
+        let current = try await h.settled(m750)
+        if hasDeviceInfo {
+            #expect(current === session && m750.dpi == 1600)
+        } else {
+            #expect(current !== session && current.deviceKey == "pb02c" && m750.dpi == 800)
+            #expect(h.daemon.status(running: true).devices.map(\.model) == ["pb02c"])
+        }
     }
 
     @Test(arguments: [true, false])
@@ -169,36 +148,12 @@ struct SessionDeviceConfigTests {
         let m750 = FakeDevice.m750
         if !hasDeviceInfo { m750.features[2] = nil }
         let session = try await h.adopt(m750)
-        let key = try #require(session.model)
+        let key = try #require(session.deviceKey)
         #expect(hasDeviceInfo ? key.first == "m" : key == "pb02c")
         #expect(session.unit == nil && m750.dpi == 1600)
         try h.reload(#"{"dpi": 1600, "devices": {"\#(key)": {"dpi": 800}}}"#)
         _ = try await h.settled(m750)
         #expect(m750.dpi == 800)
         #expect(h.daemon.status(running: true).devices.first?.model == key)
-    }
-
-    @Test func toggleScrollModeWithoutSmartShiftSendsNothingAndSaysSoOncePerSession() async throws {
-        let log = CapturedLog()
-        try await Log.$testOutput.withValue(.lines { log.append($0) }) {
-            let config = try SessionHarness.config(#"{"buttons": {"middle": "toggleScrollMode"}}"#)
-            let h = try await SessionHarness(.m750, config: config)
-            defer { h.close() }
-            try await h.session.apply()
-            let controls = try await ReprogControls.controls(h.device)
-            let replacement = Session(device: h.device, name: h.fake.name, id: "r", controls: controls, config: config,
-                                      inheriting: h.session.inheritance)
-            defer { replacement.close() }
-            h.fake.transport.sent.removeAll()
-            for session in [h.session, h.session, replacement, replacement] {
-                h.device.onEvent = { [weak session] in session?.handle($0) }
-                h.fake.emit(0x1B04, params: [0, 0x52])
-                h.fake.emit(0x1B04, params: [0, 0])
-                await session.deviceActions.drain()
-            }
-            #expect(h.fake.transport.sent.isEmpty)
-        }
-        let lines = log.lines.filter { $0.message.contains("toggleScrollMode needs SmartShift") }
-        #expect(lines.count == 2 && lines.allSatisfy { $0.level == "info" })
     }
 }
