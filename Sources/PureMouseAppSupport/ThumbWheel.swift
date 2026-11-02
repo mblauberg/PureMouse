@@ -4,7 +4,7 @@ import PureMouseKit
 /// What the thumb wheel's pop-up offers, read from and written to `thumbWheel.action`, `left`,
 /// `right` and `step` (docs/configuration.md, "Thumb wheel"); `reversed` has its own row. The same keys under
 /// `apps.<id>.thumbWheel` apply on top of the global ones, so an app also has `inherit`.
-enum ThumbWheelChoice: Hashable, Identifiable {
+public enum ThumbWheelChoice: Hashable, Identifiable, Sendable {
     /// Per app only: the app sets none of `action`, `left` and `right`.
     case inherit
     case scroll
@@ -13,15 +13,15 @@ enum ThumbWheelChoice: Hashable, Identifiable {
     /// `left` or `right` set by hand (or an `action` this app does not know).
     case custom
 
-    var id: Self { self }
+    public var id: Self { self }
 
     /// Kit's preset names in the order the pop-up lists them.
     static let presetOrder = ["zoom", "volume", "tabs", "spaces"]
 
     /// The pop-up's choices after "Same as Everywhere".
-    static let menu: [ThumbWheelChoice] = [.scroll] + presetOrder.map(ThumbWheelChoice.preset) + [.custom]
+    public static let menu: [ThumbWheelChoice] = [.scroll] + presetOrder.map(ThumbWheelChoice.preset) + [.custom]
 
-    var label: String {
+    public var label: String {
         switch self {
         case .inherit: "Same as Everywhere"
         case .scroll: "Scroll Sideways"
@@ -36,7 +36,7 @@ enum ThumbWheelChoice: Hashable, Identifiable {
 
     /// The keys this choice owns; anything else under `thumbWheel` (`inverted`, `reversed`,
     /// unknown keys) stays.
-    static let keys = ["action", "left", "right", "step"]
+    public static let keys = ["action", "left", "right", "step"]
 
     /// The choice the keys in `object` make. Outside an app no key means the default, scrolling.
     static func read(_ object: [String: Any]?, inApp: Bool) -> ThumbWheelChoice {
@@ -54,22 +54,22 @@ enum ThumbWheelChoice: Hashable, Identifiable {
 /// What the thumb wheel does once a set of keys is applied: scroll (no pair) or an action pair,
 /// the step and whether the pair is reversed. Mirrors `Config.ThumbWheel.init(_:base:)`, so an app's keys resolve on top of
 /// the global state exactly as the daemon resolves them.
-struct ThumbWheelState: Equatable {
-    struct Pair: Equatable {
-        var left: ButtonAction
-        var right: ButtonAction
+public struct ThumbWheelState: Equatable, Sendable {
+    public struct Pair: Equatable, Sendable {
+        public var left: ButtonAction
+        public var right: ButtonAction
     }
 
     /// nil: the wheel scrolls.
-    var pair: Pair?
-    var step: Int
+    public var pair: Pair?
+    public var step: Int
     /// Swaps which action each direction performs.
-    var reversed = false
+    public var reversed = false
 
     /// No keys at all: scrolling, with Kit's default step.
-    static let initial = ThumbWheelState(pair: nil, step: Config.ThumbWheel.defaultStep)
+    public static let initial = ThumbWheelState(pair: nil, step: Config.ThumbWheel.defaultStep)
 
-    var scrolls: Bool { pair == nil }
+    public var scrolls: Bool { pair == nil }
 
     /// The state after the keys in `object`, on top of this one.
     func applying(_ object: [String: Any]?) -> ThumbWheelState {
@@ -118,7 +118,7 @@ struct ThumbWheelState: Equatable {
 extension ButtonAction {
     /// The config JSON for this action, as `bind` writes it. Default and Hold and Move have no
     /// form outside a button, so they write "none".
-    var json: Any {
+    public var json: Any {
         switch self {
         case .named(let name): name
         case .keys(let spec): ["keys": spec]
@@ -131,26 +131,26 @@ extension ButtonAction {
 
 extension ConfigTree {
     /// The thumb wheel state the keys at `path` resolve to, on top of `base`.
-    func thumbWheel(at path: [String], base: ThumbWheelState = .initial) -> ThumbWheelState {
+    public func thumbWheel(at path: [String], base: ThumbWheelState = .initial) -> ThumbWheelState {
         base.applying(self[path] as? [String: Any])
     }
 
     /// Whether the thumb wheel scrolls in some app (by its own keys or the global ones), where
     /// `inverted` matters even while it has actions everywhere else.
-    var someAppScrollsThumbWheel: Bool {
+    public var someAppScrollsThumbWheel: Bool {
         let global = thumbWheel(at: ["thumbWheel"])
         let apps = self[["apps"]] as? [String: Any] ?? [:]
         return apps.keys.contains { thumbWheel(at: ["apps", $0, "thumbWheel"], base: global).scrolls }
     }
 
-    func thumbWheelChoice(at path: [String]) -> ThumbWheelChoice {
+    public func thumbWheelChoice(at path: [String]) -> ThumbWheelChoice {
         ThumbWheelChoice.read(self[path] as? [String: Any], inApp: path.first == "apps")
     }
 
     /// Writes a choice from the pop-up. A preset sets `action` and drops the step, so it brings
     /// its own; Custom writes the current pair as `left` and `right`, so the wheel does the same
     /// until one is changed, and keeps the step it had.
-    mutating func chooseThumbWheel(_ choice: ThumbWheelChoice, at path: [String], base: ThumbWheelState = .initial) {
+    public mutating func chooseThumbWheel(_ choice: ThumbWheelChoice, at path: [String], base: ThumbWheelState = .initial) {
         let inApp = path.first == "apps"
         switch choice {
         case .inherit:
@@ -176,24 +176,24 @@ extension ConfigTree {
     }
 
     /// The `reversed` key at `path`: nil when absent (an app then follows the global one).
-    func thumbWheelReversed(at path: [String]) -> Bool? {
+    public func thumbWheelReversed(at path: [String]) -> Bool? {
         bool(path + ["reversed"])
     }
 
     /// Sets `reversed`. Globally false is the default, so it removes the key; in an app nil
     /// removes it (Same as Everywhere) and false is kept, overriding a reversed global.
-    mutating func setThumbWheelReversed(_ reversed: Bool?, at path: [String]) {
+    public mutating func setThumbWheelReversed(_ reversed: Bool?, at path: [String]) {
         let inApp = path.first == "apps"
         set(inApp ? reversed : (reversed == true ? true : nil), at: path + ["reversed"])
     }
 
     /// The config key that holds what turning the wheel one way ("left" or "right") does.
-    static func thumbWheelKey(turning direction: String, reversed: Bool) -> String {
+    public static func thumbWheelKey(turning direction: String, reversed: Bool) -> String {
         reversed ? (direction == "left" ? "right" : "left") : direction
     }
 
     /// Sets what turning one way does ("left" or "right").
-    mutating func setThumbWheel(_ direction: String, to action: ButtonAction, at path: [String]) {
+    public mutating func setThumbWheel(_ direction: String, to action: ButtonAction, at path: [String]) {
         set(action.json, at: path + [direction])
     }
 }

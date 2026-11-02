@@ -1,4 +1,5 @@
 import AppKit
+import PureMouseAppSupport
 import SwiftUI
 
 /// One choice in the action picker.

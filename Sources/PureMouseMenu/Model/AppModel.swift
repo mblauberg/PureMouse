@@ -1,111 +1,61 @@
 import AppKit
 import Observation
+import PureMouseAppSupport
 import PureMouseKit
-import notify
 
-/// Everything the menu and Settings show: the daemon's status (pushed by its doorbell) and the
-/// config tree (re-read when its directory changes). No timers and no polling.
+/// Everything the menu and Settings show, as one object for the panes: the daemon
+/// (`DaemonLink`), the config (`ConfigStore`) and select by pressing (`CaptureController`), each
+/// over the same `Locations`. No timers and no polling.
 @MainActor @Observable
 final class AppModel {
-    // MARK: Daemon status
-
-    private(set) var status: Status?
-    /// `status.running` and its process exists.
-    private(set) var daemonRunning = false
-    /// The daemon writes a newer status schema than this app understands.
-    private(set) var statusTooNew = false
-
-    // MARK: Config
-
-    private(set) var config = ConfigTree()
-    /// Why the file on disk cannot be used (unreadable, not JSON, or rejected by the decoder).
-    private(set) var configProblem: String?
-    /// Why the last change could not be saved.
-    private(set) var writeError: String?
-
-    // MARK: Select by pressing
-
-    private(set) var captureListening = false
-    /// The config key of the control just pressed; the Buttons pane highlights it and opens its picker.
-    var capturedButton: String?
+    @ObservationIgnored let link: DaemonLink
+    @ObservationIgnored let store: ConfigStore
+    @ObservationIgnored let capture: CaptureController
 
     /// Called when anything the status item shows may have changed.
     @ObservationIgnored var statusChanged: () -> Void = {}
 
-    @ObservationIgnored private var diskBytes: Data?
-    @ObservationIgnored private var lastGood: Data?
-    @ObservationIgnored private var pendingWrite: DispatchWorkItem?
-    /// Edits made here and not yet saved, as the keys they set. Saving replays them onto the file
-    /// as it is then, so a hand edit made meanwhile is kept.
-    @ObservationIgnored private var pendingChanges: [ConfigTree.Change] = []
-    @ObservationIgnored private var captureToken = 0
-    @ObservationIgnored private var captureTimeout: DispatchWorkItem?
-    @ObservationIgnored private var requestedPaused: Bool?
     @ObservationIgnored private var wantsConfiguredDPI = false
-    /// The last `Control.useConfiguredDPI` sent, repeated in every control write so a later one
-    /// (pause, capture) cannot erase it before the daemon reads it; the daemon acts once per token.
-    @ObservationIgnored private var dpiToken: Int?
-    @ObservationIgnored private var exitWatch: DispatchSourceProcess?
-    @ObservationIgnored private var watchedPID: Int32 = 0
-    @ObservationIgnored private var directoryWatch: DispatchSourceFileSystemObject?
-    @ObservationIgnored private var fileWatch: DispatchSourceFileSystemObject?
-    @ObservationIgnored private var statusToken: Int32 = -1
-    @ObservationIgnored private var batteryAlerts = BatteryAlertStore(url: Companion.directory.appending(path: "battery-alerts.json"))
+    @ObservationIgnored private var batteryAlerts: BatteryAlertStore
 
-    init() {
+    init(locations: Locations = .live) {
+        link = DaemonLink(locations: locations)
+        store = ConfigStore(locations: locations)
+        capture = CaptureController(link: link)
+        batteryAlerts = BatteryAlertStore(url: locations.batteryAlerts)
+        link.changed = { [weak self, capture] in
+            capture.checkDaemon()  // a capture ends with the daemon
+            self?.statusChanged()
+        }
+        store.changed = { [weak self] in self?.statusChanged() }
+        link.statusLoaded = { [weak self] in self?.statusLoaded() }
+        link.controlFailed = { Alerts.show("PureMouse could not be reached", $0.localizedDescription) }
+        store.daemonConfigError = { [link] in link.configError }
+        store.flushed = { [weak self] in self?.sendConfiguredDPIIfWanted() }
         // Config first: the status pass reads `notifications.lowBattery`.
-        reloadConfig()
-        reloadStatus()
+        store.reloadConfig()
+        link.reloadStatus()
     }
 
     /// Starts listening for the daemon's doorbell and for config edits.
     func startWatching() {
-        notify_register_dispatch(Companion.statusNotification, &statusToken, .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.reloadStatus() }
-        }
-        watchConfigDirectory()
+        link.startWatching()
+        store.startWatching()
     }
 
-    // MARK: Derived state
+    // MARK: Daemon status
 
-    var devices: [Status.Device] { status?.devices ?? [] }
-
-    /// The mouse the menu and the Pointer pane describe: the first one online, else the last seen.
-    var primaryDevice: Status.Device? { Self.primary(of: devices) }
-
-    /// A device that is connected now and answering (live values come from it).
-    var liveDevice: Status.Device? { daemonRunning ? Self.live(of: devices) : nil }
-
-    nonisolated static func primary(of devices: [Status.Device]) -> Status.Device? {
-        live(of: devices) ?? devices.first
-    }
-
-    nonisolated static func live(of devices: [Status.Device]) -> Status.Device? { devices.first(where: \.online) }
-
-    var paused: Bool { daemonRunning && (requestedPaused ?? status?.paused ?? false) }
-
-    var accessibilityMissing: Bool { daemonRunning && status?.permissions.accessibility == false }
-
-    var inputMonitoringMissing: Bool { daemonRunning && status?.permissions.inputMonitoring == false }
-
-    var logiOptionsRunning: Bool { daemonRunning && status?.logiOptionsRunning == true }
-
-    /// The daemon's or this app's complaint about the config file.
-    var configError: String? {
-        configProblem ?? (daemonRunning ? status?.config.error : nil)
-    }
-
-    /// Panes are read-only while the config file has an error: editing would build on a file
-    /// the daemon is not using.
-    var readOnly: Bool { configError != nil }
-
-    var hasBluetoothDevice: Bool { devices.contains { $0.connection == .bluetooth } }
-
-    /// Something needs the user: a missing permission, a config error, Options+, or a newer daemon.
-    var needsAttention: Bool {
-        statusTooNew || (daemonRunning && (accessibilityMissing || (inputMonitoringMissing && hasBluetoothDevice)
-            || logiOptionsRunning || configError != nil))
-    }
+    var status: Status? { link.status }
+    var daemonRunning: Bool { link.daemonRunning }
+    var statusTooNew: Bool { link.statusTooNew }
+    var devices: [Status.Device] { link.devices }
+    var primaryDevice: Status.Device? { link.primaryDevice }
+    var liveDevice: Status.Device? { link.liveDevice }
+    var paused: Bool { link.paused }
+    var accessibilityMissing: Bool { link.accessibilityMissing }
+    var inputMonitoringMissing: Bool { link.inputMonitoringMissing }
+    var logiOptionsRunning: Bool { link.logiOptionsRunning }
+    var hasBluetoothDevice: Bool { link.hasBluetoothDevice }
 
     var lowBattery: Bool {
         guard let battery = liveDevice?.battery, !battery.charging else { return false }
@@ -113,25 +63,12 @@ final class AppModel {
         return battery.level == .critical
     }
 
-    // MARK: Status
+    func reloadStatus() { link.reloadStatus() }
 
-    func reloadStatus() {
-        let url = Companion.statusURL
-        if let data = try? Data(contentsOf: url) {
-            if let decoded = try? Companion.decoder.decode(Status.self, from: data) {
-                assign(\.statusTooNew, decoded.schema > Status.currentSchema)
-                assign(\.status, decoded)
-            } else {
-                let schema = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["schema"] as? Int
-                assign(\.statusTooNew, (schema ?? 0) > Status.currentSchema)
-                assign(\.status, nil)
-            }
-        } else {
-            assign(\.status, nil)
-            assign(\.statusTooNew, false)
-        }
-        refreshLiveness()
-        if let capture = status?.capture { handleCapture(capture) }
+    func refreshLiveness() { link.refreshLiveness() }
+
+    private func statusLoaded() {
+        if let state = status?.capture { capture.handle(state) }
         announceLowBattery()
     }
 
@@ -148,201 +85,55 @@ final class AppModel {
         }
     }
 
-    /// Re-checks that the daemon's process exists (`running` alone survives a crash).
-    func refreshLiveness() {
-        let pid = status?.pid ?? 0
-        assign(\.daemonRunning, status?.running == true && pid > 0 && kill(pid, 0) == 0)
-        if requestedPaused != nil, status?.paused == requestedPaused || !daemonRunning || pid != watchedPID {
-            requestedPaused = nil
-        }
-        watchExit(of: daemonRunning ? pid : 0)
-        if !daemonRunning, captureListening { endCapture() }
-        statusChanged()
-    }
-
-    /// Sets an observed property only when the value differs, so an unchanged status (the daemon
-    /// rings for every capture step and battery reading) invalidates no views.
-    private func assign<Value: Equatable>(_ key: ReferenceWritableKeyPath<AppModel, Value>, _ value: Value) {
-        if self[keyPath: key] != value { self[keyPath: key] = value }
-    }
-
-    /// A process source tells us the moment the daemon dies, so a crash (which cannot write a
-    /// final status) still turns the icon off. It costs nothing while the daemon lives.
-    private func watchExit(of pid: Int32) {
-        guard pid != watchedPID else { return }
-        exitWatch?.cancel()
-        exitWatch = nil
-        watchedPID = pid
-        guard pid > 0 else { return }
-        let source = DispatchSource.makeProcessSource(identifier: pid, eventMask: .exit, queue: .main)
-        source.setEventHandler { [weak self] in
-            MainActor.assumeIsolated { self?.refreshLiveness() }
-        }
-        source.resume()
-        exitWatch = source
-    }
-
     // MARK: Control
 
     func setPaused(_ paused: Bool) {
-        let previous = requestedPaused
-        requestedPaused = paused
-        if captureListening { endCapture(notify: false) }
-        // The daemon never heard it: show what it is still doing.
-        if !writeControl(capture: nil) { requestedPaused = previous }
+        if capture.listening { capture.end(notify: false) }
+        // A pause ends any capture, so the request clears it as well.
+        link.setPaused(paused) { $0.capture = nil }
         statusChanged()
     }
 
-    func startCapture() {
-        guard daemonRunning, !paused else { return }
-        captureToken = Int.random(in: 1...Int(Int32.max))
-        captureListening = true
-        capturedButton = nil
-        guard writeControl(capture: Control.Capture(token: captureToken)) else {
-            captureListening = false
-            return
-        }
-        // The daemon reports timedOut after 10 s; this covers a daemon that never answers.
-        let timeout = DispatchWorkItem { [weak self] in self?.cancelCapture() }
-        captureTimeout = timeout
-        DispatchQueue.main.asyncAfter(deadline: .now() + 11, execute: timeout)
+    var captureListening: Bool { capture.listening }
+
+    var capturedButton: String? {
+        get { capture.capturedButton }
+        set { capture.capturedButton = newValue }
     }
 
-    func cancelCapture() {
-        guard captureListening else { return }
-        endCapture()
-    }
+    func startCapture() { capture.start() }
 
-    private func endCapture(notify: Bool = true) {
-        captureListening = false
-        captureTimeout?.cancel()
-        captureTimeout = nil
-        if notify, daemonRunning { writeControl(capture: nil) }
-    }
-
-    private func handleCapture(_ capture: Status.Capture) {
-        guard captureListening, capture.token == captureToken else { return }
-        switch capture.state {
-        case .listening:
-            break
-        case .pressed:
-            captureListening = false
-            captureTimeout?.cancel()
-            capturedButton = capture.cid.map(NamedButton.config(cid:))
-        case .timedOut, .cancelled:
-            captureListening = false
-            captureTimeout?.cancel()
-        }
-    }
-
-    /// Writes the control file and rings the daemon; false (after saying why) if it could not.
-    @discardableResult
-    private func writeControl(capture: Control.Capture?) -> Bool {
-        let control = Control(paused: requestedPaused ?? status?.paused ?? false, capture: capture,
-                              useConfiguredDPI: dpiToken)
-        do {
-            try Companion.write(control, to: Companion.controlURL)
-            notify_post(Companion.controlNotification)
-            return true
-        } catch {
-            Alerts.show("PureMouse could not be reached", error.localizedDescription)
-            return false
-        }
-    }
+    func cancelCapture() { capture.cancel() }
 
     /// Asks the daemon to reload the config now (it also reloads on its own when the file changes).
-    func reloadDaemonConfig() {
-        guard daemonRunning, let pid = status?.pid else { return }
-        kill(pid, SIGHUP)
-    }
+    func reloadDaemonConfig() { link.reloadDaemonConfig() }
 
     // MARK: Config
 
-    /// Re-reads the config file. Our own writes come back as no-ops (same bytes).
-    func reloadConfig() {
-        let url = Paths.config
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            // Deleted while a change of ours waits: save it as a new file now.
-            if !pendingChanges.isEmpty {
-                if diskBytes != nil { flush() }
-                return
-            }
-            // No file: the daemon runs with every default.
-            if diskBytes != nil || configProblem != nil || !config.root.isEmpty {
-                config = ConfigTree()
-                configProblem = nil
-                diskBytes = nil
-                lastGood = Data("{}\n".utf8)
-            }
-            return
-        }
-        guard let data = try? Data(contentsOf: url) else {
-            configProblem = "PureMouse cannot read \(Format.tildePath(url.path))."
-            return
-        }
-        guard data != diskBytes else { return }
-        // Edited by hand while a change of ours waits: save ours on top of the new file now.
-        if !pendingChanges.isEmpty {
-            flush()
-            return
-        }
-        diskBytes = data
-        if let tree = try? ConfigTree(data: data) { config = tree }
-        do {
-            try ConfigCheck.validate(data)
-            configProblem = nil
-            lastGood = data
-        } catch {
-            configProblem = ConfigCheck.message(for: error)
-        }
-        writeError = nil
-        statusChanged()
-    }
+    var config: ConfigTree { store.config }
+    var writeError: String? { store.writeError }
+    var configError: String? { store.configError }
+    var readOnly: Bool { store.readOnly }
+    var canRestoreLastWorking: Bool { store.canRestoreLastWorking }
 
-    /// Sets or (with nil) removes one key. Sliders pass `debounce` so dragging writes once it rests.
-    func set(_ value: Any?, at path: [String], debounce: Bool = false) {
-        update(debounce: debounce) { $0.set(value, at: path) }
-    }
+    func reloadConfig() { store.reloadConfig() }
 
-    func update(debounce: Bool = false, _ change: (inout ConfigTree) -> Void) {
-        guard !readOnly else { return }
-        var tree = config
-        change(&tree)
-        pendingChanges += config.changes(to: tree)
-        config = tree
-        if debounce {
-            pendingWrite?.cancel()
-            let work = DispatchWorkItem { [weak self] in self?.flush() }
-            pendingWrite = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
-        } else {
-            flush()
-        }
-    }
+    func set(_ value: Any?, at path: [String], debounce: Bool = false) { store.set(value, at: path, debounce: debounce) }
 
-    /// Saves pending edits now (also when Settings closes and before quitting). Writes nothing
-    /// when there are none, and never builds on a file that does not load.
-    func flush() {
-        pendingWrite?.cancel()
-        pendingWrite = nil
-        defer { sendConfiguredDPIIfWanted() }
-        guard !pendingChanges.isEmpty else { return }
-        let changes = pendingChanges
-        pendingChanges = []
-        do {
-            let saved = try ConfigFile(url: Paths.config).save(changes)
-            config = saved.tree
-            diskBytes = saved.data
-            if let data = saved.data { lastGood = data }
-            writeError = nil
-            if directoryWatch == nil { watchConfigDirectory() }
-        } catch {
-            // Show the file as it is now, then say why the change did not land.
-            diskBytes = nil
-            reloadConfig()
-            writeError = describeSave(error)
-        }
-    }
+    func update(debounce: Bool = false, _ change: (inout ConfigTree) -> Void) { store.update(debounce: debounce, change) }
+
+    func flush() { store.flush() }
+
+    func resetAll() { store.resetAll() }
+
+    func restoreLastWorking() { store.restoreLastWorking() }
+
+    func createConfigIfMissing() { store.createIfMissing() }
+
+    /// The file Reset All Settings and Restore Last Working keep the previous config in.
+    var backupName: String { store.backupName }
+
+    var locations: Locations { store.locations }
 
     /// Sets the saved DPI and puts every mouse on it. A mouse on a DPI chosen by Cycle Pointer
     /// Speed keeps it through a reload that leaves `dpi` alone, and choosing the value already
@@ -352,107 +143,13 @@ final class AppModel {
         guard !readOnly else { return }
         if devices.contains(where: { $0.dpi != nil && $0.dpi != dpi }) { wantsConfiguredDPI = true }
         set(dpi, at: ["dpi"], debounce: debounce)
-        if pendingChanges.isEmpty { flush() }  // nothing to write: ask now
+        if !store.hasPendingChanges { flush() }  // nothing to write: ask now
     }
 
     private func sendConfiguredDPIIfWanted() {
         guard wantsConfiguredDPI else { return }
         wantsConfiguredDPI = false
         guard daemonRunning else { return }
-        let previous = dpiToken
-        dpiToken = Int.random(in: 1...Int(Int32.max))
-        if !writeControl(capture: captureListening ? Control.Capture(token: captureToken) : nil) {
-            dpiToken = previous
-        }
-    }
-
-    /// Replaces the whole file with `{}` (every setting back to the mouse's own).
-    func resetAll() {
-        pendingWrite?.cancel()
-        pendingChanges = []
-        config = ConfigTree()
-        configProblem = nil
-        write(config.data())
-    }
-
-    /// Puts back the last config that loaded, after a hand edit broke it.
-    var canRestoreLastWorking: Bool { lastGood != nil && configProblem != nil }
-
-    func restoreLastWorking() {
-        guard let lastGood, let tree = try? ConfigTree(data: lastGood) else { return }
-        pendingWrite?.cancel()
-        pendingChanges = []
-        config = tree
-        configProblem = nil
-        write(lastGood)
-    }
-
-    private func write(_ data: Data) {
-        do {
-            try ConfigFile(url: Paths.config).write(data)
-            diskBytes = data
-            lastGood = data
-            writeError = nil
-            if directoryWatch == nil { watchConfigDirectory() }
-        } catch {
-            writeError = describeSave(error)
-        }
-    }
-
-    private func describeSave(_ error: Error) -> String {
-        switch error {
-        case ConfigFile.SaveError.fileHasError:
-            "The config file changed and has an error, so this change was not saved."
-        case ConfigFile.SaveError.rejected(let reason):
-            ConfigCheck.message(for: reason)
-        case ConfigFile.SaveError.writeFailed(let reason):
-            "PureMouse could not save \(Format.tildePath(Paths.config.path)): \(reason.localizedDescription)"
-        default:
-            error.localizedDescription
-        }
-    }
-
-    /// Saving usually replaces the file (a new inode, leaving a descriptor on the old one stale), so
-    /// watch the directory; some editors write in place, which leaves the directory untouched, so
-    /// watch the file too, following each new one. `reloadConfig` compares bytes, so a save seen
-    /// by both costs one read.
-    private func watchConfigDirectory() {
-        directoryWatch?.cancel()
-        directoryWatch = nil
-        let directory = Paths.config.resolvingSymlinksInPath().deletingLastPathComponent()
-        directoryWatch = watch(directory.path, [.write, .delete, .rename]) { model, events in
-            if !events.isDisjoint(with: [.delete, .rename]) { model.watchConfigDirectory() }
-            model.configChanged()
-        }
-        watchConfigFile()
-    }
-
-    private func watchConfigFile() {
-        fileWatch?.cancel()
-        fileWatch = watch(Paths.config.resolvingSymlinksInPath().path, [.write, .extend, .delete, .rename]) { model, _ in
-            model.configChanged()
-        }
-    }
-
-    private func configChanged() {
-        watchConfigFile()  // the file may have been replaced; follow the new one
-        reloadConfig()
-    }
-
-    private func watch(_ path: String, _ events: DispatchSource.FileSystemEvent,
-                       _ handler: @escaping @MainActor (AppModel, DispatchSource.FileSystemEvent) -> Void)
-        -> DispatchSourceFileSystemObject? {
-        let fd = open(path, O_EVTONLY)
-        guard fd >= 0 else { return nil }
-        let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: fd, eventMask: events, queue: .main)
-        source.setEventHandler { [weak self, weak source] in
-            MainActor.assumeIsolated {
-                guard let self, let source else { return }
-                handler(self, source.data)
-            }
-        }
-        source.setCancelHandler { close(fd) }
-        source.resume()
-        return source
+        link.requestConfiguredDPI()
     }
 }

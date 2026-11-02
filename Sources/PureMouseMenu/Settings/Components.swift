@@ -1,4 +1,5 @@
 import AppKit
+import PureMouseAppSupport
 import PureMouseKit
 import SwiftUI
 
@@ -169,7 +170,7 @@ struct PaneBanners: View {
                        message: error + "\nPureMouse keeps using the last config that worked. Fix the file to edit settings here.",
                        symbol: "xmark.octagon.fill", tint: .red) {
                     VStack(alignment: .trailing) {
-                        Button("Open Config") { NSWorkspace.shared.open(Paths.config) }
+                        Button("Open Config") { NSWorkspace.shared.open(model.locations.config) }
                         if model.canRestoreLastWorking {
                             Button("Restore Last Working") { model.restoreLastWorking() }
                         }

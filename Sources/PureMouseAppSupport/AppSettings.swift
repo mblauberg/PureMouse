@@ -1,11 +1,11 @@
 import Foundation
 
 /// A thumb wheel suggestion for a well-known app, after Logi Options+'s own defaults.
-struct AppSuggestion: Equatable {
+public struct AppSuggestion: Equatable, Sendable {
     /// The app's name, shown when it is not installed.
-    let name: String
+    public let name: String
     /// A `thumbWheel.action` name.
-    let thumbWheel: String
+    public let thumbWheel: String
 
     /// Bundle IDs (lowercased, as they match) to suggestions.
     static let table: [String: AppSuggestion] = [
@@ -24,9 +24,9 @@ struct AppSuggestion: Equatable {
     ]
 
     /// The suggestion for a bundle ID, matched regardless of case as the daemon matches apps.
-    static func forApp(_ bundleID: String) -> AppSuggestion? { table[bundleID.lowercased()] }
+    public static func forApp(_ bundleID: String) -> AppSuggestion? { table[bundleID.lowercased()] }
 
-    var choice: ThumbWheelChoice { thumbWheel == "scroll" ? .scroll : .preset(thumbWheel) }
+    public var choice: ThumbWheelChoice { thumbWheel == "scroll" ? .scroll : .preset(thumbWheel) }
 }
 
 /// `apps.<bundle id>`: settings that differ in one app (docs/configuration.md, "Per-app settings").
@@ -34,24 +34,24 @@ struct AppSuggestion: Equatable {
 /// `right` and `step`, and `smoothScroll.speed` and `smoothingMs`; every other key stays.
 extension ConfigTree {
     /// The bundle IDs `apps` names, as written, sorted without regard to case.
-    var appIDs: [String] {
+    public var appIDs: [String] {
         guard let apps = self[["apps"]] as? [String: Any] else { return [] }
         return apps.keys.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
     /// The key that holds an app's entry: an existing one that matches regardless of case (as the
     /// daemon matches them), else the bundle ID as given.
-    func appKey(_ bundleID: String) -> String {
+    public func appKey(_ bundleID: String) -> String {
         appIDs.first { $0.caseInsensitiveCompare(bundleID) == .orderedSame } ?? bundleID
     }
 
-    func hasApp(_ bundleID: String) -> Bool { contains(["apps", appKey(bundleID)]) }
+    public func hasApp(_ bundleID: String) -> Bool { contains(["apps", appKey(bundleID)]) }
 
     /// Where an app's sections live, for `bind(_:to:in:)` and the thumb wheel helpers.
-    static func appScope(_ key: String) -> [String] { ["apps", key] }
+    public static func appScope(_ key: String) -> [String] { ["apps", key] }
 
     /// Removes an app's entry, every key in it included.
-    mutating func removeApp(_ bundleID: String) {
+    public mutating func removeApp(_ bundleID: String) {
         set(nil, at: Self.appScope(appKey(bundleID)))
     }
 
@@ -60,7 +60,7 @@ extension ConfigTree {
     /// Binds a button in one app. `.standard` removes the app's key, so the global binding applies.
     /// `.gesture` keeps the app's gesture, or starts one whose click does what the button did
     /// there, so its object is never empty.
-    mutating func bindInApp(_ app: String, button: String, to binding: ButtonAction) {
+    public mutating func bindInApp(_ app: String, button: String, to binding: ButtonAction) {
         let scope = Self.appScope(app)
         guard binding == .gesture else {
             bind(button, to: binding, in: scope)
@@ -85,7 +85,7 @@ extension ConfigTree {
     /// Binds one direction of an app's gesture. `.standard` removes the key, so the global
     /// gesture's direction applies; the last one removes the app's binding (an empty gesture is
     /// not one). Anything else, "Do Nothing" included, is written as given.
-    mutating func bindInApp(_ app: String, button: String, direction: String, to binding: ButtonAction) {
+    public mutating func bindInApp(_ app: String, button: String, direction: String, to binding: ButtonAction) {
         let scope = Self.appScope(app)
         let key = buttonKey(button, in: scope)
         let path = scope + ["buttons", key]
@@ -105,13 +105,13 @@ extension ConfigTree {
     static let scrollOverrideKeys = ["speed", "smoothingMs"]
 
     /// The app sets its own scrolling speed or glide.
-    func overridesScrolling(_ app: String) -> Bool {
+    public func overridesScrolling(_ app: String) -> Bool {
         Self.scrollOverrideKeys.contains { contains(Self.appScope(app) + ["smoothScroll", $0]) }
     }
 
     /// Turns the app's own speed and glide on, starting from the global values, or off, removing
     /// them (and `smoothScroll` and the app's entry when nothing else is left in them).
-    mutating func setOverridesScrolling(_ app: String, _ on: Bool) {
+    public mutating func setOverridesScrolling(_ app: String, _ on: Bool) {
         let path = Self.appScope(app) + ["smoothScroll"]
         if on {
             guard !overridesScrolling(app) else { return }
@@ -124,7 +124,7 @@ extension ConfigTree {
 
     /// Whether the app's scrolling glides: its own `smoothScroll.enabled`, else the global one's.
     /// A `smoothScroll` in the app turns it on where there is none globally (Kit's `decodeApps`).
-    func scrollsSmoothly(_ app: String) -> Bool {
+    public func scrollsSmoothly(_ app: String) -> Bool {
         let own = Self.appScope(app) + ["smoothScroll"]
         if let enabled = bool(own + ["enabled"]) { return enabled }
         if contains(["smoothScroll"]) { return smoothScrollEnabled }
@@ -134,7 +134,7 @@ extension ConfigTree {
     // MARK: Summary
 
     /// What an app changes, in a few words for its row: "Thumb wheel: Switch Tabs, 2 buttons".
-    func appSummary(_ app: String) -> String {
+    public func appSummary(_ app: String) -> String {
         let scope = Self.appScope(app)
         var parts: [String] = []
         let choice = thumbWheelChoice(at: scope + ["thumbWheel"])

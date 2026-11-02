@@ -1,3 +1,4 @@
+import PureMouseAppSupport
 import PureMouseKit
 import SwiftUI
 

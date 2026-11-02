@@ -73,8 +73,8 @@ one. This file covers how to work on it safely.
   free of policy. Applying config, performing actions and scrolling live in `Sources/puremouse`.
 - `Sources/PureMouseKit` is shared with the menu bar app: the config model and its decoder
   (`Config`, `Action` and its `named` table, `Keystroke` parsing, `AnyKey`, the range-checked
-  decode helper) and the status/control channel (`Companion.swift`, contract in
-  `docs/companion.md`). Data only: no HID, no event posting, no `Log` (the decoder collects
+  decode helper), the `FileLock` both sides take, and the status/control channel
+  (`Companion.swift`, contract in `docs/companion.md`). Data only: no HID, no event posting, no `Log` (the decoder collects
   problems such as `unknownButtons` and the daemon logs them). `ConfigCheck.validate` is the real
   decoder, so the menu never writes a file the daemon would reject. A config change must keep
   `ConfigGoldenTests` identical, or regenerate it on purpose. Before 1.0 nothing is kept
@@ -139,11 +139,13 @@ one. This file covers how to work on it safely.
   change or Bluetooth attach (`Daemon.pollPermissions`). The display link runs only while a
   scroll is gliding, never with `smoothingMs` 0 (`PixelCarry` posts at once).
 - The menu bar app never opens HID devices: it edits the config file and talks to the daemon only
-  through the companion channel and the daemon CLI (`docs/companion.md`). It must not poll: it
-  wakes on notifications, file events and the daemon's process exit. Its Settings window and view
-  tree are built when shown (each pane on its first visit); once Settings closes the process starts
-  over (`Relaunch`): the agent's copy exits 75 for launchd to restart, since AppKit and SwiftUI keep
-  about 35 MB otherwise. Never `exec` in place (LaunchServices then withholds the status item). The
+  through the companion channel and the daemon CLI (`docs/companion.md`). Its logic that needs no
+  AppKit or SwiftUI lives in `Sources/PureMouseAppSupport` (config editing and saving,
+  `Locations`, status words), tested in `Tests/PureMouseAppSupportTests`; keep UI frameworks out
+  of it. It must not poll: it wakes on notifications, file events and the daemon's process exit.
+  Its Settings window and view tree are built when shown (each pane on its first visit); once
+  Settings closes the process starts over (`Relaunch`): the agent's copy exits 75 for launchd to
+  restart, since AppKit and SwiftUI keep about 35 MB otherwise. Never `exec` in place (LaunchServices then withholds the status item). The
   menu is rebuilt on open. Settings controls carry their own accessibility label where a `RowLabel`
   (title plus caption) leaves them unnamed. Shortcut specs are parsed and named by Kit's `Keystroke` only; the menu adds
   glyphs and spoken words.
@@ -165,7 +167,13 @@ one. This file covers how to work on it safely.
   removing a key that is not there is a no-op, so it never prunes an ancestor); with no
   pending edit nothing is written. It refuses to build on a file that does not parse or
   validate, and writes through `JSON.encode` (shortest decimals, sorted keys, whole and big
-  numbers kept digit for digit), never `JSONSerialization`.
+  numbers kept digit for digit), never `JSONSerialization`. Only Reset All Settings and Restore
+  Last Working replace the whole file, and they keep the previous one as `config.json.bak`
+  first (`ConfigFile.replace`; nothing kept for no file or `{}`); Open Config File only creates a
+  missing file (`createIfMissing`). Every one of these writes runs under `flock` on
+  `config.json.lock` beside the resolved config, and `control.json` writes under
+  `control.json.lock`, changing only the fields that request sets; the daemon's startup delete of
+  it takes the same lock (`docs/companion.md`).
 - The Buttons and Apps panes list a named button when a connected mouse reports it or the config
   binds it; with no report, those `NamedButton.listedByDefault` (not the MX Master 4's thumb panel)
   (`ButtonRows.named`). Haptic picker entries come from Kit's `HapticWaveform.allCases`; the menu
@@ -333,7 +341,7 @@ one. This file covers how to work on it safely.
   rotation into steps (remainder kept, reset at each movement's start), paced per action
   (`ThumbStepper.pacing`: media keys free, shortcuts 50 ms, zoom 40 ms, animated actions 300 ms
   with the turns between discarded).
-- Thumb wheel presets in Settings: `ThumbWheelChoice` (`Logic/ThumbWheel.swift`) lists Kit's
+- Thumb wheel presets in Settings: `ThumbWheelChoice` (`PureMouseAppSupport/ThumbWheel.swift`) lists Kit's
   presets in `presetOrder`, with a label each; `ThumbWheelState` mirrors Kit's
   `Config.ThumbWheel.init(_:base:)` and a test checks it against the decoder. App suggestions are
   `AppSuggestion.table`.

@@ -2,25 +2,25 @@ import Foundation
 
 /// "Check for Updates", on demand only: one GET of the latest GitHub release, compared with this
 /// app's version. The logic is pure (`Version`, `parse`); `fetch` is the only network code.
-enum UpdateCheck {
+public enum UpdateCheck {
     static let endpoint = URL(string: "https://api.github.com/repos/mblauberg/PureMouse/releases/latest")!
 
-    struct Release: Equatable {
-        var version: Version
-        var page: URL
+    public struct Release: Equatable, Sendable {
+        public var version: Version
+        public var page: URL
     }
 
-    enum Outcome: Equatable {
+    public enum Outcome: Equatable, Sendable {
         case upToDate
         case available(Release)
         case failed
     }
 
-    struct Version: Comparable, Equatable {
-        var parts: [Int]
+    public struct Version: Comparable, Equatable, Sendable {
+        public var parts: [Int]
 
         /// "v1.2.3" or "1.2.3" (a pre-release or build suffix after the numbers is ignored).
-        init?(_ text: String) {
+        public init?(_ text: String) {
             var text = Substring(text.trimmingCharacters(in: .whitespaces))
             if text.first == "v" || text.first == "V" { text = text.dropFirst() }
             let core = text.prefix { $0.isNumber || $0 == "." }
@@ -29,7 +29,7 @@ enum UpdateCheck {
             parts = numbers.compactMap { $0 }
         }
 
-        static func < (a: Version, b: Version) -> Bool {
+        public static func < (a: Version, b: Version) -> Bool {
             for i in 0..<max(a.parts.count, b.parts.count) {
                 let x = i < a.parts.count ? a.parts[i] : 0
                 let y = i < b.parts.count ? b.parts[i] : 0
@@ -38,7 +38,7 @@ enum UpdateCheck {
             return false
         }
 
-        static func == (a: Version, b: Version) -> Bool { !(a < b) && !(b < a) }
+        public static func == (a: Version, b: Version) -> Bool { !(a < b) && !(b < a) }
     }
 
     /// The release in a `releases/latest` response; nil when it is not one (drafts and
@@ -57,7 +57,7 @@ enum UpdateCheck {
         return release.version > current ? .available(release) : .upToDate
     }
 
-    static func fetch(current: String) async -> Outcome {
+    public static func fetch(current: String) async -> Outcome {
         var request = URLRequest(url: endpoint, timeoutInterval: 8)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         let session = URLSession(configuration: .ephemeral)

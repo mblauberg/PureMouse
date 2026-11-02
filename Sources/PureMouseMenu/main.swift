@@ -1,6 +1,7 @@
 // The menu bar app: status item, menu and Settings window. It edits the config and talks to the
 // daemon through the companion channel; it never opens HID devices. See docs/companion.md.
 import AppKit
+import PureMouseAppSupport
 import PureMouseKit
 import notify
 

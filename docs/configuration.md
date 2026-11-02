@@ -19,7 +19,11 @@ anything left out keeps the mouse's existing setting. A short example
 
 PureMouse watches the file and applies changes when you save it. A file that does not load is
 reported in the log and in Settings, and the previous settings stay in effect. Settings changes
-only the keys it shows and keeps any others. To reload by hand:
+only the keys it shows and keeps any others. Reset All Settings and Restore Last Working (General)
+replace the whole file, so they first keep it as `config.json.bak` beside it (beside the target
+when the config is a symlink), replacing an earlier backup; a missing or empty file (`{}`) keeps
+no backup and leaves an earlier one alone. If the backup cannot be written, the file is not
+changed. To reload by hand:
 
 ```sh
 launchctl kill HUP gui/$UID/io.github.mblauberg.puremouse

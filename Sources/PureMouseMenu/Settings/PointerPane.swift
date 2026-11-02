@@ -1,3 +1,4 @@
+import PureMouseAppSupport
 import SwiftUI
 
 struct PointerPane: View {

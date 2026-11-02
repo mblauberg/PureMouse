@@ -1,10 +1,11 @@
 import AppKit
+import PureMouseAppSupport
 import SwiftUI
 
 struct GeneralPane: View {
     @Environment(AppModel.self) private var model
     let app: AppController
-    @State private var startsAtLogin = Paths.startsAtLogin
+    @State private var startsAtLogin = false  // read on appear
     @State private var showsInMenuBar = true
     @State private var confirmingReset = false
     @State private var notificationsDenied = false
@@ -22,7 +23,7 @@ struct GeneralPane: View {
                 }
                 .accessibilityLabel("Show in menu bar")
             }
-            .disabled(Paths.daemon == nil)
+            .disabled(model.locations.daemon == nil)
 
             Section {
                 Toggle(isOn: Binding(get: { model.config.bool(["notifications", "lowBattery"]) ?? true },
@@ -68,14 +69,14 @@ struct GeneralPane: View {
                 LabeledContent {
                     HStack {
                         Button("Open") { openConfig() }
-                        Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([Paths.config]) }
+                        Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([model.locations.config]) }
                     }
                 } label: {
                     Text("Config file")
-                    Text(Format.tildePath(Paths.config.path))
+                    Text(Format.tildePath(model.locations.config.path))
                         .lineLimit(1)
                         .truncationMode(.middle)
-                        .help(Paths.config.path)
+                        .help(model.locations.config.path)
                 }
                 LabeledContent {
                     Button("Show Log") { showLog() }
@@ -89,25 +90,25 @@ struct GeneralPane: View {
             }
         }
         .onAppear {
-            startsAtLogin = Paths.startsAtLogin
+            startsAtLogin = model.locations.startsAtLogin
             showsInMenuBar = app.showsStatusItem
             Task { notificationsDenied = await Notifier.isAllowed() == false }
         }
         .confirmationDialog("Reset all settings?", isPresented: $confirmingReset) {
             Button("Reset All Settings", role: .destructive) { model.resetAll() }
         } message: {
-            Text("Every button, scrolling and pointer setting goes back to how the mouse works without PureMouse. The config file is emptied.")
+            Text("Every button, scrolling and pointer setting goes back to how the mouse works without PureMouse. Unless it is empty, the current config file is kept as \(model.backupName), replacing an earlier backup.")
         }
     }
 
     private func setStartsAtLogin(_ on: Bool) {
         if on {
-            Lifecycle.perform(.register) { startsAtLogin = Paths.startsAtLogin }
+            Lifecycle.perform(.register) { startsAtLogin = model.locations.startsAtLogin }
         } else if Alerts.confirm("Stop PureMouse?",
                                  "The mouse returns to normal, the menu bar icon goes, and PureMouse no longer starts at login. Open PureMouse from Applications to start it again.",
                                  action: "Stop PureMouse") {
             model.flush()
-            Lifecycle.perform(.unregister) { startsAtLogin = Paths.startsAtLogin }
+            Lifecycle.perform(.unregister) { startsAtLogin = model.locations.startsAtLogin }
         }
     }
 
@@ -127,16 +128,16 @@ struct GeneralPane: View {
     }
 
     private func openConfig() {
-        if !FileManager.default.fileExists(atPath: Paths.config.path) { model.resetAll() }
-        NSWorkspace.shared.open(Paths.config)
+        model.createConfigIfMissing()
+        NSWorkspace.shared.open(model.locations.config)
     }
 
     private func showLog() {
         let console = URL(fileURLWithPath: "/System/Applications/Utilities/Console.app")
-        if FileManager.default.fileExists(atPath: Paths.log.path) {
-            NSWorkspace.shared.open([Paths.log], withApplicationAt: console, configuration: NSWorkspace.OpenConfiguration())
+        if FileManager.default.fileExists(atPath: model.locations.log.path) {
+            NSWorkspace.shared.open([model.locations.log], withApplicationAt: console, configuration: NSWorkspace.OpenConfiguration())
         } else {
-            NSWorkspace.shared.activateFileViewerSelecting([Paths.log.deletingLastPathComponent()])
+            NSWorkspace.shared.activateFileViewerSelecting([model.locations.log.deletingLastPathComponent()])
         }
     }
 }

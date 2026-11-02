@@ -1,7 +1,7 @@
 import Foundation
 import PureMouseKit
 import Testing
-@testable import PureMouseMenu
+@testable import PureMouseAppSupport
 
 private func tree(_ json: String) throws -> ConfigTree { try ConfigTree(data: Data(json.utf8)) }
 private func text(_ tree: ConfigTree) -> String { String(decoding: tree.data(), as: UTF8.self) }
@@ -252,11 +252,11 @@ private func mouse(_ id: String, online: Bool, dpi: Int?, steps: [Int] = []) -> 
     let asleep = mouse("a", online: false, dpi: 800, steps: [800])
     let awake = mouse("b", online: true, dpi: 1600, steps: [1600, 3200])
     // The live value and the slider's steps come from the same mouse: the first one online.
-    #expect(AppModel.live(of: [asleep, awake])?.dpi == 1600)
-    #expect(AppModel.primary(of: [asleep, awake])?.dpiSteps == [1600, 3200])
+    #expect(Status.Device.live(of: [asleep, awake])?.dpi == 1600)
+    #expect(Status.Device.primary(of: [asleep, awake])?.dpiSteps == [1600, 3200])
     let other = mouse("c", online: true, dpi: 3200)
-    #expect(AppModel.live(of: [other, awake])?.dpi == 3200)
-    #expect(AppModel.live(of: [asleep]) == nil && AppModel.primary(of: [asleep])?.dpi == 800)
+    #expect(Status.Device.live(of: [other, awake])?.dpi == 3200)
+    #expect(Status.Device.live(of: [asleep]) == nil && Status.Device.primary(of: [asleep])?.dpi == 800)
 }
 
 @Test func dpiPresetsKeyIsRemovedWhenEmpty() {

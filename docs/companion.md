@@ -50,7 +50,8 @@ missing or stale file means "PureMouse Is Off".
 
 - `paused: true`: every session is restored to native behaviour (`Session.restore()`, wheels first),
   sessions are dropped and adoption stops. `paused: false` re-adopts connected mice and applies the
-  config. Pausing is not persisted: the daemon deletes `control.json` at start.
+  config. Pausing is not persisted: the daemon deletes `control.json` at start, under
+  `control.json.lock`, so a menu write already under way lands first and is deleted with it.
 - `capture: {token}` with a new token starts **select by pressing**. For up to 10 s every divertable
   control of every mouse is diverted; the first press reports `{token, state: pressed, cid,
   deviceID}` and performs no action; then the normal diversion is restored. Timeout reports
@@ -66,6 +67,17 @@ missing or stale file means "PureMouse Is Off".
 The menu edits `config.json` as a JSON tree: it changes only the keys a control owns, keeps unknown
 keys, and writes with `.prettyPrinted, .sortedKeys`. Before writing, it validates the whole file
 with `ConfigCheck.validate`, which runs the daemon's own decoder.
+
+Every config write (a save, Reset All Settings or Restore Last Working with its `config.json.bak`,
+creating a missing file) is one read-merge-replace under an exclusive `flock` on `config.json.lock`
+beside the resolved config (`ConfigFile`, `FileLock`), so two writer processes never drop each
+other's keys; a writer waits while another holds it. The lock is a separate file because the
+config is replaced atomically. Hand edits take no lock: saves replay their keys onto the file as
+it is. `control.json` writes likewise lock `control.json.lock` in the companion directory, read
+the file and change only what that request means (`DaemonLink.writeControl`): a pause sets
+`paused`, a DPI request sets `useConfiguredDPI`, a capture sets `capture` and its end clears it only
+while the file still holds that capture's token. Every other field stays as the file has it; with
+no file, `paused` starts from the status.
 
 The daemon watches the config's directory with a `DispatchSource` (the file is replaced atomically,
 so the file's own descriptor goes stale). It reloads when the file's bytes change, debounced

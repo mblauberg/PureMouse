@@ -1,3 +1,4 @@
+import PureMouseAppSupport
 import SwiftUI
 
 /// One Settings pane: a grouped form at the window's fixed width, sized to its content so the

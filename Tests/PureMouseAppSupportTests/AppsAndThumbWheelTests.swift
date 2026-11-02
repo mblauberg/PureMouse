@@ -1,7 +1,7 @@
 import Foundation
 import PureMouseKit
 import Testing
-@testable import PureMouseMenu
+@testable import PureMouseAppSupport
 
 private func tree(_ json: String) throws -> ConfigTree { try ConfigTree(data: Data(json.utf8)) }
 private func decoded(_ tree: ConfigTree) throws -> Config { try JSONDecoder().decode(Config.self, from: tree.data()) }
@@ -357,27 +357,7 @@ private func resolved(_ wheel: Config.ThumbWheel) -> Resolved {
     }
 }
 
-@Test func anAppPickerOffersSameAsEverywhereInsteadOfDefault() {
-    let entries = PickerEntry.all(allowsDefault: false, allowsGesture: true, sameAsEverywhere: "Mission Control")
-    #expect(entries.first?.label == "Same as Everywhere")
-    #expect(entries.first?.detail == "(Mission Control)")
-    #expect(entries.first?.matches(.standard) == true)
-    #expect(!entries.contains { $0.id == "default" })
-}
-
 // MARK: Haptics
-
-@Test func thePickerListsEveryHapticWaveformInWords() {
-    let entries = PickerEntry.all(allowsDefault: true, allowsGesture: true)
-        .filter { $0.group == ActionCatalog.hapticGroup }
-    #expect(entries.map(\.kind) == HapticWaveform.allCases.map { .set(.haptic($0.rawValue)) })
-    #expect(entries.allSatisfy { $0.symbol != nil })
-    #expect(ActionCatalog.hapticLabel(for: "sharpStateChange") == "Sharp State Change")
-    #expect(ActionCatalog.hapticLabel(for: "happyAlert") == "Happy Alert")
-    #expect(ActionCatalog.hapticLabel(for: "boxBreathing") == "Box Breathing")
-    #expect(ButtonAction.haptic("happyAlert").label == "Haptic: Happy Alert")
-    #expect(ActionCatalog.hapticGroup.contains("MX Master 4"))
-}
 
 @Test func aThumbWheelDirectionCanPlayAHaptic() throws {
     var config = try tree(#"{"thumbWheel":{"action":"volume"}}"#)

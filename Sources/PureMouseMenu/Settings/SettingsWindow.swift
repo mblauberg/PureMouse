@@ -1,4 +1,5 @@
 import AppKit
+import PureMouseAppSupport
 import SwiftUI
 
 enum SettingsPane: String, CaseIterable {

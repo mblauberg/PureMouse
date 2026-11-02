@@ -1,3 +1,4 @@
+import PureMouseAppSupport
 import SwiftUI
 
 /// What turning the thumb wheel does: a pop-up of choices and, for Custom, an action per
