@@ -39,7 +39,7 @@ public enum ThumbWheelChoice: Hashable, Identifiable, Sendable {
     public static let keys = ["action", "left", "right", "step"]
 
     /// The choice the keys in `object` make. Outside an app no key means the default, scrolling.
-    public static func read(_ object: [String: Any]?, inApp: Bool) -> ThumbWheelChoice {
+    static func read(_ object: [String: Any]?, inApp: Bool) -> ThumbWheelChoice {
         let object = object ?? [:]
         if object["left"] != nil || object["right"] != nil { return .custom }
         switch object["action"] {

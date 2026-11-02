@@ -179,7 +179,7 @@ public enum NamedButton: String, CaseIterable, Sendable {
     /// only, so it shows when a mouse has it or the config binds it.
     var listedByDefault: Bool { self != .thumbPanel }
 
-    public static func config(cid: UInt16) -> String {
+    static func config(cid: UInt16) -> String {
         allCases.first { $0.cid == cid }?.rawValue ?? hex(cid)
     }
 

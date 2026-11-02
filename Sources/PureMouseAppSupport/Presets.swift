@@ -16,7 +16,7 @@ public enum Feel: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    public var values: (acceleration: Double, smoothingMs: Double)? {
+    var values: (acceleration: Double, smoothingMs: Double)? {
         switch self {
         case .precise: (0.5, 60)
         case .balanced: (1.0, 125)
@@ -26,7 +26,7 @@ public enum Feel: String, CaseIterable, Identifiable, Sendable {
     }
 
     /// The preset matching these values (absent keys take the daemon's defaults), else `.custom`.
-    public static func matching(acceleration: Double?, smoothingMs: Double?) -> Feel {
+    static func matching(acceleration: Double?, smoothingMs: Double?) -> Feel {
         let a = acceleration ?? 1.0, s = smoothingMs ?? 125
         return presets.first {
             guard let v = $0.values else { return false }

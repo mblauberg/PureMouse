@@ -6,7 +6,7 @@ import Foundation
 public enum Lifecycle {
     public enum Command: Sendable {
         case register, unregister, stop, menuOn, menuOff
-        public var arguments: [String] {
+        var arguments: [String] {
             switch self {
             case .register: ["register"]
             case .unregister: ["unregister"]
