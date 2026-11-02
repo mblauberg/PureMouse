@@ -130,9 +130,7 @@ struct AppSheet: View {
         [["buttons"], scope + ["buttons"]].flatMap { (config[$0] as? [String: Any]).map { Array($0.keys) } ?? [] }
     }
 
-    private func title(_ button: String) -> String {
-        NamedButton(rawValue: button)?.label ?? "Control \(button)"
-    }
+    private func title(_ button: String) -> String { NamedButton.title(forKey: button) }
 
     /// What applies everywhere, for the dimmed value and "Same as Everywhere (…)". An unset
     /// direction does nothing.
