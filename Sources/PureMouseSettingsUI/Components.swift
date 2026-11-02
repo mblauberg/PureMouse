@@ -205,7 +205,10 @@ struct AdvancedSheet<Content: View, Leading: View>: View {
             Text(title)
                 .font(.headline)
                 .padding(.top)
-            Form { content }
+            Form {
+                SheetBanners()
+                content
+            }
                 .formStyle(.grouped)
                 .scrollBounceBehavior(.basedOnSize)
                 // As tall as its rows, up to what the screen leaves, then it scrolls. Proposed the
