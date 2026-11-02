@@ -183,7 +183,11 @@ Settings opens the same way from everywhere (`SettingsLauncher`): `show-settings
 `io.github.mblauberg.puremouse.menu.show` is posted, and the helper is opened with `NSWorkspace`,
 which starts it or brings the running one forward (one instance per bundle ID). A running helper
 reads the file on the doorbell; a starting one reads it at launch. Only a stamp from the last 5 s
-counts, and the reader removes it (`ShowRequest`). The menu app no longer listens on the doorbell.
+counts, and the reader removes it (`ShowRequest`); writing and reading-then-removing hold `show-settings.lock`, so
+a reader never sees a half-written pane or removes a request written after it read. The menu app no
+longer listens on the doorbell. A helper that LaunchServices still lists but whose process has
+exited is opened again 0.3 s later, and Quit PureMouse waits for an open under way and quits the
+helper it starts.
 
 Opening PureMouse.app from the Finder runs `register`, touches `show-settings` and opens the menu
 app. The menu app opens Settings when it was opened by hand rather than by launchd, when it finds a

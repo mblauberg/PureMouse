@@ -21,17 +21,23 @@ public struct ShowRequest: Equatable, Sendable {
         consume(from: Companion.showSettingsURL, now: Date())
     }
 
+    /// Writing and consuming take `show-settings.lock`: a request written while another is being
+    /// read and removed would otherwise be read half written or removed unread.
     static func write(pane: SettingsPane?, to file: URL) {
-        try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? Data((pane?.rawValue ?? "").utf8).write(to: file)
+        try? FileLock.withLock(FileLock.url(for: file)) {
+            try Data((pane?.rawValue ?? "").utf8).write(to: file, options: .atomic)
+        }
     }
 
     static func consume(from file: URL, now: Date) -> ShowRequest? {
-        guard let date = (try? FileManager.default.attributesOfItem(atPath: file.path))?[.modificationDate] as? Date
-        else { return nil }
-        let body = (try? Data(contentsOf: file)).map { String(decoding: $0, as: UTF8.self) } ?? ""
-        try? FileManager.default.removeItem(at: file)
-        guard now.timeIntervalSince(date) < freshness else { return nil }
+        let taken = try? FileLock.withLock(FileLock.url(for: file)) { () -> (Date, String)? in
+            guard let date = (try? FileManager.default.attributesOfItem(atPath: file.path))?[.modificationDate] as? Date
+            else { return nil }
+            let body = (try? Data(contentsOf: file)).map { String(decoding: $0, as: UTF8.self) } ?? ""
+            try? FileManager.default.removeItem(at: file)
+            return (date, body)
+        }
+        guard let (date, body) = taken ?? nil, now.timeIntervalSince(date) < freshness else { return nil }
         return ShowRequest(pane: SettingsPane(rawValue: body.trimmingCharacters(in: .whitespacesAndNewlines)))
     }
 }

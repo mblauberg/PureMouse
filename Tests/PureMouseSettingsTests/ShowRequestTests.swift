@@ -1,4 +1,5 @@
 import Foundation
+import os
 import Testing
 @testable import PureMouseAppSupport
 
@@ -44,6 +45,22 @@ private func requestFile() -> URL {
     ShowRequest.write(pane: .apps, to: file)
     let again = try #require(try FileManager.default.attributesOfItem(atPath: file.path)[.modificationDate] as? Date)
     #expect(ShowRequest.consume(from: file, now: again.addingTimeInterval(4.9)) == ShowRequest(pane: .apps))
+}
+
+@Test func aRequestIsNeverReadHalfWrittenWhileAnotherIsWritten() {
+    let file = requestFile()
+    let rounds = 4000
+    let bad = OSAllocatedUnfairLock(initialState: 0)
+    // Half the threads keep asking for the pointer pane, half keep taking requests; a reader
+    // that sees the file between its truncation and its write would read no pane.
+    DispatchQueue.concurrentPerform(iterations: rounds) { round in
+        if round.isMultiple(of: 2) {
+            ShowRequest.write(pane: .pointer, to: file)
+        } else if let request = ShowRequest.consume(from: file, now: Date()), request.pane != .pointer {
+            bad.withLock { $0 += 1 }
+        }
+    }
+    #expect(bad.withLock { $0 } == 0)
 }
 
 @Test func settingsOpensOnTheRememberedPaneElseButtons() {
