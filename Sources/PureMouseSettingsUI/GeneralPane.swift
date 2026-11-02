@@ -29,7 +29,7 @@ struct GeneralPane: View {
 
             Section {
                 Toggle(isOn: Binding(get: { openAtLogin.isOn }, set: { perform(.openAtLogin($0)) })) {
-                    RowLabel("Open at login", help: "Turning it off does not stop PureMouse.")
+                    RowLabel("Open at login", help: "Turning it off doesn't stop PureMouse.")
                 }
                 .accessibilityLabel("Open at login")
                 .disabled(model.locations.daemon == nil)
@@ -95,7 +95,7 @@ struct GeneralPane: View {
                     .disabled(changingRunning || model.locations.daemon == nil)
             }
         } label: {
-            RowLabel("PureMouse", help: "Stopping returns the mouse to normal. Open at login does not change.")
+            RowLabel("PureMouse", help: "Stopping returns the mouse to normal. Open at login doesn't change.")
         }
     }
 
@@ -200,15 +200,15 @@ private struct GeneralAdvancedSheet: View {
                             .accessibilityLabel("Show log in Finder")
                     }
                 } label: {
-                    RowLabel("Log", help: "Useful when something is not working.")
+                    RowLabel("Log", help: "Useful when something isn't working.")
                 }
             }
         } leading: {
             Button("Reset All Settings…") { confirmingReset = true }
                 .confirmationDialog("Reset all settings?", isPresented: $confirmingReset) {
-                    Button("Reset All Settings", role: .destructive) { model.resetAll() }
+                    Button("Reset All Settings") { model.resetAll() }
                 } message: {
-                    Text("Buttons, scrolling and pointer settings return to the mouse's defaults. The current config file is saved as \(model.backupName), replacing any earlier backup. Open at login and the menu bar icon do not change.")
+                    Text("Buttons, scrolling and pointer settings return to the mouse's defaults. The current config file is saved as \(model.backupName), replacing any earlier backup. Open at login and the menu bar icon don't change.")
                 }
         }
     }

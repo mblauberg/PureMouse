@@ -101,7 +101,7 @@ private struct UpdateRow: View {
                     Button("View Release") { NSWorkspace.shared.open(release.page) }
                 }
             case .failed?:
-                Text("Could not check for updates. Try again later.").font(.callout).foregroundStyle(.secondary)
+                Text("Couldn't check for updates. Try again later.").font(.callout).foregroundStyle(.secondary)
             case nil:
                 EmptyView()
             }

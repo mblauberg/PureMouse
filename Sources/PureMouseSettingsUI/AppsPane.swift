@@ -29,7 +29,7 @@ struct AppsPane: View {
         .onChange(of: selected) { settings?.refit() }
         .confirmationDialog("Remove \(removing.map { identities.identity($0).name } ?? "this app")'s settings?",
                             isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })) {
-            Button("Remove", role: .destructive) {
+            Button("Remove") {
                 if let id = removing { remove(id) }
             }
         } message: {
@@ -128,7 +128,7 @@ struct AppsPane: View {
         let finish: (NSApplication.ModalResponse) -> Void = { response in
             guard response == .OK, let url = panel.url else { return }
             guard let id = Bundle(url: url)?.bundleIdentifier else {
-                Alerts.show("That app cannot be added", "\(url.lastPathComponent) has no bundle identifier.")
+                Alerts.show("That app can't be added.", "\(url.lastPathComponent) has no bundle identifier.")
                 return
             }
             add(id)

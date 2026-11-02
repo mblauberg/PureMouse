@@ -14,13 +14,13 @@ extension Notice {
 
     var title: String {
         switch self {
-        case .configError: "The config file has an error"
-        case .writeError: "That change was not saved"
+        case .configError: "The config file isn't valid."
+        case .writeError: "That change wasn't saved."
         case .statusTooNew: "Update PureMouse"
-        case .off: "PureMouse is off"
-        case .paused: "PureMouse is paused"
-        case .logiOptions: "Logi Options+ is running"
-        case .accessibility: "PureMouse needs Accessibility"
+        case .off: "PureMouse is off."
+        case .paused: "PureMouse is paused."
+        case .logiOptions: "Logi Options+ is running."
+        case .accessibility: "PureMouse needs Accessibility."
         }
     }
 
@@ -133,14 +133,14 @@ struct NoticeActions: View {
             }
             // It replaces the whole file, so it asks first.
             .confirmationDialog(UseLastWorkingConfirmation.title, isPresented: $confirmingLastWorking) {
-                Button(UseLastWorkingConfirmation.button, role: .destructive) { model.restoreLastWorking() }
+                Button(UseLastWorkingConfirmation.button) { model.restoreLastWorking() }
             } message: {
                 Text(UseLastWorkingConfirmation.message(backupName: model.backupName))
             }
         case .writeError:
             EmptyView()
         case .statusTooNew:
-            Button("Releases") { NSWorkspace.shared.open(Links.releases) }
+            Button("View Releases") { NSWorkspace.shared.open(Links.releases) }
         case .off:
             Button("Start PureMouse") { notice.loginAction.map { model.perform($0.command) } }
         case .paused:
