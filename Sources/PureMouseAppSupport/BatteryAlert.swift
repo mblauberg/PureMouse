@@ -52,11 +52,13 @@ public enum BatteryAlert {
         percent <= criticalPercent ? .critical : percent <= lowPercent ? .low : .none
     }
 
+    /// The notification's text: "MX Master 3S battery low" and "20% left. Charge it soon." A mouse
+    /// that reports no percentage gets the advice alone.
     public static func message(for band: Band, device: String, battery: Status.Device.Battery) -> (title: String, body: String) {
-        let detail = battery.percent.map { "\(device) is at \($0)%." } ?? "\(device)'s battery is \(band == .critical ? "critical" : "low")."
+        let left = battery.percent.map { "\($0)% left. " } ?? ""
         switch band {
-        case .critical: return ("Mouse battery critical", detail + " Charge it now.")
-        default: return ("Mouse battery low", detail + " Charge it soon.")
+        case .critical: return ("\(device) battery critical", left + "Charge it now.")
+        default: return ("\(device) battery low", left + "Charge it soon.")
         }
     }
 }

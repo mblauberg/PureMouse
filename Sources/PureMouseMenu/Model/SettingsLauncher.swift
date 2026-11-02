@@ -16,6 +16,14 @@ extension NSRunningApplication: RunningHelper {
     func quit() { terminate() }
 }
 
+/// The alerts for a Settings helper that cannot be opened: what failed and what to do, with no path
+/// or system text (`docs/ui-language.md`). The detail goes to the log.
+enum SettingsAlert {
+    static let missing = (title: "PureMouse Settings is missing", body: "Reinstall PureMouse to get it back.")
+    static let couldNotOpen = (title: "PureMouse Settings could not open",
+                               body: "Try again. If it keeps happening, restart your Mac.")
+}
+
 /// Opens Settings, which is an app of its own (`PureMouse Settings.app`, docs/adr/0009): the pane
 /// goes in the `show-settings` file and the doorbell rings for a helper already running, then the
 /// helper is opened, which starts it or brings it forward. Where it is: `SettingsLookup`.
@@ -77,12 +85,14 @@ final class SettingsLauncher {
                     try process.run()
                     binary = process
                 } catch {
-                    system.alert("PureMouse Settings could not open", "\(url.path): \(error.localizedDescription)")
+                    NSLog("PureMouse: Settings did not start from %@: %@", url.path, error.localizedDescription)
+                    system.alert(SettingsAlert.couldNotOpen.title, SettingsAlert.couldNotOpen.body)
                 }
             }
             done()
         case .failure(let failure):
-            system.alert("PureMouse Settings could not be found", failure.description)
+            NSLog("PureMouse: %@", failure.description)
+            system.alert(SettingsAlert.missing.title, SettingsAlert.missing.body)
             done()
         }
     }
@@ -99,7 +109,8 @@ final class SettingsLauncher {
                 return done()
             }
             if let error {
-                system.alert("PureMouse Settings could not open", error.localizedDescription)
+                NSLog("PureMouse: Settings did not open: %@", error.localizedDescription)
+                system.alert(SettingsAlert.couldNotOpen.title, SettingsAlert.couldNotOpen.body)
                 return done()
             }
             guard helper?.isAlive != true, !system.running(app).contains(where: \.isAlive), retries > 0 else { return done() }

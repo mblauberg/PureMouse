@@ -33,8 +33,10 @@ struct MenuRenderer {
         } else {
             item = NSMenuItem(title: plan.title, action: nil, keyEquivalent: plan.key)
         }
-        if plan.withOption { item.keyEquivalentModifierMask = [.command, .option] }
-        if plan.alternate { item.isAlternate = true }
+        if plan.alternate {
+            item.keyEquivalentModifierMask = .option
+            item.isAlternate = true
+        }
         if plan.checked { item.state = .on }
         if plan.attention {
             // Shown in the checkmark column, like the mockup's "!".
@@ -66,7 +68,7 @@ struct MenuRenderer {
         }
         header.attributedTitle = text
         header.image = StatusIcon.headerImage()
-        header.setAccessibilityLabel(([title] + lines).joined(separator: ", "))
+        header.setAccessibilityLabel(MenuPlan.spokenHeader(title: title, lines: lines))
         return header
     }
 }

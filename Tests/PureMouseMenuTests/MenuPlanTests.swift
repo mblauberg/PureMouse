@@ -17,7 +17,7 @@ struct MenuPlanTests {
                 return indent + (alternate ? "⌥header " : "header ") + ([title] + lines).joined(separator: ", ")
             case let .item(item):
                 var tags: [String] = []
-                if !item.key.isEmpty { tags.append((item.withOption ? "⌥⌘" : "⌘") + item.key) }
+                if !item.key.isEmpty { tags.append("⌘" + item.key) }
                 if item.checked { tags.append("on") }
                 if item.attention { tags.append("attention") }
                 if !item.enabled { tags.append("disabled") }
@@ -38,7 +38,7 @@ struct MenuPlanTests {
         ---
         Settings… [⌘,, -> openSettings(nil)]
         Quit PureMouse [⌘q, -> quit]
-        Hide Menu Bar Icon [⌥⌘q, alternate, -> hideMenuBarIcon]
+        Hide Menu Bar Icon [alternate, -> hideMenuBarIcon]
         """
 
     static func mouse(_ id: String, name: String = "MX Master 3S", connection: Status.Device.Connection = .receiver,
@@ -78,7 +78,7 @@ struct MenuPlanTests {
         state.statusTooNew = true
         #expect(lines(state).hasPrefix("""
             header PureMouse Is Off, The mouse works as it does without PureMouse
-            Update the Menu Bar App… [attention, -> openReleases]
+            Update PureMouse… [attention, -> openReleases]
             ---
             """))
     }
@@ -201,13 +201,32 @@ struct MenuPlanTests {
         state.logiOptionsRunning = true
         #expect(lines(state).contains("""
             v0.3.0
-            Update the Menu Bar App… [attention, -> openReleases]
+            Update PureMouse… [attention, -> openReleases]
             Allow Accessibility Access… [attention, -> openPrivacy(PureMouseAppSupport.PrivacyPane.accessibility)]
             Allow Input Monitoring… [attention, -> openPrivacy(PureMouseAppSupport.PrivacyPane.inputMonitoring)]
-            Fix Config Error… [attention, -> openSettings(Optional(PureMouseAppSupport.SettingsPane.general))]
-            Quit Logi Options+… [attention, -> openSettings(Optional(PureMouseAppSupport.SettingsPane.general))]
+            Fix Config File… [attention, -> openSettings(Optional(PureMouseAppSupport.SettingsPane.general))]
+            Logi Options+ Is Running… [attention, -> openSettings(Optional(PureMouseAppSupport.SettingsPane.general))]
             ---
             """))
+    }
+
+    /// macOS reserves ⌥⌘Q for "Quit and Keep Windows", so the alternate has no key equivalent.
+    @Test func hideMenuBarIconHasNoKeyEquivalent() throws {
+        let rows = MenuPlan.rows(for: Self.running(), option: false)
+        let hide = try #require(rows.compactMap { row -> MenuItem? in
+            if case let .item(item) = row, item.title == "Hide Menu Bar Icon" { return item }
+            return nil
+        }.first)
+        #expect(hide.alternate)
+        #expect(hide.key.isEmpty)
+    }
+
+    @Test func theSpokenHeaderReadsNoSeparatorDot() {
+        let spoken = MenuPlan.spokenHeader(title: "MX Master 3S", lines: ["USB receiver · Battery 45%", "800 DPI · v0.3.0"])
+        #expect(spoken == "MX Master 3S, USB receiver, Battery 45%, 800 DPI, v0.3.0")
+        #expect(!spoken.contains("·"))
+        let paused = MenuPlan.spokenHeader(title: "MX Master 3S", lines: ["Paused · USB receiver · Battery 45%"])
+        #expect(paused == "MX Master 3S, Paused, USB receiver, Battery 45%")
     }
 
     @Test func inputMonitoringMattersOnlyWithABluetoothMouse() {

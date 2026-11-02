@@ -21,6 +21,12 @@ lands with the text it changes.
 - **No exclamation marks, no "please", no blame.** Say what happened and what to do next.
 - **Errors.** Title: what failed, as a statement. Body: one sentence on what to do. Raw command
   output and paths go to the log, not the alert.
+- **Notifications.** Title: the thing and its state ("MX Master 3S battery low"). Body: the fact,
+  then what to do ("20% left. Charge it soon.").
+- **CLI.** Success is a sentence on stdout. A failure is one line on stderr led by `puremouse: `
+  ("puremouse: cannot register: …") and a non-zero exit status.
+- **Key equivalents.** A menu item never claims one macOS reserves (⌥⌘Q is "Quit and Keep
+  Windows"); an alternate that has no natural one has none.
 - **Spelling.** Australian English in docs and prose. UI text uses macOS's own names for macOS
   places ("Applications folder", "Login Items", "Privacy & Security").
 - **Accessibility labels** say what a control does in words; never read a separator ("·") or a

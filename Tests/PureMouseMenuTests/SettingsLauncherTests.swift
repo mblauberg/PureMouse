@@ -23,17 +23,20 @@ final class FakeSystem {
     var running: [Helper] = []
     var delayed: [(TimeInterval, @MainActor () -> Void)] = []
     var alerts: [String] = []
+    var alertBodies: [String] = []
+    /// What the lookup answers.
+    var found: Result<SettingsLookup.Helper, SettingsLookup.Failure>?
     var quitMarks = 0
 
     var system: SettingsLauncher.System {
         SettingsLauncher.System(
-            find: { [app] in .success(.app(app)) },
+            find: { [app, found] in found ?? .success(.app(app)) },
             post: { [unowned self] in posts.append($0) },
             markQuit: { [unowned self] in quitMarks += 1 },
             open: { [unowned self] _, completion in opens.append(completion) },
             running: { [unowned self] _ in running },
             after: { [unowned self] delay, work in delayed.append((delay, work)) },
-            alert: { [unowned self] title, _ in alerts.append(title) })
+            alert: { [unowned self] title, body in alerts.append(title); alertBodies.append(body) })
     }
 
     /// Answers the oldest open still waiting.
@@ -70,6 +73,22 @@ struct SettingsLauncherTests {
         fake.answer(live)
         #expect(done == 1)
         #expect(fake.alerts.isEmpty)
+    }
+
+    @Test(arguments: [
+        SettingsLookup.Failure.notFound(app: "/Applications/PureMouse.app/Contents/Helpers/PureMouse Settings.app",
+                                        binary: "/Applications/PureMouse.app/Contents/MacOS/PureMouseSettings"),
+        .overrideMissing("/tmp/PureMouseSettings"),
+    ])
+    func aMissingHelperIsReportedWithoutAPath(failure: SettingsLookup.Failure) {
+        let fake = FakeSystem()
+        fake.found = .failure(failure)
+        var done = 0
+        SettingsLauncher(system: fake.system).open { done += 1 }
+        #expect(fake.alerts == ["PureMouse Settings is missing"])
+        #expect(fake.alertBodies == ["Reinstall PureMouse to get it back."])
+        #expect(!fake.alertBodies.joined().contains("/"))
+        #expect(done == 1)
     }
 
     @Test func aLiveHelperIsOpenedOnce() {
