@@ -45,7 +45,8 @@ one. This file covers how to work on it safely.
   Gatekeeper dialog or grant permissions, so leave those to whoever is at the Mac. Machine-specific
   notes belong in the uncommitted `CLAUDE.local.md`.
 - Releases: tag `vX.Y.Z` on a clean `main` (the bundle version is the tag without the `v`), run
-  `./scripts/package.sh` on a Mac holding the `PureMouse` signing identity, and attach
+  `PUREMOUSE_SIGN_IDENTITY=PureMouse ./scripts/package.sh` on a Mac holding that identity (else a
+  Developer ID identity, if present, wins), and attach
   `.build/dist/PureMouse-X.Y.Z.zip` to a GitHub release with its SHA-256. A release signed by any
   other identity makes every user grant permissions again. CI (`.github/workflows/ci.yml`) builds,
   tests and bundles ad hoc, verifies the signatures, checks the size budget

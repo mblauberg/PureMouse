@@ -12,7 +12,7 @@ device features are in [`AGENTS.md`](../AGENTS.md).
 ./scripts/package.sh     # release zip for Apple silicon and Intel, in .build/dist/
 ```
 
-`install.sh` and `package.sh` build through these, which also run on their own:
+`install.sh` and `package.sh` build with `build-app.sh`; CI runs all three, and so can you:
 
 ```sh
 ./scripts/build-app.sh [--universal] [--version X.Y.Z]   # sign and assemble .build/app/PureMouse.app
@@ -70,7 +70,9 @@ signature from that team.
 ## Releases
 
 1. Tag `vX.Y.Z` on a clean `main`; the bundle version is the tag without the `v`.
-2. Run `./scripts/package.sh` on a Mac that holds the `PureMouse` identity.
+2. Run `PUREMOUSE_SIGN_IDENTITY=PureMouse ./scripts/package.sh` on a Mac that holds the
+   `PureMouse` identity. Naming it matters: on a Mac that also holds a Developer ID, the build would
+   otherwise sign with that, and every user would have to grant permissions again.
 3. Attach `.build/dist/PureMouse-X.Y.Z.zip` to a GitHub release with its SHA-256.
 
 Release notes come from GitHub Releases ([ADR 17](adr/0017-github-releases-is-the-changelog.md)):
