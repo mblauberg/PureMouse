@@ -91,7 +91,7 @@ public enum Companion {
 public struct Status: Codable, Equatable, Sendable {
     /// Bumped when the status or control shape changes; a reader seeing a newer version shows
     /// "update PureMouse".
-    public static let currentSchema = 1
+    public static let currentSchema = 2
 
     public var schema = Status.currentSchema
     public var pid: Int32
@@ -161,8 +161,6 @@ public struct Status: Codable, Equatable, Sendable {
         /// Every DPI the sensor accepts, ascending; empty if it could not be read.
         public var dpiSteps: [Int]
         public var wheelMode: WheelMode?
-        public var hasSmartShift: Bool
-        public var hasThumbWheel: Bool
         /// Controls (buttons) the mouse can hand to PureMouse.
         public var controls: [Control]
         /// The key of this mouse in the config's `devices` section: `m` plus the 12 lowercase hex
@@ -174,13 +172,13 @@ public struct Status: Codable, Equatable, Sendable {
         public var unit: String?
         /// A word such as "mouse", "trackball" or "keyboard".
         public var kind: String?
-        /// What the mouse reports it can do; nil when not published. A member that is nil is
-        /// unknown (not false).
+        /// What the mouse reports it can do, once it has been configured; nil before. A member
+        /// that is nil is unknown (not false), and a reader treats it as available.
         public var capabilities: Capabilities?
 
         public init(id: String, name: String, connection: Connection, online: Bool, battery: Battery?,
-                    dpi: Int?, dpiSteps: [Int], wheelMode: WheelMode?, hasSmartShift: Bool,
-                    hasThumbWheel: Bool, controls: [Control], model: String? = nil, unit: String? = nil,
+                    dpi: Int?, dpiSteps: [Int], wheelMode: WheelMode?, controls: [Control],
+                    model: String? = nil, unit: String? = nil,
                     kind: String? = nil, capabilities: Capabilities? = nil) {
             self.id = id
             self.name = name
@@ -190,13 +188,17 @@ public struct Status: Codable, Equatable, Sendable {
             self.dpi = dpi
             self.dpiSteps = dpiSteps
             self.wheelMode = wheelMode
-            self.hasSmartShift = hasSmartShift
-            self.hasThumbWheel = hasThumbWheel
             self.controls = controls
             self.model = model
             self.unit = unit
             self.kind = kind
             self.capabilities = capabilities
+        }
+
+        /// Whether a setting that needs `capability` applies to this mouse: unless it is known to
+        /// lack it, so an unknown capability shows as available.
+        public func offers(_ capability: KeyPath<Capabilities, Bool?>) -> Bool {
+            capabilities?[keyPath: capability] != false
         }
 
         public enum Connection: String, Codable, Sendable { case receiver, bluetooth }

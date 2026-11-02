@@ -143,19 +143,28 @@ extension Session {
     /// without it), inverted in hardware.
     private func applyWheels() async throws {
         try ensureOpen()
+        // Only wheels the mouse has (or may have, until their lookup answers) are taken over.
+        let wheels = [HiResWheel.id, ThumbWheel.id]
+        let mayHaveWheels = wheels.contains { device.knownPresence(of: $0) != false }
         // Taking the wheels over without permission to post scroll events would silence them.
         let accessibility = environment.canPostEvents
         let takeOver = Handoff.wheelsDiverted(scrolling: scroll != nil, accessibility: accessibility, away: away)
-        if scroll != nil && !accessibility { Log.error("\(name): no Accessibility permission; leaving the wheels native") }
+        if scroll != nil && !accessibility && mayHaveWheels {
+            Log.error("\(name): no Accessibility permission; leaving the wheels native")
+        }
         let smooth = takeOver && smoothAnywhere
         // Set before diverting, so `restore` hands them back even if a write below fails.
-        if takeOver { wheelsMayBeDiverted = true }
+        if takeOver && mayHaveWheels { wheelsMayBeDiverted = true }
         // Each wheel stands alone: a main wheel that times out must not leave the thumb wheel diverted.
         try await Independently.each([Wheel.main, .thumb], stopsOn: { self.stops($0) }) {
             try await applyWheel($0, takeOver: takeOver, smooth: smooth)
         }
         // Reached only when both were set, so a wheel that failed still counts as maybe diverted.
-        if !takeOver { wheelsMayBeDiverted = false }
+        if !takeOver || wheels.allSatisfy({ device.knownPresence(of: $0) == false }) { wheelsMayBeDiverted = false }
+        if smoothAnywhere, device.knownPresence(of: HiResWheel.id) == false, !smoothScrollUnsupportedLogged {
+            smoothScrollUnsupportedLogged = true
+            Log.info("\(name): smooth scrolling needs HID++ 0x2121, which this mouse lacks; its wheel scrolls natively")
+        }
     }
 
     private enum Wheel { case main, thumb }
@@ -177,8 +186,7 @@ extension Session {
             try ensureOpen()
             try await HiResWheel.setMode(device, .init(diverted: smooth, highResolution: smooth, inverted: inverted))
         case .thumb:
-            state.hasThumbWheel = try await device.hasFeature(ThumbWheel.id)
-            guard state.hasThumbWheel else { return }
+            guard try await device.hasFeature(ThumbWheel.id) else { return }
             var inverted = false
             if takeOver {
                 thumbInfo = try await ThumbWheel.info(device)

@@ -58,7 +58,7 @@ struct ScrollingPane: View {
                 .disabled(!smooth)
             }
 
-            if device?.hasSmartShift != false || config.contains(["scrollWheel"]) {
+            if device?.offers(\.smartShift) != false || config.contains(["scrollWheel"]) {
                 Section("Main wheel") {
                     let inverted = config.bool(["scrollWheel", "inverted"])
                     Toggle(isOn: model.toggle(["scrollWheel", "inverted"], default: false)) {
@@ -66,14 +66,14 @@ struct ScrollingPane: View {
                                  mouseDefault: inverted == nil)
                     }
                     .accessibilityLabel("Reverse main wheel direction")
-                    if device?.hasSmartShift != false {
+                    if device?.offers(\.smartShift) != false {
                         wheelMode
                         smartShift
                     }
                 }
             }
 
-            if device?.hasThumbWheel != false || config.contains(["thumbWheel"]) {
+            if device?.offers(\.thumbWheel) != false || config.contains(["thumbWheel"]) {
                 Section {
                     let scrolls = config.thumbWheel(at: ["thumbWheel"]).scrolls
                     ThumbWheelRows(path: ["thumbWheel"])

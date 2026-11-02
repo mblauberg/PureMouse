@@ -9,6 +9,12 @@ import HIDPP
 final class Session {
     let device: HIDPPDevice
     let name: String
+    /// Read once at adoption and kept by replacement sessions; reported in `status`.
+    let identity: Identification
+    /// The device key: which `devices` entry of the config applies (`Config.forDevice`).
+    var model: String? { identity.model }
+    var unit: String? { identity.unit }
+    var kind: DeviceName.Kind? { identity.kind }
     /// Reported in `Status.Device.id`: stable while the daemon runs.
     let id: String
     let controls: [UInt16: ReprogControls.Control]
@@ -59,12 +65,14 @@ final class Session {
     var recognizer: GestureRecognizer
     var wheelMultiplier = 15
     var thumbInfo = ThumbWheel.Info(nativeResolution: 18, divertedResolution: 120)
-    /// Targets already reported as snapped to a supported resolution, so each is logged once.
-    private var snapLogged: Set<Int> = []
     /// Device state that outlives a config (see `DeviceState`).
     var state: DeviceState
     var hapticCapabilities: Haptic.Capabilities?
     var hapticMissingLogged = false
+    /// Logged once per session: smooth scrolling configured on a mouse without 0x2121, and
+    /// `toggleScrollMode` on one without SmartShift.
+    var smoothScrollUnsupportedLogged = false
+    var toggleUnsupportedLogged = false
     var unsupportedHaptics: Set<HapticWaveform> = []
     private var configuring: Task<Void, Never>?
     private var configureGeneration = 0
@@ -106,8 +114,11 @@ final class Session {
         var batteryLevels: UInt8?
         /// The battery is read from legacy 0x1000, the mouse lacking 0x1004; chosen by `apply`.
         var legacyBatterySelected = false
-        var hasSmartShift = false
-        var hasThumbWheel = false
+        /// An apply has succeeded, so feature lookups have been made and `capabilities` can be
+        /// reported from them.
+        var applied = false
+        /// Targets already reported as snapped to a supported resolution, so each is logged once.
+        var snapLogged: Set<Int> = []
     }
 
     /// What a session hands to the one replacing it on reload: its `DeviceState`, and what the
@@ -127,10 +138,12 @@ final class Session {
         var diversionAfter: Task<Void, Never>?
     }
 
-    init(device: HIDPPDevice, name: String, id: String, controls: [ReprogControls.Control], config: Config,
+    init(device: HIDPPDevice, name: String, identity: Identification = Identification(), id: String,
+         controls: [ReprogControls.Control], config: Config,
          inheriting inherited: Inherited = Inherited(), environment: SessionEnvironment = .live) {
         self.device = device
         self.name = name
+        self.identity = identity
         self.id = id
         self.config = config
         self.environment = environment
@@ -138,7 +151,8 @@ final class Session {
         self.controls = controls
         pressable = controls.values.filter { Self.isDivertable($0.cid, in: controls) && !$0.isVirtual }
             .map(\.cid).sorted()
-            .map { Status.Device.Control(cid: $0, name: Config.Button(cid: $0)?.rawValue) }
+            .map { Status.Device.Control(cid: $0, name: Config.Button(cid: $0)?.rawValue,
+                                         gestures: controls[$0]?.supportsRawXY) }
         let global = config.global
         self.global = global
         let scopes = [global] + Array(config.apps.values)
@@ -174,8 +188,10 @@ final class Session {
         if !appProfiles.isEmpty {
             scroll?.profileForBurst = { [weak self] in self?.profileUnderPointer() ?? ScrollEngine.Profile() }
         }
-        for cid in config.boundControls.sorted() where controls[cid]?.isDivertable != true {
-            Log.error("\(name): control \(ControlNames.describe(cid)) is missing or not divertable; skipped")
+        // Config is shared by every mouse, so a binding this one cannot take is expected: noted once.
+        let unbindable = config.boundControls.sorted().filter { controls[$0]?.isDivertable != true }
+        if !unbindable.isEmpty {
+            Log.debug("\(name): \(unbindable.map(ControlNames.describe).joined(separator: ", ")) missing or not divertable; skipped")
         }
     }
 
@@ -209,8 +225,24 @@ final class Session {
             online: state.online, battery: state.battery.flatMap(Self.status), dpi: state.dpi,
             dpiSteps: state.resolutions?.values ?? [],
             wheelMode: state.wheelMode.map { $0 == .ratchet ? .ratchet : .freespin },
-            hasSmartShift: state.hasSmartShift, hasThumbWheel: state.hasThumbWheel,
-            controls: pressable)
+            controls: pressable, model: model, unit: unit, kind: kind?.name, capabilities: capabilities)
+    }
+
+    /// What the mouse has, from the lookups an apply made (`HIDPPDevice.knownPresence`), so
+    /// building it sends nothing. Nil before the first successful apply; a member is nil while
+    /// unknown, such as after a lookup that timed out. A choice of two features is false only
+    /// when both are known absent.
+    var capabilities: Status.Device.Capabilities? {
+        guard state.applied else { return nil }
+        func has(_ feature: UInt16) -> Bool? { device.knownPresence(of: feature) }
+        func either(_ a: UInt16, _ b: UInt16) -> Bool? {
+            let pair = [has(a), has(b)]
+            return pair.contains(true) ? true : pair.allSatisfy { $0 == false } ? false : nil
+        }
+        return Status.Device.Capabilities(
+            dpi: has(AdjustableDPI.id), smartShift: either(SmartShift.id, SmartShiftEnhanced.id),
+            smoothScroll: has(HiResWheel.id), thumbWheel: has(ThumbWheel.id), haptics: has(Haptic.id),
+            battery: either(UnifiedBattery.id, LegacyBattery.id))
     }
 
     private static func status(_ battery: UnifiedBattery.State) -> Status.Device.Battery? {
@@ -352,6 +384,8 @@ final class Session {
                 state.legacyBatterySelected = try await device.hasFeature(LegacyBattery.id)
             }
         } catch { }
+        // Looked up for `capabilities` only; a failure leaves it unknown.
+        _ = try? await device.hasFeature(Haptic.id)
 
         // One step in the chain, so a handoff (`setAway`) cannot interleave with it.
         try await serialised(on: diversion) { try await $0.applyInputs(wheels: true) }
@@ -362,6 +396,7 @@ final class Session {
         }
         await readBattery()
         state.online = true
+        state.applied = true
         changed()
     }
 
@@ -431,9 +466,7 @@ final class Session {
     private func applyScrollMode() async throws {
         var enhanced = false
         do {
-            let clutch = try await clutch()
-            state.hasSmartShift = clutch != nil
-            guard let clutch else { return }
+            guard let clutch = try await clutch() else { return }
             enhanced = clutch == .enhanced
             let mode = state.scrollMode ?? config.scrollWheel?.mode?.smartShift
             let threshold = config.scrollWheel?.smartShiftThreshold
@@ -470,7 +503,7 @@ final class Session {
     /// `target` snapped to a resolution the sensor accepts, or unchanged if the list is unknown.
     func supportedDPI(near target: Int) -> Int {
         let dpi = state.resolutions?.nearest(to: target) ?? target
-        if dpi != target, snapLogged.insert(target).inserted {
+        if dpi != target, state.snapLogged.insert(target).inserted {
             Log.info("\(name): dpi \(target) is not supported; using \(dpi)")
         }
         return dpi

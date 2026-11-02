@@ -253,7 +253,10 @@ extension Session {
     private func toggleScrollMode() async {
         do {
             guard let clutch = try await clutch() else {
-                Log.error("\(name): toggleScrollMode needs SmartShift")
+                if !toggleUnsupportedLogged {
+                    toggleUnsupportedLogged = true
+                    Log.info("\(name): toggleScrollMode needs SmartShift, which this mouse lacks")
+                }
                 return
             }
             let next: SmartShift.Mode = try await scrollMode(of: clutch) == .ratchet ? .freespin : .ratchet

@@ -9,7 +9,7 @@ import Testing
         logiOptionsRunning: false, config: .init(path: "/tmp/config.json", error: nil),
         devices: [.init(id: "r1", name: "MX Master 3S", connection: .receiver, online: true,
                         battery: .init(percent: 80, level: .good, charging: false), dpi: 1600,
-                        dpiSteps: [200, 250], wheelMode: .ratchet, hasSmartShift: true, hasThumbWheel: true,
+                        dpiSteps: [200, 250], wheelMode: .ratchet,
                         controls: [.init(cid: 0x53, name: "back")])],
         capture: nil, away: true)
     let data = try Companion.encoder.encode(status)
@@ -34,13 +34,13 @@ private func fullStatus() -> Status {
         devices: [
             .init(id: "1-1", name: "MX Master 3S", connection: .receiver, online: true,
                   battery: .init(percent: 80, level: .good, charging: false), dpi: 1600, dpiSteps: [200, 250],
-                  wheelMode: .ratchet, hasSmartShift: true, hasThumbWheel: true,
+                  wheelMode: .ratchet,
                   controls: [.init(cid: 0x53, name: "back", gestures: true), .init(cid: 0xFD, name: nil, gestures: false)],
                   model: "m4082b0230000", unit: "0a1b2c3d", kind: "mouse",
                   capabilities: .init(dpi: true, smartShift: true, smoothScroll: false, thumbWheel: true,
                                       haptics: false, battery: true, features: ["0001", "2201", "2110"])),
             .init(id: "2-1", name: "M750", connection: .bluetooth, online: true, battery: nil, dpi: nil,
-                  dpiSteps: [], wheelMode: nil, hasSmartShift: false, hasThumbWheel: false, controls: [],
+                  dpiSteps: [], wheelMode: nil, controls: [],
                   model: "pb02c", kind: "mouse"),
         ],
         capture: .init(token: 4, state: .pressed, cid: 0xFD, deviceID: "2-1", model: "pb02c"), away: false)
@@ -77,15 +77,24 @@ private func fullStatus() -> Status {
 
     @Test func nilIdentityFieldsAreLeftOutOfADeviceToo() throws {
         let device = Status.Device(id: "1", name: "x", connection: .receiver, online: true, battery: nil, dpi: nil,
-                                   dpiSteps: [], wheelMode: nil, hasSmartShift: false, hasThumbWheel: false,
+                                   dpiSteps: [], wheelMode: nil,
                                    controls: [.init(cid: 1, name: nil)])
         let text = String(decoding: try Companion.encoder.encode(device), as: UTF8.self)
         for key in ["model", "unit", "kind", "capabilities", "gestures"] { #expect(!text.contains(key), "\(key)") }
     }
 
-    @Test func theSchemaIsStillOne() {
-        #expect(Status.currentSchema == 1)
-        #expect(fullStatus().schema == 1)
+    @Test func aSettingIsOfferedUnlessTheMouseIsKnownToLackIt() {
+        var device = fullStatus().devices[1]
+        #expect(device.capabilities == nil && device.offers(\.smartShift) && device.offers(\.thumbWheel))
+        device.capabilities = .init(dpi: true, smartShift: false)
+        #expect(!device.offers(\.smartShift) && device.offers(\.thumbWheel) && device.offers(\.dpi))
+    }
+
+    @Test func theSchemaIsTwoAndTheOldFeatureFlagsAreGone() throws {
+        #expect(Status.currentSchema == 2)
+        #expect(fullStatus().schema == 2)
+        let text = String(decoding: try Companion.encoder.encode(fullStatus()), as: UTF8.self)
+        #expect(!text.contains("hasSmartShift") && !text.contains("hasThumbWheel"))
     }
 }
 

@@ -1,0 +1,189 @@
+import Foundation
+import HIDPP
+import HIDPPTesting
+import PureMouseKit
+import Testing
+@testable import puremouse
+
+/// What a session publishes about its mouse: identity, capabilities and controls, all from what
+/// the mouse reports.
+@Suite(.quietLog) @MainActor
+struct SessionStatusTests {
+    typealias Capabilities = Status.Device.Capabilities
+
+    func encoded(_ device: Status.Device) throws -> String {
+        String(decoding: try Companion.encoder.encode(device), as: UTF8.self)
+    }
+
+    @Test func theMXMaster3SReportsItsIdentityAndEveryCapabilityItHas() async throws {
+        let fake = FakeDevice.mxMaster3S
+        fake.responses[.init(0x0003, 0)]?.replaceSubrange(1...4, with: [0x0A, 0x1B, 0x2C, 0x3D])
+        let h = try await SessionHarness(fake, identify: true)
+        defer { h.close() }
+        #expect(h.session.status.capabilities == nil)  // not before an apply
+        try await h.session.apply()
+        let status = h.session.status
+        #expect(status.model == "mb03440910000")
+        #expect(status.unit == "0a1b2c3d")
+        #expect(status.kind == "mouse")
+        // The fixture lacks only haptics (and the fallbacks 0x2111 and 0x1000).
+        #expect(status.capabilities == Capabilities(dpi: true, smartShift: true, smoothScroll: true, thumbWheel: true,
+                                                    haptics: false, battery: true))
+        #expect(status.controls.map(\.cid) == [0x52, 0x53, 0x56, 0xC3, 0xC4])
+        #expect(status.controls.filter { $0.gestures == true }.map(\.cid) == [0xC3])
+        #expect(status.controls.allSatisfy { $0.gestures != nil })
+    }
+
+    @Test func theM750ShowsOnlyWhatItHas() async throws {
+        let h = try await SessionHarness(.m750, identify: true)
+        defer { h.close() }
+        try await h.session.apply()
+        let status = h.session.status
+        #expect(status.capabilities == Capabilities(dpi: true, smartShift: false, smoothScroll: false, thumbWheel: false,
+                                                    haptics: false, battery: true))
+        // 0x0050 and 0x0051 are not divertable, 0x00D7 is virtual; the rest report raw XY.
+        #expect(status.controls.map(\.cid) == [0x52, 0x53, 0x56, 0xFD])
+        #expect(status.controls.allSatisfy { $0.gestures == true })
+        #expect(ControlNames.name(0x00FD) == "DPI button")
+        #expect(status.kind == "mouse")
+        #expect(status.model.map(Config.isDeviceKey) == true && status.model?.first == "m")
+        #expect(status.unit == nil)  // the dump's 0x0003 reply carries no unit ID
+    }
+
+    @Test func aMouseWithoutSmartShiftThumbWheelOrHapticsIsDescribedByWhatItReports() async throws {
+        let h = try await SessionHarness(.synthetic, identify: true)
+        defer { h.close() }
+        try await h.session.apply()
+        let status = h.session.status
+        #expect(status.model == "m40aa00000000" && status.unit == "12345678" && status.kind == "mouse")
+        #expect(status.capabilities == Capabilities(dpi: true, smartShift: false, smoothScroll: true, thumbWheel: false,
+                                                    haptics: false, battery: true))
+        #expect(status.controls.map(\.cid) == [0x52, 0x53, 0x56])
+        #expect(status.controls.allSatisfy { $0.gestures == false })
+    }
+
+    @Test(arguments: [[UInt8](repeating: 0, count: 16), [0] + [UInt8](repeating: 0xFF, count: 15)])
+    func aModelIDOfAllZerosOrAllOnesFallsBackToTheProductKey(reply: [UInt8]) async throws {
+        let fake = FakeDevice.m750
+        fake.responses[.init(0x0003, 0)] = reply
+        let h = try await SessionHarness(fake, identify: true)
+        defer { h.close() }
+        #expect(h.session.model == "pb02c")
+        #expect(h.session.unit == nil)
+    }
+
+    @Test func withoutDeviceInfoTheKeyIsTheProductIDAndThereIsNoUnit() async throws {
+        let fake = FakeDevice.m750
+        fake.features[2] = nil  // 0x0003
+        let h = try await SessionHarness(fake, identify: true)
+        defer { h.close() }
+        #expect(h.session.model == "pb02c" && h.session.unit == nil)
+        #expect(h.session.name == "Signature Plus M750" && h.session.kind == .mouse)
+        try await h.session.apply()
+        #expect(h.session.status.model == "pb02c")
+    }
+
+    @Test func aDeviceInfoThatTimesOutLeavesTheKeyUnknownRatherThanGuessed() async throws {
+        let fake = FakeDevice.m750
+        fake.failures[.init(0x0003, 0)] = .timeout
+        let h = try await SessionHarness(fake, identify: true)
+        defer { h.close() }
+        #expect(h.session.model == nil && h.session.name == "Signature Plus M750")
+    }
+
+    @Test func aLookupThatFailsOnceLeavesThatCapabilityOut() async throws {
+        let fake = FakeDevice.mxMaster3S
+        let answer = fake.transport.answer
+        var dropped = false
+        fake.transport.answer = { request in
+            // The first root lookup of haptics 0x19B0 goes unanswered.
+            if !dropped, request.featureIndex == 0, request.function == 0, request.params.starts(with: [0x19, 0xB0]) {
+                dropped = true
+                return nil
+            }
+            return try answer?(request)
+        }
+        let h = try await SessionHarness(fake)
+        defer { h.close() }
+        try await h.session.apply()
+        #expect(dropped)
+        let capabilities = try #require(h.session.status.capabilities)
+        #expect(capabilities.haptics == nil && capabilities.dpi == true)
+        let json = try encoded(h.session.status)
+        #expect(!json.contains("haptics") && json.contains("\"smartShift\" : true"))
+    }
+
+    @Test func buildingCapabilitiesSendsNothing() async throws {
+        let h = try await SessionHarness(.m750, identify: true)
+        defer { h.close() }
+        try await h.session.apply()
+        h.fake.transport.sent.removeAll()
+        _ = try encoded(h.session.status)
+        #expect(h.fake.transport.sent.isEmpty)
+    }
+
+    @Test func capabilitiesAreInheritedByAReplacementSession() async throws {
+        let h = try await SessionHarness(.m750)
+        defer { h.close() }
+        try await h.session.apply()
+        let controls = try await ReprogControls.controls(h.device)
+        let replacement = Session(device: h.device, name: h.fake.name, id: "r", controls: controls, config: .empty,
+                                  inheriting: h.session.inheritance)
+        defer { replacement.close() }
+        #expect(replacement.status.capabilities == h.session.status.capabilities)
+    }
+
+    @Test func theM750WithSmoothScrollingSendsNoWheelWriteAndSaysWhyOnce() async throws {
+        let log = CapturedLog()
+        try await Log.$testOutput.withValue(.lines { log.append($0) }) {
+            let h = try await SessionHarness(.m750, config: SessionHarness.config(#"{"smoothScroll": {}}"#), identify: true)
+            defer { h.close() }
+            try await h.session.apply()
+            try await h.session.apply()
+            #expect(h.session.status.capabilities?.smoothScroll == false)
+            #expect(h.fake.transport.sent.allSatisfy { [0x2121, 0x2150].contains(h.fake.feature(of: $0)) == false })
+            // Nothing was taken over, so quitting has no wheel to hand back.
+            #expect(!h.session.wheelsMayBeDiverted)
+            #expect(Daemon.restoreSteps(quitting: [h.session.restoreSteps], pausing: []) == h.session.divertedControls.count)
+        }
+        let line = "smooth scrolling needs HID++ 0x2121, which this mouse lacks; its wheel scrolls natively"
+        #expect(log.lines.filter { $0.level == "info" && $0.message.hasSuffix(line) }.count == 1)
+        #expect(!log.lines.contains { $0.level == "error" })
+    }
+
+    @Test func withoutAccessibilityAMouseWithNoWheelsLogsNoWheelError() async throws {
+        let log = CapturedLog()
+        try await Log.$testOutput.withValue(.lines { log.append($0) }) {
+            let h = try await SessionHarness(.m750, config: SessionHarness.config(#"{"smoothScroll": {}}"#),
+                                             environment: .init(canPostEvents: false))
+            defer { h.close() }
+            try await h.session.apply()  // looks the wheels up
+            try await h.session.apply()
+        }
+        #expect(log.lines.filter { $0.message.contains("no Accessibility permission") }.count == 1)
+    }
+
+    @Test func aMouseWithoutSmartShiftThumbWheelOrHapticsIsConfiguredQuietly() async throws {
+        let log = CapturedLog()
+        try await Log.$testOutput.withValue(.lines { log.append($0) }) {
+            let config = try SessionHarness.config(#"""
+                {"dpi": 1650, "scrollWheel": {"mode": "freespin", "smartShiftThreshold": 255},
+                 "thumbWheel": {"action": "tabs"}, "smoothScroll": {},
+                 "buttons": {"gesture": {"up": "missionControl"}, "top": "showDesktop",
+                             "middle": "toggleScrollMode", "back": {"haptic": "knock"}}}
+                """#)
+            let h = try await SessionHarness(.synthetic, config: config, identify: true)
+            defer { h.close() }
+            try await h.session.apply()
+            try await h.session.apply()
+            // Only what it has: its DPI, its main wheel and its buttons.
+            #expect(h.fake.dpi == 1650)
+            #expect(h.fake.mainWheelDiverted)
+            #expect(Set(h.fake.controls.filter(\.diverted).map(\.cid)) == [0x52, 0x53])
+            #expect(h.fake.transport.sent.allSatisfy { h.fake.feature(of: $0) != nil })
+        }
+        #expect(log.lines.filter { $0.level != "debug" }.isEmpty, "\(log.lines)")
+        // The gesture and top buttons it lacks: one debug line.
+        #expect(log.lines.filter { $0.message.contains("missing or not divertable") }.count == 1)
+    }
+}
