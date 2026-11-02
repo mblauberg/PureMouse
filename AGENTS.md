@@ -36,7 +36,8 @@ one. This file covers how to work on it safely.
   (`Sources/PureMouseMenu/DevHooks.swift`); `--login` launches it as launchd does (no Settings).
   Debug builds of the helper take `PUREMOUSE_DEV_PANE=<pane>` (a tab, `general`, `mouse`, `apps`,
   `about`, or a Mouse segment, `buttons`, `scrolling`, `pointer`), `PUREMOUSE_DEV_APPEARANCE`,
-  `PUREMOUSE_DEV_PICKER=<button>`, `PUREMOUSE_DEV_SHORTCUT=<button>` (Mouse › Buttons) and
+  `PUREMOUSE_DEV_PICKER=<button>`, `PUREMOUSE_DEV_SHORTCUT=<button>` (Mouse › Buttons),
+  `PUREMOUSE_DEV_SHEET=<name>` (a sheet on the pane shown, `DevSheet`: `advanced`) and
   `PUREMOUSE_DEV_APP=<bundle id>` (Apps tab; adds the app without writing) for screenshots
   (`Sources/PureMouseSettingsUI/DevHooks.swift`). `PUREMOUSE_DEV_MENU=1` puts a plain backdrop
   under the menu, since its glass shows whatever is behind it. A window capture
@@ -238,7 +239,9 @@ one. This file covers how to work on it safely.
   `preferredContentSize` without telling the tab controller, so `SettingsTabs.refit()` copies it
   across (through `MouseTab.fit()`, which adds the strip). Advanced settings sit behind a pane's
   footer (`PaneFooter`: Restore Defaults, Advanced…) in an `AdvancedSheet`, which never opens
-  another sheet.
+  another sheet. A control the mouse lacks is hidden per control from the primary mouse's
+  reported capabilities (`ControlAvailability`; unknown or no mouse shows it, a value already set
+  keeps it with a caption), and Scrolling's rows from `ScrollingLayout`.
 - Settings notices (config error, unsaved change, status too new, PureMouse off, paused, Logi
   Options+, Accessibility on the panes that need it) come from `BannerPlan.items`, in that order.
   A pane shows only the first as its banner, with "N more notices" opening General, whose Status

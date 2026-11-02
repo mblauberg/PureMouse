@@ -84,4 +84,9 @@ One term per concept. "Retire" lists words that must not appear in UI text for t
 | Battery | battery low, battery critical; "20% left" | — |
 | Thumb wheel steps per action | Turn distance; caption says what it does ("How far to turn before the action repeats.") | Turn per action, "wheel steps" |
 | Scroll acceleration | a strength, shown without a unit (Off … Strong) | "1.0×" |
+| A shell command bound to a control | Run Command (action and sheet title; "Run Command…" in the picker) | Run Shell Command |
+| Capturing a shortcut | Record Shortcut, then "Recording…" while it listens; "Or enter it" for typing | "Click to record" |
+| Thumb wheel actions the other way round | Swap directions ("Swaps what turning left and right does.") | Reverse direction (for actions), Reversed |
+| SmartShift threshold | Switches at (Slower … Faster) | Threshold, Sooner/Later |
+| A control this mouse lacks, kept because it is set | "Not supported by this mouse." (caption) | — |
 | Support | Support PureMouse (About link); GitHub Sponsors (the destination) | Donate, Buy Me a Coffee, Pro, Free version |
