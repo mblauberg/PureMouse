@@ -29,6 +29,9 @@ public final class CaptureController {
 
     public func start() {
         guard link.daemonRunning, !link.paused else { return }
+        // A restart replaces the running request, and its timeout with it.
+        cancelTimeout?()
+        cancelTimeout = nil
         token = newToken()
         listening = true
         capturedButton = nil

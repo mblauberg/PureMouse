@@ -157,3 +157,20 @@ private func link(_ sandbox: Sandbox, owns: DaemonLink.ControlFields, tokens: [I
     menu.setPaused(true)
     #expect(sandbox.control() == Control(paused: true, capture: nil, useConfiguredDPI: nil))
 }
+
+@MainActor @Test func aPauseFromTheCombinedAppKeepsAnotherProcesssCapture() throws {
+    let sandbox = try Sandbox()
+    try sandbox.writeStatus(daemonStatus())
+    let app = link(sandbox, owns: .all)
+    try Companion.write(Control(paused: false, capture: .init(token: 5)), to: sandbox.locations.control)
+    app.setPaused(true)
+    app.requestConfiguredDPI()
+    #expect(sandbox.control() == Control(paused: true, capture: .init(token: 5), useConfiguredDPI: 101))
+    // Its own capture, and ending it, still go through.
+    app.capture = .init(token: 6)
+    app.writeControl()
+    #expect(sandbox.control()?.capture == .init(token: 6))
+    app.capture = nil
+    app.setPaused(false)
+    #expect(sandbox.control() == Control(paused: false, capture: nil, useConfiguredDPI: 101))
+}

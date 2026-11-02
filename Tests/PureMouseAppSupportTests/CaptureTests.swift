@@ -84,3 +84,15 @@ private func running(_ sandbox: Sandbox, status: Status = daemonStatus()) throws
     #expect(!capture.listening)
     #expect(sandbox.control()?.capture == nil)
 }
+
+@MainActor @Test func startingAgainReplacesTheEarlierTimeout() throws {
+    let sandbox = try Sandbox()
+    let daemon = try running(sandbox)
+    let manual = ManualClock()
+    var tokens = [77, 78]
+    let capture = CaptureController(link: daemon, clock: manual.clock, newToken: { tokens.removeFirst() })
+    capture.start()
+    capture.start()
+    #expect(manual.pending.count == 1)
+    #expect(sandbox.control()?.capture == Control.Capture(token: 78))
+}

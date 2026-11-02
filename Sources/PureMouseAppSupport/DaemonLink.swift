@@ -14,9 +14,13 @@ public final class DaemonLink {
     /// The daemon writes a newer status schema than this app understands.
     public private(set) var statusTooNew = false
 
-    /// The select-by-pressing request this process has open, repeated in every control write
-    /// until it ends (`CaptureController`).
-    @ObservationIgnored public var capture: Control.Capture?
+    /// The select-by-pressing request this process has open (`CaptureController`). The next
+    /// control write sends it; writes after that keep the file's value, so a pause or DPI request
+    /// from here cannot cancel a capture another process started.
+    @ObservationIgnored public var capture: Control.Capture? {
+        didSet { captureChanged = true }
+    }
+    @ObservationIgnored private var captureChanged = false
 
     /// Called when anything the status item shows may have changed.
     @ObservationIgnored public var changed: @MainActor () -> Void = {}
@@ -187,18 +191,20 @@ public final class DaemonLink {
     public func writeControl() -> Bool { write(newDPIToken: nil) }
 
     /// One read-merge-replace of `control.json` under `control.json.lock`: the owned fields come
-    /// from here (`paused` only while a request is pending, `useConfiguredDPI` only when new), the
-    /// rest stay as the file has them. With no file, `paused` follows the daemon's status.
+    /// from here (`paused` only while a request is pending, `capture` only when this process
+    /// changed it, `useConfiguredDPI` only when new), the rest stay as the file has them. With no
+    /// file, `paused` follows the daemon's status.
     private func write(newDPIToken: Int?) -> Bool {
         let url = locations.control
         do {
             try FileLock.withLock(FileLock.url(for: url)) {
                 var control = Companion.read(Control.self, from: url) ?? Control(paused: status?.paused ?? false)
                 if owns.contains(.paused), let requestedPaused { control.paused = requestedPaused }
-                if owns.contains(.capture) { control.capture = capture }
+                if owns.contains(.capture), captureChanged { control.capture = capture }
                 if owns.contains(.useConfiguredDPI), let newDPIToken { control.useConfiguredDPI = newDPIToken }
                 try Companion.write(control, to: url)
             }
+            captureChanged = false
             ring()
             return true
         } catch {
