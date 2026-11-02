@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted, not built
+Accepted
 
 ## Context
 
@@ -31,8 +31,10 @@ exiting when its window closes. Pure logic and the file contract live in a share
 ## Consequences
 
 - No residue by construction; Dock and Cmd-Tab come free; `Relaunch` and its couplings go.
-- A third nested bundle: about 2 MB more, one more entry in `scripts/lib.zsh`'s signing list, and a
-  line in the size budget.
+- A third nested bundle: about 3.3 MB more installed (11.6 MB against 8.3 MB) and 2.4 MB more
+  download, 1.8 MB of each for its own copy of the adaptive icon (`Assets.car`), which is what
+  draws its Dock and Cmd-Tab icon in the dark, clear and tinted styles; one more entry in
+  `scripts/lib.zsh`'s `components`, and budgets re-measured.
 - A cold start at "Settings…" (budget 1 s), and two processes writing the config, which both take
   an advisory lock on `config.json.lock` for the whole read-merge-replace.
 - Opening the app from the Finder and `puremouse register` must open the helper.

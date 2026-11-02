@@ -16,12 +16,12 @@ skip() {
 }
 
 # stand_in_app <dir> <version>: an unsigned PureMouse.app laid out by assemble_bundle, with
-# /usr/bin/true as both executables. Prints its path.
+# /usr/bin/true as every executable. Prints its path.
 stand_in_app() {
     local dir=$1 version=$2
     mkdir -p $dir/bin
-    cp /usr/bin/true $dir/bin/puremouse
-    cp /usr/bin/true $dir/bin/PureMouseMenu
+    local component
+    for component in $components; do cp /usr/bin/true $dir/bin/$(component_executable $component); done
     assemble_bundle $dir/bin $dir/PureMouse.app $version 42 >/dev/null
     print -r -- $dir/PureMouse.app
 }
@@ -71,8 +71,7 @@ while (( \$# )); do
     shift
 done
 mkdir -p .build/stub
-cp /usr/bin/true .build/stub/puremouse
-cp /usr/bin/true .build/stub/PureMouseMenu
+for component in \$components; do cp /usr/bin/true .build/stub/\$(component_executable \$component); done
 assemble_bundle .build/stub .build/app/PureMouse.app \$version 1
 touch .build/app/PureMouse.app/Contents/Resources/NEW
 scripts/sign-bundle.sh .build/app/PureMouse.app --identity - 2>/dev/null
@@ -110,7 +109,12 @@ fi
 exit 0'
     fake_command pkill 'print -r -- "pkill $@" >> "${0:A:h}/launchctl.log"
 exit 1'
-    fake_command pgrep '[[ -z ${FAKE_MENU_RUNNING:-} ]] || exit 0
+    fake_command pgrep '[[ -z ${FAKE_MENU_RUNNING:-} || $* != *PureMouseMenu* ]] || exit 0
 [[ -z ${FAKE_OTHER_USERS_MENU:-} || $* == *-u* ]] || exit 0
 exit 1'
+}
+
+# settings_of <app>: the nested Settings helper.
+settings_of() {
+    component_path $1 "$(settings_component)"
 }

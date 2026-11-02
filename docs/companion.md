@@ -1,13 +1,18 @@
 # Menu bar app and daemon: the contract
 
-PureMouse is two processes in one app bundle:
+PureMouse is two resident processes in one app bundle, plus Settings on demand:
 
 - **The daemon** (`PureMouse.app/Contents/MacOS/puremouse`): headless and unchanged in identity
   (bundle ID `io.github.mblauberg.puremouse`, executable path, signature), so existing
   Accessibility and Input Monitoring grants keep matching. It alone talks to the mouse.
 - **The menu bar app** (`PureMouse.app/Contents/Library/LoginItems/PureMouse Menu.app`, bundle ID
-  `io.github.mblauberg.puremouse.menu`, `LSUIElement`): the status item, its menu and the Settings
-  window. It needs no privacy permissions and never opens HID devices.
+  `io.github.mblauberg.puremouse.menu`, `LSUIElement`): the status item and its menu. It needs no
+  privacy permissions and never opens HID devices.
+- **The Settings helper** (`PureMouse.app/Contents/Helpers/PureMouse Settings.app`, bundle ID
+  `io.github.mblauberg.puremouse.settings`, a regular app with a Dock icon): the Settings window.
+  The menu bar app opens it, and it quits when its window closes
+  ([ADR 9](adr/0009-settings-helper-app.md)). It edits the config and sends control requests as
+  the menu bar app does, under the same locks.
 
 Either works without the other. With the menu bar app quit or hidden, the mouse behaves exactly as
 configured; with the daemon stopped, the menu shows "PureMouse Is Off" and can start it.
@@ -134,8 +139,9 @@ All optional; nil members are left out of the JSON.
 ## Login and lifecycle
 
 The daemon CLI owns every launchd change (`LoginItem.swift` holds the policy; a `LoginService`,
-`LaunchdAgentService`, holds the mechanism, so the policy is tested against a fake). The menu
-app runs these commands through the daemon binary at `Bundle.main.bundleURL/../../../MacOS/puremouse`.
+`LaunchdAgentService`, holds the mechanism, so the policy is tested against a fake). The menu app
+and the Settings helper run these commands through the daemon binary in the app they are nested
+in, `PureMouse.app/Contents/MacOS/puremouse` (`Locations`).
 
 "Starts at login" and "is running now" are separate, and each command changes only the axis the
 table gives:
@@ -169,19 +175,39 @@ state: `notRegistered` (does not start at login), `enabled` (does), `requiresApp
 but the user must approve it in System Settings › Login Items; no mechanism reports it yet) or
 `notFound` (the build has no such job, e.g. no menu bar app); `hidden` is whether `menu off` is in
 force. The decoder is `LoginStatus` in `PureMouseKit`. It says nothing about what is running: a
-job started with `start` while unregistered reads `notRegistered`. The menu app reads its "starts
-at login" answer from it rather than looking for a plist file.
+job started with `start` while unregistered reads `notRegistered`. Settings reads its "starts at
+login" answer from it rather than looking for a plist file.
 
-Opening PureMouse.app from the Finder runs `register`, touches `show-settings` in
-`Companion.directory` and opens the menu app, which shows Settings; with the icon hidden it quits
-when Settings closes. `open` is tried twice, since it can reach the instance `register` is booting
-out and fail (`_LSOpenURLsWithCompletionHandler` error -600). The old alert is kept only when
-there is no menu app or it cannot be opened. The menu app keeps a single instance: a second launch
-touches `show-settings`, posts `io.github.mblauberg.puremouse.menu.show` and exits, and the running
-one shows Settings. An instance that starts within 5 s of that stamp (including one launchd starts)
-shows Settings too and removes it, so a request made while the agent restarts is not lost. Reopening
-the app (`applicationShouldHandleReopen`) also shows Settings. If the user has blocked the item
-under System Settings › Menu Bar, opening the app still reaches Settings.
+Settings opens the same way from everywhere (`SettingsLauncher`): `show-settings` in
+`Companion.directory` is written with the pane to show (empty: the last one), the doorbell
+`io.github.mblauberg.puremouse.menu.show` is posted, and the helper is opened with `NSWorkspace`,
+which starts it or brings the running one forward (one instance per bundle ID). A running helper
+reads the file on the doorbell; a starting one reads it at launch. Only a stamp from the last 5 s
+counts, and the reader removes it (`ShowRequest`). Every writer (the menu app, and the daemon's
+`openMenu`) and every reader goes through Kit's `SettingsRequest`, which holds `show-settings.lock`
+and replaces the file atomically, so a reader never sees a half-written pane or removes a request
+written after it read. The menu app no longer listens on the doorbell. A helper that LaunchServices
+still lists but whose process has exited is opened again 0.3 s later, unless a newer open has
+superseded it. Quit PureMouse first leaves a `settings-quit` stamp beside `show-settings`, then
+waits up to 3 s for an open under way and quits the helper it starts. A helper that starts later
+still, within 60 s of the stamp and with no request written since, exits at launch; any new
+request clears the stamp.
+
+Opening PureMouse.app from the Finder runs `register`, touches `show-settings` and opens the menu
+app. The menu app opens Settings when it was opened by hand rather than by launchd, when it finds a
+fresh stamp at launch (so a request made while `register` restarts the agent is not lost), when its
+icon is hidden (it then quits once Settings is open), and when it is reopened
+(`applicationShouldHandleReopen`). `open` is tried twice, since it can reach the instance
+`register` is booting out and fail (`_LSOpenURLsWithCompletionHandler` error -600); if both fail, the Settings helper is opened
+directly and reads the same stamp. The old alert is kept only when neither app can be opened. The menu app keeps a single
+instance: a second launch opens Settings and exits, and the running one keeps the icon. If the user
+has blocked the item under System Settings › Menu Bar, opening the app still reaches Settings.
+
+The helper runs `menu on` and `menu off` itself. It is not in the menu agent's process group, so
+hiding the icon from Settings leaves Settings open. Turning on Start at login there runs `register`,
+which restarts the menu app's agent (the icon goes and comes back), since the caller is not the menu
+app. Quit PureMouse quits the helper first, which saves its edits and cancels a select by pressing
+still listening, then runs `stop`. Quit in the helper's own menu (⌘Q) quits only Settings.
 
 ## Footprint
 
@@ -194,58 +220,67 @@ read them as "about" and repeat the rig after each macOS release. The bare AppKi
 
 | Menu app, release build | Without the variable, MB | Shipped (`MallocSpaceEfficient=1`), MB | Bare AppKit status item and menu, same Mac |
 |---|---|---|---|
-| fresh, about 4.5 s after launch | 13.8 | 10.1 | 10.8 |
-| after 1 menu open | 19.8 | 14.1 | 15.2 |
-| after 3 menu opens | 19.9 | 14.1 | 15.4 |
-| after 10 menu opens | 19.9 | 14.2 | 15.6 |
-| after 200 status doorbells, 10 ms apart, menu never opened | 13.8 | 10.0 | |
-| Settings open, in this process | 43.1 | 33.9 | |
-| Settings closed again, in this process | 38.9 | 24.9 | |
+| fresh, about 4.5 s after launch | 11.9 | 8.6 | 10.8 |
+| after 1 menu open | 18.4 | 12.9 | 15.2 |
+| after 3 menu opens | 18.6 | 13.0 | 15.4 |
+| after 10 menu opens | 18.8 | 12.9 | 15.6 |
+| after 200 status doorbells, 10 ms apart, menu never opened | 12.1 | 8.8 | |
+| while the Settings helper is open | 12.0 | 8.6 | |
+| 1.5 s after the Settings helper quits | 12.1 | 8.6 | |
+| after 5 opens and quits of the Settings helper | 12.1 | 8.5 | |
+
+| Settings helper, release build | Without the variable | Shipped |
+|---|---|---|
+| its own footprint, 2 s after its window is on screen | 44.0 MB | 34.4 MB |
+| cold start, from the menu being asked for Settings to the window on screen | 518 ms | 526 ms |
 
 The shipped column is the rig, which passes on the Info.plist's `LSEnvironment` (the agent's plist
-sets the same variable); the other column is main's build without it (same Mac, same day).
-After 3 opens that is 0.71 times the baseline, and fresh is lower, which passes the adoption rule
-(at most 0.75 times, fresh no worse).
+sets the same variable); the other column is the same build without it (same Mac, same day). The
+helper's Info.plist sets the variable too, so it has it however it is opened (LaunchServices also
+passes the menu app's environment on to the app it opens). The cold start's slowest run was each
+time the first (1154 and 972 ms).
 
 What the numbers say:
 
-- **The first menu open costs about 4 to 6 MB, once.** Later opens add almost nothing (14.1 to 14.2 MB
-  over ten, shipped; 19.8 to 19.9 without the variable). A bare `NSStatusItem` with an `NSMenu` and nothing else grows by about 4 MB on its first
-  open (10.8 to 15.2 MB), so most of the cost is AppKit's, not the menu's; the rest is ours.
-- **Status updates did not grow it.** 200 doorbells posted 10 ms apart, `status.json` changed
-  before each, left the fresh figure where it was (10.0 against 10.1 MB shipped; 13.8 against 13.8 without the variable).
+- **The first menu open costs about 4 MB, once** (8.6 to 12.9 MB shipped; 11.9 to 18.4 without
+  the variable). Later opens add nothing (12.9 MB after ten). A bare `NSStatusItem` with an
+  `NSMenu` and nothing else grows by about 4 MB on its first open (10.8 to 15.2 MB), so the cost
+  is AppKit's.
+- **Fresh is about 1.5 MB lower than with Settings in the menu's own process** (8.6 against 10.1 MB
+  shipped; 11.9 against 13.8 without the variable). The menu no longer links SwiftUI, which is the
+  likely difference.
+- **Status updates barely moved it.** 200 doorbells posted 10 ms apart, `status.json` changed
+  before each, left it 0.2 MB above fresh (8.8 against 8.6 MB shipped; 12.1 against 11.9 without
+  the variable).
 - **No growth was seen across the measured opens and doorbells.** The earlier question was a
   repeating 272 KB block per open. It was not reproduced: after 30 opens under
   `MallocStackLogging`, `heap -addresses=all` listed no live block of that size (the largest live
   block was 64 KB), so no owner could be named. One run on 2026-11-02, with
   `scripts/measure-menu.sh --blocks`.
-- **Settings is where the rest goes.** Opening it adds about 24 MB (29 without the variable), and closing it gives back only
-  about 9 MB (4 without), even after `malloc_zone_pressure_relief`: AppKit and SwiftUI keep the pages. Hence
-  `Relaunch`: once Settings has closed, the app starts over as a fresh copy (the "closed" row above
-  is the process without that restart; the rig does not restart it).
+- **Settings costs the menu nothing.** With the helper open the menu stays at its fresh figure
+  (8.6 MB shipped), and it is there again after the helper quits, once or five times. The helper's
+  34 MB is its own and goes when it quits. Before the helper, Settings in the menu's own process
+  added about 24 MB on opening (to 33.9 MB shipped; about 29 MB, to 43.1, without the variable)
+  and gave back only about 9 MB on closing (to 24.9 MB; about 4 MB, to 38.9, without), even after
+  `malloc_zone_pressure_relief`: AppKit and SwiftUI keep the pages. Hence the helper
+  ([ADR 9](adr/0009-settings-helper-app.md)).
 - **Allocator.** The growth was freed small-malloc pages that stay resident and that
   `malloc_zone_pressure_relief` does not return. The menu app runs with
   `MallocSpaceEfficient=1` (a preference for reusing freed space over speed), in its launchd
   environment and, for a launch by the Finder, `LSEnvironment` in its Info.plist. The gate ran on the
-  branch build against main's, five runs each, side by side: 14.1 against 19.9 MB after 3 opens
-  (0.71 times) and 10.1 against 13.8 fresh. The variable is undocumented, so a macOS release may
-  ignore it; the rig is repeated after each one.
+  branch build against main's, five runs each, side by side, with Settings still in the menu's
+  process: 14.1 against 19.9 MB after 3 opens (0.71 times) and 10.1 against 13.8 fresh. The
+  variable is undocumented, so a macOS release may ignore it; the rig is repeated after each one.
 - **The prefs-domain caveat.** For a while the rig's numbers were bimodal: some launches started
   about 4 MB higher, even for the fresh and doorbell scenarios, and a fresh bundle id or
   `defaults delete` of the rig's domain brought them back. The cause is a transient state of the
   preferences domain that we could not reproduce on demand, so the rig clears its domain before
   every launch. An installed app that carries that state may read several MB above these figures.
 
-The Settings window and its view tree are created when shown. Once Settings has closed, the app
-starts over as a fresh copy (`Relaunch`): the agent's copy exits with 75 (EX_TEMPFAIL) and launchd
-restarts it (`KeepAlive` unless successful) within a second, in the same place in the menu bar; it
-waits until 11 s after its own start (launchd's respawn throttle), and while the menu is open or a
-lifecycle command runs. A copy the Finder started (the icon was hidden, then shown again in
-Settings) exits and has launchd start the agent, so the icon is supervised again. `exec` in place
-does not work: LaunchServices keeps the old image's registration for the pid and the new image
-never gets its status item. The menu itself is a plain `NSMenu` built on open (`menuNeedsUpdate`).
-`scripts/measure-menu.budgets` holds the limits the rig checks; measure with the rig, or
-`footprint`/`vmmap --summary`, before and after each change.
+The menu app links no SwiftUI and never shows a window, so it never has to start over. The menu
+itself is a plain `NSMenu` built on open (`menuNeedsUpdate`). `scripts/measure-menu.budgets`
+holds the limits the rig checks; measure with the rig, or `footprint`/`vmmap --summary`, before and
+after each change, and the menu app again after Settings has opened and closed.
 
 ## Daemon decisions
 

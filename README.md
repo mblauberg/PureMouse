@@ -35,15 +35,15 @@ the mouse is idle, so is PureMouse.
 
 | | PureMouse (main), as measured |
 |---|---|
-| Download | 5.7 MB dmg, 8.3 MB installed; universal (Apple silicon and Intel) |
-| Memory | Background process: 4-6 MB. Menu bar app: about 10 MB fresh, about 14 MB once its menu has been opened (medians of 5 on macOS 27.0.1) |
+| Download | 8.1 MB dmg, 11.6 MB installed; universal (Apple silicon and Intel) |
+| Memory | Background process: 4-6 MB. Menu bar app: about 9 MB fresh, about 13 MB once its menu has been opened. Settings: about 34 MB in its own process while its window is open, then nothing (medians of 5 on macOS 27.0.1) |
 | Idle CPU | Zero in normal use: no polling, no timers, no wake-ups* |
-| Processes | Two: the background process and an optional menu bar app |
+| Processes | Two: the background process and an optional menu bar app, plus Settings while its window is open |
 | Network | None, unless you press **Check for Updates** |
 | Privacy | No account, no telemetry, nothing stored on the mouse |
 
-The background process uses only system frameworks and no UI toolkit. The menu bar app builds its
-Settings window on demand and hands the memory back when you close it. Smooth scrolling runs in
+The background process uses only system frameworks and no UI toolkit. Settings is a separate app
+that runs only while its window is open, so the menu bar app stays small. Smooth scrolling runs in
 step with the display, and only while the wheel is moving.
 
 <sub>* Two exceptions, both short-lived: while a permission is still to be granted, PureMouse checks

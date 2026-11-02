@@ -62,10 +62,10 @@ that nobody is using, not on the Mac whose PureMouse you rely on: it opens menus
 ./scripts/measure-menu.sh --runs 3 --no-build
 ./scripts/measure-menu.sh --blocks        # also: 30 menu opens under MallocStackLogging, heap and malloc_history
 ./scripts/measure-menu.sh --env NAME=value   # the same, with one more variable in the menu's environment
-./scripts/measure-menu.sh --write-budgets # replace the budgets with the medians plus 2 MB, rounded up
+./scripts/measure-menu.sh --write-budgets # replace the budgets from the medians (MB plus 2, ms plus half)
 ```
 
-A Mac with only the command line tools cannot build the menu: the macOS 27 SDK expands SwiftUI's
+A Mac with only the command line tools cannot build the Settings helper: the macOS 27 SDK expands SwiftUI's
 `@State` with a plugin that ships with Xcode only. Copy Xcode's `libSwiftUIMacros.dylib`
 (`Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib/swift/host/plugins/`,
 the same Swift release as the Mac's own) into a directory of its own there and pass it with
@@ -75,13 +75,16 @@ It exits 0 when every budget holds, 1 when a median exceeds its budget (the line
 scenario and both numbers) and 2 when the rig itself fails. Samples are in
 `.build/rig/results/measure-menu-<time>.tsv` (`--tsv` picks another path), one row per sample with
 a `unit` column (MB, or ms for a cold start). `--blocks` exits 2 if `heap` fails or lists no blocks.
-A budgets file without a whole-number limit for `fresh`, `open-1`, `open-10` and `doorbells-200`
-is also exit 2. `scripts/measure-bare-appkit.sh` measures the bare AppKit comparison.
+A budgets file without a whole-number limit for `fresh`, `open-1`, `open-10`, `doorbells-200`,
+`helper-closed`, `helper-closed-5`, `helper` and `helper-cold-start` is also exit 2. `scripts/measure-bare-appkit.sh` measures the bare AppKit comparison.
 
-The rig is isolated from the installed app. It builds the release menu with `-DDEVHOOKS` into
-`.build/rig`, wraps it, with the function that assembles the shipped menu app (`make_menu_bundle` in `scripts/lib.zsh`), in a bundle of its own (`io.github.mblauberg.puremouse.menu.rig`) and starts
-it against a throwaway companion directory (`PUREMOUSE_COMPANION_DIR`, `PUREMOUSE_CONFIG` and
-`PUREMOUSE_DAEMON` set), with a sleeping process standing in for the daemon and a one-mouse
+The rig is isolated from the installed app. It builds the release menu and Settings helper with
+`-DDEVHOOKS` into `.build/rig`, wraps each, with the functions that assemble the shipped ones
+(`make_menu_bundle` and `make_settings_bundle` in `scripts/lib.zsh`), in a bundle of its own
+(`io.github.mblauberg.puremouse.menu.rig`, `….settings.rig`) and starts the menu against a
+throwaway companion directory (`PUREMOUSE_COMPANION_DIR`, `PUREMOUSE_CONFIG` and
+`PUREMOUSE_DAEMON` set, and `PUREMOUSE_SETTINGS` naming the rig's helper, which the menu opens
+with those variables through LaunchServices, as it opens the shipped one), with a sleeping process standing in for the daemon and a one-mouse
 `status.json`. A companion directory also renames the doorbells (a short hash of it is appended,
 see `docs/companion.md`), so nothing the rig rings reaches the installed app. It only reads the
 installed agents' pids with `launchctl print`, before and after, and stops with status 2 if either
@@ -92,28 +95,35 @@ changed.
 `nm` is no use, since the optimiser inlines the type away). The rig's part, `Rig`, acts only when `PUREMOUSE_COMPANION_DIR` is
 set. The script writes `rig-command` ("number verb") in that directory and rings the rig doorbell;
 the menu answers with the number in `rig-ack` once done. Verbs: `menu` (open the menu, close it
-again), `settings` and `settings-close` (the Settings window), `relief` (`malloc_zone_pressure_relief`).
+again), `settings` (open the Settings helper) and `settings-close` (quit it). The helper's part,
+built with `-DDEVHOOKS` too, writes its pid to `settings-visible` in that directory once its window
+is first on screen. After each quit the script waits until `lsappinfo` no longer lists the helper:
+LaunchServices keeps a quit app listed for a moment after its process exits, and an open in that
+moment brings the dead copy forward and starts none.
 
-Scenarios, each a median of the runs, in MB of physical footprint (`footprint`):
+Scenarios, each a median of the runs, in MB of physical footprint (`footprint`), or ms:
 
 | Scenario | What it measures |
 |---|---|
 | `fresh` | a new menu app, about 4.5 s after it reports ready (a 3 s wait, then the 1.5 s settle) |
 | `open-1`, `open-3`, `open-10` | after that many opens of the menu |
 | `doorbells-200` | a new menu app after 200 status doorbells, 10 ms apart, each after a change to `status.json` (back-to-back posts can coalesce) |
-| `settings-open`, `settings-closed` | Settings in the menu app's own process, and after it closes (read after the rig runs `malloc_zone_pressure_relief`, and without the `Relaunch` the installed app does); informational, no budget |
-| `helper-open`, `helper-closed`, `helper-cold-start` | the Settings helper: the menu app's footprint while it is open and after, and the time (ms) from the open request to the helper's first visible window. They read "helper not built" until `PureMouseSettings` is in `Package.swift`. The helper writes a `settings-visible` file in the companion directory when its first window is visible; the cold start is that file's modification time minus the request. |
+| `helper-cold-start` | ms from the menu being asked for Settings to the helper's window on screen, the helper not running: `settings-visible`'s modification time minus the request's |
+| `helper` | the Settings helper's own footprint, 2 s after its window is on screen |
+| `helper-open`, `helper-closed` | the menu app's footprint while the helper is open (informational), and 1.5 s after it quits |
+| `helper-closed-5` | the menu app's footprint after five opens and quits of the helper |
 
-`scripts/measure-menu.budgets` holds `scenario<TAB>MB` limits; a scenario with no line has none.
-Set them from a run of the build you accept (median plus 2 MB, rounded up) and lower them when a
-change earns it. Only a Mac with a desktop session can run the rig, so CI does not; repeat it on the
+`scripts/measure-menu.budgets` holds `scenario<TAB>limit` lines in the scenario's unit; a scenario
+with no line has none. Set them from a run of the build you accept (`--write-budgets`: a
+footprint's median plus 2 MB, rounded up; the cold start's plus half, rounded up to 100 ms) and
+lower them when a change earns it. Only a Mac with a desktop session can run the rig, so CI does not; repeat it on the
 spare Mac after each macOS release (and see `docs/companion.md`, "Footprint", for the figures).
 
 ## Signing
 
-`scripts/sign-bundle.sh` signs every build, the menu app first and then PureMouse.app, each with
-its own identifier, without `--deep`, and always with the hardened runtime. The identity is the
-first of:
+`scripts/sign-bundle.sh` signs every build inside out, the nested apps (the menu bar app, then the
+Settings helper) first and PureMouse.app last, each with its own identifier, without `--deep`, and
+always with the hardened runtime. The identity is the first of:
 
 1. `PUREMOUSE_SIGN_IDENTITY`;
 2. a valid `Developer ID Application` identity in the keychain;
@@ -183,6 +193,8 @@ running checks.
 - The size budgets are `INSTALLED_MAX_BYTES` (the app) and `DMG_MAX_BYTES` (the dmg) in
   `scripts/size-budget.env`, each measured from the universal build plus 15%. Raising one is a
   reviewed change that says what grew.
+- When the app grows past a budget, re-measure and raise the budget by that rule rather than shrink
+  the app at the cost of functionality or polish worth keeping (the owner's rule).
 
 ## Repository settings the release relies on
 

@@ -30,6 +30,7 @@ permissions.
 The menu bar app needs neither permission. It asks to show notifications the first time it has a
 low-battery warning to show, or when you turn the warning on
 ([`Sources/PureMouseMenu/Model/Notifier.swift`](../Sources/PureMouseMenu/Model/Notifier.swift)).
+The Settings helper needs no permissions either.
 
 ## What it reads on this Mac
 
@@ -55,16 +56,18 @@ reconnects. It stores nothing on the mouse or the receiver.
 
 | File | Written by | What it holds |
 |---|---|---|
-| `~/.config/puremouse/config.json` | Settings, when you change something ([`Sources/PureMouseMenu/Logic/ConfigFile.swift`](../Sources/PureMouseMenu/Logic/ConfigFile.swift)); a copy of the example config on first open if there is none ([`Sources/puremouse/LoginItem.swift`](../Sources/puremouse/LoginItem.swift)) | Your settings. A symlinked config has its target replaced, not the link |
+| `~/.config/puremouse/config.json` | Settings, when you change something ([`Sources/PureMouseAppSupport/ConfigFile.swift`](../Sources/PureMouseAppSupport/ConfigFile.swift)); a copy of the example config on first open if there is none ([`Sources/puremouse/LoginItem.swift`](../Sources/puremouse/LoginItem.swift)) | Your settings. A symlinked config has its target replaced, not the link |
 | `~/Library/Logs/PureMouse.log`, and `PureMouse.log.1` once it passes 1 MiB | The background process ([`Sources/puremouse/Log.swift`](../Sources/puremouse/Log.swift)) | Always: a start line with the PureMouse and macOS versions; each mouse and receiver by the name macOS reports (for Bluetooth, the name in Bluetooth settings), product ID and device key (its model ID, [Configuration](configuration.md#per-device-settings)), with its features; permission state; config errors; Logi Options+ running; Universal Control, pause and wake events; and a failed `run` command's first 80 characters with its exit status. While you use **Select by Pressing**: the control ID of the button you press. With `--verbose` only: the control ID of every press, gesture directions, and the bundle ID of the app whose settings apply. Never what you type, and never a `run` command's output |
 | `~/Library/LaunchAgents/io.github.mblauberg.puremouse.plist` and `….menu.plist` | `puremouse register`, which opening the app runs ([`Sources/puremouse/LoginItem.swift`](../Sources/puremouse/LoginItem.swift)) | Start-at-login entries naming the app's two programs. `puremouse unregister` removes them |
 | `~/Library/Application Support/PureMouse/launchd/<label>.plist` | `puremouse start`, for a job that is not registered ([`Sources/puremouse/LoginService.swift`](../Sources/puremouse/LoginService.swift)) | The same entry as the one in `LaunchAgents`, outside the folder launchd loads at login, so it runs now and not at the next login. `puremouse stop` removes it |
 | `~/Library/Application Support/PureMouse/status.json` | The background process ([`Sources/puremouse/Channel.swift`](../Sources/puremouse/Channel.swift)) | What the menu shows: connected mice (each with its device key, kind, what it supports and the unit ID it reports, a number that identifies that one mouse), battery, DPI, permission and config state |
-| `~/Library/Application Support/PureMouse/control.json` | The menu bar app ([`Sources/PureMouseMenu/Model/AppModel.swift`](../Sources/PureMouseMenu/Model/AppModel.swift)) | Requests to the background process: pause, select by pressing, use the configured DPI. Removed when the background process starts ([`Sources/puremouse/Channel.swift`](../Sources/puremouse/Channel.swift)) |
-| `~/Library/Application Support/PureMouse/battery-alerts.json` | The menu bar app ([`Sources/PureMouseMenu/Logic/BatteryAlert.swift`](../Sources/PureMouseMenu/Logic/BatteryAlert.swift)) | Which low-battery warning was last shown per mouse, so it is not repeated |
+| `~/Library/Application Support/PureMouse/control.json` | The menu bar app and Settings ([`Sources/PureMouseAppSupport/AppModel.swift`](../Sources/PureMouseAppSupport/AppModel.swift)) | Requests to the background process: pause, select by pressing, use the configured DPI. Removed when the background process starts ([`Sources/puremouse/Channel.swift`](../Sources/puremouse/Channel.swift)) |
+| `~/Library/Application Support/PureMouse/battery-alerts.json` | The menu bar app ([`Sources/PureMouseAppSupport/BatteryAlert.swift`](../Sources/PureMouseAppSupport/BatteryAlert.swift)) | Which low-battery warning was last shown per mouse, so it is not repeated |
 | `~/Library/Application Support/PureMouse/menu-hidden` | `puremouse menu off` ([`Sources/puremouse/LoginItem.swift`](../Sources/puremouse/LoginItem.swift)) | Empty; its presence keeps the menu bar icon hidden |
-| `~/Library/Application Support/PureMouse/show-settings` | Opening the app ([`Sources/puremouse/LoginItem.swift`](../Sources/puremouse/LoginItem.swift), [`Sources/PureMouseMenu/AppController.swift`](../Sources/PureMouseMenu/AppController.swift)) | Empty; asks the menu bar app to open Settings, and is removed once seen |
-| `~/Library/Preferences/io.github.mblauberg.puremouse.menu.plist` | macOS, for the menu bar app ([`Sources/PureMouseMenu/Settings/SettingsWindow.swift`](../Sources/PureMouseMenu/Settings/SettingsWindow.swift)) | The Settings window's position and its last pane |
+| `~/Library/Application Support/PureMouse/show-settings` | Opening the app or Settings ([`Sources/puremouse/LoginItem.swift`](../Sources/puremouse/LoginItem.swift), [`Sources/PureMouseKit/SettingsRequest.swift`](../Sources/PureMouseKit/SettingsRequest.swift)) | Empty, or the Settings pane to show; asks for Settings to open, and is removed once seen. `show-settings.lock` beside it is an empty lock file |
+| `~/Library/Application Support/PureMouse/settings-quit` | Quit PureMouse ([`Sources/PureMouseKit/SettingsRequest.swift`](../Sources/PureMouseKit/SettingsRequest.swift)) | Empty; for 60 s, stops a Settings window that was asked for before the quit from opening after it. The next request to open Settings removes it |
+| `~/Library/Preferences/io.github.mblauberg.puremouse.menu.plist` | macOS, for the menu bar app ([`Sources/PureMouseMenu/Menu/StatusMenu.swift`](../Sources/PureMouseMenu/Menu/StatusMenu.swift), [`Sources/PureMouseAppSupport/NotificationPermission.swift`](../Sources/PureMouseAppSupport/NotificationPermission.swift)) | Where the menu bar icon sits, and whether its notifications are off in System Settings (for Settings' hint) |
+| `~/Library/Preferences/io.github.mblauberg.puremouse.settings.plist` | macOS, for Settings ([`Sources/PureMouseSettingsUI/SettingsWindow.swift`](../Sources/PureMouseSettingsUI/SettingsWindow.swift)) | The Settings window's position and its last pane |
 
 The file and channel formats are in [Configuration](configuration.md) and
 [Companion](companion.md). The low-battery warning is a local notification
@@ -74,7 +77,7 @@ The file and channel formats are in [Configuration](configuration.md) and
 
 Pressing **Check for Updates** in Settings › About makes one HTTPS GET of
 `https://api.github.com/repos/mblauberg/PureMouse/releases/latest` and compares the version it
-returns with yours ([`Sources/PureMouseMenu/Logic/UpdateCheck.swift`](../Sources/PureMouseMenu/Logic/UpdateCheck.swift)).
+returns with yours ([`Sources/PureMouseAppSupport/UpdateCheck.swift`](../Sources/PureMouseAppSupport/UpdateCheck.swift)).
 It uses an ephemeral session, so no cookies or cache are kept. GitHub sees what any web request
 shows: your IP address and a standard user agent naming the app and the system version. There are
 no background checks, and the background process has no network code at all.

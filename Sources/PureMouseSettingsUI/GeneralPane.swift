@@ -4,11 +4,11 @@ import SwiftUI
 
 struct GeneralPane: View {
     @Environment(AppModel.self) private var model
-    let app: AppController
     @State private var startsAtLogin = false  // read on appear
     @State private var showsInMenuBar = true
     @State private var confirmingReset = false
     @State private var notificationsDenied = false
+    @State private var deniedWatch: NotificationPermission.Watch?
 
     var body: some View {
         PaneForm {
@@ -26,7 +26,7 @@ struct GeneralPane: View {
             .disabled(model.locations.daemon == nil)
 
             Section {
-                Toggle(isOn: Binding(get: { model.config.bool(["notifications", "lowBattery"]) ?? true },
+                Toggle(isOn: Binding(get: { model.lowBatteryNotificationsOn },
                                      set: { setLowBatteryNotifications($0) })) {
                     RowLabel("Low battery notification",
                              help: notificationsDenied
@@ -46,11 +46,11 @@ struct GeneralPane: View {
             Section("Permissions") {
                 PermissionRow(title: "Accessibility", help: "Lets PureMouse scroll, press shortcuts and swipe for you.",
                               granted: model.daemonRunning ? model.status?.permissions.accessibility : nil) {
-                    app.openPrivacy(.accessibility)
+                    NSWorkspace.shared.open(PrivacyPane.accessibility.url)
                 }
                 PermissionRow(title: "Input Monitoring", help: "Needed for Bluetooth. The USB receiver works without it.",
                               granted: model.daemonRunning ? model.status?.permissions.inputMonitoring : nil) {
-                    app.openPrivacy(.inputMonitoring)
+                    NSWorkspace.shared.open(PrivacyPane.inputMonitoring.url)
                 }
                 if model.logiOptionsRunning {
                     LabeledContent {
@@ -91,9 +91,12 @@ struct GeneralPane: View {
         }
         .onAppear {
             refreshStartsAtLogin()
-            showsInMenuBar = app.showsStatusItem
-            Task { notificationsDenied = await Notifier.isAllowed() == false }
+            showsInMenuBar = model.locations.showsInMenuBar
+            // The menu bar app records the answer as it learns it, and may learn it while this shows.
+            notificationsDenied = NotificationPermission.denied(in: NotificationPermission.menuDefaults)
+            deniedWatch = NotificationPermission.Watch(NotificationPermission.menuDefaults) { notificationsDenied = $0 }
         }
+        .onDisappear { deniedWatch = nil }
         .confirmationDialog("Reset all settings?", isPresented: $confirmingReset) {
             Button("Reset All Settings", role: .destructive) { model.resetAll() }
         } message: {
@@ -108,28 +111,29 @@ struct GeneralPane: View {
 
     private func setStartsAtLogin(_ on: Bool) {
         if on {
-            Lifecycle.perform(.register) { refreshStartsAtLogin() }
+            model.perform(.register) { refreshStartsAtLogin() }
         } else if Alerts.confirm("Stop PureMouse?",
                                  "The mouse returns to normal, the menu bar icon goes, and PureMouse no longer starts at login. Open PureMouse from Applications to start it again.",
                                  action: "Stop PureMouse") {
             model.flush()
-            Lifecycle.perform(.unregister) { refreshStartsAtLogin() }
+            model.perform(.unregister) { refreshStartsAtLogin() }
         }
     }
 
-    /// Turning it on asks macOS for permission now, while the user is here to answer.
+    /// The menu bar app posts the notifications, and macOS asks per app, so the menu bar app asks
+    /// for permission when it sees this turned on, and records the answer for this pane.
     private func setLowBatteryNotifications(_ on: Bool) {
         model.set(on ? nil : false, at: ["notifications", "lowBattery"])
-        guard on else { return }
-        Task {
-            await Notifier.requestIfNeeded()
-            notificationsDenied = await Notifier.isAllowed() == false
-        }
     }
 
+    /// Runs `menu on` or `off` now. This app is not in the menu agent's process group, so removing
+    /// that agent leaves it open. The switch moves at once, and goes back to what is so (the
+    /// daemon's `menu-hidden` marker) if the command fails.
     private func setShowsInMenuBar(_ on: Bool) {
         showsInMenuBar = on
-        app.setMenuBarPreference(on)
+        guard on != model.locations.showsInMenuBar else { return }
+        model.flush()
+        model.perform(on ? .menuOn : .menuOff, then: {}, otherwise: { showsInMenuBar = model.locations.showsInMenuBar })
     }
 
     private func openConfig() {

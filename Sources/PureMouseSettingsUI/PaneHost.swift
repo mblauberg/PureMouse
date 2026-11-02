@@ -5,12 +5,12 @@ import SwiftUI
 /// window fits it.
 struct PaneHost: View {
     let pane: SettingsPane
-    let app: AppController
+    let context: SettingsContext
 
     var body: some View {
         Group {
             switch pane {
-            case .general: GeneralPane(app: app)
+            case .general: GeneralPane()
             case .buttons: ButtonsPane()
             case .scrolling: ScrollingPane()
             case .pointer: PointerPane()
@@ -19,18 +19,18 @@ struct PaneHost: View {
             }
         }
         .frame(width: SettingsWindowController.width)
-        .environment(\.app, app)
+        .environment(\.settings, context)
     }
 }
 
-private struct AppKey: EnvironmentKey {
-    static let defaultValue: AppController? = nil
+private struct SettingsKey: EnvironmentKey {
+    static let defaultValue: SettingsContext? = nil
 }
 
 extension EnvironmentValues {
-    var app: AppController? {
-        get { self[AppKey.self] }
-        set { self[AppKey.self] = newValue }
+    var settings: SettingsContext? {
+        get { self[SettingsKey.self] }
+        set { self[SettingsKey.self] = newValue }
     }
 }
 

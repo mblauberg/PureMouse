@@ -3,7 +3,8 @@
 ## Status
 
 Accepted. The footprint rig has run on the spare test Mac (2026-11-02; `docs/companion.md`,
-Footprint), which fixes the budgets below, and the `MallocSpaceEfficient` gate passed.
+Footprint), which fixes the budgets below, and the `MallocSpaceEfficient` gate passed. The budgets
+were measured again the same day with Settings as a helper app ([ADR 9](0009-settings-helper-app.md)).
 
 ## Context
 
@@ -17,11 +18,16 @@ dirty freed malloc memory. An earlier target of 10 MB is below that floor.
 
 - Budgets are measured numbers, in `scripts/measure-menu.budgets`: the median of 5 rig runs plus
   2 MB, rounded up, lowered when a change earns it. With the variable set: fresh launch at most
-  13 MB; after the menu has been opened, at most 17 MB once and 17 MB after ten opens.
-- `MallocSpaceEfficient=1` is set for the menu app (launchd environment and `LSEnvironment`). The
-  gate was the baseline build against the branch build, 5 runs each: 14.08 MB after three opens
-  against 19.86 (0.71 times, the rule is at most 0.75), and 10.14 MB fresh against 13.83
-  (`docs/companion.md`, Footprint).
+  11 MB; after the menu has been opened, at most 15 MB once and after ten opens; after 200 status
+  doorbells, 11 MB.
+- The Settings helper's footprints follow the same rule: the menu app after the helper quits, once
+  or five times, at most 11 MB, and the helper itself at most 37 MB with its window open. Its cold
+  start, from the menu being asked to the window on screen, is budgeted at the median plus half,
+  rounded up to 100 ms (800 ms).
+- `MallocSpaceEfficient=1` is set for the menu app (launchd environment and `LSEnvironment`) and the
+  Settings helper (`LSEnvironment`). The gate was the baseline build against the branch build, 5
+  runs each: 14.08 MB after three opens against 19.86 (0.71 times, the rule is at most 0.75), and
+  10.14 MB fresh against 13.83 (`docs/companion.md`, Footprint).
 - `NSMenu` stays.
 
 ## Alternatives rejected

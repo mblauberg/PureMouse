@@ -1,5 +1,6 @@
 #!/bin/zsh
-# Stops PureMouse and removes the app and its login agents (the daemon's and the menu bar app's).
+# Stops PureMouse, quits Settings and removes the app and its login agents (the daemon's and the
+# menu bar app's).
 # Keeps ~/.config/puremouse.
 set -euo pipefail
 source "${0:A:h}/lib.zsh"

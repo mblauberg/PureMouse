@@ -101,7 +101,7 @@ struct LaunchdAgentService: LoginService {
                 "Label": job.label,
                 "ProgramArguments": [Job.menuExecutable(in: location).path],
                 "RunAtLoad": true,
-                // Relaunched after a crash, not after Quit.
+                // Started again after a crash, not after Quit.
                 "KeepAlive": ["SuccessfulExit": false],
                 "ProcessType": "Interactive",
                 // Keeps about 8 MB off the menu's footprint once it has been used (docs/adr/0010).

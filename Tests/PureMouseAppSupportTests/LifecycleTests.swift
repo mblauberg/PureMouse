@@ -25,6 +25,45 @@ import Testing
         #expect(await read(from: daemon)?.startsAtLogin == true)
     }
 
+    /// Runs `menu off` against a daemon that exits with `status`, the way `call` makes the
+    /// request, and returns what happened in order. The alert, or a success, ends the wait.
+    private func perform(exiting status: Int, _ call: (AppModel, @escaping @MainActor (String) -> Void) -> Void) async throws -> [String] {
+        let sandbox = try Sandbox()
+        var locations = sandbox.locations
+        locations.daemon = try stubDaemon(printing: "", exiting: status)
+        var events: [String] = []
+        var model: AppModel?
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            model = AppModel(locations: locations, alert: { title, _ in events.append("alert: \(title)"); done.resume() })
+            call(model!) { event in
+                events.append(event)
+                if event == "success" { done.resume() }
+            }
+        }
+        return events
+    }
+
+    /// The shape of the call sites (`perform(.register) { refreshStartsAtLogin() }`, the menu's
+    /// hide): an unlabelled trailing closure runs on success only.
+    @Test func aTrailingClosureRunsOnlyOnSuccess() async throws {
+        for status in [0, 1] {
+            let events = try await perform(exiting: status) { model, record in
+                model.perform(.menuOff) { record("success") }
+            }
+            #expect(events == (status == 0 ? ["success"] : ["alert: PureMouse could not do that"]))
+        }
+    }
+
+    /// A failed command runs the caller's failure handler, so a switch can go back, then alerts.
+    @Test func aFailedCommandRunsTheFailureHandlerThenAlerts() async throws {
+        for status in [0, 1] {
+            let events = try await perform(exiting: status) { model, record in
+                model.perform(.menuOff, then: { record("success") }, otherwise: { record("failure") })
+            }
+            #expect(events == (status == 0 ? ["success"] : ["failure", "alert: PureMouse could not do that"]))
+        }
+    }
+
     @Test func loginStatusIsNilWhenTheAnswerCannotBeUsed() async throws {
         #expect(await read(from: try stubDaemon(printing: "not json")) == nil)
         #expect(await read(from: URL(fileURLWithPath: "/nonexistent/puremouse")) == nil)

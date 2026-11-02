@@ -37,16 +37,6 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     func close() { menu.cancelTracking() }
     #endif
 
-    private(set) var isOpen = false
-
-    func menuWillOpen(_ menu: NSMenu) { isOpen = true }
-
-    func menuDidClose(_ menu: NSMenu) {
-        isOpen = false
-        // An action chosen in the menu runs after this; let it start first.
-        DispatchQueue.main.async { [app] in app.relaunchIfIdle() }
-    }
-
     private var shown: (dimmed: Bool, badge: StatusIcon.Badge, label: String)?
 
     /// Redraws the glyph and relabels it only when what they show has changed.
@@ -83,7 +73,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         case .openPrivacy(let pane): app.openPrivacy(pane)
         case .toggleSmoothScrolling: model.update { $0.smoothScrollEnabled.toggle() }
         case .setDPI(let dpi): model.setDPI(dpi)
-        case .start: Lifecycle.perform(.register)
+        case .start: model.perform(.register)
         case .setPaused(let paused): model.setPaused(paused)
         case .reloadConfig: model.reloadDaemonConfig()
         case .showLog: NSWorkspace.shared.activateFileViewerSelecting([model.locations.log])

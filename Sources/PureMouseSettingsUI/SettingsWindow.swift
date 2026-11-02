@@ -2,50 +2,28 @@ import AppKit
 import PureMouseAppSupport
 import SwiftUI
 
-enum SettingsPane: String, CaseIterable {
-    case general, buttons, scrolling, pointer, apps, about
-
-    var title: String {
-        switch self {
-        case .general: "General"
-        case .buttons: "Buttons"
-        case .scrolling: "Scrolling"
-        case .pointer: "Pointer"
-        case .apps: "Apps"
-        case .about: "About"
-        }
-    }
-
-    /// SF Symbols available on macOS 14.
-    var symbol: String {
-        switch self {
-        case .general: "gearshape"
-        case .buttons: "computermouse"
-        case .scrolling: "arrow.up.and.down"
-        case .pointer: "cursorarrow"
-        case .apps: "square.grid.2x2"
-        case .about: "info.circle"
-        }
-    }
-}
-
 /// The Settings window: native toolbar tabs (`NSTabViewController`, `.toolbar` style) over
-/// SwiftUI grouped forms. Created when first shown and released when closed.
+/// SwiftUI grouped forms. The helper shows one for its whole life, and quits when it closes
+/// (`didClose`).
 @MainActor
-final class SettingsWindowController: NSWindowController, NSWindowDelegate {
+public final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     static let width: CGFloat = 600
     private static let paneKey = "SettingsPane"
 
-    private let app: AppController
+    private let context: SettingsContext
     private let tabs = SettingsTabs()
+    /// Runs once the window has closed, unless it was shown again meanwhile.
+    public var didClose: () -> Void = {}
 
-    init(model: AppModel, app: AppController) {
-        self.app = app
+    public init(model: AppModel) {
+        let context = SettingsContext()
+        context.tabs = tabs
+        self.context = context
         tabs.tabStyle = .toolbar
         tabs.transitionOptions = [.crossfade, .allowUserInteraction]
         for pane in SettingsPane.allCases {
             let lazy = LazyPane {
-                let host = NSHostingController(rootView: PaneHost(pane: pane, app: app).environment(model))
+                let host = NSHostingController(rootView: PaneHost(pane: pane, context: context).environment(model))
                 host.sizingOptions = .preferredContentSize
                 return host
             }
@@ -65,7 +43,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         super.init(window: window)
         window.delegate = self
         tabs.didSelect = { pane in UserDefaults.standard.set(pane.rawValue, forKey: Self.paneKey) }
-        let saved = UserDefaults.standard.string(forKey: Self.paneKey).flatMap(SettingsPane.init) ?? .buttons
+        let saved = SettingsPane.remembered(UserDefaults.standard.string(forKey: Self.paneKey))
         // Titled before the first pane loads, so "Untitled" never shows.
         window.title = saved.title
         select(saved)
@@ -74,7 +52,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    func show(pane: SettingsPane?) {
+    public func show(pane: SettingsPane?) {
         if let pane { select(pane) }
         guard let window else { return }
         if !window.isVisible { window.center() }
@@ -89,9 +67,13 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         }
     }
 
-    func windowWillClose(_ notification: Notification) {
-        // Let AppKit finish closing before the controller and its views go.
-        DispatchQueue.main.async { [app] in app.settingsDidClose() }
+    public func windowWillClose(_ notification: Notification) {
+        // Let AppKit finish closing first. A request to show Settings in that gap (the menu bar app
+        // rings the doorbell) keeps the window, so the helper stays.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, window?.isVisible != true else { return }
+            didClose()
+        }
     }
 }
 

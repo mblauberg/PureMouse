@@ -8,6 +8,7 @@
 root=${${(%):-%x}:A:h:h}
 label=io.github.mblauberg.puremouse
 menu_label=$label.menu
+settings_label=$label.settings
 minimum=14.0
 copyright="Copyright © 2026 Michael Blauberg. MIT licence."
 category=public.app-category.utilities
@@ -18,6 +19,7 @@ category=public.app-category.utilities
 # bundle that contains it. Read entries with component_id, component_path and component_executable.
 components=(
     "$menu_label:Contents/Library/LoginItems/PureMouse Menu.app:PureMouseMenu"
+    "$settings_label:Contents/Helpers/PureMouse Settings.app:PureMouseSettings"
     "$label:.:puremouse"
 )
 
@@ -87,6 +89,11 @@ stop_agents() {
     die "PureMouse is still running, so $1; try: pkill -x -u $UID $running"
 }
 
+# settings_component: the `components` entry of the nested Settings helper.
+settings_component() {
+    print -r -- ${(M)components:#$settings_label:*}
+}
+
 # plist_value <plist> <key>: a top-level value, or a non-zero status when the key is missing.
 plist_value() {
     /usr/libexec/PlistBuddy -c "Print :$2" $1 2>/dev/null
@@ -137,19 +144,25 @@ signing_identity() {
     fi
 }
 
-# write_info_plist <file> <identifier> <executable> <version> <build> daemon|menu
-# The daemon's bundle is background-only; the menu app has a display name and the allocator setting
-# its agent also sets (LoginItem.menuDefinition), for Finder launches. Nothing else differs.
+# write_info_plist <file> <identifier> <executable> <version> <build> daemon|menu|settings
+# The daemon's bundle is background-only; the menu app and the Settings helper have a display name,
+# and the helper is a regular app (Dock icon, Cmd-Tab). Both have the allocator setting the menu's
+# agent sets (LoginItem.menuDefinition): the menu app for Finder launches, the helper for the opens
+# that do not come from the menu app (the daemon's, the Finder's). Nothing else differs.
 write_info_plist() {
     local file=$1 identifier=$2 executable=$3 version=$4 build=$5 role=$6
-    local display= background= environment=
+    local display= background= environment= element='<true/>'
+    local allocator=$'\n  <key>LSEnvironment</key><dict><key>MallocSpaceEfficient</key><string>1</string></dict>'
     case $role in
         daemon) background=$'\n  <key>LSBackgroundOnly</key><true/>' ;;
         menu)
             display=$'\n  <key>CFBundleDisplayName</key><string>PureMouse</string>'
-            environment=$'\n  <key>LSEnvironment</key><dict><key>MallocSpaceEfficient</key><string>1</string></dict>'
-            ;;
-        *) die "write_info_plist: role must be daemon or menu, not '$role'" ;;
+            environment=$allocator ;;
+        settings)
+            display=$'\n  <key>CFBundleDisplayName</key><string>PureMouse Settings</string>'
+            environment=$allocator
+            element='<false/>' ;;
+        *) die "write_info_plist: role must be daemon, menu or settings, not '$role'" ;;
     esac
     cat > $file <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -166,25 +179,28 @@ write_info_plist() {
   <key>LSMinimumSystemVersion</key><string>$minimum</string>
   <key>LSApplicationCategoryType</key><string>$category</string>
   <key>NSHumanReadableCopyright</key><string>$copyright</string>
-  <key>LSUIElement</key><true/>$background$environment
+  <key>LSUIElement</key>$element$background$environment
 </dict></plist>
 PLIST
 }
 
 # assemble_bundle <bin dir> <app> <version> <build>
-# Lays out an unsigned PureMouse.app from built `puremouse` and `PureMouseMenu` binaries, with the
-# menu bar app nested at Contents/Library/LoginItems (a login item of its own: `puremouse register`
-# writes its agent).
+# Lays out an unsigned PureMouse.app from built `puremouse`, `PureMouseMenu` and `PureMouseSettings`
+# binaries, with the menu bar app nested at Contents/Library/LoginItems (a login item of its own:
+# `puremouse register` writes its agent) and the Settings helper at Contents/Helpers (opened by the
+# menu bar app). The About pane's icon PNGs are the helper's only.
 assemble_bundle() {
     local bin=$1 app=$2 version=$3 build=$4
     local menu_app=$(component_path $app "$(menu_component)")
+    local settings_app=$(component_path $app "$(settings_component)")
     rm -rf $app
     mkdir -p $app/Contents/{MacOS,Resources}
     cp $bin/puremouse $app/Contents/MacOS/puremouse
     cp $root/config.example.json $root/assets/{Assets.car,AppIcon.icns} $app/Contents/Resources/
     write_info_plist $app/Contents/Info.plist $label puremouse $version $build daemon
 
-    make_menu_bundle $bin/PureMouseMenu $menu_app $menu_label $version $build
+    make_menu_bundle $bin/$(component_executable "$(menu_component)") $menu_app $menu_label $version $build
+    make_settings_bundle $bin/$(component_executable "$(settings_component)") $settings_app $settings_label $version $build
 }
 
 # make_menu_bundle <menu binary> <app> <identifier> <version> <build>
@@ -195,8 +211,7 @@ make_menu_bundle() {
     mkdir -p "$menu_app/Contents/"{MacOS,Resources}
     local executable=$(component_executable "$(menu_component)")
     cp $binary "$menu_app/Contents/MacOS/$executable"
-    cp $root/assets/{Assets.car,AppIcon.icns,AppIcon.png,AppIcon-dark.png,MenuBarIcon.pdf} \
-        "$menu_app/Contents/Resources/"
+    cp $root/assets/{Assets.car,AppIcon.icns,MenuBarIcon.pdf} "$menu_app/Contents/Resources/"
     write_info_plist "$menu_app/Contents/Info.plist" $identifier $executable $version $build menu
 }
 
@@ -204,6 +219,21 @@ make_menu_bundle() {
 # The one test for whether a build is a Developer ID build.
 developer_id_signed() {
     print -r -- $1 | grep '^Authority=Developer ID Application: ' >/dev/null
+}
+
+# make_settings_bundle <helper binary> <app> <identifier> <version> <build>
+# The Settings helper's bundle, unsigned, as make_menu_bundle makes the menu bar app's. It has the
+# icon twice over, as PureMouse.app has: Assets.car for its Dock and Cmd-Tab icon in the dark, clear
+# and tinted styles on macOS 26 and later (AppIcon.icns has only the light one), AppIcon.icns for
+# macOS 14 and 15. The PNGs are the About pane's icon: NSWorkspace draws PureMouse.app's Icon
+# Composer icon in its light form whatever the window's appearance.
+make_settings_bundle() {
+    local binary=$1 settings_app=$2 identifier=$3 version=$4 build=$5
+    mkdir -p "$settings_app/Contents/"{MacOS,Resources}
+    local executable=$(component_executable "$(settings_component)")
+    cp $binary "$settings_app/Contents/MacOS/$executable"
+    cp $root/assets/{Assets.car,AppIcon.icns,AppIcon.png,AppIcon-dark.png} "$settings_app/Contents/Resources/"
+    write_info_plist "$settings_app/Contents/Info.plist" $identifier $executable $version $build settings
 }
 
 # check_release_signature <codesign -dvv output> <team ID> <component>

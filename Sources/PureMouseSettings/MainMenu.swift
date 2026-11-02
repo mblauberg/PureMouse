@@ -1,14 +1,15 @@
 import AppKit
 
-/// The hidden main menu of an accessory app: it never shows, but its key equivalents reach the
-/// Settings window (⌘W, and editing keys in text fields).
+/// The helper's menu bar: Quit and Hide, editing keys for text fields, and ⌘W.
 @MainActor
 enum MainMenu {
-    static func make(app: AppController) -> NSMenu {
+    static func make() -> NSMenu {
         let main = NSMenu()
 
-        let appMenu = NSMenu(title: "PureMouse")
-        appMenu.addItem(ClosureMenuItem(title: "Quit PureMouse", key: "q") { app.quitAll() })
+        let appMenu = NSMenu(title: "PureMouse Settings")
+        appMenu.addItem(withTitle: "Hide PureMouse Settings", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "Quit PureMouse Settings", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         main.addItem(submenu: appMenu)
 
         let edit = NSMenu(title: "Edit")
@@ -25,6 +26,7 @@ enum MainMenu {
         let window = NSMenu(title: "Window")
         window.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
         main.addItem(submenu: window)
+        NSApp.windowsMenu = window
         return main
     }
 }

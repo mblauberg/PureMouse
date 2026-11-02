@@ -19,11 +19,6 @@ public enum Lifecycle {
         }
     }
 
-    private static var running = 0
-
-    /// No command is running (the menu app waits for this before it relaunches).
-    public static var idle: Bool { running == 0 }
-
     /// Asks the daemon's CLI whether PureMouse starts at login; nil when it cannot be asked or its
     /// answer is not understood.
     public static func readLoginStatus(daemon: URL? = Locations.live.daemon,
@@ -31,21 +26,12 @@ public enum Lifecycle {
         run(.loginStatus, daemon: daemon) { completion((try? $0.get()).flatMap(LoginStatus.parse)) }
     }
 
-    /// Called after each command's completion handler (the menu app then tries its relaunch).
-    public static var finished: @MainActor () -> Void = {}
-
     /// Runs the command off the main thread and reports its output, or why it failed.
     public static func run(_ command: Command, daemon: URL? = Locations.live.daemon,
                            then completion: @escaping @MainActor (Result<String, LifecycleError>) -> Void) {
         guard let daemon else {
             completion(.failure(.noDaemon))
             return
-        }
-        running += 1
-        let completion: @MainActor (Result<String, LifecycleError>) -> Void = { result in
-            completion(result) // may show an alert; still running until it is answered
-            running -= 1
-            finished()
         }
         let process = Process()
         let pipe = Pipe()

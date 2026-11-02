@@ -1,6 +1,11 @@
-# scenario<TAB>limit in MB: a median above it fails scripts/measure-menu.sh. Written by --write-budgets from the
-# medians of 5 runs on macOS 27.0.1, 2026-11-02, with MallocSpaceEfficient=1, plus 2 MB rounded up; lower them when a change earns it.
-fresh	13
-open-1	17
-open-10	17
-doorbells-200	13
+# scenario<TAB>limit in the scenario's unit (MB; ms for helper-cold-start): a median above it fails
+# scripts/measure-menu.sh. Written by --write-budgets from the medians of 5 runs on macOS 27.0.1,
+# 2026-11-02: MB plus 2 rounded up, ms plus half rounded up to 100; lower them when a change earns it.
+fresh	11
+open-1	15
+open-10	15
+doorbells-200	11
+helper-cold-start	800
+helper	37
+helper-closed	11
+helper-closed-5	11

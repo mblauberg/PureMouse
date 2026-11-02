@@ -1,5 +1,6 @@
 #!/bin/zsh
-# Measures the menu bar app's memory footprint and checks it against scripts/measure-menu.budgets.
+# Measures the menu bar app's memory footprint, and the Settings helper's footprint and cold start,
+# and checks them against scripts/measure-menu.budgets.
 # Run it on a spare Mac with a logged-in GUI session and nobody using it, never on a Mac whose
 # PureMouse you rely on (it is isolated from the installed one, but it does open menus and windows).
 # Usage and scenarios: docs/development.md ("Footprint rig").
@@ -7,6 +8,7 @@
 #   ./scripts/measure-menu.sh [--runs N] [--blocks] [--no-build] [--budgets FILE] [--tsv FILE]
 #                             [--write-budgets] [--keep] [--plugin-path DIR] [--env NAME=value]...
 #   --env NAME=value  adds a variable to the menu's environment, on top of the bundle's LSEnvironment
+#                     (and the helper's: LaunchServices passes the menu's environment on to the app it opens)
 #
 # A Mac with only the command line tools cannot expand SwiftUI's @State (the SDK's SwiftUIMacros
 # plugin ships with Xcode). Copy Xcode's libSwiftUIMacros.dylib (Xcode.app/Contents/Developer/
@@ -16,10 +18,11 @@
 #
 # Exit status: 0 every budget met, 1 a budget exceeded, 2 the rig itself failed.
 #
-# How it stays apart from the installed app: the menu is a release build with -DDEVHOOKS, in a
-# bundle of its own (io.github.mblauberg.puremouse.menu.rig) under .build/rig, started with
-# PUREMOUSE_COMPANION_DIR, PUREMOUSE_CONFIG and PUREMOUSE_DAEMON pointing into a throwaway
-# fixture directory. A stub process stands in for the daemon. The companion directory also renames
+# How it stays apart from the installed app: the menu and the Settings helper are release builds
+# with -DDEVHOOKS, in bundles of their own (io.github.mblauberg.puremouse.menu.rig and
+# ….settings.rig) under .build/rig. The menu is started with PUREMOUSE_COMPANION_DIR,
+# PUREMOUSE_CONFIG and PUREMOUSE_DAEMON pointing into a throwaway fixture directory, and
+# PUREMOUSE_SETTINGS naming the rig's helper, which it opens with those variables. A stub process stands in for the daemon. The companion directory also renames
 # the doorbells (Companion.doorbell), so nothing it rings reaches the installed app. The script
 # only reads the installed agents' pids (launchctl print) before and after, and fails if either changed.
 set -euo pipefail
@@ -61,9 +64,11 @@ done
 
 daemon_label=$label
 rig_label=$menu_label.rig
+helper_label=$settings_label.rig
 scratch=$PWD/.build/rig
 app=$scratch/PureMouse\ Rig.app
 exe=$app/Contents/MacOS/PureMouseMenu
+helper_app=$scratch/PureMouse\ Settings\ Rig.app
 settle=1.5          # seconds between an action and the reading after it
 export HOME=${HOME:?}
 
@@ -73,8 +78,9 @@ for tool in footprint notifyutil codesign swift launchctl; do
 done
 [[ $(uname) == Darwin ]] || fail "macOS only"
 
-# Every limit is a whole number, and the scenarios a change to the menu could regress each have one:
-# a gate must not pass for lack of a limit.
+# Every limit is a whole number, and the scenarios a change to the menu or the helper could regress
+# each have one: a gate must not pass for lack of a limit.
+budgeted=(fresh open-1 open-10 doorbells-200 helper-closed helper-closed-5 helper helper-cold-start)
 check_budgets() {
     [[ -f $budgets ]] || fail "no budgets file at $budgets"
     local name limit
@@ -82,7 +88,7 @@ check_budgets() {
         [[ $name == \#* || -z $name ]] && continue
         [[ $limit == <-> ]] || fail "$budgets: the limit for '$name' is '$limit', not a whole number"
     done < $budgets
-    for name in fresh open-1 open-10 doorbells-200; do
+    for name in $budgeted; do
         [[ $(awk -F'\t' -v s=$name '$1 == s { print $2 }' $budgets) == <-> ]] \
             || fail "$budgets needs exactly one whole-number limit for '$name'"
     done
@@ -100,35 +106,30 @@ mkdir -p $scratch
 plugin_flags=()
 [[ -z $plugin_path ]] || plugin_flags=(-Xswiftc -plugin-path -Xswiftc $plugin_path)
 if (( build )); then
-    print "building the release menu with -DDEVHOOKS (scratch: $scratch/build)"
-    swift build -c release --product PureMouseMenu -Xswiftc -DDEVHOOKS $plugin_flags --scratch-path $scratch/build >$scratch/build.log 2>&1 \
-        || {
-            grep -q "plugin for module 'SwiftUIMacros' not found" $scratch/build.log \
-                && print -u2 "this Mac lacks Xcode's SwiftUIMacros plugin: see --plugin-path in the script's header"
-            grep error: $scratch/build.log | head -5 >&2
-            fail "build failed (log: $scratch/build.log)"
-        }
+    print "building the release menu and Settings helper with -DDEVHOOKS (scratch: $scratch/build)"
+    : > $scratch/build.log
+    for product in PureMouseMenu PureMouseSettings; do
+        swift build -c release --product $product -Xswiftc -DDEVHOOKS $plugin_flags --scratch-path $scratch/build >>$scratch/build.log 2>&1 \
+            || {
+                grep -q "plugin for module 'SwiftUIMacros' not found" $scratch/build.log \
+                    && print -u2 "this Mac lacks Xcode's SwiftUIMacros plugin: see --plugin-path in the script's header"
+                grep error: $scratch/build.log | head -5 >&2
+                fail "build failed (log: $scratch/build.log)"
+            }
+    done
 fi
 bin=$(swift build -c release --product PureMouseMenu --scratch-path $scratch/build --show-bin-path)
-[[ -x $bin/PureMouseMenu ]] || fail "no built menu at $bin (run without --no-build)"
+[[ -x $bin/PureMouseMenu && -x $bin/PureMouseSettings ]] || fail "no built menu and helper at $bin (run without --no-build)"
 
-rm -rf $app
+rm -rf $app $helper_app
 make_menu_bundle $bin/PureMouseMenu $app $rig_label rig 0
 codesign --force --sign - --identifier $rig_label $app >/dev/null 2>&1 || fail "could not sign the rig bundle"
+make_settings_bundle $bin/PureMouseSettings $helper_app $helper_label rig 0
+codesign --force --sign - --identifier $helper_label $helper_app >/dev/null 2>&1 || fail "could not sign the rig helper"
 # The rig starts the executable itself, so the Info.plist's LSEnvironment (what a Finder launch gives the
 # shipped app) is passed on by hand; --env adds to it.
 bundle_env=(${(f)"$(/usr/libexec/PlistBuddy -c 'Print :LSEnvironment' $app/Contents/Info.plist 2>/dev/null | sed -n 's/^ *\(.*\) = \(.*\)$/\1=\2/p')"})
 rig_env=($bundle_env $rig_env)
-
-# The Settings helper, once it exists, is built and measured too.
-helper=
-if grep -q 'PureMouseSettings' Package.swift; then
-    if (( build )); then
-        swift build -c release --product PureMouseSettings $plugin_flags --scratch-path $scratch/build >>$scratch/build.log 2>&1 \
-            || fail "helper build failed (log: $scratch/build.log)"
-    fi
-    helper=$bin/PureMouseSettings
-fi
 
 # --- Fixture and process control -----------------------------------------------------------------
 results=$scratch/results; mkdir -p $results
@@ -149,6 +150,7 @@ trap 'exit 130' HUP INT TERM
 
 stop_menu() {
     local pid i
+    pkill -f "$helper_app/Contents/MacOS/PureMouseSettings" 2>/dev/null || true
     for pid in $menu_pid $stub_pid; do
         kill $pid 2>/dev/null || continue
         for i in {1..50}; do kill -0 $pid 2>/dev/null || break; sleep 0.1; done
@@ -184,6 +186,7 @@ start_menu() {
     # The rig's own preferences domain (Settings' pane and frame) starts empty each time: left to
     # build up, a state like it once added 4 MB to every launch that followed.
     defaults delete $rig_label 2>/dev/null || true
+    defaults delete $helper_label 2>/dev/null || true
     fx=$(mktemp -d "${TMPDIR:-/tmp}/puremouse-rig.XXXXXX")
     fx=${fx:A}
     fixtures+=($fx)
@@ -196,7 +199,7 @@ start_menu() {
     local scrub=() v
     for v in ${(k)parameters[(R)*export*]}; do if [[ $v == (Malloc*|DYLD_*|NSZombie*|OS_ACTIVITY_*|CFNETWORK_*) ]]; then scrub+=(-u $v); fi; done
     env -u XPC_SERVICE_NAME $scrub $rig_env "$@" PUREMOUSE_COMPANION_DIR=$fx PUREMOUSE_CONFIG=$fx/config.json PUREMOUSE_DAEMON=$fx/daemon \
-        $exe --login >$fx/menu.log 2>&1 &
+        PUREMOUSE_SETTINGS=$helper_app $exe --login >$fx/menu.log 2>&1 &
     menu_pid=$!
     started=$EPOCHREALTIME
     local i
@@ -230,13 +233,13 @@ rig() {
     fail "the rig menu did not answer '$1' in 30 s"
 }
 
-# sample SCENARIO RUN: the menu's footprint now, appended to the TSV.
+# sample SCENARIO RUN [PID]: the menu's footprint now (or PID's), appended to the TSV.
 sample() {
-    local out fp peak
-    out=$(footprint -f bytes --noCategories $menu_pid 2>&1) || fail "footprint failed: $out"
+    local out fp peak pid=${3:-$menu_pid}
+    out=$(footprint -f bytes --noCategories $pid 2>&1) || fail "footprint failed: $out"
     fp=$(print -r -- $out | awk '$1 == "phys_footprint:" { print $2 }')
     peak=$(print -r -- $out | awk '$1 == "phys_footprint_peak:" { print $2 }')
-    [[ $fp == <-> && $peak == <-> ]] || fail "could not read footprint for pid $menu_pid: $out"
+    [[ $fp == <-> && $peak == <-> ]] || fail "could not read footprint for pid $pid: $out"
     printf '%s\t%s\t%.2f\t%.2f\tMB\n' $1 $2 $(( fp / 1048576.0 )) $(( peak / 1048576.0 )) >> $tsv
 }
 
@@ -263,27 +266,33 @@ run_doorbells() {  # 200 status doorbells, the status changing each time
     stop_menu
 }
 
-run_settings() {  # Settings in the menu's own process (until the helper replaces it)
+# run_helper RUN: the Settings helper opened from the menu and quit five times. The first time: its
+# cold start (the request to its window on screen, ms), its own footprint (helper) and the menu's
+# while it is open and after it quits; then the menu's after all five.
+run_helper() {
     start_menu
-    rig settings; sleep 2; sample settings-open $1
-    rig settings-close
-    # The close is followed by malloc_zone_pressure_relief, which waits until the process is 11 s old.
-    while (( EPOCHREALTIME - started < 13 )); do sleep 0.5; done
-    rig relief
-    sleep $settle; sample settings-closed $1
-    stop_menu
-}
-
-run_helper() {  # only with a built helper: the menu's footprint while it is open and after, and its cold start
-    start_menu
-    local asked=$EPOCHREALTIME stamped
-    rig settings
-    for i in {1..100}; do [[ -e $fx/settings-visible ]] && break; sleep 0.1; done
-    [[ -e $fx/settings-visible ]] || fail "the helper never wrote $fx/settings-visible"
-    stamped=$(stat -f %Fm $fx/settings-visible)
-    printf 'helper-cold-start\t%s\t%.2f\t0\tms\n' $1 $(( (stamped - asked) * 1000.0 )) >> $tsv
-    sleep 2; sample helper-open $1
-    rig settings-close; sleep 2; sample helper-closed $1
+    local cycle helper_pid asked i
+    for cycle in {1..5}; do
+        rm -f $fx/settings-visible
+        asked=$EPOCHREALTIME
+        rig settings
+        for i in {1..100}; do [[ -s $fx/settings-visible ]] && break; sleep 0.1; done
+        [[ -s $fx/settings-visible ]] || fail "open $cycle of 5: the helper never wrote $fx/settings-visible (helper processes: $(pgrep -f "$helper_app/Contents/MacOS/PureMouseSettings" | tr '\n' ' ')none else; log: $fx/menu.log)"
+        helper_pid=$(<$fx/settings-visible)
+        if (( cycle == 1 )); then
+            printf 'helper-cold-start\t%s\t%.2f\t0\tms\n' $1 $(( ($(stat -f %Fm $fx/settings-visible) - asked) * 1000.0 )) >> $tsv
+            sleep 2; sample helper-open $1; sample helper $1 $helper_pid
+        fi
+        rig settings-close
+        for i in {1..100}; do kill -0 $helper_pid 2>/dev/null || break; sleep 0.1; done
+        kill -0 $helper_pid 2>/dev/null && fail "the helper (pid $helper_pid) did not quit when asked"
+        # LaunchServices lists a helper for a moment after its process exits, and an open in that
+        # moment brings forward the dead copy and starts none.
+        for i in {1..50}; do [[ -z $(lsappinfo find bundleid=$helper_label) ]] && break; sleep 0.1; done
+        [[ -n $(lsappinfo find bundleid=$helper_label) ]] && fail "LaunchServices still lists the helper (pid $helper_pid) after it quit"
+        if (( cycle == 1 )); then sleep $settle; sample helper-closed $1; fi
+    done
+    sleep $settle; sample helper-closed-5 $1
     stop_menu
 }
 
@@ -291,8 +300,7 @@ for run in {1..$runs}; do
     print "run $run of $runs"
     run_menu_opens $run
     run_doorbells $run
-    run_settings $run
-    if [[ -n $helper ]]; then run_helper $run; fi
+    run_helper $run
 done
 
 # --- --blocks: which allocations does opening the menu leave behind --------------------------------
@@ -345,11 +353,17 @@ summary=$(awk -F'\t' '
     }' $tsv)
 
 if (( write_budgets )); then
-    # The median plus 2 MB, rounded up, for the scenarios a change to the menu could regress; the
-    # others (open-3, Settings in the menu's process, the helper) are reported only.
-    { print "# scenario<TAB>limit in MB: a median above it fails scripts/measure-menu.sh. Written by --write-budgets from the"
-      print "# medians of $runs runs on macOS $(sw_vers -productVersion), $(date +%Y-%m-%d), plus 2 MB rounded up; lower them when a change earns it."
-      print -r -- $summary | awk -F'\t' '$1 ~ /^(fresh|open-1|open-10|doorbells-200)$/ { printf "%s\t%d\n", $1, ($2 + 2 == int($2 + 2)) ? $2 + 2 : int($2 + 2) + 1 }'; } > $budgets
+    # For the scenarios a change could regress ($budgeted): a footprint's median plus 2 MB, rounded
+    # up; the cold start's median plus half, rounded up to 100 ms. The others (open-3, helper-open)
+    # are reported only.
+    { print "# scenario<TAB>limit in the scenario's unit (MB; ms for helper-cold-start): a median above it fails"
+      print "# scripts/measure-menu.sh. Written by --write-budgets from the medians of $runs runs on macOS $(sw_vers -productVersion),"
+      print "# $(date +%Y-%m-%d): MB plus 2 rounded up, ms plus half rounded up to 100; lower them when a change earns it."
+      print -r -- $summary | awk -F'\t' -v names="$budgeted" '
+          BEGIN { n = split(names, list, " "); for (i = 1; i <= n; i++) keep[list[i]] = 1 }
+          !($1 in keep) { next }
+          $6 == "ms" { printf "%s\t%d\n", $1, int(($2 * 1.5 + 99) / 100) * 100; next }
+          { printf "%s\t%d\n", $1, ($2 + 2 == int($2 + 2)) ? $2 + 2 : int($2 + 2) + 1 }'; } > $budgets
     print "wrote $budgets"
 fi
 check_budgets
@@ -370,13 +384,8 @@ while IFS=$'\t' read -r name median low high n unit; do
     fi
     printf '%-22s %8s %8s %8s %8s   %s\n' $name $median $low $high "${limit:--}" $verdict
 done <<< $summary
-if [[ -z $helper ]]; then
-    for name in helper-open helper-closed helper-cold-start; do
-        printf '%-22s %s\n' $name "helper not built"
-    done
-fi
 print
-print "unit: MB of physical footprint (footprint(1)), median of $runs; macOS $(sw_vers -productVersion) ($(sw_vers -buildVersion)), $(uname -m)"
+print "unit: MB of physical footprint (footprint(1)), helper-cold-start in ms, median of $runs; macOS $(sw_vers -productVersion) ($(sw_vers -buildVersion)), $(uname -m)"
 (( ${#rig_env} )) && print "menu environment: $rig_env"
 print "samples: $tsv"
 print "installed menu and daemon pids before and after: $installed_before / $installed_after"

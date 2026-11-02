@@ -6,7 +6,7 @@ import SwiftUI
 /// app in the Apps pane (`["apps", key, "thumbWheel"]`, with "Same as Everywhere").
 struct ThumbWheelRows: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.app) private var app
+    @Environment(\.settings) private var settings
     let path: [String]
     /// The state the keys at `path` apply on top of: none globally, the global one in an app.
     var base: ThumbWheelState = .initial
@@ -38,7 +38,7 @@ struct ThumbWheelRows: View {
             RowLabel("Action", help: help(choice, reversed: state.reversed))
         }
         // Custom and the turn per action add rows.
-        .onChange(of: choice) { app?.refitSettings() }
+        .onChange(of: choice) { settings?.refit() }
         .sheet(item: $sheet) { request in
             switch request.kind {
             case .shortcut: ShortcutSheet(request: request) { apply(.keys($0), to: request.target) }
