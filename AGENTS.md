@@ -296,7 +296,8 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   with event parsing routed in `Session.handle()`, and a parse test in `Tests/HIDPPTests`.
 - Per-app settings: a new per-app section needs a case in `Config.appSections`, decoding on top of
   the global value in `Config.decodeApps`, a `sets…` flag, and its lookup at the moment it applies.
-  Every config section decodes on a `base` (`init(_:base:)`); a new section takes one.
+  Every config section decodes on a `base` (`init(_:base:)`); a new section takes one, keeps
+  its range checks and adds cases to the golden decode test (`ConfigGoldenTests`).
 - Thumb-wheel actions: `Config.ThumbWheel.presets` (Kit) names action pairs; `ThumbStepper` counts
   rotation into steps (remainder kept, reset at each movement's start), paced per action
   (`ThumbStepper.pacing`: media keys free, shortcuts 50 ms, zoom 40 ms, animated actions 300 ms
