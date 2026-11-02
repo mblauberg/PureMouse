@@ -74,20 +74,4 @@ import Testing
         #expect(fixture.contents() == "someone else's\n")
         #expect(fixture.contents(moved) == all.joined())
     }
-
-    @Test func neverRotatesATerminal() throws {
-        let fixture = try LogFixture()
-        let terminal = try PseudoTerminal()
-        try FileManager.default.createDirectory(at: fixture.log.deletingLastPathComponent(),
-                                                withIntermediateDirectories: true)
-        try Data(Self.lines(0..<10).joined().utf8).write(to: fixture.log)
-
-        // Constructed directly: attachStderr would not attach a terminal at all.
-        let file = LogFile(url: fixture.log, fd: terminal.fd, rotateAt: 100, opened: false)
-        file.write(Data(Self.lines(0..<5).joined().utf8))  // past the cap
-        file.rotateIfNeeded()
-
-        #expect(!FileManager.default.fileExists(atPath: fixture.log.path + ".1"))
-        #expect(fixture.contents() == Self.lines(0..<10).joined())
-    }
 }

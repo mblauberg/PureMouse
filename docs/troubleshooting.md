@@ -23,6 +23,9 @@ the examples below call it `puremouse`.
   macOS upgrade the notification it relies on may have changed: see
   [After a macOS upgrade](#after-a-macos-upgrade). Actions bound to buttons (back and forward in
   Safari, for example) do not apply on the other Mac; it gets the buttons' native behaviour.
+- **A `run` action does nothing:** its output is discarded, and the log only says it failed and
+  with which exit status. Redirect its output to a file to see why, for example
+  `{"run": "my-script >> /tmp/my-script.log 2>&1"}`.
 - **A setting has no effect:** check the menu for a config error. A file that does not load leaves
   the previous settings in effect, and the error names the field.
 

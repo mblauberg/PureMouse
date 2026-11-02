@@ -162,6 +162,11 @@ has a name.
 `brightnessUp`, `brightnessDown`, `nextTab`, `previousTab`, `zoomIn`, `zoomOut`, `none`,
 `{"keys": "cmd+shift+4"}`, `{"run": "open -a Safari"}`, `{"haptic": "sharpStateChange"}`.
 
+`run` starts the command with `/bin/sh -c`, as you, and does not wait for it. Its output is
+discarded; a command that exits non-zero is logged once with its first 80 characters and its exit
+status. To see what a command prints, redirect it to a file:
+`{"run": "my-script >> /tmp/my-script.log 2>&1"}`.
+
 `spaceLeft` and `spaceRight` send your own "Move left/right a space" shortcuts from System
 Settings › Keyboard › Keyboard Shortcuts › Mission Control, or Ctrl+Left/Right if those are off.
 `nextTab`/`previousTab` send Ctrl+Tab and Ctrl+Shift+Tab, and `zoomIn`/`zoomOut` Cmd+= and Cmd+-,

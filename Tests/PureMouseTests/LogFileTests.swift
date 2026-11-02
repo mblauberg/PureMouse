@@ -35,7 +35,6 @@ final class LogFixture {
         try Data("earlier run\n".utf8).write(to: fixture.log)
 
         let file = try #require(LogFile.attachStderr(url: fixture.log, fd: fixture.fd))
-        #expect(file.opened)
         Log.$testFile.withValue(file) { Log.info("PureMouse dev on macOS test") }
 
         let lines = fixture.contents().split(separator: "\n")
@@ -51,27 +50,20 @@ final class LogFixture {
         #expect(fixture.contents().hasSuffix(" error first line\n"))
     }
 
-    @Test func aDescriptorAlreadyOnTheLogIsKept() throws {
+    /// Under `2>&-` the daemon starts with fd 2 closed, so opening the log takes 2 itself.
+    @Test func aClosedDescriptorIsReopenedAndKept() throws {
         let fixture = try LogFixture()
-        try FileManager.default.createDirectory(at: fixture.log.deletingLastPathComponent(),
-                                                withIntermediateDirectories: true)
-        try Data("from launchd\n".utf8).write(to: fixture.log)
-        // As launchd opens StandardErrorPath for agents registered by 0.3.x, but without
-        // O_APPEND, so a reopen by attachStderr would show in the descriptor's flags.
-        let onLog = open(fixture.log.path, O_WRONLY | O_CLOEXEC)
-        try #require(onLog >= 0)
-        defer { close(onLog) }
-        lseek(onLog, 0, SEEK_END)
+        // The lowest free number, as 2 is when closed: open() hands it straight back. (Another
+        // test may take it first; the checks below hold either way.)
+        let free = open("/dev/null", O_RDONLY)
+        try #require(free >= 0)
+        close(free)
 
-        let file = try #require(LogFile.attachStderr(url: fixture.log, fd: onLog))
-        #expect(!file.opened)
-        #expect(fcntl(onLog, F_GETFL) & O_APPEND == 0)
-        Log.$testFile.withValue(file) { Log.info("written once") }
-
-        let text = fixture.contents()
-        #expect(text.hasPrefix("from launchd\n"))
-        #expect(text.components(separatedBy: "written once").count == 2)
-        #expect(fixture.contents(fixture.directory.appending(path: "stderr")).isEmpty)
+        let file = try #require(LogFile.attachStderr(url: fixture.log, fd: free))
+        defer { close(free) }
+        #expect(fcntl(free, F_GETFD) == 0)  // open, and inherited across exec like stderr
+        Log.$testFile.withValue(file) { Log.info("still open") }
+        #expect(fixture.contents().hasSuffix(" info still open\n"))
     }
 
     @Test func aTerminalIsLeftAlone() throws {

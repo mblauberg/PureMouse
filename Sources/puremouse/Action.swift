@@ -72,14 +72,48 @@ enum SystemActions {
         }
     }
 
+    /// Starts a configured `run` command and returns at once. Its output is discarded (`shell`);
+    /// a failure is logged once, when it ends.
     private static func run(_ command: String) {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/sh")
-        process.arguments = ["-c", command]
+        let process = shell(command)
+        process.terminationHandler = { process in
+            if let message = exitMessage(command, status: process.terminationStatus,
+                                         reason: process.terminationReason) {
+                Log.error(message)
+            }
+        }
         do {
             try process.run()
         } catch {
-            Log.error("run '\(command)': \(error)")
+            Log.error("run \"\(shown(command))\": \(error)")
         }
+    }
+
+    /// `/bin/sh -c command` with stdout and stderr on /dev/null: a command's output must not reach
+    /// the daemon's log, which only the daemon's own writes are counted and rotated by.
+    nonisolated static func shell(_ command: String) -> Process {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", command]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        return process
+    }
+
+    /// The log line for a command that ended badly, or nil when it exited 0.
+    nonisolated static func exitMessage(_ command: String, status: Int32,
+                                        reason: Process.TerminationReason) -> String? {
+        switch reason {
+        case .exit where status == 0: nil
+        case .exit: "run \"\(shown(command))\" exited \(status)"
+        case .uncaughtSignal: "run \"\(shown(command))\" ended by signal \(status)"
+        @unknown default: "run \"\(shown(command))\" ended (\(status))"
+        }
+    }
+
+    /// A command as the log shows it: one line, at most 80 characters.
+    nonisolated static func shown(_ command: String) -> String {
+        let line = command.split(whereSeparator: \.isNewline).joined(separator: " ")
+        return line.count <= 80 ? line : line.prefix(79) + "…"
     }
 }
