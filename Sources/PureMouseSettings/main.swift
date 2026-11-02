@@ -10,7 +10,8 @@ MainActor.assumeIsolated {
     // `show-settings`, and its doorbell has already reached the running one.
     if let bundleID = Bundle.main.bundleIdentifier,
        let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
-           .first(where: { $0.processIdentifier != getpid() && !$0.isTerminated }) {
+           // LaunchServices learns of an exit late: a copy that has just quit may still be listed.
+           .first(where: { $0.processIdentifier != getpid() && !$0.isTerminated && kill($0.processIdentifier, 0) == 0 }) {
         app.yieldActivation(to: running)
         running.activate()
         exit(0)

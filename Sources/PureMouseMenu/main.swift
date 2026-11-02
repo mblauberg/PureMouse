@@ -14,7 +14,7 @@ MainActor.assumeIsolated {
        NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
            // LaunchServices learns of an exit late: a copy that has just quit may still be listed.
            .contains(where: { $0.processIdentifier != getpid() && !$0.isTerminated && kill($0.processIdentifier, 0) == 0 }) {
-        SettingsLauncher.open(pane: ShowRequest.consume()?.pane) { exit(0) }
+        SettingsLauncher.shared.open(pane: ShowRequest.consume()?.pane) { exit(0) }
         app.run()
     }
 

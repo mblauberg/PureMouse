@@ -42,7 +42,7 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     func showSettings(pane: SettingsPane? = nil, then done: @escaping @MainActor () -> Void = {}) {
         Task { await Notifier.refresh() }
-        SettingsLauncher.open(pane: pane, then: done)
+        SettingsLauncher.shared.open(pane: pane, then: done)
     }
 
     private func statusChanged() {
@@ -58,18 +58,19 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     // MARK: Lifecycle
 
-    /// Quit PureMouse: quits Settings, then stops the daemon (which restores the mouse) and this
-    /// app. Both start again at login. `stop` boots out this app's agent too, so launchd may end us
-    /// first.
+    /// Quit PureMouse: quits Settings (and one still opening), then stops the daemon (which
+    /// restores the mouse) and this app. Both start again at login. `stop` boots out this app's
+    /// agent too, so launchd may end us first.
     func quitAll() {
-        SettingsLauncher.quit()
-        model.flush()
-        guard Locations.live.daemon != nil else { NSApp.terminate(nil); return }
-        Lifecycle.run(.stop) { result in
-            if case .failure(let error) = result {
-                Alerts.show("PureMouse could not stop", error.description)
+        SettingsLauncher.shared.quit { [model] in
+            model.flush()
+            guard Locations.live.daemon != nil else { NSApp.terminate(nil); return }
+            Lifecycle.run(.stop) { result in
+                if case .failure(let error) = result {
+                    Alerts.show("PureMouse could not stop", error.description)
+                }
+                NSApp.terminate(nil)
             }
-            NSApp.terminate(nil)
         }
     }
 

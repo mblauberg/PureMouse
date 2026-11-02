@@ -97,7 +97,7 @@ private enum Rig {
             app.showSettings()
             done()
         case "settings-close":
-            SettingsLauncher.quit()
+            SettingsLauncher.shared.quitRunning()
             done()
         default:
             break
