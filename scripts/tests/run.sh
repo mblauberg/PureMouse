@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Tests for the build, sign, verify and size scripts. Each test_*.zsh file defines `test_*`
+# Tests for the build, sign, verify, size, install, uninstall and release scripts. Each test_*.zsh file defines `test_*`
 # functions; each runs in its own subshell with a fresh $tmp, and a non-zero status fails it.
 #
 #   scripts/tests/run.sh [name-filter]

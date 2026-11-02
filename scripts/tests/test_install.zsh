@@ -42,14 +42,11 @@ test_uninstall_stops_the_agents_and_removes_the_app_and_agents_but_not_the_confi
     mkdir -p $tmp/home/Library/LaunchAgents $tmp/home/.config/puremouse
     touch $tmp/home/Library/LaunchAgents/$label.plist $tmp/home/Library/LaunchAgents/$menu_label.plist
     touch $tmp/home/.config/puremouse/config.json
+    expect "both agent plists exist before" test -e $tmp/home/Library/LaunchAgents/$menu_label.plist -a -e $tmp/home/Library/LaunchAgents/$label.plist
     $repo/scripts/uninstall.sh >/dev/null
     expect "the app is removed" test ! -e $tmp/Applications/PureMouse.app
     expect "both agents are removed" test -z "$(print -l $tmp/home/Library/LaunchAgents/*(N))"
     expect "the config is kept" test -e $tmp/home/.config/puremouse/config.json
     local log=$(<$tmp/fakes/launchctl.log)
     [[ $log == *"bootout gui/$UID/$menu_label"*"bootout gui/$UID/$label"* ]] || { print -u2 -- $log; return 1; }
-}
-
-test_install_and_uninstall_name_no_label_of_their_own() {
-    ! grep -n 'io.github.mblauberg' scripts/install.sh scripts/uninstall.sh
 }

@@ -22,11 +22,11 @@ source "${0:A:h}/lib.zsh"
 cd $root
 
 usage="usage: release.sh [--dry-run] [--version 0.0.0-ci.<shortsha>]"
-dry_run=0 version=
+dry_run=0 version= version_given=0
 while (( $# )); do
     case $1 in
         --dry-run) dry_run=1; shift ;;
-        --version) (( $# >= 2 )) || die "--version needs a value"; version=$2; shift 2 ;;
+        --version) (( $# >= 2 )) || die "--version needs a value"; version=$2 version_given=1; shift 2 ;;
         *) die $usage ;;
     esac
 done
@@ -76,19 +76,21 @@ notarize() {
 # verify_dmg <dmg> [verify-bundle.sh options]: mounts it read-only, out of sight of the Finder, and
 # checks that it holds PureMouse.app, which verify-bundle.sh accepts, and the Applications link.
 verify_dmg() {
-    local dmg=$1 mount=$(mktemp -d) problem=
+    local dmg=$1 mount problem=
     shift
+    mount=$(mktemp -d)
     hdiutil attach -nobrowse -readonly -noverify -mountpoint $mount $dmg >/dev/null ||
-        die "could not mount ${dmg:t}"
+        { rmdir $mount; die "could not mount ${dmg:t}"; }
     [[ -L $mount/Applications && $(readlink $mount/Applications) == /Applications ]] ||
         problem="no Applications link to /Applications"
     [[ -n $problem ]] || scripts/verify-bundle.sh $mount/PureMouse.app $@ || problem="PureMouse.app does not verify"
-    hdiutil detach -quiet $mount || hdiutil detach -quiet -force $mount
+    hdiutil detach -quiet $mount || hdiutil detach -quiet -force $mount ||
+        die "could not unmount $mount; detach it with: hdiutil detach -force $mount"
     rmdir $mount
     [[ -z $problem ]] || die "${dmg:t}: $problem"
 }
 
-if [[ -n $version ]]; then
+if (( version_given )); then
     (( dry_run )) || die "--version is only for a --dry-run (a release takes its version from its tag)"
     [[ $version =~ '^0\.0\.0-ci\.[0-9A-Za-z]+$' ]] || die "a dry run's --version must be 0.0.0-ci.<shortsha>, not '$version'"
 else
@@ -104,7 +106,7 @@ app=.build/app/PureMouse.app
 dist=.build/dist
 dmg=$dist/PureMouse-$version.dmg
 identity=$(signing_identity)
-verify=($app)
+release_opts=()
 
 scripts/build-app.sh --universal --version $version
 [[ $(plist_value $app/Contents/Info.plist CFBundleShortVersionString) == $version ]] ||
@@ -112,9 +114,9 @@ scripts/build-app.sh --universal --version $version
 if (( ! dry_run )); then
     # build-app.sh signs without a timestamp; Apple's notary service and a release need one.
     scripts/sign-bundle.sh $app --identity "$identity" --timestamp
-    verify+=(--release)
+    release_opts=(--release)
 fi
-scripts/verify-bundle.sh $verify
+scripts/verify-bundle.sh $app $release_opts
 scripts/check-size.sh $app
 
 if (( notarise )); then
@@ -133,7 +135,7 @@ else
 fi
 
 mkdir -p $dist
-rm -f $dmg $dist/SHA256SUMS
+rm -f $dist/SHA256SUMS
 dmg_options=(--identity "$identity")
 (( dry_run )) || dmg_options+=(--timestamp)
 scripts/make-dmg.sh $app $dmg $dmg_options
@@ -141,7 +143,7 @@ if (( notarise )); then
     notarize $dmg
     xcrun stapler staple $dmg
 fi
-verify_dmg $dmg $verify[2,-1]
+verify_dmg $dmg $release_opts
 scripts/check-size.sh $dmg
 (cd $dist && shasum -a 256 ${dmg:t} > SHA256SUMS && shasum -a 256 -c SHA256SUMS)
 (( ! dry_run )) || echo "dry run: $dmg is for checking, not for publishing"

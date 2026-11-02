@@ -1,4 +1,5 @@
-# Shared by the build, sign and verify scripts: source it, do not run it.
+# Shared by the build, sign, verify, install, uninstall and release scripts and their tests: source
+# it, do not run it.
 #
 # Bundle layout, identifiers, the one Info.plist writer, version handling and identity choice live
 # here so that every script agrees on them. The identifiers are frozen: macOS keys permission grants
@@ -39,32 +40,34 @@ menu_component() {
     print -r -- ${(M)components:#$menu_label:*}
 }
 
-# app_component: the `components` entry of PureMouse.app itself (the daemon).
-app_component() {
-    print -r -- ${(M)components:#*:.}
-}
-
 # Where install.sh puts PureMouse.app and uninstall.sh takes it from. PUREMOUSE_INSTALL_DIR exists
 # for the script tests, which must never touch /Applications.
 install_dir=${PUREMOUSE_INSTALL_DIR:-/Applications}
 
-# stop_agents <consequence>: boots out the menu bar app's and the daemon's login agents and waits
-# until neither is running, so their files can be replaced or removed. bootout returns before the
-# old instance has finished restoring the mouse, and replacing a running binary can get it killed
-# for an invalid signature first. Otherwise it dies with "PureMouse is still running, so
-# <consequence>".
+# stop_agents <consequence>: boots out every component's login agent (the menu bar app's first, the
+# daemon's last; a component without an agent is simply not loaded) and waits until none is running,
+# so their files can be replaced or removed. bootout returns before the old instance has finished
+# restoring the mouse, and replacing a running binary can get it killed for an invalid signature
+# first. Otherwise it dies with "PureMouse is still running, so <consequence>".
 stop_agents() {
-    local menu_id=$(component_id "$(menu_component)") daemon_id=$(component_id "$(app_component)")
+    local component loaded
+    for component in $components; do
+        launchctl bootout gui/$UID/$(component_id $component) 2>/dev/null || true
+    done
     # The menu bar app may have been started by the Finder rather than launchd.
-    launchctl bootout gui/$UID/$menu_id 2>/dev/null || true
     pkill -x PureMouseMenu 2>/dev/null || true
-    launchctl bootout gui/$UID/$daemon_id 2>/dev/null || true
     local _
     for _ in {1..50}; do
-        launchctl print gui/$UID/$daemon_id >/dev/null 2>&1 || pgrep -x PureMouseMenu >/dev/null || return 0
+        loaded=
+        for component in $components; do
+            ! launchctl print gui/$UID/$(component_id $component) >/dev/null 2>&1 || loaded=$(component_id $component)
+        done
+        if [[ -z $loaded ]] && ! pgrep -x PureMouseMenu >/dev/null; then
+            return 0
+        fi
         sleep 0.1
     done
-    die "PureMouse is still running, so $1; try: launchctl bootout gui/$UID/$daemon_id"
+    die "PureMouse is still running, so $1; try: ${loaded:+launchctl bootout gui/$UID/$loaded}${loaded:-pkill -x PureMouseMenu}"
 }
 
 # plist_value <plist> <key>: a top-level value, or a non-zero status when the key is missing.

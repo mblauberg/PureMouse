@@ -159,7 +159,7 @@ Notarisation follows [ADR 14](adr/0014-signing-identity-is-configuration.md). It
 all set: it zips and submits the app, staples the app, builds and signs the dmg, then submits and
 staples the dmg. With none set, `release.sh` logs "skipping notarisation" and carries on. With some
 but not all, it fails naming the missing ones, and a Developer ID signature without them fails too.
-On an `Invalid` result it prints `notarytool log`. This path has only run against a fake `xcrun`
+On any result but `Accepted` (`Invalid` included) it prints `notarytool log`. This path has only run against a fake `xcrun`
 (`scripts/tests/test_release.zsh`); its first real run belongs to the Developer ID work.
 
 Release notes come from GitHub Releases ([ADR 17](adr/0017-github-releases-is-the-changelog.md)):

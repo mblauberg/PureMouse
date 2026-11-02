@@ -33,7 +33,6 @@ ditto $app $stage/PureMouse.app
 ln -s /Applications $stage/Applications
 
 # hdiutil sometimes fails with "Resource busy" on a machine that is busy indexing; it passes again.
-rm -f $dmg
 for attempt in 1 2 3; do
     hdiutil create -volname PureMouse -srcfolder $stage -fs HFS+ -format ULFO -ov $dmg >/dev/null && break
     rm -f $dmg
