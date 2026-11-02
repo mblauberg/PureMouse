@@ -234,6 +234,11 @@ one. This file covers how to work on it safely.
   across (through `MouseTab.fit()`, which adds the strip). Advanced settings sit behind a pane's
   footer (`PaneFooter`: Restore Defaults, Advanced…) in an `AdvancedSheet`, which never opens
   another sheet.
+- Settings notices (config error, unsaved change, status too new, PureMouse off, paused, Logi
+  Options+, Accessibility on the panes that need it) come from `BannerPlan.items`, in that order.
+  A pane shows only the first as its banner, with "N more notices" opening General, whose Status
+  section lists them all as rows (off is its PureMouse row). Use Last Working Config… asks before
+  it replaces the file.
 - User-facing text (menu, Settings, alerts, notifications, accessibility labels, CLI output)
   follows `docs/ui-language.md`: its casing rules and glossary. Layout, controls and what shows by
   default versus behind Advanced… follow `docs/ui-design.md`. Change either page in the same PR as
@@ -366,8 +371,10 @@ one. This file covers how to work on it safely.
   companion directory that launchd does not load at login), `stop` boots out and keeps the registration
   (table in `docs/companion.md`). `puremouse login-status` prints `LoginStatus` (Kit) as JSON, and
   Settings reads "starts at login" from it, not from a plist file. General's Open at login switch
-  runs `login on|off` and never stops anything; its PureMouse is running row runs `start` / `stop`
-  (the control-to-command mapping is `LoginAction`, tested in `LoginActionTests`). Opening the
+  runs `login on|off` and never stops anything; its Status row's Start / Stop, the "PureMouse is
+  off" banner and the menu's Start PureMouse run `start` / `stop`, never `register` (the
+  control-to-command mapping is `LoginAction`, tested in `LoginActionTests`, `BannerPlanTests`
+  and `MenuPlanTests`). Opening the
   app from the Finder runs `register`, then `LoginItem.openSettings` opens the Settings helper
   directly (the alert is kept for a build without one).
 - Builds are signed by `scripts/sign-bundle.sh`: inside out from `scripts/lib.zsh`'s `components`

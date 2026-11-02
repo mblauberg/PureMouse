@@ -49,7 +49,7 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
         tabs.didSelectSegment = { defaults.set($0.rawValue, forKey: Self.segmentKey) }
         // Titled before the first pane loads, so "Untitled" never shows.
         window.title = saved.tab.title
-        select(saved.tab)
+        tabs.open(.tab(saved.tab))
     }
 
     @available(*, unavailable)
@@ -95,22 +95,12 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
     }
 
     public func show(pane: SettingsPane?) {
-        if let pane {
-            let next = SettingsSelection(tab: tabs.selectedTab ?? .mouse, segment: tabs.segment).opening(pane)
-            tabs.selectSegment(next.segment)
-            select(next.tab)
-        }
+        if let pane { tabs.open(pane) }
         guard let window else { return }
         if !window.isVisible { window.center() }
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
         DispatchQueue.main.async { window.makeFirstResponder(nil) }
-    }
-
-    private func select(_ tab: SettingsTab) {
-        if let index = SettingsTab.shown.firstIndex(of: tab) {
-            tabs.selectedTabViewItemIndex = index
-        }
     }
 
     public func windowWillClose(_ notification: Notification) {
@@ -142,6 +132,13 @@ final class SettingsTabs: NSTabViewController {
         self.segment = segment
         mouse?.select(segment)
         didSelectSegment(segment)
+    }
+
+    /// Shows a tab, or Mouse on a segment.
+    func open(_ pane: SettingsPane) {
+        let next = SettingsSelection(tab: selectedTab ?? .mouse, segment: segment).opening(pane)
+        selectSegment(next.segment)
+        if let index = SettingsTab.shown.firstIndex(of: next.tab) { selectedTabViewItemIndex = index }
     }
 
     override func tabView(_ tabView: NSTabView, didSelect tabViewItem: NSTabViewItem?) {

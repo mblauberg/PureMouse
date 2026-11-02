@@ -327,7 +327,7 @@ private struct AppDetail: View {
             if let suggestion = suggestion(config) {
                 Section {
                     Banner(title: "Suggested for \(identity.name)", message: "The thumb wheel \(describe(suggestion)).",
-                           symbol: "lightbulb.fill", tint: .yellow) {
+                           symbol: "lightbulb.fill") {
                         Button("Use Suggested Settings") {
                             model.update { $0.chooseThumbWheel(suggestion.choice, at: scope + ["thumbWheel"], base: globalThumbWheel(config)) }
                         }
