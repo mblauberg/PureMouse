@@ -37,6 +37,9 @@ public final class FakeDevice {
     /// A failure remains until removed; useful for retry and offline tests.
     public var failures: [Call: Failure] = [:]
     public var playedWaveforms: [UInt8] = []
+    /// A mouse in onboard-profile mode (0x8100) can acknowledge a DPI write and keep its own
+    /// resolution; the readback then shows the old value.
+    public var ignoresDPIWrites = false
     /// getDeviceType's answer (0x0005 function 2): 3 is a mouse.
     public var kind: UInt8 = 3
     /// Features whose next root lookup goes unanswered (`dropFirstLookup`), and those dropped.
@@ -69,9 +72,13 @@ public final class FakeDevice {
 
     public var mainWheelDiverted: Bool { (responses[Call(0x2121, 1)]?.first ?? 0) & 1 != 0 }
     public var mainWheelHighResolution: Bool { (responses[Call(0x2121, 1)]?.first ?? 0) & 2 != 0 }
+    public var lowResWheelDiverted: Bool { (responses[Call(0x2130, 0)]?.first ?? 0) & 1 != 0 }
     public var thumbWheelDiverted: Bool { (responses[Call(0x2150, 1)]?.first ?? 0) & 1 != 0 }
+    /// The resolution the sensor reads back: 0x2201's, or 0x2202's X axis where there is no 0x2201.
     public var dpi: Int {
-        let r = responses[Call(0x2201, 2)] ?? [0, 3, 232]
+        let extended = !features.values.contains(0x2201) && features.values.contains(0x2202)
+        let r = extended ? responses[Call(0x2202, 5)] ?? Self.defaults[Call(0x2202, 5)]!
+                         : responses[Call(0x2201, 2)] ?? [0, 3, 232]
         return Int(UInt16(r[1]) << 8 | UInt16(r[2]))
     }
 
@@ -165,7 +172,18 @@ public final class FakeDevice {
             return reply(controls[i].reporting)
         case (0x2121, 2): responses[Call(feature, 1)] = p; return reply(p)
         case (0x2150, 2): responses[Call(feature, 1)] = p; return reply(p)
-        case (0x2201, 3): responses[Call(feature, 2)] = p; return reply(p)
+        case (0x2130, 1): responses[Call(feature, 0)] = p; return reply(p)
+        case (0x2201, 3):
+            if !ignoresDPIWrites { responses[Call(feature, 2)] = p }
+            return reply(p)
+        case (0x2202, 6):
+            // [sensor, X, Y, lift-off distance] in; [sensor, X, default X, Y, default Y, lift-off] out.
+            guard p.count >= 6 else { return FakeTransport.error(to: r, code: 2) }
+            let old = responses[Call(feature, 5)] ?? Self.defaults[Call(feature, 5)]!
+            if !ignoresDPIWrites {
+                responses[Call(feature, 5)] = [p[0], p[1], p[2], old[3], old[4], p[3], p[4], old[7], old[8], p[5]]
+            }
+            return reply(p)
         case (0x2110, 1), (0x2111, 2):
             let getter: UInt8 = feature == 0x2110 ? 0 : 1
             var state = responses[Call(feature, getter)] ?? [2, 30, 50]
@@ -191,6 +209,10 @@ public final class FakeDevice {
                 fake.transport.productID = id
             }
             if line.hasPrefix("name: ") { fake.name = String(line.dropFirst(6)) }
+            if line.hasPrefix("type: "),
+               let kind = DeviceName.Kind.allCases.first(where: { $0.name == line.dropFirst(6) }) {
+                fake.kind = kind.rawValue
+            }
             if line.hasPrefix("device product IDs: ") {
                 let pairs = line.dropFirst(20).split(separator: " ").map { $0.split(separator: "=") }
                 var reply = Array(repeating: UInt8(0), count: 16)
@@ -248,6 +270,9 @@ public final class FakeDevice {
         ("hires 0x2121 caps", Call(0x2121, 0)), ("hires 0x2121 mode", Call(0x2121, 1)),
         ("thumb 0x2150 info", Call(0x2150, 0)), ("thumb 0x2150 status", Call(0x2150, 1)),
         ("battery 0x1004 status", Call(0x1004, 1)), ("battery 0x1000 status", Call(0x1000, 0)),
+        ("battery 0x1001 voltage", Call(0x1001, 0)), ("lowres 0x2130 mode", Call(0x2130, 0)),
+        ("dpi 0x2202 caps", Call(0x2202, 1)), ("dpi 0x2202 list", Call(0x2202, 2)),
+        ("dpi 0x2202 get", Call(0x2202, 5)),
         ("haptic 0x19B0 caps", Call(0x19B0, 0)),
     ]
 
@@ -258,5 +283,11 @@ public final class FakeDevice {
         Call(0x2150, 0): [0, 18, 0, 120], Call(0x2150, 1): [0, 0],
         Call(0x1004, 0): [15, 3], Call(0x1004, 1): [80, 4, 0, 0], Call(0x1000, 0): [80, 20, 0],
         Call(0x19B0, 0): [0, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF],
+        // Native reporting; 4088 mV discharging (OpenLogi's G915); 0x2202 as Solaar lays it out:
+        // separate Y and lift-off distance, 100 to 25600 step 50, 800 DPI on both axes, high lift-off.
+        Call(0x2130, 0): [0], Call(0x1001, 0): [0x0F, 0xF8, 0],
+        Call(0x2202, 1): [0, 0, 3],
+        Call(0x2202, 2): [0, 0, 0, 0x00, 0x64, 0xE0, 0x32, 0x64, 0x00, 0, 0],
+        Call(0x2202, 5): [0, 0x03, 0x20, 0x03, 0x20, 0x03, 0x20, 0x03, 0x20, 2],
     ]
 }
