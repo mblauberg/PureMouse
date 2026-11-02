@@ -71,8 +71,9 @@ Sources/PureMouseKit/   shared by both apps: config model and decoder, status/co
 Sources/puremouse/      the daemon: applying config, actions, gestures, smooth scrolling, one
                         session per mouse, discovery, reconnects, wake, reload, permissions
 Sources/PureMouseMenu/  the menu bar app (AppKit status item and menu, SwiftUI Settings panes)
-Tests/                  pure logic: framing and event parsing, config, gestures, scroll maths,
-                        config editing
+Sources/HIDPPTesting/   test support only: in-memory transport and stateful HID++ mouse from probe dumps
+Tests/                  request handling and device behaviour against fakes, framing and event parsing,
+                        config, gestures, scroll maths, config editing
 scripts/                build, install, uninstall, package, signing identity, icon
 assets/                 app icon (Icon Composer source, compiled icon, README images), menu bar glyph
 ```

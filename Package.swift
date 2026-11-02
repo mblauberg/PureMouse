@@ -21,8 +21,9 @@ let package = Package(
             dependencies: ["PureMouseKit"],
             swiftSettings: [.unsafeFlags(["-Osize"], .when(configuration: .release))]
         ),
-        .testTarget(name: "HIDPPTests", dependencies: ["HIDPP"]),
-        .testTarget(name: "PureMouseTests", dependencies: ["puremouse"]),
+        .target(name: "HIDPPTesting", dependencies: ["HIDPP"]),
+        .testTarget(name: "HIDPPTests", dependencies: ["HIDPP", "HIDPPTesting"]),
+        .testTarget(name: "PureMouseTests", dependencies: ["puremouse", "HIDPPTesting"]),
         .testTarget(name: "PureMouseKitTests", dependencies: ["PureMouseKit"]),
         .testTarget(name: "PureMouseMenuTests", dependencies: ["PureMouseMenu"]),
     ]
