@@ -10,7 +10,7 @@ private func requestFile() -> URL {
         .appending(path: "show-settings")
 }
 
-/// The daemon's `openMenu` writes `SettingsRequest.write("")`: while a reader holds the lock (it
+/// The daemon's `openSettings` writes `SettingsRequest.write("")`: while a reader holds the lock (it
 /// has read the request and not yet removed it), that write waits, so it is neither cut short nor
 /// removed unread.
 @Test func theDaemonsRequestWaitsForAReaderHoldingTheLock() throws {

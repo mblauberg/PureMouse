@@ -59,6 +59,7 @@ private final class FakeLoginService: LoginService {
 }
 
 private let appURL = URL(fileURLWithPath: "/Applications/PureMouse.app/Contents/Library/LoginItems/PureMouse Menu.app")
+private let helperURL = URL(fileURLWithPath: "/Applications/PureMouse.app/Contents/Helpers/PureMouse Settings.app")
 private let installedExecutable = URL(fileURLWithPath: "/Applications/PureMouse.app/Contents/MacOS/puremouse")
 
 /// One policy over a fake service and a temporary companion directory.
@@ -67,13 +68,20 @@ private final class Rig: @unchecked Sendable {
     let directory = FileManager.default.temporaryDirectory.appending(path: "pm-login-\(UUID().uuidString)")
     var seeded = 0
     var menuIsCaller = false
+    /// Settings requests made, and apps opened with their attempts, in order with the service's calls.
+    var requests = 0
+    var opened: [(app: URL, attempts: Int)] = []
+    /// Whether `open` succeeds.
+    var opens = true
     private let menuApp: URL?
+    private let settingsApp: URL?
     private let executable: () throws -> URL
     private let lockTimeout: TimeInterval
 
-    init(menuApp: URL? = appURL, lockTimeout: TimeInterval = 5,
+    init(menuApp: URL? = appURL, settingsApp: URL? = helperURL, lockTimeout: TimeInterval = 5,
          executable: @escaping () throws -> URL = { installedExecutable }) {
         self.menuApp = menuApp
+        self.settingsApp = settingsApp
         self.lockTimeout = lockTimeout
         self.executable = executable
     }
@@ -81,7 +89,14 @@ private final class Rig: @unchecked Sendable {
     lazy var item = LoginItem(service: service, host: .init(
         executable: executable, menuApp: menuApp, hiddenMarker: directory.appending(path: Companion.menuHiddenName),
         lockFile: directory.appending(path: "lifecycle.lock"), lockTimeout: lockTimeout,
-        calledFromMenu: { [unowned self] _ in menuIsCaller }, seedConfig: { [unowned self] in seeded += 1 }))
+        calledFromMenu: { [unowned self] _ in menuIsCaller }, seedConfig: { [unowned self] in seeded += 1 },
+        settingsApp: settingsApp,
+        requestSettings: { [unowned self] in requests += 1; service.calls.append("request settings") },
+        open: { [unowned self] app, attempts in
+            opened.append((app, attempts))
+            service.calls.append("open \(app.lastPathComponent)")
+            return opens
+        }))
 
     deinit { try? FileManager.default.removeItem(at: directory) }
 
@@ -169,6 +184,54 @@ private final class Rig: @unchecked Sendable {
         _ = try rig.item.start()
         #expect(rig.service.registered.isEmpty)
         #expect(try rig.item.stopAll() == "PureMouse stopped.")
+    }
+
+    // MARK: Opened from the Finder
+
+    @Test func finderLaunchRegistersThenOpensTheSettingsHelperOnly() throws {
+        let rig = Rig()
+        #expect(try rig.item.finderLaunch() == .init(outcome: "PureMouse is running and will start at login.",
+                                                     settingsOpened: true))
+        #expect(rig.service.calls == ["stop daemon", "register daemon", "start daemon",
+                                      "stop menu", "register menu", "start menu",
+                                      "request settings", "open PureMouse Settings.app"])
+        #expect(rig.opened.map(\.app) == [helperURL])
+        #expect(rig.opened.map(\.attempts) == [2])
+    }
+
+    @Test func finderLaunchOpensSettingsWithTheMenuIconHidden() throws {
+        let rig = Rig()
+        try rig.hideMenu()
+        #expect(try rig.item.finderLaunch().settingsOpened)
+        #expect(rig.service.registered == [.daemon])
+        #expect(rig.opened.map(\.app) == [helperURL])
+        #expect(rig.hidden)
+    }
+
+    @Test func aMissingHelperLeavesTheAlertAndRegistrationDone() throws {
+        let rig = Rig(settingsApp: nil)
+        let launch = try rig.item.finderLaunch()
+        #expect(!launch.settingsOpened)
+        #expect(launch.outcome == "PureMouse is running and will start at login.")
+        #expect(rig.service.registered == [.daemon, .menu])
+        #expect(rig.service.running == [.daemon, .menu])
+        #expect(rig.requests == 0)
+        #expect(rig.opened.isEmpty)
+    }
+
+    @Test func aHelperThatWillNotOpenLeavesTheAlertAndRegistrationDone() throws {
+        let rig = Rig()
+        rig.opens = false
+        #expect(try rig.item.finderLaunch().settingsOpened == false)
+        #expect(rig.service.registered == [.daemon, .menu])
+        #expect(rig.requests == 1)
+    }
+
+    @Test func nothingOpensWhenRegisteringFails() {
+        let rig = Rig(executable: { throw LoginItem.Failure.translocated })
+        #expect(throws: LoginItem.Failure.translocated) { try rig.item.finderLaunch() }
+        #expect(rig.requests == 0)
+        #expect(rig.opened.isEmpty)
     }
 
     // MARK: The menu app as the caller

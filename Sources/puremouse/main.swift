@@ -21,12 +21,11 @@ if let i = arguments.firstIndex(of: "--verbose") {
 
 switch arguments.first {
 case nil where LoginItem.inBundle:
-    // Opened from the Finder: install the login agents, then show Settings through the menu bar app.
+    // Opened from the Finder: install the login agents, then open the Settings helper.
     do {
-        let outcome = try login.register()
-        // With the icon hidden, the menu bar app still opens, opens Settings and quits.
-        if let menu = LoginItem.menuApp, login.openMenu(menu) { exit(0) }
-        LoginItem.alert("PureMouse", outcome + """
+        let launch = try login.finderLaunch()
+        if launch.settingsOpened { exit(0) }
+        LoginItem.alert("PureMouse", launch.outcome + """
 
 
             macOS will ask for Accessibility and Input Monitoring; allow both in System Settings › \

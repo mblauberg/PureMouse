@@ -41,12 +41,20 @@ struct LoginItem {
         var calledFromMenu: (URL) -> Bool
         /// Copies the bundled example config unless one is there.
         var seedConfig: () -> Void
+        /// The bundled Settings helper, absent from builds that do not include it.
+        var settingsApp: URL?
+        /// Asks for Settings to open (`SettingsRequest`), for the helper to read when it starts.
+        var requestSettings: () -> Void
+        /// Opens the app, trying up to the given number of times; whether it opened.
+        var open: (URL, Int) -> Bool
 
         static var live: Host {
             Host(executable: LoginItem.liveExecutable, menuApp: LoginItem.menuApp,
                  hiddenMarker: Companion.directory.appending(path: Companion.menuHiddenName),
                  lockFile: FileLock.url(for: Companion.directory.appending(path: "lifecycle")), lockTimeout: 30,
-                 calledFromMenu: LoginItem.parentIsMenu, seedConfig: LoginItem.seedConfig)
+                 calledFromMenu: LoginItem.parentIsMenu, seedConfig: LoginItem.seedConfig,
+                 settingsApp: LoginItem.settingsApp, requestSettings: { SettingsRequest.write("") },
+                 open: LoginItem.open)
         }
     }
 
@@ -181,18 +189,30 @@ struct LoginItem {
         }
     }
 
-    /// Opens the menu bar app, which then opens Settings (a second launch hands over to the
-    /// running one). `register` has just restarted the menu agent, and `open` can fail (-600)
-    /// while launchd is starting the app, so the request is also left in
-    /// `Companion.showSettingsURL` (`SettingsRequest`, under its lock) for it to read on launch,
-    /// and `open` is tried once more. If the menu app still cannot be reached, the Settings helper
-    /// is opened itself; it reads the same request, and it is the one listening on the doorbell,
-    /// not the menu app. False if neither opened.
-    func openMenu(_ app: URL) -> Bool {
-        SettingsRequest.write("")
-        if Self.open(app, attempts: 2) { return true }
-        guard let settings = Self.settingsApp else { return false }
-        return Self.open(settings, attempts: 1)
+    /// What opening the app from the Finder did.
+    struct FinderLaunch: Equatable {
+        /// What `register` reported.
+        var outcome: String
+        /// Whether Settings opened; if not, the caller tells the user the outcome itself.
+        var settingsOpened: Bool
+    }
+
+    /// Opening the app from the Finder: `register`, then Settings. Registration has happened by the
+    /// time Settings is attempted, so a missing or unopenable helper leaves it done.
+    func finderLaunch() throws -> FinderLaunch {
+        let outcome = try register()
+        return FinderLaunch(outcome: outcome, settingsOpened: openSettings())
+    }
+
+    /// Opens the Settings helper, which reads the request left in `Companion.showSettingsURL`
+    /// (`SettingsRequest`, under its lock) when it starts. It is opened itself, not through the menu
+    /// bar app, which `register` starts unless its icon is hidden and which has no part in
+    /// Settings. `open` is tried twice, since it can fail while LaunchServices is busy. False if the
+    /// build has no helper or it would not open.
+    func openSettings() -> Bool {
+        guard let settings = host.settingsApp else { return false }
+        host.requestSettings()
+        return host.open(settings, 2)
     }
 
     /// The bundled Settings helper, absent from builds that do not include it.
@@ -202,7 +222,7 @@ struct LoginItem {
     }
 
     /// `open` with the app, `attempts` times a second apart until it succeeds.
-    private static func open(_ app: URL, attempts: Int) -> Bool {
+    private static func open(_ app: URL, _ attempts: Int) -> Bool {
         for attempt in 0..<attempts {
             if attempt > 0 { Thread.sleep(forTimeInterval: 1) }
             let process = Process()
