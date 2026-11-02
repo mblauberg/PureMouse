@@ -48,6 +48,8 @@ struct ButtonsPane: View {
         .sheet(isPresented: $showingAdvanced) {
             ButtonsAdvancedSheet().environment(model)
         }
+        // The sheet's rows are about Hold and Move: with none left, it has nothing to show.
+        .onChange(of: usesGestures) { _, uses in if !uses { showingAdvanced = false } }
         .sheet(item: $sheet) { request in
             switch request.kind {
             case .shortcut: ShortcutSheet(request: request) { apply(.keys($0), to: request.target) }
