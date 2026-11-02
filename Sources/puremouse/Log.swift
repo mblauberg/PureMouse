@@ -128,7 +128,8 @@ final class LogFile: @unchecked Sendable {
         // Count afresh even if this fails, so a failure is retried a cap later, not on every line.
         size = 0
         guard rename(url.path, old) == 0 else { return }
-        _ = Self.reopen(url, onto: fd)
+        // Without a new file, put the old one back rather than leave fd writing to `<name>.1`.
+        if !Self.reopen(url, onto: fd) { rename(old, url.path) }
     }
 
     /// Whether `fd` is the file at `url` (same device and inode).
