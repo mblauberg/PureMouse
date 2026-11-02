@@ -191,6 +191,10 @@ struct PaneFooter: View {
     }
 }
 
+/// What an `AdvancedSheet` spends on its title, its buttons row and their padding, so the form
+/// and this chrome together fit the height `LazyPane.fitted` allows.
+private let sheetChromeHeight: CGFloat = 160
+
 /// A pane's Advanced… sheet: a title, a grouped form, and Done as the default button, with an
 /// optional button at the bottom-leading edge (General's Reset All Settings…). A sheet never opens
 /// another sheet: anything that needs more room inside it is a disclosure (docs/ui-design.md).
@@ -228,7 +232,9 @@ struct AdvancedSheet<Content: View, Leading: View>: View {
     }
 
     /// The screen's height less the window's toolbar and the sheet's title and buttons.
-    private static var maxFormHeight: CGFloat { LazyPane.fitted(NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)).height - 160 }
+    private static var maxFormHeight: CGFloat {
+        LazyPane.fitted(NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)).height - sheetChromeHeight
+    }
 }
 
 extension AdvancedSheet where Leading == EmptyView {
@@ -271,4 +277,3 @@ extension View {
     /// Indents a disclosed child row past its parent's triangle.
     func disclosedRow() -> some View { padding(.leading, 22) }
 }
-

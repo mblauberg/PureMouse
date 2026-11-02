@@ -144,7 +144,8 @@ struct AppSheet: View {
     /// What applies everywhere, for the dimmed value and "Same as Everywhere (…)". An unset
     /// direction does nothing.
     private func everywhereLabel(_ action: ButtonAction, direction: Bool = false) -> String {
-        action == .standard ? (direction ? ButtonAction.named("none").label : action.label) : action.label
+        if action == .standard, direction { return ButtonAction.named("none").label }
+        return action.label
     }
 
     @ViewBuilder

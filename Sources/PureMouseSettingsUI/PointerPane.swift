@@ -31,15 +31,14 @@ struct PointerPane: View {
             Section {
                 if layout.showsRows {
                     ValueSlider(title: "Pointer Speed", spokenTitle: "Pointer speed",
-                                help: "Higher moves the pointer further for the same hand movement. Available speeds depend on your mouse."
-                                    + (estimate ? " Using the mouse's own setting." : ""),
+                                help: "Higher moves the pointer further for the same hand movement. Available speeds depend on your mouse.",
                                 value: Binding(get: { Double(DPIReading.index(of: current, in: steps)) },
                                                set: { DPIReading.step(at: $0, in: steps).map { setDPI($0, debounce: true) } }),
                                 range: 0...Double(max(steps.count - 1, 1)),
                                 low: reported ? Format.number(steps.first ?? 0) : "",
                                 high: reported ? Format.number(steps.last ?? 0) : "",
                                 format: { _ in reading.readout(live: live, configured: configured) },
-                                availability: layout.availability)
+                                availability: layout.availability, mouseDefault: estimate)
                         // A sensor with a single setting has nothing to slide between.
                         .disabled(steps.count < 2)
                     LabeledContent {} label: {
