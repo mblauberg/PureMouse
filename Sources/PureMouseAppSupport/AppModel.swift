@@ -137,12 +137,15 @@ public final class AppModel {
 
     public func flush() { store.flush() }
 
-    /// Runs a login or lifecycle command and shows an alert if it fails.
-    public func perform(_ command: Lifecycle.Command, then success: @escaping @MainActor () -> Void = {}) {
+    /// Runs a login or lifecycle command, then `success`; if it fails, `failure`, then an alert.
+    public func perform(_ command: Lifecycle.Command, then success: @escaping @MainActor () -> Void = {},
+                        otherwise failure: @escaping @MainActor () -> Void = {}) {
         Lifecycle.run(command, daemon: locations.daemon) { [alert] result in
             switch result {
             case .success: success()
-            case .failure(let error): alert("PureMouse could not do that", error.description)
+            case .failure(let error):
+                failure()
+                alert("PureMouse could not do that", error.description)
             }
         }
     }

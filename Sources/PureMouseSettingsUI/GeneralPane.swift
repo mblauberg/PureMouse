@@ -127,12 +127,13 @@ struct GeneralPane: View {
     }
 
     /// Runs `menu on` or `off` now. This app is not in the menu agent's process group, so removing
-    /// that agent leaves it open.
+    /// that agent leaves it open. The switch moves at once, and goes back to what is so (the
+    /// daemon's `menu-hidden` marker) if the command fails.
     private func setShowsInMenuBar(_ on: Bool) {
         showsInMenuBar = on
         guard on != model.locations.showsInMenuBar else { return }
         model.flush()
-        model.perform(on ? .menuOn : .menuOff)
+        model.perform(on ? .menuOn : .menuOff, otherwise: { showsInMenuBar = model.locations.showsInMenuBar })
     }
 
     private func openConfig() {

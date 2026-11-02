@@ -25,6 +25,24 @@ import Testing
         #expect(await read(from: daemon)?.startsAtLogin == true)
     }
 
+    /// A failed command runs the caller's failure handler, so a switch can go back, then alerts.
+    @Test func aFailedCommandRunsTheFailureHandlerThenAlerts() async throws {
+        for status in [0, 1] {
+            let sandbox = try Sandbox()
+            var locations = sandbox.locations
+            locations.daemon = try stubDaemon(printing: "", exiting: status)
+            var events: [String] = []
+            var model: AppModel?
+            // Either the success handler or the alert, which comes last, ends the wait.
+            await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+                model = AppModel(locations: locations, alert: { title, _ in events.append("alert: \(title)"); done.resume() })
+                model?.perform(.menuOff, then: { events.append("success"); done.resume() },
+                               otherwise: { events.append("failure") })
+            }
+            #expect(events == (status == 0 ? ["success"] : ["failure", "alert: PureMouse could not do that"]))
+        }
+    }
+
     @Test func loginStatusIsNilWhenTheAnswerCannotBeUsed() async throws {
         #expect(await read(from: try stubDaemon(printing: "not json")) == nil)
         #expect(await read(from: URL(fileURLWithPath: "/nonexistent/puremouse")) == nil)
