@@ -124,6 +124,50 @@ private func fullStatus() -> Status {
         #expect(try Companion.decoder.decode(Status.self, from: data) == status)
     }
 
+    /// Every case of each enum the 0.3.0 reader decodes strictly. The switches have no `default`,
+    /// so adding a case to one of these enums stops compiling here until the case is listed and
+    /// the frozen reader has been checked against it (rule 3 of the additive contract).
+    @Test func the030TypesDecodeEveryCaseOfEveryStatusEnum() throws {
+        func connections(_ c: Status.Device.Connection) -> [Status.Device.Connection] {
+            switch c { case .receiver, .bluetooth: [.receiver, .bluetooth] }
+        }
+        func wheelModes(_ m: Status.Device.WheelMode) -> [Status.Device.WheelMode] {
+            switch m { case .ratchet, .freespin: [.ratchet, .freespin] }
+        }
+        func levels(_ l: Status.Device.Battery.Level) -> [Status.Device.Battery.Level] {
+            switch l { case .full, .good, .low, .critical: [.full, .good, .low, .critical] }
+        }
+        func states(_ s: Status.Capture.State) -> [Status.Capture.State] {
+            switch s { case .listening, .pressed, .timedOut, .cancelled: [.listening, .pressed, .timedOut, .cancelled] }
+        }
+        let every = (connections(.receiver), wheelModes(.ratchet), levels(.full), states(.listening))
+        #expect(every.0.count == 2 && every.1.count == 2 && every.2.count == 4 && every.3.count == 4)
+
+        var seen = 0
+        for connection in every.0 {
+            for mode in every.1 {
+                for level in every.2 {
+                    var status = fullStatus()
+                    status.devices[0].connection = connection
+                    status.devices[0].wheelMode = mode
+                    status.devices[0].battery = .init(percent: 50, level: level, charging: false)
+                    let frozen = try Companion.decoder.decode(Status030.self, from: Companion.encoder.encode(status))
+                    #expect(frozen.devices[0].connection.rawValue == connection.rawValue)
+                    #expect(frozen.devices[0].wheelMode?.rawValue == mode.rawValue)
+                    #expect(frozen.devices[0].battery?.level.rawValue == level.rawValue)
+                    seen += 1
+                }
+            }
+        }
+        #expect(seen == 2 * 2 * 4)
+        for state in every.3 {
+            var status = fullStatus()
+            status.capture = .init(token: 1, state: state, cid: nil, deviceID: nil)
+            let frozen = try Companion.decoder.decode(Status030.self, from: Companion.encoder.encode(status))
+            #expect(frozen.capture?.state.rawValue == state.rawValue)
+        }
+    }
+
     @Test func the030ControlDecodesTheNewRequestFields() throws {
         let control = Control(paused: false, capture: .init(token: 9, device: "m4082b0230000"),
                               useConfiguredDPI: 5, device: "pb02c")

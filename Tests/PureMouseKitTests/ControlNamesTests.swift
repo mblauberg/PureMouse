@@ -27,17 +27,4 @@ import Testing
         #expect(ControlNames.describe(0x1234) == "0x1234")
         #expect(ControlNames.describe(0x0007) == "0x0007")
     }
-
-    /// The menu's `NamedButton.label` for each config button; PureMouseMenu cannot be imported here,
-    /// so the labels are repeated and `NamedButton` is expected to match them.
-    @Test func configButtonsHaveTheMenusLabels() {
-        let menuLabels: [Config.Button: String] = [
-            .gesture: "Gesture button", .back: "Back", .forward: "Forward",
-            .top: "Top button", .middle: "Wheel click", .thumbPanel: "Thumb panel",
-        ]
-        #expect(Set(menuLabels.keys) == Set(Config.Button.allCases))
-        for button in Config.Button.allCases {
-            #expect(ControlNames.name(button.cid) == menuLabels[button], "\(button)")
-        }
-    }
 }

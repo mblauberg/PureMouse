@@ -41,13 +41,21 @@ public struct Config: Decodable, Sendable {
         try self.init(decoder.container(keyedBy: AnyKey.self), base: nil)
     }
 
-    /// The sections `c` names, each decoded on top of the same section of `base` (or of the
-    /// defaults), so a caller can layer one set of settings over another. A section `c` leaves out
-    /// is `base`'s; `dpiPresets` replaces `base`'s whole and a binding replaces `base`'s for that
-    /// control. `base`'s `apps` and `warnings` are carried over as they are.
+    /// The top-level sections `c` names, each decoded on top of the same section of `base` (or of
+    /// the defaults), so a caller can layer one set of settings over another. A section `c` leaves
+    /// out is `base`'s; `dpiPresets` replaces `base`'s whole and a binding replaces `base`'s for
+    /// that control.
+    ///
+    /// `apps`, `warnings` and `unknownButtons` are never taken from `base`: they start empty, and
+    /// `apps` in `c` is decoded against the layered result. Per-app settings snapshot the globals
+    /// they inherit, so a caller that owns precedence (top level, then device, then app) layers
+    /// the device sections first and decodes the top-level `apps` against that result.
     init(_ c: KeyedDecodingContainer<AnyKey>, base: Config?) throws {
-        self = base ?? Config()
         let base = base ?? Config()
+        self = base
+        apps = [:]
+        warnings = []
+        unknownButtons = []
         dpi = try c.decodeIfPresent(Int.self, forKey: AnyKey("dpi"), in: Self.dpiRange) ?? base.dpi
         if c.contains(AnyKey("dpiPresets")) {
             let key = AnyKey("dpiPresets")

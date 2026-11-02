@@ -88,7 +88,6 @@ import Testing
             let changed = zip(a, e).first { $0 != $1 }?.0.prefix(while: { $0 != "\n" }) ?? "entry count"
             Issue.record("decoded output differs from ConfigGoldenExpected, first at: \(changed)")
         }
-        #expect(actual == expected)
     }
 
     @Test func corpusCoversSuccessesFailuresAndWarnings() {

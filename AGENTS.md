@@ -64,13 +64,10 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
   decode helper) and the status/control channel (`Companion.swift`, contract in
   `docs/companion.md`). Data only: no HID, no event posting, no `Log` (the decoder collects
   problems such as `unknownButtons` and the daemon logs them). `ConfigCheck.validate` is the real
-  decoder, so the menu never writes a file the daemon would reject. Every config section decodes
-  on a `base` (`Config.init(_:base:)` and each section's `init(_:base:)`), so a new section must
-  take one, keep its range checks, and extend the golden decode test (`ConfigGoldenTests`). The
-  status line is additive only: new fields optional, none removed or retyped, no case added to an
-  existing enum, `schema` untouched (`docs/companion.md`, Versioning); `Status030.swift` is the
-  frozen 0.3.0 reader. Control IDs are named by `ControlNames` (a new mouse control's name goes
-  there, apart from the config vocabulary in `Config.Button`).
+  decoder, so the menu never writes a file the daemon would reject. A config change must keep
+  `ConfigGoldenTests` identical, or regenerate it on purpose. The status line is additive only: new
+  fields optional, none removed or retyped, no case added to an existing enum, `schema` untouched
+  (`docs/companion.md`, Versioning); `Status030.swift` is the frozen 0.3.0 reader.
 - All HID and HID++ work runs on the main actor. IOKit and CoreVideo callbacks hop to it
   (`MainActor.assumeIsolated` / `DispatchQueue.main`); keep it that way. The process serves the
   main queue with `runMainLoop()` (a `CFRunLoop` on the main thread), never `dispatchMain()`:
@@ -292,12 +289,14 @@ Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for 
 ## Extending
 
 - New named button: keep `Config.Button` and the menu's `NamedButton` in step (names and CIDs).
+  Add the control's display name to `ControlNames` (Kit) too.
 - New action: a case in `Action` and a name in `Action.named` (both in PureMouseKit), handling in
   `SystemActions.perform` (or `Session.perform` for device actions).
 - New device feature: a wrapper in `Sources/HIDPP/Features.swift`, applied in `Session.apply()`,
   with event parsing routed in `Session.handle()`, and a parse test in `Tests/HIDPPTests`.
 - Per-app settings: a new per-app section needs a case in `Config.appSections`, decoding on top of
   the global value in `Config.decodeApps`, a `sets…` flag, and its lookup at the moment it applies.
+  Every config section decodes on a `base` (`init(_:base:)`); a new section takes one.
 - Thumb-wheel actions: `Config.ThumbWheel.presets` (Kit) names action pairs; `ThumbStepper` counts
   rotation into steps (remainder kept, reset at each movement's start), paced per action
   (`ThumbStepper.pacing`: media keys free, shortcuts 50 ms, zoom 40 ms, animated actions 300 ms

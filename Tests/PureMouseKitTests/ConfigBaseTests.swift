@@ -30,7 +30,7 @@ import Testing
         let layered = try decode("{}", on: base)
         #expect(layered.dpi == 1600 && layered.dpiPresets == [800, 1600] && layered.scrollWheel?.smartShiftThreshold == 20)
         #expect(layered.thumbWheel?.step == 4 && layered.smoothScroll?.speed == 2 && layered.gesture.distanceMm == 8)
-        #expect(!layered.universalControl.handOff && layered.buttons.count == 3 && layered.unknownButtons == ["zz"])
+        #expect(!layered.universalControl.handOff && layered.buttons.count == 3 && layered.unknownButtons.isEmpty)
     }
 
     @Test func presentKeysLayerOnTheBase() throws {
@@ -52,7 +52,37 @@ import Testing
         guard case .gesture(let g) = layered.bindings[0xC3] else { Issue.record("gesture"); return }
         #expect(g.click == .missionControl && g.left == .spaceLeft && g.up == .appExpose)
         #expect(layered.bindings[0xC4] != nil && layered.buttons["back"] == nil && layered.buttons["0x0053"] != nil)
-        #expect(layered.unknownButtons == ["qq", "zz"])
+        #expect(layered.unknownButtons == ["qq"])  // the layer's own; the base's are not carried
+    }
+
+    @Test func appsAreNotCarriedFromTheBase() throws {
+        let base = try decode(#"{"smoothScroll": {"speed": 2}, "apps": {"a.app": {"buttons": {"back": "none"}}}, "buttons": {"zz": "none"}}"#, on: nil)
+        #expect(base.apps.count == 1 && base.unknownButtons == ["zz"])
+        let layered = try decode(#"{"dpi": 800}"#, on: base)
+        #expect(layered.apps.isEmpty && layered.warnings.isEmpty && layered.unknownButtons.isEmpty)
+        #expect(layered.smoothScroll?.speed == 2 && layered.buttons.count == 1)
+    }
+
+    @Test func appsInTheLayerInheritTheLayeredGlobals() throws {
+        let base = try decode(#"{"smoothScroll": {"speed": 2}, "thumbWheel": {"action": "volume"}, "buttons": {"middle": "mute"}}"#, on: nil)
+        let layered = try decode("""
+            {"smoothScroll": {"smoothingMs": 300}, "buttons": {"back": "navigateBack"},
+             "apps": {"x": {"smoothScroll": {"enabled": false}, "buttons": {"forward": "none"}}}}
+            """, on: base)
+        let app = try #require(layered.settings(forApp: "x"))
+        // The base's speed and the layer's smoothing both reach the app, not the defaults.
+        #expect(app.smoothScroll?.speed == 2 && app.smoothScroll?.smoothingMs == 300 && app.smoothScroll?.enabled == false)
+        #expect(app.thumbWheel.mode == .actions(left: .volumeDown, right: .volumeUp))
+        #expect(Set(app.bindings.keys) == [0x52, 0x53, 0x56])
+        #expect(layered.warnings.isEmpty)
+    }
+
+    @Test func anAppTheBaseAlsoNamesIsNotARepeat() throws {
+        let base = try decode(#"{"smoothScroll": {"speed": 2}, "apps": {"x": {"smoothScroll": {"speed": 5}}}}"#, on: nil)
+        let layered = try decode(#"{"smoothScroll": {"smoothingMs": 300}, "apps": {"x": {"smoothScroll": {"smoothingMs": 10}}}}"#, on: base)
+        #expect(layered.warnings.isEmpty)
+        #expect(layered.settings(forApp: "x")?.smoothScroll?.speed == 2)
+        #expect(layered.settings(forApp: "x")?.smoothScroll?.smoothingMs == 10)
     }
 
     @Test func rangeChecksStillApplyOnABase() throws {
