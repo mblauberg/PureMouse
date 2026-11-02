@@ -36,7 +36,7 @@ the mouse is idle, so is PureMouse.
 | | PureMouse (main), as measured |
 |---|---|
 | Download | 4.6 MB dmg, 11.9 MB installed; universal (Apple silicon and Intel) |
-| Memory | Background process: 4-6 MB. Menu bar app: about 9 MB fresh, about 13 MB once its menu has been opened. Settings: about 34 MB in its own process while its window is open, then nothing (medians of 5 on macOS 27.0.1) |
+| Memory | Background process: 4-6 MB. Menu bar app: about 9 MB fresh, about 14 MB once its menu has been opened. Settings: about 36 MB in its own process while its window is open, then nothing (medians of 5 on macOS 27.0.1) |
 | Idle CPU | Zero in normal use: no polling, no timers, no wake-ups* |
 | Processes | Two: the background process and an optional menu bar app, plus Settings while its window is open |
 | Network | None, unless you press **Check for Updates** |

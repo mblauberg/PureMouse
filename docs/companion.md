@@ -260,6 +260,13 @@ helper's Info.plist sets the variable too, so it has it however it is opened (La
 passes the menu app's environment on to the app it opens). The cold start's slowest run was each
 time the first (1154 and 972 ms).
 
+Re-measured on 2026-11-03 at main 990927a (the same Mac, shipped column only), every scenario is
+up about 0.7 to 1.1 MB and still inside its budget: fresh 9.4, after 1 menu open 14.0, after 10
+opens 14.1, after 200 doorbells 9.4, with the helper open or after it quits 9.3 to 9.4, and the
+helper itself 35.7 MB, with a cold start of 654 ms. Several menu and Settings changes landed
+between the two runs (the Settings request lock, the login controls, the battery notifications);
+the growth was not bisected. The comparisons below are from the 2026-11-02 set.
+
 What the numbers say:
 
 - **The first menu open costs about 4 MB, once** (8.6 to 12.9 MB shipped; 11.9 to 18.4 without
