@@ -147,7 +147,7 @@ table gives:
 
 | Command | Effect |
 |---|---|
-| `puremouse register` | writes and boots both agents (daemon `KeepAlive`; menu `RunAtLoad`, `KeepAlive: {SuccessfulExit: false}`), unless the menu is hidden. Prints the outcome |
+| `puremouse register` | writes and boots both agents (daemon `KeepAlive`; menu `RunAtLoad`, `KeepAlive: {SuccessfulExit: false}`, `MallocSpaceEfficient`), unless the menu is hidden. Prints the outcome |
 | `puremouse unregister` | boots out both agents and removes both plists |
 | `puremouse login on` / `off` | writes both plists (the menu's unless hidden) without booting anything, or removes both without booting anything out. A running agent is left as it is |
 | `puremouse start` | boots the agents that are not running (the menu's unless hidden) and leaves the rest alone. An agent that is not registered runs from a plist in `launchd/` under `Companion.directory`, which launchd does not load at the next login |

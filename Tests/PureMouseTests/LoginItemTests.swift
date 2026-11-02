@@ -278,13 +278,14 @@ private final class Rig {
         #expect(NSDictionary(dictionary: LoginItem.daemonDefinition(executable: installedExecutable)) == expected)
     }
 
-    @Test func theMenuDefinitionIsWhatLaunchdHasAlwaysBeenGiven() {
+    @Test func theMenuDefinitionAddsOnlyTheAllocatorSetting() {
         let expected: NSDictionary = [
             "Label": "io.github.mblauberg.puremouse.menu",
             "ProgramArguments": [appURL.appending(path: "Contents/MacOS/PureMouseMenu").path],
             "RunAtLoad": true,
             "KeepAlive": ["SuccessfulExit": false],
             "ProcessType": "Interactive",
+            "EnvironmentVariables": ["MallocSpaceEfficient": "1"],
         ]
         #expect(NSDictionary(dictionary: LoginItem.menuDefinition(app: appURL)) == expected)
     }

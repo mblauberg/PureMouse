@@ -90,13 +90,17 @@ signing_identity() {
 }
 
 # write_info_plist <file> <identifier> <executable> <version> <build> daemon|menu
-# The daemon's bundle is background-only; the menu app has a display name. Nothing else differs.
+# The daemon's bundle is background-only; the menu app has a display name and the allocator setting
+# its agent also sets (LoginItem.menuDefinition), for Finder launches. Nothing else differs.
 write_info_plist() {
     local file=$1 identifier=$2 executable=$3 version=$4 build=$5 role=$6
-    local display= background=
+    local display= background= environment=
     case $role in
         daemon) background=$'\n  <key>LSBackgroundOnly</key><true/>' ;;
-        menu) display=$'\n  <key>CFBundleDisplayName</key><string>PureMouse</string>' ;;
+        menu)
+            display=$'\n  <key>CFBundleDisplayName</key><string>PureMouse</string>'
+            environment=$'\n  <key>LSEnvironment</key><dict><key>MallocSpaceEfficient</key><string>1</string></dict>'
+            ;;
         *) die "write_info_plist: role must be daemon or menu, not '$role'" ;;
     esac
     cat > $file <<PLIST
@@ -114,7 +118,7 @@ write_info_plist() {
   <key>LSMinimumSystemVersion</key><string>$minimum</string>
   <key>LSApplicationCategoryType</key><string>$category</string>
   <key>NSHumanReadableCopyright</key><string>$copyright</string>
-  <key>LSUIElement</key><true/>$background
+  <key>LSUIElement</key><true/>$background$environment
 </dict></plist>
 PLIST
 }

@@ -86,6 +86,9 @@ struct LoginItem {
             // Relaunched after a crash, not after Quit.
             "KeepAlive": ["SuccessfulExit": false],
             "ProcessType": "Interactive",
+            // Keeps about 8 MB off the menu's footprint once it has been used (docs/adr/0010).
+            // Undocumented, so scripts/measure-menu.sh re-checks it per macOS release.
+            "EnvironmentVariables": ["MallocSpaceEfficient": "1"],
         ]
     }
 
