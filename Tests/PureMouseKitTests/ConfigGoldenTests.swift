@@ -38,7 +38,10 @@ import Testing
         case .struct, .class, .enum, .tuple:
             if mirror.children.isEmpty { return ["\(pad)\(label): \(value)"] }
             let name = mirror.displayStyle == .enum ? "\(value)".prefix { $0 != "(" } : "\(mirror.subjectType)".prefix { $0 != "<" }
-            return nested(String(name), mirror.children.map { ($0.label ?? "_", $0.value) })
+            // `Config.devices` came after the capture; an empty one is left out so configs without
+            // `devices` keep their golden output (DeviceConfigTests covers the entries).
+            let children = mirror.children.filter { $0.label != "devices" || !Mirror(reflecting: $0.value).children.isEmpty }
+            return nested(String(name), children.map { ($0.label ?? "_", $0.value) })
         default:
             return ["\(pad)\(label): \(value)"]
         }
