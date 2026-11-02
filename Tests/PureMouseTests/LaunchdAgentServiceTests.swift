@@ -5,6 +5,7 @@ import Testing
 
 private let appURL = URL(fileURLWithPath: "/Applications/PureMouse.app/Contents/Library/LoginItems/PureMouse Menu.app")
 private let executable = URL(fileURLWithPath: "/Applications/PureMouse.app/Contents/MacOS/puremouse")
+private let movedApp = URL(fileURLWithPath: "/Users/someone/PureMouse.app/Contents/Library/LoginItems/PureMouse Menu.app")
 private let movedExecutable = URL(fileURLWithPath: "/Users/someone/PureMouse.app/Contents/MacOS/puremouse")
 
 /// `LaunchdAgentService` over temporary `agents` and `transient` directories and a scripted
@@ -16,6 +17,8 @@ private final class Harness: @unchecked Sendable {
     var calls: [[String]] = []
     /// What launchd says about the job, and what bootstrap, kickstart and bootout do to it.
     var loaded: JobState = .notLoaded
+    /// The executable launchd loaded the job to run: set by bootstrap, kept by kickstart.
+    var loadedProgram = Job.menuExecutable(in: appURL).path
     var failing: Set<String> = []
     var bootoutKeepsJob = false
     let uid = getuid()
@@ -26,17 +29,32 @@ private final class Harness: @unchecked Sendable {
         if failing.contains(verb) { return (5, "\(verb) failed") }
         switch verb {
         case "print":
-            switch loaded {
-            case .notLoaded: return (113, "Could not find service")
-            case .loadedIdle: return (0, "gui/501/x = {\n\tstate = not running\n\tlast exit code = 0\n}")
-            case .running: return (0, "gui/501/x = {\n\tactive count = 1\n\tstate = running\n\tpid = 123\n}")
-            }
-        case "bootstrap", "kickstart": loaded = .running
+            return loaded == .notLoaded ? (113, "Could not find service") : (0, report())
+        case "bootstrap":
+            loaded = .running
+            let plist = try? PropertyListSerialization.propertyList(from: Data(contentsOf: URL(fileURLWithPath: arguments[2])), format: nil) as? [String: Any]
+            loadedProgram = (plist?["ProgramArguments"] as? [String])?.first ?? ""
+        case "kickstart": loaded = .running
         case "bootout": if !bootoutKeepsJob { loaded = .notLoaded }
         default: break
         }
         return (0, "")
     }, stopPolls: 3, stopPause: 0)
+
+    /// `launchctl print` as launchd lays it out: the job's own keys one tab in, blocks nested
+    /// deeper, and a `state` key inside a block that is not the job's.
+    func report() -> String {
+        var lines = [
+            "gui/501/x = {", "\tactive count = 1", "\tpath = /Users/me/Library/LaunchAgents/x.plist",
+            "\ttype = LaunchAgent", "\tstate = \(loaded == .running ? "running" : "not running")", "",
+            "\tprogram = \(loadedProgram)", "\targuments = {", "\t\t\(loadedProgram)", "\t}", "",
+            "\tresource coalition = {", "\t\tID = 1", "\t\tstate = running", "\t\tcpu = {", "\t\t\tstate = running", "\t\t}", "\t}", "",
+        ]
+        if loaded == .running { lines.append("\tpid = 123") }
+        lines.append("\tlast exit code = (never exited)")
+        lines.append("}")
+        return lines.joined(separator: "\n")
+    }
 
     deinit { try? FileManager.default.removeItem(at: root) }
 
@@ -93,6 +111,43 @@ private final class Harness: @unchecked Sendable {
         #expect(!h.exists(h.registered(.menu)))
     }
 
+    @Test func aLoadedJobWithoutAProcessAndAStaleDefinitionIsBootedOutAndBootstrappedAgain() throws {
+        let h = Harness()
+        h.loaded = .loadedIdle
+        h.loadedProgram = Job.menuExecutable(in: movedApp).path
+        try h.service.register(.menu, at: movedApp)
+        h.calls = []
+        #expect(try h.service.start(.menu, at: appURL))
+        #expect(h.verbs == ["print", "bootout", "print", "bootstrap"])
+        #expect(!h.verbs.contains("kickstart"))
+        #expect(h.calls.contains(["bootout", "gui/\(h.uid)/\(Job.menu.label)"]))
+        #expect(h.calls.last { $0[0] == "bootstrap" } == ["bootstrap", "gui/\(h.uid)", h.registered(.menu).path])
+        #expect(h.loadedProgram == Job.menuExecutable(in: appURL).path)
+        #expect(try h.program(h.registered(.menu)) == Job.menuExecutable(in: appURL).path)
+        #expect(h.service.status(.menu) == .enabled)
+        #expect(h.service.state(.menu) == .running)
+    }
+
+    @Test func anUnregisteredStaleLoadedJobIsBootstrappedFromAKeptPlistAndStaysUnregistered() throws {
+        let h = Harness()
+        h.loaded = .loadedIdle
+        h.loadedProgram = "/old/PureMouseMenu"
+        #expect(try h.service.start(.menu, at: appURL))
+        #expect(h.calls.last { $0[0] == "bootstrap" } == ["bootstrap", "gui/\(h.uid)", h.kept(.menu).path])
+        #expect(!h.verbs.contains("kickstart"))
+        #expect(h.service.status(.menu) == .notRegistered)
+        #expect(h.loadedProgram == Job.menuExecutable(in: appURL).path)
+    }
+
+    @Test func aLoadedJobThatDoesNotSayWhatItRunsIsLoadedAgainRatherThanKickstarted() throws {
+        let h = Harness()
+        h.loaded = .loadedIdle
+        h.loadedProgram = ""
+        #expect(try h.service.start(.menu, at: appURL))
+        #expect(!h.verbs.contains("kickstart"))
+        #expect(h.loadedProgram == Job.menuExecutable(in: appURL).path)
+    }
+
     @Test func aRunningJobIsLeftAloneAndItsRegistrationUntouched() throws {
         let h = Harness()
         try h.service.register(.daemon, at: movedExecutable)
@@ -109,6 +164,7 @@ private final class Harness: @unchecked Sendable {
         #expect(throws: LaunchdAgentService.Failure.bootstrap("bootstrap failed")) { try h.service.start(.daemon, at: executable) }
         h.failing = []
         h.loaded = .loadedIdle
+        h.loadedProgram = executable.path
         h.failing = ["kickstart"]
         #expect(throws: LaunchdAgentService.Failure.kickstart("kickstart failed")) { try h.service.start(.daemon, at: executable) }
     }
@@ -122,6 +178,22 @@ private final class Harness: @unchecked Sendable {
             #expect(h.service.state(.daemon) == state)
         }
         #expect(h.calls.allSatisfy { $0 == ["print", "gui/\(h.uid)/\(Job.daemon.label)"] })
+    }
+
+    /// A `state = running` inside a nested block is not the job's.
+    @Test func aNestedRunningStateDoesNotMakeAnIdleJobRunning() {
+        let h = Harness()
+        h.loaded = .loadedIdle
+        let idle = h.report()
+        #expect(idle.contains("\t\tstate = running"))
+        #expect(h.service.state(.menu) == .loadedIdle)
+    }
+
+    @Test func aRunningJobIsRunningWhateverTheNestedBlocksSay() {
+        let h = Harness()
+        h.loaded = .running
+        #expect(h.report().contains("\tstate = running\n"))
+        #expect(h.service.state(.menu) == .running)
     }
 
     // MARK: Stopping

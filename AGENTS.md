@@ -292,7 +292,7 @@ one. This file covers how to work on it safely.
   the policy against a fake and `LaunchdAgentServiceTests` the mechanism against a scripted
   `launchctl`. Every mutating command holds `lifecycle.lock` in the companion directory. "Starts at login" and "running now" are separate axes:
   `login on|off` register or unregister without loading or booting out, `start` starts what has no
-  process (bootstrap if not loaded, kickstart if loaded idle) and refreshes a registered job's
+  process (bootstrap if not loaded, kickstart if loaded idle with this copy's executable, otherwise bootout and bootstrap) and refreshes a registered job's
   plist first, without registering anything (an unregistered job runs from a plist under the
   companion directory that launchd does not load at login), `stop` boots out and keeps the registration
   (table in `docs/companion.md`). `puremouse login-status` prints `LoginStatus` (Kit) as JSON, and

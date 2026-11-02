@@ -121,13 +121,34 @@ struct LaunchdAgentService: LoginService {
         FileManager.default.fileExists(atPath: plistURL(job).path) ? .enabled : .notRegistered
     }
 
-    /// `launchctl print` fails for a job that is not loaded, and for a loaded one says
-    /// `state = running` (with a `pid`) only while a process exists.
-    func state(_ job: Job) -> JobState {
+    func state(_ job: Job) -> JobState { inspect(job).state }
+
+    /// What launchd says about the job: the state, and the executable it was loaded to run. A job
+    /// that is not loaded makes `launchctl print` fail. The report is nested blocks, and `state` is
+    /// also a key inside some of them (the resource coalition's, for one), so only the lines at
+    /// the job's own depth count: `state = running` there means a process exists.
+    private func inspect(_ job: Job) -> (state: JobState, program: String?) {
         let (status, output) = launchctl(["print", target(job)])
-        guard status == 0 else { return .notLoaded }
-        let running = output.split(separator: "\n").contains { $0.trimmingCharacters(in: .whitespaces) == "state = running" }
-        return running ? .running : .loadedIdle
+        guard status == 0 else { return (.notLoaded, nil) }
+        var depth = 0
+        var running = false
+        var program: String?
+        var inArguments = false
+        for line in output.split(separator: "\n", omittingEmptySubsequences: false) {
+            let text = line.trimmingCharacters(in: .whitespaces)
+            if text == "}" {
+                depth -= 1
+                if depth == 1 { inArguments = false }
+            } else if text.hasSuffix("{") {
+                if depth == 1 { inArguments = text == "arguments = {" }
+                depth += 1
+            } else if depth == 1, text.hasPrefix("state = ") {
+                running = text == "state = running"
+            } else if inArguments, depth == 2, program == nil, !text.isEmpty {
+                program = text
+            }
+        }
+        return (running ? .running : .loadedIdle, program)
     }
 
     func register(_ job: Job, at location: URL) throws {
@@ -136,7 +157,7 @@ struct LaunchdAgentService: LoginService {
 
     @discardableResult
     func start(_ job: Job, at location: URL) throws -> Bool {
-        let current = state(job)
+        let (current, loadedProgram) = inspect(job)
         if current == .running { return false }
         let definition = Self.definition(job, at: location)
         var plist = plistURL(job)
@@ -148,12 +169,24 @@ struct LaunchdAgentService: LoginService {
             try write(definition, to: plist)
         }
         if current == .loadedIdle {
-            let (status, output) = launchctl(["kickstart", target(job)])
-            guard status == 0 else { throw Failure.kickstart(output) }
-        } else {
-            let (status, output) = launchctl(["bootstrap", "gui/\(getuid())", plist.path])
-            guard status == 0 else { throw Failure.bootstrap(output) }
+            // A kickstart runs the definition launchd loaded, which names the old path if the app
+            // moved since. Its executable (the first argument in `launchctl print`) is compared
+            // with this build's; a job that differs, or that does not say, has no process, so
+            // booting it out loses nothing and the current plist is bootstrapped in its place.
+            let expected = (definition["ProgramArguments"] as? [String])?.first
+            if loadedProgram == expected {
+                let (status, output) = launchctl(["kickstart", target(job)])
+                guard status == 0 else { throw Failure.kickstart(output) }
+                return true
+            }
+            if status(job) == .notRegistered {
+                plist = transientURL(job)
+                try write(definition, to: plist)
+            }
+            try bootout(job)
         }
+        let (status, output) = launchctl(["bootstrap", "gui/\(getuid())", plist.path])
+        guard status == 0 else { throw Failure.bootstrap(output) }
         return true
     }
 
@@ -167,14 +200,20 @@ struct LaunchdAgentService: LoginService {
 
     @discardableResult
     func stop(_ job: Job) throws -> Bool {
-        let jobTarget = target(job)
         // Whether or not it was loaded, a definition kept for `start` goes: booting out needs only
         // the label.
         defer { try? FileManager.default.removeItem(at: transientURL(job)) }
         guard state(job) != .notLoaded else { return false }
+        try bootout(job)
+        return true
+    }
+
+    /// Boots the job out and waits for launchd to let go of it.
+    private func bootout(_ job: Job) throws {
+        let jobTarget = target(job)
         let (_, output) = launchctl(["bootout", jobTarget])
         for _ in 0..<stopPolls {
-            if state(job) == .notLoaded { return true }
+            if state(job) == .notLoaded { return }
             usleep(stopPause)
         }
         throw Failure.stillRunning(target: jobTarget, output: output)
