@@ -105,72 +105,112 @@ struct ConcurrentWritersTests {
 }
 
 @MainActor
-private func link(_ sandbox: Sandbox, owns: DaemonLink.ControlFields, tokens: [Int] = [101, 102]) -> DaemonLink {
+private func makeLink(_ sandbox: Sandbox, tokens: [Int] = [101, 102]) -> DaemonLink {
     var tokens = tokens
-    let link = DaemonLink(locations: sandbox.locations, owns: owns, isAlive: { $0 == 4242 },
+    let link = DaemonLink(locations: sandbox.locations, isAlive: { $0 == 4242 },
                           newToken: { tokens.removeFirst() }, ring: {})
     link.reloadStatus()
     return link
 }
 
-@MainActor @Test func theMenuWritingPausedKeepsSettingsCapture() throws {
+/// Two processes on one companion directory, each with its own link and select by pressing.
+@MainActor
+private struct Writer {
+    let link: DaemonLink
+    let capture: CaptureController
+    let clock = ManualClock()
+
+    init(_ sandbox: Sandbox, captureToken: Int, dpiToken: Int = 101) {
+        link = makeLink(sandbox, tokens: [dpiToken])
+        capture = CaptureController(link: link, clock: clock.clock, newToken: { captureToken })
+    }
+}
+
+@MainActor @Test func pausingKeepsAnotherWritersCapture() throws {
     let sandbox = try Sandbox()
     try sandbox.writeStatus(daemonStatus())
     try Companion.write(Control(paused: false, capture: .init(token: 5), useConfiguredDPI: 9), to: sandbox.locations.control)
-    let menu = link(sandbox, owns: .menu)
-    menu.setPaused(true)
+    makeLink(sandbox).setPaused(true)
     #expect(sandbox.control() == Control(paused: true, capture: .init(token: 5), useConfiguredDPI: 9))
 }
 
-@MainActor @Test func settingsCancellingACaptureKeepsThePause() throws {
+@MainActor @Test func startingAndCancellingACaptureKeepsThePause() throws {
     let sandbox = try Sandbox()
     try sandbox.writeStatus(daemonStatus(paused: false))
     try Companion.write(Control(paused: true, capture: nil, useConfiguredDPI: 9), to: sandbox.locations.control)
-    let settings = link(sandbox, owns: .settings)
-    settings.capture = .init(token: 3)
-    settings.writeControl()
+    let writer = Writer(sandbox, captureToken: 3)
+    writer.capture.start()
     #expect(sandbox.control() == Control(paused: true, capture: .init(token: 3), useConfiguredDPI: 9))
-    settings.capture = nil
-    settings.writeControl()
+    writer.capture.cancel()
     #expect(sandbox.control() == Control(paused: true, capture: nil, useConfiguredDPI: 9))
+}
+
+@MainActor @Test func aCaptureThatTimesOutKeepsAnotherWritersNewerCapture() throws {
+    let sandbox = try Sandbox()
+    try sandbox.writeStatus(daemonStatus())
+    let a = Writer(sandbox, captureToken: 11)
+    let b = Writer(sandbox, captureToken: 22)
+    a.capture.start()
+    b.capture.start()
+    a.clock.advance(CaptureController.timeout)
+    #expect(!a.capture.listening)
+    #expect(sandbox.control()?.capture == .init(token: 22))
+    b.capture.cancel()
+    #expect(sandbox.control()?.capture == nil)
+}
+
+@MainActor @Test func aDPIRequestAfterACompletedCaptureKeepsAnotherWritersCapture() throws {
+    let sandbox = try Sandbox()
+    try sandbox.writeStatus(daemonStatus())
+    let a = Writer(sandbox, captureToken: 11)
+    let b = Writer(sandbox, captureToken: 22)
+    a.capture.start()
+    a.capture.handle(Status.Capture(token: 11, state: .pressed, cid: 0x53, deviceID: "a"))
+    #expect(!a.capture.listening)
+    b.capture.start()
+    a.link.requestConfiguredDPI()
+    #expect(sandbox.control() == Control(paused: false, capture: .init(token: 22), useConfiguredDPI: 101))
+}
+
+@MainActor @Test func aDPIRequestDoesNotReplayAnEarlierPause() throws {
+    let sandbox = try Sandbox()
+    try sandbox.writeStatus(daemonStatus())
+    let a = makeLink(sandbox, tokens: [101])
+    let b = makeLink(sandbox)
+    a.setPaused(true)
+    b.setPaused(false)
+    a.requestConfiguredDPI()
+    #expect(sandbox.control() == Control(paused: false, capture: nil, useConfiguredDPI: 101))
 }
 
 @MainActor @Test func aLaterWriteKeepsAnotherWritersNewerDPIToken() throws {
     let sandbox = try Sandbox()
     try sandbox.writeStatus(daemonStatus())
-    let menu = link(sandbox, owns: .menu, tokens: [101])
-    let settings = link(sandbox, owns: .settings, tokens: [201])
-    menu.requestConfiguredDPI()
-    settings.requestConfiguredDPI()
-    menu.setPaused(true)
+    let a = makeLink(sandbox, tokens: [101])
+    let b = makeLink(sandbox, tokens: [201])
+    a.requestConfiguredDPI()
+    b.requestConfiguredDPI()
+    a.setPaused(true)
     #expect(sandbox.control()?.useConfiguredDPI == 201)
 }
 
 @MainActor @Test func aRestartedDaemonIsNotSentAnOldDPIToken() throws {
     let sandbox = try Sandbox()
     try sandbox.writeStatus(daemonStatus())
-    let menu = link(sandbox, owns: .all)
-    menu.requestConfiguredDPI()
+    let a = makeLink(sandbox)
+    a.requestConfiguredDPI()
     #expect(sandbox.control()?.useConfiguredDPI == 101)
     // The daemon deletes control.json at start.
     try FileManager.default.removeItem(at: sandbox.locations.control)
-    menu.setPaused(true)
+    a.setPaused(true)
     #expect(sandbox.control() == Control(paused: true, capture: nil, useConfiguredDPI: nil))
 }
 
-@MainActor @Test func aPauseFromTheCombinedAppKeepsAnotherProcesssCapture() throws {
+@MainActor @Test func aPauseThatEndsACaptureClearsItInTheSameWrite() throws {
     let sandbox = try Sandbox()
     try sandbox.writeStatus(daemonStatus())
-    let app = link(sandbox, owns: .all)
+    let a = makeLink(sandbox)
     try Companion.write(Control(paused: false, capture: .init(token: 5)), to: sandbox.locations.control)
-    app.setPaused(true)
-    app.requestConfiguredDPI()
-    #expect(sandbox.control() == Control(paused: true, capture: .init(token: 5), useConfiguredDPI: 101))
-    // Its own capture, and ending it, still go through.
-    app.capture = .init(token: 6)
-    app.writeControl()
-    #expect(sandbox.control()?.capture == .init(token: 6))
-    app.capture = nil
-    app.setPaused(false)
-    #expect(sandbox.control() == Control(paused: false, capture: nil, useConfiguredDPI: 101))
+    a.setPaused(true) { $0.capture = nil }
+    #expect(sandbox.control() == Control(paused: true, capture: nil, useConfiguredDPI: nil))
 }

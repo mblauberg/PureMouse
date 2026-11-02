@@ -172,7 +172,7 @@ one. This file covers how to work on it safely.
   first (`ConfigFile.replace`; nothing kept for no file or `{}`); Open Config File only creates a
   missing file (`createIfMissing`). Every one of these writes runs under `flock` on
   `config.json.lock` beside the resolved config, and `control.json` writes under
-  `control.json.lock`, changing only the fields the writer owns (`docs/companion.md`).
+  `control.json.lock`, changing only the fields that request sets (`docs/companion.md`).
 - The Buttons and Apps panes list a named button when a connected mouse reports it or the config
   binds it; with no report, those `NamedButton.listedByDefault` (not the MX Master 4's thumb panel)
   (`ButtonRows.named`). Haptic picker entries come from Kit's `HapticWaveform.allCases`; the menu

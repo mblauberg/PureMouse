@@ -42,9 +42,9 @@ private func running(_ sandbox: Sandbox, status: Status = daemonStatus()) throws
     #expect(!capture.listening)
     #expect(capture.capturedButton == "back")
     #expect(manual.pending.isEmpty)
-    // A later control write no longer carries the request.
+    // A later write leaves the answered token alone (the daemon acts once per token).
     daemon.setPaused(true)
-    #expect(sandbox.control()?.capture == nil)
+    #expect(sandbox.control() == Control(paused: true, capture: .init(token: 77)))
 }
 
 @MainActor @Test func captureNeedsARunningUnpausedDaemon() throws {
@@ -67,7 +67,7 @@ private func running(_ sandbox: Sandbox, status: Status = daemonStatus()) throws
     daemon.reloadStatus()
     let manual = ManualClock()
     let capture = CaptureController(link: daemon, clock: manual.clock)
-    daemon.livenessChecked = { capture.checkDaemon() }
+    daemon.changed = { capture.checkDaemon() }
     capture.start()
     alive = false
     daemon.refreshLiveness()

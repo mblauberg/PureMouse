@@ -23,9 +23,11 @@ final class AppModel {
         store = ConfigStore(locations: locations)
         capture = CaptureController(link: link)
         batteryAlerts = BatteryAlertStore(url: locations.batteryAlerts)
-        link.changed = { [weak self] in self?.statusChanged() }
+        link.changed = { [weak self, capture] in
+            capture.checkDaemon()  // a capture ends with the daemon
+            self?.statusChanged()
+        }
         store.changed = { [weak self] in self?.statusChanged() }
-        link.livenessChecked = { [capture] in capture.checkDaemon() }
         link.statusLoaded = { [weak self] in self?.statusLoaded() }
         link.controlFailed = { Alerts.show("PureMouse could not be reached", $0.localizedDescription) }
         store.daemonConfigError = { [link] in link.configError }
@@ -93,7 +95,8 @@ final class AppModel {
 
     func setPaused(_ paused: Bool) {
         if capture.listening { capture.end(notify: false) }
-        link.setPaused(paused)
+        // A pause ends any capture, so the request clears it as well.
+        link.setPaused(paused) { $0.capture = nil }
         statusChanged()
     }
 

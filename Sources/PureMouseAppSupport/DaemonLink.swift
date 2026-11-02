@@ -14,49 +14,19 @@ public final class DaemonLink {
     /// The daemon writes a newer status schema than this app understands.
     public private(set) var statusTooNew = false
 
-    /// The select-by-pressing request this process has open (`CaptureController`). The next
-    /// control write sends it; writes after that keep the file's value, so a pause or DPI request
-    /// from here cannot cancel a capture another process started.
-    @ObservationIgnored public var capture: Control.Capture? {
-        didSet { captureChanged = true }
-    }
-    @ObservationIgnored private var captureChanged = false
-
-    /// Called when anything the status item shows may have changed.
+    /// Called after each liveness check: anything the status item shows may have changed, and a
+    /// capture ends with the daemon.
     @ObservationIgnored public var changed: @MainActor () -> Void = {}
-    /// Called after each liveness check, before `changed` (a capture ends with the daemon).
-    @ObservationIgnored public var livenessChecked: @MainActor () -> Void = {}
     /// Called after each status file is read and checked.
     @ObservationIgnored public var statusLoaded: @MainActor () -> Void = {}
     /// Called when the control file cannot be written, before the write reports false.
     @ObservationIgnored public var controlFailed: @MainActor (Error) -> Void = { _ in }
-
-    /// The `control.json` fields this process owns; a write changes only these and keeps the
-    /// rest as the file has them (another process may own them).
-    public struct ControlFields: OptionSet, Sendable {
-        public let rawValue: Int
-        public init(rawValue: Int) { self.rawValue = rawValue }
-        public static let paused = ControlFields(rawValue: 1)
-        public static let capture = ControlFields(rawValue: 2)
-        public static let useConfiguredDPI = ControlFields(rawValue: 4)
-        /// The status menu: pause and resume, and the DPI it sets.
-        public static let menu: ControlFields = [.paused, .useConfiguredDPI]
-        /// Settings: select by pressing, and the DPI it sets.
-        public static let settings: ControlFields = [.capture, .useConfiguredDPI]
-        public static let all: ControlFields = [.paused, .capture, .useConfiguredDPI]
-    }
-
-    public let owns: ControlFields
 
     @ObservationIgnored private let locations: Locations
     @ObservationIgnored private let isAlive: (Int32) -> Bool
     @ObservationIgnored private let newToken: () -> Int
     @ObservationIgnored private let ring: () -> Void
     @ObservationIgnored private var requestedPaused: Bool?
-    /// The last `Control.useConfiguredDPI` this process sent. Later writes keep the file's token
-    /// (this one, or a newer one from another writer), so a pause or capture cannot erase it
-    /// before the daemon reads it; the daemon acts once per token.
-    @ObservationIgnored public private(set) var dpiToken: Int?
     @ObservationIgnored private var exitWatch: DispatchSourceProcess?
     @ObservationIgnored private var watchedPID: Int32 = 0
     @ObservationIgnored private var statusToken: Int32 = -1
@@ -65,13 +35,11 @@ public final class DaemonLink {
     ///   - isAlive: whether a process exists (`kill(pid, 0)`).
     ///   - newToken: a fresh request token.
     ///   - ring: the doorbell after a control write.
-    ///   - owns: the `control.json` fields this process writes.
-    public init(locations: Locations, owns: ControlFields = .all,
+    public init(locations: Locations,
                 isAlive: @escaping (Int32) -> Bool = { kill($0, 0) == 0 },
-                newToken: @escaping () -> Int = { Int.random(in: 1...Int(Int32.max)) },
+                newToken: @escaping () -> Int = RequestToken.random,
                 ring: @escaping () -> Void = { notify_post(Companion.controlNotification) }) {
         self.locations = locations
-        self.owns = owns
         self.isAlive = isAlive
         self.newToken = newToken
         self.ring = ring
@@ -135,7 +103,6 @@ public final class DaemonLink {
             requestedPaused = nil
         }
         watchExit(of: daemonRunning ? pid : 0)
-        livenessChecked()
         changed()
     }
 
@@ -163,13 +130,14 @@ public final class DaemonLink {
 
     // MARK: Control
 
-    /// Asks the daemon to pause or resume; false if the request could not be written, in which
-    /// case the menu goes on showing what the daemon is still doing.
+    /// Asks the daemon to pause or resume (and whatever `also` changes with it); false if the
+    /// request could not be written, in which case the menu goes on showing what the daemon is
+    /// still doing.
     @discardableResult
-    public func setPaused(_ paused: Bool) -> Bool {
+    public func setPaused(_ paused: Bool, also: (inout Control) -> Void = { _ in }) -> Bool {
         let previous = requestedPaused
         requestedPaused = paused
-        guard writeControl() else {
+        guard writeControl({ $0.paused = paused; also(&$0) }) else {
             requestedPaused = previous
             return false
         }
@@ -180,31 +148,22 @@ public final class DaemonLink {
     @discardableResult
     public func requestConfiguredDPI() -> Bool {
         let token = newToken()
-        guard write(newDPIToken: token) else { return false }
-        dpiToken = token
-        return true
+        return writeControl { $0.useConfiguredDPI = token }
     }
 
-    /// Writes this process's fields of the control file and rings the daemon; false (after
-    /// `controlFailed`) if it could not.
+    /// One read-change-replace of `control.json` under `control.json.lock`, then the doorbell:
+    /// `change` sets only what this request means, and every other field stays as the file has
+    /// it (another process may have written it). With no file, `paused` follows the daemon's
+    /// status. False (after `controlFailed`) if it could not be written.
     @discardableResult
-    public func writeControl() -> Bool { write(newDPIToken: nil) }
-
-    /// One read-merge-replace of `control.json` under `control.json.lock`: the owned fields come
-    /// from here (`paused` only while a request is pending, `capture` only when this process
-    /// changed it, `useConfiguredDPI` only when new), the rest stay as the file has them. With no
-    /// file, `paused` follows the daemon's status.
-    private func write(newDPIToken: Int?) -> Bool {
+    public func writeControl(_ change: (inout Control) -> Void) -> Bool {
         let url = locations.control
         do {
             try FileLock.withLock(FileLock.url(for: url)) {
                 var control = Companion.read(Control.self, from: url) ?? Control(paused: status?.paused ?? false)
-                if owns.contains(.paused), let requestedPaused { control.paused = requestedPaused }
-                if owns.contains(.capture), captureChanged { control.capture = capture }
-                if owns.contains(.useConfiguredDPI), let newDPIToken { control.useConfiguredDPI = newDPIToken }
+                change(&control)
                 try Companion.write(control, to: url)
             }
-            captureChanged = false
             ring()
             return true
         } catch {
@@ -218,4 +177,9 @@ public final class DaemonLink {
         guard daemonRunning, let pid = status?.pid else { return }
         kill(pid, SIGHUP)
     }
+}
+
+/// A fresh token for a control request (`Control.capture`, `Control.useConfiguredDPI`).
+public enum RequestToken {
+    public static func random() -> Int { Int.random(in: 1...Int(Int32.max)) }
 }

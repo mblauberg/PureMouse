@@ -5,7 +5,7 @@
 //       once (keeping a backup) after save number <reset-after>
 //   ConfigWriterProbe <dir> control <menu|settings> <count>
 //       writes control.json <count> times as that role: the menu toggles `paused` (ending
-//       paused), Settings starts and cancels a capture (ending with token 77 open)
+//       paused), Settings starts and cancels captures (ending with token 77 open)
 import Foundation
 import PureMouseAppSupport
 import PureMouseKit
@@ -43,15 +43,17 @@ case "save":
 case "control":
     MainActor.assumeIsolated {
         let menu = arguments[3] == "menu"
-        let link = DaemonLink(locations: locations, owns: menu ? .menu : .settings, ring: {})
+        let link = DaemonLink(locations: locations, ring: {})
         link.controlFailed = { fail("control: \($0)") }
         for index in 0..<count {
             if menu {
                 link.setPaused(index % 2 == 0 || index == count - 1)
+            } else if index == count - 1 || index % 2 == 0 {
+                let token = index == count - 1 ? 77 : 1000 + index
+                link.writeControl { $0.capture = Control.Capture(token: token) }
             } else {
-                link.capture = index == count - 1 ? Control.Capture(token: 77)
-                    : index % 2 == 0 ? Control.Capture(token: 1000 + index) : nil
-                link.writeControl()
+                // Cancel the capture started just before, unless the file now holds another.
+                link.writeControl { if $0.capture?.token == 1000 + index - 1 { $0.capture = nil } }
             }
         }
     }

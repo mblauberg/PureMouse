@@ -21,7 +21,7 @@ public final class CaptureController {
     @ObservationIgnored private var cancelTimeout: Clock.Cancel?
 
     public init(link: DaemonLink, clock: Clock = .main,
-                newToken: @escaping () -> Int = { Int.random(in: 1...Int(Int32.max)) }) {
+                newToken: @escaping () -> Int = RequestToken.random) {
         self.link = link
         self.clock = clock
         self.newToken = newToken
@@ -35,8 +35,8 @@ public final class CaptureController {
         token = newToken()
         listening = true
         capturedButton = nil
-        link.capture = Control.Capture(token: token)
-        guard link.writeControl() else {
+        let request = Control.Capture(token: token)
+        guard link.writeControl({ $0.capture = request }) else {
             stopListening()
             return
         }
@@ -48,10 +48,14 @@ public final class CaptureController {
         end()
     }
 
-    /// Stops listening; with `notify`, tells a running daemon to stop too.
+    /// Stops listening; with `notify`, tells a running daemon to stop too, unless another
+    /// process has started a capture of its own since.
     public func end(notify: Bool = true) {
         stopListening()
-        if notify, link.daemonRunning { link.writeControl() }
+        let mine = token
+        if notify, link.daemonRunning {
+            link.writeControl { if $0.capture?.token == mine { $0.capture = nil } }
+        }
     }
 
     /// A capture ends with the daemon.
@@ -75,7 +79,6 @@ public final class CaptureController {
 
     private func stopListening() {
         listening = false
-        link.capture = nil
         cancelTimeout?()
         cancelTimeout = nil
     }
