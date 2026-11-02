@@ -11,6 +11,7 @@ private final class FakeLoginService: LoginService {
     var loaded: Set<Job> = []
     var calls: [String] = []
     var definitions: [Job: [String: Any]] = [:]
+    var loadedDefinitions: [Job: [String: Any]] = [:]
 
     func status(_ job: Job) -> JobStatus { registered.contains(job) ? .enabled : .notRegistered }
     func isLoaded(_ job: Job) -> Bool { loaded.contains(job) }
@@ -24,6 +25,7 @@ private final class FakeLoginService: LoginService {
     func load(_ job: Job, _ definition: [String: Any]) throws {
         calls.append("load \(job)")
         loaded.insert(job)
+        loadedDefinitions[job] = definition
     }
 
     func unregister(_ job: Job) throws {
@@ -175,8 +177,16 @@ private final class Rig {
 
     @Test func menuOnNeedsAMenuApp() throws {
         let rig = Rig(menuApp: nil)
-        #expect(throws: LoginItem.Failure.self) { try rig.item.showMenu(true) }
+        #expect(throws: LoginItem.Failure.noMenuApp) { try rig.item.showMenu(true) }
         #expect(rig.service.calls.isEmpty)
+    }
+
+    @Test func aBuildWithoutAMenuStartsAndRegistersOnlyTheDaemon() throws {
+        let rig = Rig(menuApp: nil)
+        _ = try rig.item.loginOn()
+        _ = try rig.item.start()
+        _ = try rig.item.loginOff()
+        #expect(rig.service.calls == ["register daemon", "load daemon", "unregister daemon", "unregister menu"])
     }
 
     // MARK: Not an installed app
@@ -190,6 +200,7 @@ private final class Rig {
         #expect(throws: LoginItem.Failure.self) { try rig.item.loginOn() }
         #expect(throws: LoginItem.Failure.self) { try rig.item.loginOff() }
         #expect(throws: LoginItem.Failure.self) { try rig.item.showMenu(false) }
+        #expect(throws: LoginItem.Failure.self) { try rig.item.showMenu(true) }
         #expect(rig.service.calls.isEmpty)
         #expect(rig.seeded == 0)
         #expect(!rig.hidden)
@@ -288,6 +299,15 @@ private final class Rig {
             "EnvironmentVariables": ["MallocSpaceEfficient": "1"],
         ]
         #expect(NSDictionary(dictionary: LoginItem.menuDefinition(app: appURL)) == expected)
+    }
+
+    @Test func startLoadsTheDefinitionsSoAnUnregisteredJobCanRun() throws {
+        let rig = Rig()
+        _ = try rig.item.start()
+        #expect(NSDictionary(dictionary: try #require(rig.service.loadedDefinitions[.daemon]))
+            == NSDictionary(dictionary: LoginItem.daemonDefinition(executable: installedExecutable)))
+        #expect(NSDictionary(dictionary: try #require(rig.service.loadedDefinitions[.menu]))
+            == NSDictionary(dictionary: LoginItem.menuDefinition(app: appURL)))
     }
 
     @Test func theServiceReceivesTheDefinitions() throws {

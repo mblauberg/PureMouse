@@ -5,11 +5,11 @@ import Testing
 
 @MainActor @Suite struct LifecycleTests {
     /// A stand-in for the daemon binary: a script that answers only `login-status`.
-    private func stubDaemon(printing output: String) throws -> URL {
+    private func stubDaemon(printing output: String, exiting status: Int = 0) throws -> URL {
         let directory = FileManager.default.temporaryDirectory.appending(path: "pm-lifecycle-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let script = directory.appending(path: "puremouse")
-        try Data("#!/bin/sh\n[ \"$1\" = login-status ] && cat <<'EOF'\n\(output)\nEOF\n".utf8).write(to: script)
+        try Data("#!/bin/sh\n[ \"$1\" = login-status ] && cat <<'EOF'\n\(output)\nEOF\nexit \(status)\n".utf8).write(to: script)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
         return script
     }
@@ -29,5 +29,7 @@ import Testing
         #expect(await read(from: try stubDaemon(printing: "not json")) == nil)
         #expect(await read(from: URL(fileURLWithPath: "/nonexistent/puremouse")) == nil)
         #expect(await read(from: nil) == nil)
+        let json = #"{"service":"launchd","daemon":"enabled","menu":"enabled","hidden":false}"#
+        #expect(await read(from: try stubDaemon(printing: json, exiting: 1)) == nil)
     }
 }
