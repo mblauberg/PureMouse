@@ -23,6 +23,9 @@ final class MouseTab: NSViewController {
     let selection: MouseSelection
     /// Called when the segment changes, after its pane shows, so the window can refit to it.
     var didSelect: (MouseSegment) -> Void = { _ in }
+    /// Called as the segment changes away from Buttons, whichever way the change came (the strip
+    /// or a request), so Find by Pressing, which belongs to Buttons, ends with it.
+    var willLeaveButtons: () -> Void = {}
 
     private let makeHeader: (MouseSelection) -> NSView
     private let make: (MouseSegment) -> NSViewController
@@ -63,6 +66,7 @@ final class MouseTab: NSViewController {
     /// Shows a segment, building its pane on its first visit.
     func select(_ segment: MouseSegment) {
         guard segment != selection.segment else { return }
+        if selection.segment == .buttons { willLeaveButtons() }
         selection.segment = segment
         if isViewLoaded { show(segment) }
         didSelect(segment)
@@ -134,8 +138,6 @@ struct MouseHeader: View {
     }
 
     private func choose(_ segment: MouseSegment) {
-        // Find by Pressing belongs to Buttons, so leaving it ends one under way.
-        if segment != .buttons, model.captureListening { model.cancelCapture() }
         selection.select(segment)
     }
 

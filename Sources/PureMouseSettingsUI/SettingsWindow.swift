@@ -47,6 +47,8 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
         window.delegate = self
         tabs.didSelect = { defaults.set($0.rawValue, forKey: Self.tabKey) }
         tabs.didSelectSegment = { defaults.set($0.rawValue, forKey: Self.segmentKey) }
+        // Find by Pressing belongs to Mouse › Buttons, so leaving Mouse ends one under way.
+        tabs.didLeaveMouse = { [weak model] in model?.cancelCapture() }
         // Titled before the first pane loads, so "Untitled" never shows.
         window.title = saved.tab.title
         tabs.open(.tab(saved.tab))
@@ -82,6 +84,7 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
                 tabs?.selectSegment($0)
                 context.refit()
             }
+            mouse.willLeaveButtons = { [weak model] in model?.cancelCapture() }
             tabs.mouse = mouse
             return mouse
         }
@@ -118,6 +121,9 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
 final class SettingsTabs: NSTabViewController {
     var didSelect: (SettingsTab) -> Void = { _ in }
     var didSelectSegment: (MouseSegment) -> Void = { _ in }
+    /// Called when another tab replaces Mouse, whichever way the change came.
+    var didLeaveMouse: () -> Void = {}
+    private var shownTab: SettingsTab?
     /// The Mouse tab's segment, kept while another tab shows and used when Mouse is first built.
     private(set) var segment: MouseSegment = .buttons
     /// The Mouse tab, once built.
@@ -150,7 +156,12 @@ final class SettingsTabs: NSTabViewController {
 
     override func tabView(_ tabView: NSTabView, didSelect tabViewItem: NSTabViewItem?) {
         super.tabView(tabView, didSelect: tabViewItem)
-        if let id = tabViewItem?.identifier as? String, let tab = SettingsTab(rawValue: id) { didSelect(tab) }
+        if let id = tabViewItem?.identifier as? String, let tab = SettingsTab(rawValue: id) {
+            // The controller moves its index before telling us, so the tab left is the one last shown.
+            if shownTab == .mouse, tab != .mouse { didLeaveMouse() }
+            shownTab = tab
+            didSelect(tab)
+        }
         fitWindow(animated: view.window?.isVisible == true)
         // No field or button starts focused: Tab still reaches them.
         DispatchQueue.main.async { [weak self] in self?.view.window?.makeFirstResponder(nil) }
