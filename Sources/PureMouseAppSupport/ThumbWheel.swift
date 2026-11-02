@@ -3,9 +3,10 @@ import PureMouseKit
 
 /// What the thumb wheel's pop-up offers, read from and written to `thumbWheel.action`, `left`,
 /// `right` and `step` (docs/configuration.md, "Thumb wheel"); `reversed` has its own row. The same keys under
-/// `apps.<id>.thumbWheel` apply on top of the global ones, so an app also has `inherit`.
+/// `apps.<id>.thumbWheel` and `devices.<key>.thumbWheel` apply on top of the global ones, so an app
+/// or a mouse also has `inherit`.
 public enum ThumbWheelChoice: Hashable, Identifiable, Sendable {
-    /// Per app only: the app sets none of `action`, `left` and `right`.
+    /// Per app or per mouse only: it sets none of `action`, `left` and `right`.
     case inherit
     case scroll
     /// One of Kit's `Config.ThumbWheel.presets` by its config name.
@@ -130,6 +131,9 @@ extension ButtonAction {
 }
 
 extension ConfigTree {
+    /// Whether `path` is an app's or a mouse's, which may leave a key to the top level.
+    static func leavesToWiderScope(_ path: [String]) -> Bool { path.first == "apps" || path.first == "devices" }
+
     /// The thumb wheel state the keys at `path` resolve to, on top of `base`.
     public func thumbWheel(at path: [String], base: ThumbWheelState = .initial) -> ThumbWheelState {
         base.applying(self[path] as? [String: Any])
@@ -144,14 +148,14 @@ extension ConfigTree {
     }
 
     public func thumbWheelChoice(at path: [String]) -> ThumbWheelChoice {
-        ThumbWheelChoice.read(self[path] as? [String: Any], inApp: path.first == "apps")
+        ThumbWheelChoice.read(self[path] as? [String: Any], inApp: Self.leavesToWiderScope(path))
     }
 
     /// Writes a choice from the pop-up. A preset sets `action` and drops the step, so it brings
     /// its own; Custom writes the current pair as `left` and `right`, so the wheel does the same
     /// until one is changed, and keeps the step it had.
     public mutating func chooseThumbWheel(_ choice: ThumbWheelChoice, at path: [String], base: ThumbWheelState = .initial) {
-        let inApp = path.first == "apps"
+        let inApp = Self.leavesToWiderScope(path)
         switch choice {
         case .inherit:
             for key in ThumbWheelChoice.keys { set(nil, at: path + [key]) }
@@ -183,7 +187,7 @@ extension ConfigTree {
     /// Sets `reversed`. Globally false is the default, so it removes the key; in an app nil
     /// removes it (Same as Everywhere) and false is kept, overriding a reversed global.
     public mutating func setThumbWheelReversed(_ reversed: Bool?, at path: [String]) {
-        let inApp = path.first == "apps"
+        let inApp = Self.leavesToWiderScope(path)
         set(inApp ? reversed : (reversed == true ? true : nil), at: path + ["reversed"])
     }
 

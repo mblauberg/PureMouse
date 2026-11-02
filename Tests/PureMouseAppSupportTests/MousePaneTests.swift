@@ -107,11 +107,14 @@ private func tree(_ json: String) throws -> ConfigTree { try ConfigTree(data: Da
 
 @Test func offPausedOfflineOrNoMouseLeavesEveryControlShown() {
     let device = mouse(noWheels)
-    #expect(ControlAvailability.devices(primary: device, running: true, paused: false) == [device])
-    #expect(ControlAvailability.devices(primary: device, running: false, paused: false).isEmpty)
-    #expect(ControlAvailability.devices(primary: device, running: true, paused: true).isEmpty)
-    #expect(ControlAvailability.devices(primary: mouse(noWheels, online: false), running: true, paused: false).isEmpty)
-    #expect(ControlAvailability.devices(primary: nil, running: true, paused: false).isEmpty)
+    func deciding(_ devices: [Status.Device], running: Bool = true, paused: Bool = false) -> [Status.Device] {
+        MouseScope.deciding(devices: devices, config: ConfigTree(), scope: .global, running: running, paused: paused)
+    }
+    #expect(deciding([device]) == [device])
+    #expect(deciding([device], running: false).isEmpty)
+    #expect(deciding([device], paused: true).isEmpty)
+    #expect(deciding([mouse(noWheels, online: false)]).isEmpty)
+    #expect(deciding([]).isEmpty)
     let offline = ScrollingLayout(config: ConfigTree(), devices: [])
     #expect(ScrollingLayout.Row.allCases.allSatisfy { offline.availability($0) == .available })
     #expect(offline.smoothScrollingRows == [.smoothScrolling, .feel, .speed])

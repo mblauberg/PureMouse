@@ -1062,3 +1062,50 @@ private func kitSays(_ root: [String: Any], mouse key: String, sets path: [Strin
     #expect(created > 10)
     #expect(removedEntries > 5, "\(removedEntries)")
 }
+
+// MARK: The #51 review's two gaps
+
+@Test func removingDPIOnAMixedCaseTwinDoesNotLetTheOtherSpellingApply() throws {
+    let key = mouse
+    let config = try tree(#"{"devices": {"\#(key.uppercased())": {"dpi": 1600}, "\#(key)": {"dpi": 1200}}}"#)
+    // Kit: the last spelling in sorted order applies, and it replaces the earlier entry whole.
+    #expect(try decode(config).forDevice(key).dpi == 1200)
+    var edited = config
+    edited.set(nil, at: ["dpi"], in: device(key))
+    // Kit is the oracle: the other spelling's 1600 must not come back.
+    #expect(try decode(edited).forDevice(key).dpi != 1600)
+    #expect(try decode(edited).forDevice(key).dpi == (try decode(ConfigTree()).forDevice(key).dpi))
+    #expect(edited.resolvedInt(["dpi"], in: device(key)) == nil)
+    #expect(!edited.isOverridden(["dpi"], in: device(key)))
+    // The applying entry stays as a name-only shadow, so Settings and Kit agree.
+    #expect(edited.contains(["devices", key]))
+    // And with another key on the shadowed spelling, the same: none of its keys apply.
+    let richer = try tree(#"{"devices": {"\#(key.uppercased())": {"dpi": 1600, "scrollWheel": {"inverted": true}}, "\#(key)": {"dpi": 1200}}}"#)
+    var removed = richer
+    removed.set(nil, at: ["dpi"], in: device(key))
+    #expect(try decode(removed).forDevice(key).scrollWheel?.inverted == (try decode(ConfigTree()).forDevice(key).scrollWheel?.inverted))
+    #expect(removed.resolved(["scrollWheel"], in: device(key)) == nil)
+}
+
+@Test func aWholeSectionReadSkipsAKeyTheDeviceSetsToNull() throws {
+    let config = try tree(#"{"scrollWheel": {"inverted": true, "mode": "ratchet"}, "devices": {"\#(mouse)": {"scrollWheel": {"inverted": null, "smartShiftThreshold": 20}}}}"#)
+    let section = config.resolved(["scrollWheel"], in: device(mouse)) as? [String: Any]
+    // A null reads as absent (Kit decodes it as such), so the top level's value stays.
+    #expect(section?["inverted"] as? Bool == true)
+    #expect(section?["mode"] as? String == "ratchet")
+    #expect(section?["smartShiftThreshold"] as? Int == 20)
+    let kit = try decode(config).forDevice(mouse).scrollWheel
+    #expect(kit?.inverted == true && kit?.smartShiftThreshold == 20)
+    #expect(config.resolvedBool(["scrollWheel", "inverted"], in: device(mouse)) == true)
+    #expect(!config.isOverridden(["scrollWheel", "inverted"], in: device(mouse)))
+}
+
+@Test func theMixedCaseShadowSurvivesTheReplayOfARemovalOntoTheFile() throws {
+    let file = try tree(#"{"devices": {"\#(mouse.uppercased())": {"dpi": 1600}, "\#(mouse)": {"dpi": 1200}}}"#)
+    var edited = file
+    edited.set(nil, at: ["dpi"], in: device(mouse))
+    var saved = file
+    saved.apply(file.changes(to: edited))
+    #expect(try decode(saved).forDevice(mouse).dpi == (try decode(ConfigTree()).forDevice(mouse).dpi))
+    #expect(saved.resolvedInt(["dpi"], in: device(mouse)) == nil)
+}

@@ -50,11 +50,14 @@ public struct ScrollingLayout {
 
     let config: ConfigTree
     let devices: [Status.Device]
+    let scope: ConfigScope
 
-    /// `devices`: the mice the pane describes (`AppModel.capabilityDevices`).
-    public init(config: ConfigTree, devices: [Status.Device]) {
+    /// `devices`: the mice the pane describes (`AppModel.capabilityDevices(in:)`); `scope`: All
+    /// Mice or the one the pane edits, whose settings the rows that depend on a value read.
+    public init(config: ConfigTree, devices: [Status.Device], scope: ConfigScope = .global) {
         self.config = config
         self.devices = devices
+        self.scope = scope
     }
 
     /// Whether the mouse can use the row, from the capabilities it needs and the key that keeps
@@ -71,7 +74,7 @@ public struct ScrollingLayout {
         case .smartShift, .switchesAt: ([\.smartShift], ["scrollWheel", "smartShiftThreshold"])
         case .thumbWheelAction, .thumbWheel: ([\.thumbWheel], ["thumbWheel"])
         }
-        return ControlAvailability.of(needs, devices: devices, configured: config.contains(key))
+        return ControlAvailability.of(needs, devices: devices, configured: config.holds(key, in: scope))
     }
 
     /// Whether the row shows: the mouse can use it and it applies to the current settings.
@@ -85,12 +88,14 @@ public struct ScrollingLayout {
     }
 
     /// SmartShift is on unless its threshold is 255 (or more).
-    public var smartShiftOn: Bool { config.int(["scrollWheel", "smartShiftThreshold"]).map { $0 < 255 } ?? true }
+    public var smartShiftOn: Bool { config.resolvedInt(["scrollWheel", "smartShiftThreshold"], in: scope).map { $0 < 255 } ?? true }
 
-    /// The thumb wheel rows the global settings make apply.
+    /// The thumb wheel rows the settings in `scope` make apply. A mouse that leaves the action to
+    /// All Mice has the step of that action too.
     var thumbWheelRows: [ThumbWheelAdvancedRow] {
-        ThumbWheelAdvancedRow.rows(scrolls: config.thumbWheel(at: ["thumbWheel"]).scrolls,
-                                   someAppScrolls: config.someAppScrollsThumbWheel, inApp: false, inherits: false)
+        let inherits = scope.deviceKey != nil && config.thumbWheelChoice(at: config.prefix(of: scope) + ["thumbWheel"]) == .inherit
+        return ThumbWheelAdvancedRow.rows(scrolls: config.thumbWheel(in: scope).scrolls,
+                                          someAppScrolls: config.someAppScrollsThumbWheel, inApp: false, inherits: inherits)
     }
 
     /// The pane's groups: Smooth scrolling, Main Wheel and Thumb Wheel, each with the rows it

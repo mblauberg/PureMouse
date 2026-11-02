@@ -13,6 +13,11 @@ public final class CaptureController {
     public private(set) var outcome: Outcome?
     /// The config key of the control just pressed; the Buttons pane highlights it and opens its picker.
     public var capturedButton: String?
+    /// The device key of the mouse that was pressed (`Status.Capture.model`), when it said.
+    public private(set) var capturedDevice: String?
+    /// Called when a control is pressed, with the mouse's device key if the daemon gave one, before
+    /// `capturedButton` is set, so a pane can switch to that mouse's scope first.
+    @ObservationIgnored public var pressed: @MainActor (String?) -> Void = { _ in }
 
     public enum Outcome: Equatable, Sendable {
         case noButtonDetected
@@ -41,7 +46,8 @@ public final class CaptureController {
         self.newToken = newToken
     }
 
-    public func start() {
+    /// Starts listening on every mouse, or only the one with this device key (`Control.Capture.device`).
+    public func start(device: String? = nil) {
         guard link.daemonRunning, !link.paused else { return }
         // A restart replaces the running request, and its timeout with it.
         cancelTimeout?()
@@ -49,8 +55,9 @@ public final class CaptureController {
         token = newToken()
         listening = true
         capturedButton = nil
+        capturedDevice = nil
         outcome = nil
-        let request = Control.Capture(token: token)
+        let request = Control.Capture(token: token, device: device)
         guard link.writeControl({ $0.capture = request }) else {
             stopListening()
             return
@@ -99,6 +106,8 @@ public final class CaptureController {
             break
         case .pressed:
             stopListening()
+            capturedDevice = capture.model
+            pressed(capture.model)
             capturedButton = capture.cid.map(NamedButton.config(cid:))
         case .timedOut:
             stopListening()

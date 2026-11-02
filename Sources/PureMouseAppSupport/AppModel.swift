@@ -23,14 +23,23 @@ public final class AppModel {
     @ObservationIgnored public var statusChanged: () -> Void = {}
 
     @ObservationIgnored private let alert: Alert
-    @ObservationIgnored private var wantsConfiguredDPI = false
+    /// The mice a DPI change moved off a cycled value, to be told to use the configured one once
+    /// the file is written: a device key each, or nil for every mouse.
+    @ObservationIgnored private var wantedConfiguredDPI: Set<String?> = []
+    @ObservationIgnored let defaults: UserDefaults
+    static let mouseKey = "SettingsMouse"
+    /// The mouse chosen in Settings' pop-up, by device key, remembered per user. nil is All Mice.
+    /// Whether it applies is `scope`'s to say.
+    public internal(set) var rememberedMouse: String?
     /// Only a model that announces low battery keeps the bands announced (the menu app's).
     @ObservationIgnored private var batteryAlerts: (store: BatteryAlertStore, announce: Announce, withdraw: Withdraw)?
 
     /// `notifications`: post and take down low-battery notifications (`BatteryAlert`); nil for a
     /// model that never does.
-    public init(locations: Locations = .live, alert: @escaping Alert,
+    public init(locations: Locations = .live, defaults: UserDefaults = .standard, alert: @escaping Alert,
                 notifications: (announce: Announce, withdraw: Withdraw)? = nil) {
+        self.defaults = defaults
+        rememberedMouse = defaults.string(forKey: Self.mouseKey)
         link = DaemonLink(locations: locations)
         store = ConfigStore(locations: locations)
         capture = CaptureController(link: link)
@@ -45,6 +54,7 @@ public final class AppModel {
             self?.statusChanged()
         }
         link.statusLoaded = { [weak self] in self?.statusLoaded() }
+        capture.pressed = { [weak self] key in self?.selectCapturedMouse(key) }
         link.controlFailed = { alert("PureMouse couldn't be reached.", $0.localizedDescription) }
         store.daemonConfigError = { [link] in link.configError }
         store.flushed = { [weak self] in self?.sendConfiguredDPIIfWanted() }
@@ -123,7 +133,8 @@ public final class AppModel {
         set { capture.capturedButton = newValue }
     }
 
-    public func startCapture() { capture.start() }
+    /// Starts Find by Pressing on the mouse chosen in the pop-up, or on every mouse for All Mice.
+    public func startCapture() { capture.start(device: scope.deviceKey) }
 
     public func cancelCapture() { capture.cancel() }
 
@@ -151,6 +162,23 @@ public final class AppModel {
     public func set(_ value: Any?, at path: [String], debounce: Bool = false) { store.set(value, at: path, debounce: debounce) }
 
     public func update(debounce: Bool = false, _ change: (inout ConfigTree) -> Void) { store.update(debounce: debounce, change) }
+
+    /// Sets `path` (relative to the scope) in `target`, or removes it with nil: for a mouse, only
+    /// under `devices.<key>`, which a first write creates with the mouse's `name`.
+    public func set(_ value: Any?, at path: [String], in target: ScopeTarget, debounce: Bool = false) {
+        update(debounce: debounce, in: target) { $0.set(value, at: path, in: target.scope) }
+    }
+
+    /// An edit made in `target`'s scope. A device entry it leaves holding only its name goes, and
+    /// one it creates is given the name.
+    public func update(debounce: Bool = false, in target: ScopeTarget, _ change: (inout ConfigTree) -> Void) {
+        store.update(debounce: debounce) {
+            $0.entryName = target.name
+            change(&$0)
+            $0.settleEntry(for: target.scope, name: target.name)
+            $0.entryName = nil
+        }
+    }
 
     public func flush() { store.flush() }
 
@@ -189,17 +217,24 @@ public final class AppModel {
     /// Speed keeps it through a reload that leaves `dpi` alone, and choosing the value already
     /// saved changes nothing on disk, so once the file is written the daemon is also asked to
     /// drop the cycled one.
-    public func setDPI(_ dpi: Int, debounce: Bool = false) {
+    ///
+    /// In a mouse's scope (`target`), the DPI is written under that mouse only, and only that mouse
+    /// is told. The status menu passes none, so it always sets the top level.
+    public func setDPI(_ dpi: Int, debounce: Bool = false, in target: ScopeTarget = .allMice) {
         guard !readOnly else { return }
-        if devices.contains(where: { $0.dpi != nil && $0.dpi != dpi }) { wantsConfiguredDPI = true }
-        set(dpi, at: ["dpi"], debounce: debounce)
+        let key = target.scope.deviceKey
+        let moved = devices.contains { $0.dpi != nil && $0.dpi != dpi && (key == nil || $0.model?.lowercased() == key) }
+        if moved { wantedConfiguredDPI.insert(key) }
+        set(dpi, at: ["dpi"], in: target, debounce: debounce)
         if !store.hasPendingChanges { flush() }  // nothing to write: ask now
     }
 
     private func sendConfiguredDPIIfWanted() {
-        guard wantsConfiguredDPI else { return }
-        wantsConfiguredDPI = false
+        guard !wantedConfiguredDPI.isEmpty else { return }
+        let wanted = wantedConfiguredDPI
+        wantedConfiguredDPI = []
         guard daemonRunning else { return }
-        link.requestConfiguredDPI()
+        // One mouse is asked by its key; several, or all, by asking every mouse.
+        link.requestConfiguredDPI(device: wanted.count == 1 ? wanted.first! : nil)
     }
 }

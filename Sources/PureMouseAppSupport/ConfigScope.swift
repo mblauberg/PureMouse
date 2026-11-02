@@ -146,15 +146,42 @@ extension ConfigTree {
         let target = entry + path
         if value == nil {
             guard contains(target) else { return true }
-            set(nil, at: target)
-            if let rest = self[entry] as? [String: Any], rest.keys.allSatisfy({ $0 == "name" }) {
-                set(nil, at: entry)
-            }
+            removeKeepingShadow(at: target, entry: entry, name: name)
         } else {
-            if !(self[entry] is [String: Any]) { set(name ?? key, at: entry + ["name"]) }
+            if !(self[entry] is [String: Any]) { set(name ?? entryName ?? key, at: entry + ["name"]) }
             set(value, at: target)
         }
         return true
+    }
+
+    /// Whether `entry` is the spelling the decoder keeps while the file spells the same mouse
+    /// another way too (the last in sorted order): it then shadows the others.
+    func shadowsOtherSpellings(_ entry: [String]) -> Bool {
+        guard entry.count == 2, entry[0] == "devices" else { return false }
+        let spellings = (self[["devices"]] as? [String: Any] ?? [:]).keys.filter { $0.lowercased() == entry[1].lowercased() }
+        return spellings.count > 1 && spellings.max() == entry[1]
+    }
+
+    /// Removes the key at `target` inside the device entry `entry`. An entry emptied by it, or left
+    /// holding only its `name`, goes, unless it shadows another spelling of the key: Kit then keeps
+    /// this entry whole, and removing it would let the other spelling apply with every key it holds,
+    /// so a name-only entry stays in its place.
+    mutating func removeKeepingShadow(at target: [String], entry: [String], name: String? = nil) {
+        let shadows = shadowsOtherSpellings(entry)
+        set(nil, at: target)
+        if shadows, self[entry] == nil { set(name ?? entryName ?? entry[1].lowercased(), at: entry + ["name"]) }
+        pruneIfNameOnly(entry)
+    }
+
+    /// Removes a device entry that holds only its `name`, as a name says nothing without an override.
+    /// Not when the file spells the key another way too and this is the spelling the decoder keeps
+    /// (the last in sorted order): the entry then shadows the others, and removing it would let one
+    /// of them apply, with every key it holds.
+    mutating func pruneIfNameOnly(_ entry: [String]) {
+        guard entry.count == 2, entry[0] == "devices", let rest = self[entry] as? [String: Any],
+              rest.keys.allSatisfy({ $0 == "name" }) else { return }
+        if shadowsOtherSpellings(entry) { return }
+        set(nil, at: entry)
     }
 
     // MARK: Helpers

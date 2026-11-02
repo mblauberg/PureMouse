@@ -4,6 +4,9 @@ import Foundation
 /// key, including ones it does not know, so hand edits and the UI coexist (docs/companion.md).
 public struct ConfigTree {
     var root: [String: Any]
+    /// The name a device entry gets when a write creates it (`set(_:at:in:name:)` with no name):
+    /// the mouse's, set by `AppModel` for the edit under way.
+    var entryName: String?
 
     public init(_ root: [String: Any] = [:]) { self.root = root }
 
@@ -125,11 +128,10 @@ public struct ConfigTree {
     mutating func apply(_ changes: [Change]) {
         for change in changes {
             let removing = change.value == nil && contains(change.path)
-            set(change.value, at: change.path)
-            let entry = Array(change.path.prefix(2))
-            if removing, change.path.count > 2, change.path[0] == "devices",
-               let rest = self[entry] as? [String: Any], rest.keys.allSatisfy({ $0 == "name" }) {
-                set(nil, at: entry)
+            if removing, change.path.count > 2, change.path[0] == "devices" {
+                removeKeepingShadow(at: change.path, entry: Array(change.path.prefix(2)))
+            } else {
+                set(change.value, at: change.path)
             }
         }
     }

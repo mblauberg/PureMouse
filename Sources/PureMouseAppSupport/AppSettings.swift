@@ -145,7 +145,12 @@ extension ConfigTree {
 
     /// A button as an app's sheet shows it. Reading it writes nothing.
     public func appButton(_ app: String, button: String) -> AppButton {
-        let scope = Self.appScope(app)
+        scopedButton(button, in: Self.appScope(app))
+    }
+
+    /// A button as a row shows it in an app or on a mouse: the scope's own binding over the top
+    /// level's, which applies while the scope leaves the button alone (`own` is `.standard`).
+    public func scopedButton(_ button: String, in scope: ConfigScope) -> AppButton {
         let own = binding(button, in: scope)
         let everywhere = binding(button)
         // A plain action of the app's own replaces a global gesture, so it has no directions.

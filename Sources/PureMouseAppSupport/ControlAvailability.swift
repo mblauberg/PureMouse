@@ -37,9 +37,13 @@ public enum ControlAvailability: Equatable, Sendable {
 }
 
 extension AppModel {
-    /// The mice whose capabilities decide which controls show (`ControlAvailability.devices`).
-    /// With several mice, which one a pane describes is still the primary one.
-    public var capabilityDevices: [Status.Device] {
-        ControlAvailability.devices(primary: primaryDevice, running: daemonRunning, paused: paused)
+    /// The mice whose capabilities decide which controls show for All Mice (`capabilityDevices(in:)`).
+    public var capabilityDevices: [Status.Device] { capabilityDevices(in: .global) }
+
+    /// The mice whose capabilities decide which controls show in `scope` (`MouseScope.deciding`):
+    /// the chosen mouse, or for All Mice every mouse once all of them are known and connected.
+    /// Otherwise none, so every control shows and stays editable (offline editing).
+    public func capabilityDevices(in scope: ConfigScope) -> [Status.Device] {
+        MouseScope.deciding(devices: devices, config: config, scope: scope, running: daemonRunning, paused: paused)
     }
 }
