@@ -85,7 +85,7 @@ struct SessionDeviceConfigTests {
 
     /// The synthetic mouse without DPI is a mouse only for a control its own settings bind: one
     /// bound only for another mouse lets it past the first check, not the second.
-    @Test(arguments: [("m40aa00000000", true), (nil, false), ("mb03440910000", false)] as [(String?, Bool)])
+    @Test(arguments: [("m40aa00000000", true), (nil, false), ("mb03400000000", false)] as [(String?, Bool)])
     func aMouseWithoutDPIIsAdoptedOnlyForAControlBoundForIt(entry: String?, adopted: Bool) async throws {
         let h = try DaemonHarness(entry.map { #"{"devices": {"\#($0)": {"buttons": {"back": "none"}}}}"# } ?? "{}")
         defer { h.close() }
