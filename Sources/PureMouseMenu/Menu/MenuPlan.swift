@@ -150,13 +150,13 @@ enum MenuPlan {
     /// The warning rows; with PureMouse off, only a status too new to read.
     static func attentionRows(_ state: MenuState) -> [MenuRow] {
         var rows: [MenuRow] = []
-        if state.statusTooNew { rows.append(attention("Update PureMouse…", .openReleases)) }
+        if state.statusTooNew { rows.append(attention("Update PureMouse", .openReleases)) }
         guard state.daemonRunning else { return rows }
         if state.accessibilityMissing {
-            rows.append(attention("Allow Accessibility Access…", .openPrivacy(.accessibility)))
+            rows.append(attention("Allow Accessibility Access", .openPrivacy(.accessibility)))
         }
         if state.inputMonitoringMissing, state.hasBluetoothDevice {
-            rows.append(attention("Allow Input Monitoring…", .openPrivacy(.inputMonitoring)))
+            rows.append(attention("Allow Input Monitoring", .openPrivacy(.inputMonitoring)))
         }
         if state.configError { rows.append(attention("Fix Config File…", .openSettings(.tab(.general)))) }
         if state.logiOptionsRunning { rows.append(attention("Logi Options+ Is Running…", .openSettings(.tab(.general)))) }
