@@ -55,18 +55,23 @@ answering a question people have, and a good default means most people never tou
   `.controlSize` overrides except `.mini` on a switch, if a grouped form's default ever renders
   larger than System Settings' (check it in a capture), and never `.extraLarge`. Text is a
   semantic style (`.title3`, `.body`, `.callout`, `.subheadline`) and a symbol is sized with
-  `.imageScale`. A slider's end words are its own `minimumValueLabel` and `maximumValueLabel`, and
-  its width comes from the form (`ValueSlider` has no width). A shortcut recorder is a `.bordered`
+  `.imageScale`. A slider's end words sit under its ends in caption type, as System Settings
+  draws them, hidden from VoiceOver (the slider speaks its value), and every slider is one width
+  so a pane's tracks line up (`ValueSlider`). A shortcut recorder is a `.bordered`
   button with the shortcut in `.title3` and the recording state as a symbol and a word (no system
   control records a ⌘ chord). Scan-tested by `UIChromeScanTests`, which reads
   `Sources/PureMouseSettingsUI` and fails on `.system(size:`, a `.frame` with a numeric size,
-  `.controlSize` other than `.mini` on a switch, `.background(`, `Material`,
+  `.controlSize` other than `.mini` on a switch, `.background(` or `.background {`, `Material`,
   `NSVisualEffectView`, `glassEffect`, `.buttonStyle(.glass`, `cornerRadius`, `RoundedRectangle(`,
-  `Color.<name>` other than `clear`, `primary` and `secondary`, and named colours (`.white`,
-  `.black`, `.red` and the rest). Its allow-list holds at most five lines, each a file, a source
+  `Color.<name>` other than `clear`, `primary` and `secondary`, a colour built from values
+  (`Color(red:`, `Color(hue:`; a semantic `NSColor` is the system's), `.custom(` fonts, and named colours (`.white`, `.black`, `.red`
+  and the rest). A size or colour held in a constant is not caught: name it in review, not
+  around the scan. Its allow-list holds at most five lines, each a file, a source
   fragment and a reason, and an entry that no longer matches fails: today the About icon's
-  artwork frame and the action picker popover's size (a `List` has none of its own). Sheets share
-  one width (`SettingsWindowController.sheetWidth`) and take their height from their content.
+  artwork frame, the action picker popover's size (a `List` has none of its own), the slider's
+  width and its readout's minimum width, and the shortcut and command editors' width (also
+  popovers inside an app's sheet, so narrower than it). Other sheets share one width
+  (`SettingsWindowController.sheetWidth`) and take their height from their content.
 - **Custom shapes are concentric.** Prefer a system container (form section, `GroupBox`). A custom
   rounded view, such as the device card, uses `ConcentricRectangle` (macOS 26+) so it follows the
   window's radius; the macOS 14–15 branch may use one named radius constant.
@@ -173,7 +178,7 @@ Each level has one mechanism, and each label says what it reveals.
   `PUREMOUSE_DEV_*` hooks) each sheet and popover, and fails on a control with no label, an unnamed
   button, two controls with one label in a window, or a control under 20 × 20 pt. It does not hold
   the system's own parts to the size or the label: a slider and a mini switch (16-18 pt, drawn by
-  AppKit; the row takes the click), the words at a slider's ends, the window's close, zoom and
+  AppKit; the row takes the click), the window's close, zoom and
   minimise buttons, and a scroll bar's arrows and pages.
 - **Captures** and README screenshots come from a macOS 27 host running a build linked against
   the macOS 27 SDK (`scripts/verify-bundle.sh` checks the SDK), since the system restyles at run

@@ -105,6 +105,9 @@ enum ChromeScan {
     private static let lineRules: [(rule: String, pattern: String)] = [
         (".system(size:", #"\.system\(\s*size\s*:"#),
         (".background(", #"\.background\("#),
+        (".background {", #"\.background\s*\{"#),
+        ("Color(<values>)", #"\bColor\(\s*(red|hue|white|cgColor)\s*:"#),
+        (".custom(", #"\.custom\("#),
         ("Material", #"\bMaterial\b|\.(ultraThin|thin|regular|thick|ultraThick|bar)Material\b"#),
         ("NSVisualEffectView", #"\bNSVisualEffectView\b"#),
         ("glassEffect", #"\bglassEffect\b"#),
@@ -253,10 +256,20 @@ enum ChromeScan {
         ChromeAllowance(
             file: "ActionPicker.swift", fragment: ".frame(width: 260, height: 464)",
             reason: "A List has no size of its own, so the popover needs one width and height; the search field and rows are the system's."),
+        ChromeAllowance(
+            file: "Components.swift", fragment: ".frame(width: 200)",
+            reason: "Every slider is one width, so a pane's tracks line up whatever their labels, as in System Settings."),
+        ChromeAllowance(
+            file: "Components.swift", fragment: ".frame(minWidth: 56, alignment: .trailing)",
+            reason: "A slider's readout column is one width, so rows with short and long values (2.2, 300 ms) keep their tracks in line."),
+        ChromeAllowance(
+            file: "Sheets.swift", fragment: ".frame(width: 400)",
+            reason: "The shortcut and command editors open as popovers inside an app's sheet, so they are narrower than the sheet; text fields have no width of their own."),
     ]
 
     @Test func theSettingsSourcesLetTheSystemDrawTheChrome() throws {
-        #expect(ChromeScan.problems(files: try Self.sources(), allowed: Self.allowed) == [])
+        let problems = ChromeScan.problems(files: try Self.sources(), allowed: Self.allowed)
+        #expect(problems.isEmpty, "\(problems.joined(separator: "\n"))")
     }
 
     @Test func theAllowListIsShortAndEachEntryGivesItsReason() {
@@ -278,6 +291,10 @@ enum ChromeScan {
             ("view.controlSize(.large)", ".controlSize(.large)"),
             ("Button(\"x\") {}.controlSize(.mini)", ".controlSize(.mini)"),
             ("view.background(.background)", ".background("),
+            ("view.background { Color.clear }", ".background {"),
+            ("Color(red: 1, green: 0, blue: 0)", "Color(<values>)"),
+            ("Color(hue: 0.5, saturation: 1, brightness: 1)", "Color(<values>)"),
+            (#"Text("x").font(.custom("Menlo", size: 12))"#, ".custom("),
             ("view.background(.ultraThinMaterial)", "Material"),
             ("NSVisualEffectView()", "NSVisualEffectView"),
             ("view.glassEffect()", "glassEffect"),

@@ -49,9 +49,9 @@ enum DevAXDump {
         func visit(_ index: Int) {
             guard index < views.count else {
                 fflush(stdout)
-                // The same quit a capture makes: ends any open sheet first.
-                NSApp.terminateClosingSheets(status: failures > 0 ? 1 : 0)
-                return
+                // Not `terminate(_:)`, which quits with status 0 whatever was found. The dump has
+                // edited nothing, so there is nothing to save.
+                exit(failures > 0 ? 1 : 0)
             }
             if let pane = views[index] { show(ShowRequest(pane: pane)) }
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
@@ -93,13 +93,7 @@ enum DevAXDump {
     static func check(_ entries: [Entry]) -> [String] {
         var problems: [String] = []
         var seen: [String: Int] = [:]
-        for (index, entry) in entries.enumerated() where entry.isControl {
-            // The words at a slider's ends (`minimumValueLabel`, `maximumValueLabel`) are the
-            // slider's own parts: AppKit lists them as buttons beside it, a line of text tall.
-            let siblings = [entries[..<index].last { $0.depth <= entry.depth },
-                            entries[(index + 1)...].first { $0.depth <= entry.depth }]
-            let beside = siblings.contains { $0?.role == "AXSlider" && $0?.depth == entry.depth }
-            if entry.role == "AXButton", beside { continue }
+        for entry in entries where entry.isControl {
             let name = "\(entry.role) \"\(entry.label)\""
             // The close, zoom and minimise buttons are the system's, labelled by AppKit for VoiceOver.
             // So are a scroll bar's arrows and pages.

@@ -61,12 +61,14 @@ struct AboutPane: View {
     }
 
     /// A link whose hit target is 20 pt tall: its line of text is 16, and the `.link` button style
-    /// takes the label's text alone as its frame.
+    /// takes the label's text alone as its frame. VoiceOver still finds it as a link (`AXLink`), and
+    /// it shows the pointing hand where macOS 15 can say so, as `Link` does.
     private func link(_ title: String, _ destination: URL) -> some View {
         Button { openURL(destination) } label: { Text(title).padding(.vertical, 2).contentShape(Rectangle()) }
             .buttonStyle(.plain)
             .foregroundStyle(.tint)
             .accessibilityAddTraits(.isLink)
+            .modifier(LinkPointer())
     }
 
     /// Between links; read aloud as nothing.
@@ -126,6 +128,17 @@ private struct UpdateRow: View {
             let result = await UpdateCheck.fetch(current: Locations.version)
             outcome = result
             checking = false
+        }
+    }
+}
+
+/// The pointing hand over a link (macOS 15 and later; macOS 14 shows the arrow).
+private struct LinkPointer: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 15, *) {
+            content.pointerStyle(.link)
+        } else {
+            content
         }
     }
 }

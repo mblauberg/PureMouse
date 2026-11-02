@@ -121,7 +121,7 @@ struct ShortcutSheet: View {
             }
         }
         .padding(20)
-        .frame(width: SettingsWindowController.sheetWidth)
+        .frame(width: 400)
         .onAppear {
             if Shortcut.isValid(request.initial) { recorder.spec = request.initial }
             recorder.start()
@@ -290,7 +290,7 @@ struct CommandSheet: View {
             }
         }
         .padding(20)
-        .frame(width: SettingsWindowController.sheetWidth)
+        .frame(width: 400)
         .onAppear { command = request.initial }
     }
 }

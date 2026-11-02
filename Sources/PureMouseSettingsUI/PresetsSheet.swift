@@ -41,15 +41,14 @@ struct PresetsSheet: View {
                 // Borderless, as under System Settings' lists: a section footer draws bordered
                 // buttons at mixed sizes (a disabled one full size, an enabled one a mini capsule).
                 .buttonStyle(.borderless)
-                // A bare plus or minus is 14 pt wide and, for the minus, 2 pt tall; the circled
-                // symbols at title3 with `glyph`'s padding make a 21 pt target.
-                .font(.title3)
             }
         }
     }
 
+    /// A bare plus or minus is 14 pt wide and, for the minus, 2 pt tall; the circled symbol at
+    /// title3 with this padding makes a 21 pt target. The footer's text keeps its own size.
     private func glyph(_ name: String) -> some View {
-        Image(systemName: name).padding(3).contentShape(Rectangle())
+        Image(systemName: name).font(.title3).padding(3).contentShape(Rectangle())
     }
 
     private func row(_ preset: Int, checked: Bool, presets: [Int]) -> some View {

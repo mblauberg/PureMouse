@@ -247,12 +247,12 @@ extension NSApplication {
     /// is attached again while `terminate(_:)` runs, which then returns without quitting (seen in
     /// the bundled helper with an app's sheet open). So when it returns, finish the quit as it
     /// would have: announce `willTerminate` (the delegate saves) and exit.
-    public func terminateClosingSheets(status: Int32 = 0) {
+    public func terminateClosingSheets() {
         for window in windows {
             for sheet in window.sheets.reversed() { window.endSheet(sheet) }
         }
         terminate(nil)
         NotificationCenter.default.post(name: NSApplication.willTerminateNotification, object: self)
-        exit(status)
+        exit(0)
     }
 }
