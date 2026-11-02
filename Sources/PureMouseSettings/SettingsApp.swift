@@ -13,7 +13,7 @@ final class SettingsApp: NSObject, NSApplicationDelegate {
     private var settings: SettingsWindowController?
     private var showToken: Int32 = -1
     private lazy var menuActions = MainMenu.Actions(
-        showAbout: { [weak self] in self?.show(.about) },
+        showAbout: { [weak self] in self?.show(.tab(.about)) },
         open: { NSWorkspace.shared.open($0) })
     private var terminateSignal: DispatchSourceSignal?
 
