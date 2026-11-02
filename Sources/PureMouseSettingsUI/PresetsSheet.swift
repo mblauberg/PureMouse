@@ -29,11 +29,11 @@ struct PresetsSheet: View {
                     Button { add(presets) } label: { Image(systemName: "plus") }
                         .disabled(!DPIPresets.canAdd(current, to: presets) || model.readOnly)
                         .accessibilityLabel(DPIPresets.addLabel)
-                        .help(DPIPresets.addLabel)
+                        .help("Saves the current pointer speed")
                     Button { checked.map { remove($0, from: presets) } } label: { Image(systemName: "minus") }
                         .disabled(checked == nil || model.readOnly)
                         .accessibilityLabel(checked.map(DPIPresets.removeLabel) ?? "Remove Preset")
-                        .help("Remove Preset")
+                        .help("Removes the checked preset")
                     if presets.count >= DPIPresets.limit {
                         Text("Up to \(DPIPresets.limit) presets.")
                     }

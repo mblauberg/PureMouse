@@ -121,7 +121,7 @@ struct ShortcutSheet: View {
             }
         }
         .padding(20)
-        .frame(width: 400)
+        .frame(width: SettingsWindowController.sheetWidth)
         .onAppear {
             if Shortcut.isValid(request.initial) { recorder.spec = request.initial }
             recorder.start()
@@ -203,7 +203,11 @@ final class ShortcutRecorder {
     }
 }
 
-/// The recorder's field: shows the shortcut in ⌃⌥⇧⌘ glyphs; click it to record again.
+/// The recorder's field: shows the shortcut in ⌃⌥⇧⌘ glyphs; press it to record again.
+///
+/// A `.bordered` button, since no system control records a shortcut: a text field takes typed
+/// characters, not a ⌘ or ⌃ chord, and SwiftUI's `KeyboardShortcut` only declares one. The sheet
+/// listens through a local key monitor (`ShortcutRecorder`) while this reads "Recording…".
 struct RecorderField: View {
     let recorder: ShortcutRecorder
 
@@ -214,24 +218,22 @@ struct RecorderField: View {
         Button {
             recorder.recording ? recorder.stop() : recorder.start()
         } label: {
-            HStack {
+            HStack(spacing: 8) {
+                Image(systemName: recorder.recording ? "record.circle" : "keyboard")
+                    .symbolRenderingMode(.hierarchical)
+                    .accessibilityHidden(true)
                 Text(displayText)
-                    .font(.system(size: 17, weight: .medium))
+                    .font(.title3)
                     .foregroundStyle(recorder.spec == nil || recorder.recording && recorder.held.isEmpty ? .secondary : .primary)
-                Spacer()
+                // Once modifiers are held they replace the word, so say it beside them.
+                if recorder.recording && !recorder.held.isEmpty {
+                    Text(Self.recording).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 10)
-            .frame(maxWidth: .infinity, minHeight: 36)
-            .background(.background, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-            // The accent ring appears once keys are held: opened with the pointer, the field
-            // says "Recording" without a focus ring.
-            .overlay {
-                let keying = recorder.recording && !recorder.held.isEmpty
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .strokeBorder(keying ? Color.accentColor : Color.secondary.opacity(0.35), lineWidth: keying ? 2 : 1)
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.bordered)
         // While recording, the field listens through its own monitor and draws its own state;
         // the sheet focuses it on open, which would otherwise ring it before any key is pressed.
         .focusEffectDisabled(recorder.recording)
@@ -288,7 +290,7 @@ struct CommandSheet: View {
             }
         }
         .padding(20)
-        .frame(width: 440)
+        .frame(width: SettingsWindowController.sheetWidth)
         .onAppear { command = request.initial }
     }
 }

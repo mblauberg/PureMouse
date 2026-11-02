@@ -176,6 +176,32 @@ struct MenuPlanTests {
         #expect(StatusText.accessibilityLabel(state, primary: mouse) == "PureMouse, MX Master 3S, battery 80 percent, paused")
     }
 
+    /// A paused PureMouse lists no mouse, and the label still says it is paused.
+    @Test func thePausedLabelDoesNotNeedAMouse() {
+        var state = Self.running([])
+        state.paused = true
+        #expect(StatusText.accessibilityLabel(state, primary: nil) == "PureMouse, no mouse connected, paused")
+        state.paused = false
+        state.away = true
+        #expect(StatusText.accessibilityLabel(state, primary: nil) == "PureMouse, no mouse connected, on another Mac")
+        // Off says only that: there is no mouse to describe and nothing paused.
+        let off = MenuState(dpiPresets: [], currentDPI: nil)
+        #expect(StatusText.accessibilityLabel(off, primary: nil) == "PureMouse, off")
+    }
+
+    /// A battery that reports a level but no percentage is spoken when it is low or critical.
+    @Test func aLevelOnlyBatteryIsSpokenWhenLow() {
+        func label(_ level: Status.Device.Battery.Level) -> String {
+            var mouse = Self.mouse("a", percent: nil)
+            mouse.battery = .init(percent: nil, level: level, charging: false)
+            return StatusText.accessibilityLabel(Self.running([mouse]), primary: mouse)
+        }
+        #expect(label(.low) == "PureMouse, MX Master 3S, battery low")
+        #expect(label(.critical) == "PureMouse, MX Master 3S, battery critical")
+        #expect(label(.good) == "PureMouse, MX Master 3S")
+        #expect(label(.full) == "PureMouse, MX Master 3S")
+    }
+
     /// The status item badges exactly when the menu shows an attention row.
     @Test func theBadgeFollowsTheAttentionRows() {
         var off = MenuState()

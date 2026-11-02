@@ -77,7 +77,7 @@ extension String {
 }
 
 /// A slider with its words under each end, as System Settings draws them (Slow … Fast), and
-/// its value on the right.
+/// its value on the right. The form gives the slider its width; the system sizes the end labels.
 struct ValueSlider: View {
     let title: String
     /// What VoiceOver calls the slider, where the title alone is ambiguous (two "Speed" rows).
@@ -88,7 +88,6 @@ struct ValueSlider: View {
     let low: String
     let high: String
     let format: (Double) -> String
-    var width: CGFloat = 200
     var availability = ControlAvailability.available
     /// The key is absent and the mouse keeps its own setting (`RowLabel.mouseDefault`).
     var mouseDefault = false
@@ -97,13 +96,17 @@ struct ValueSlider: View {
         LabeledContent {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 EndLabeledSlider(title: spokenTitle ?? title, value: $value, range: range, low: low, high: high)
-                    .frame(width: width)
                     .accessibilityValue(format(value))
-                Text(format(value))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-                    .frame(minWidth: 52, alignment: .trailing)
-                    .accessibilityHidden(true)
+                // The readout takes the room of the widest value it can show, hidden, so the
+                // slider does not shift as the digits change.
+                ZStack(alignment: .trailing) {
+                    Text(format(range.lowerBound)).hidden()
+                    Text(format(range.upperBound)).hidden()
+                    Text(format(value))
+                }
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
             }
         } label: {
             RowLabel(title, help: help, mouseDefault: mouseDefault, availability: availability)
@@ -111,8 +114,9 @@ struct ValueSlider: View {
     }
 }
 
-/// A plain slider with small words under its ends. No `step:`: macOS would draw a tick per
-/// step, so callers snap in their binding instead.
+/// A plain slider with its words at the ends, drawn by the slider itself (`minimumValueLabel`,
+/// `maximumValueLabel`). No `step:`: macOS would draw a tick per step, so callers snap in their
+/// binding instead.
 struct EndLabeledSlider: View {
     let title: String
     @Binding var value: Double
@@ -121,20 +125,18 @@ struct EndLabeledSlider: View {
     let high: String
 
     var body: some View {
-        VStack(spacing: 0) {
+        // No words at the ends when there are none to say (Pointer Speed before the mouse has
+        // reported its range).
+        if low.isEmpty && high.isEmpty {
             Slider(value: $value, in: range) { Text(title) }
                 .labelsHidden()
-            // No words under the ends when there are none to say (Pointer Speed before the mouse
-            // has reported its range).
-            if !low.isEmpty || !high.isEmpty {
-                HStack {
-                    Text(low)
-                    Spacer(minLength: 8)
-                    Text(high)
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
+        } else {
+            Slider(value: $value, in: range) {
+                Text(title)
+            } minimumValueLabel: {
+                Text(low)
+            } maximumValueLabel: {
+                Text(high)
             }
         }
     }
@@ -256,10 +258,10 @@ struct DisclosureLabel: View {
         } label: {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .bold))
+                    .imageScale(.small)
+                    .fontWeight(.bold)
                     .foregroundStyle(.secondary)
                     .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                    .frame(width: 10)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                     if let help { Text(help).font(.subheadline).foregroundStyle(.secondary) }

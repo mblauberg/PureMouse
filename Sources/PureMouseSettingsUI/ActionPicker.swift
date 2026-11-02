@@ -164,7 +164,6 @@ struct ActionPicker: View {
         VStack(alignment: .leading, spacing: 6) {
             SearchField(text: $query, placeholder: "Search actions", focusOnAppear: focusSearch,
                         onMove: move, onSubmit: submit)
-                .frame(height: 22)
             ScrollViewReader { proxy in
                 List(selection: Binding(get: { highlighted }, set: { select($0) })) {
                     ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
@@ -192,11 +191,11 @@ struct ActionPicker: View {
                     if let id { proxy.scrollTo(id) }
                 }
             }
-            .frame(idealHeight: 420)
         }
         .padding(8)
-        .frame(width: 260)
-        .fixedSize(horizontal: false, vertical: true)
+        // A List has no size of its own, so the popover keeps one width and height (allow-listed in
+        // UIChromeScanTests); the search field and the list take theirs from the system.
+        .frame(width: 260, height: 464)
         .onAppear { highlighted = entries.first { $0.matches(current) }?.id }
         .onChange(of: query) { _, _ in highlighted = visible.first?.id }
     }
@@ -376,6 +375,8 @@ struct ActionButton: View {
     var accessibilityName: String
     /// In an app: what applies elsewhere, which `.standard` shows dimmed (`InheritedValue`).
     var sameAsEverywhere: String?
+    /// `sameAsEverywhere` as VoiceOver says it (a shortcut in words); the label itself when nil.
+    var spokenEverywhere: String?
     @State private var openedFromKeyboard = false
 
     /// An app's binding as its row shows it: `.standard` leaves it to `everywhere`.
@@ -389,6 +390,14 @@ struct ActionButton: View {
     static let labelLimit = 32
 
     private var label: String { inherited?.effective ?? action.label }
+
+    /// What VoiceOver reads as the value: a shortcut in words ("Shift Command 4"), not glyphs, and
+    /// an inherited one with its source ("Mission Control, same as Everywhere").
+    static func spokenValue(for action: ButtonAction, everywhere: String?, spokenEverywhere: String?) -> String {
+        guard let everywhere else { return action.spokenLabel }
+        let own = action == .standard ? nil : action.spokenLabel
+        return InheritedValue(own: own, inherited: spokenEverywhere ?? everywhere, source: InheritedScope.everywhere).spoken
+    }
 
     /// The haptic waveforms, unless the mouse is known to have no motor; a bound one still shows.
     private var offersHaptics: Bool { Self.offersHaptics(for: action, devices: model.capabilityDevices) }
@@ -408,9 +417,9 @@ struct ActionButton: View {
             PopUpLabel(text: Self.shortened(label), style: inherited?.style ?? .primary)
         }
         .fixedSize()
-        .help(helpText)
+        .help(Self.tooltip(for: action))
         .accessibilityLabel(accessibilityName)
-        .accessibilityValue(inherited?.spoken ?? label)
+        .accessibilityValue(Self.spokenValue(for: action, everywhere: sameAsEverywhere, spokenEverywhere: spokenEverywhere))
         .accessibilityHint("Opens the list of actions")
         .popover(isPresented: $isPresented, arrowEdge: .bottom) {
             ActionPicker(current: action,
@@ -430,11 +439,18 @@ struct ActionButton: View {
         return text.prefix(half) + "…" + text.suffix(labelLimit - 1 - half)
     }
 
-    private var helpText: String {
-        switch action {
+    /// The tooltips are under 75 characters (docs/ui-language.md).
+    static let tooltipLimit = 74
+
+    /// The tooltip: what a shortcut presses or a command runs, shortened to `tooltipLimit`.
+    static func tooltip(for action: ButtonAction) -> String {
+        let text = switch action {
         case .run(let command): "Runs: \(command)"
         case .keys(let spec): "Presses \(Shortcut.display(spec) ?? spec)"
         default: ""
         }
+        guard text.count > tooltipLimit else { return text }
+        let half = (tooltipLimit - 1) / 2
+        return text.prefix(half) + "…" + text.suffix(tooltipLimit - 1 - half)
     }
 }
