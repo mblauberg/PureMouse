@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted, not built
+Accepted. The top-level and app scopes drop the bindings; the device scope arrives with
+[ADR 5](0005-config-v2-device-overrides.md).
 
 ## Context
 

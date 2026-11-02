@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted, not built
+Accepted. The absence cache and known presence are built; the capability map waits on
+[ADR 4](0004-device-identity-and-companion-contract.md).
 
 ## Context
 

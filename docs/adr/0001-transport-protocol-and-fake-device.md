@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted, not built
+Accepted
 
 ## Context
 
