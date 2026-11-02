@@ -43,7 +43,8 @@ enum Probe {
 
         if let count = try? await d.call(0x0001, 0).first {
             var features: [String] = []
-            for i in 1...count {
+            for offset in 0..<count {
+                let i = offset + 1
                 if let r = try? await d.call(0x0001, 1, [i]), r.count >= 2 {
                     features.append(String(format: "%02x:%04x", i, UInt16(r[0]) << 8 | UInt16(r[1])))
                 }

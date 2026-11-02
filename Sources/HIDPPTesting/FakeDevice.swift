@@ -87,7 +87,7 @@ public final class FakeDevice {
             return reply([features.first { $0.value == id }?.key ?? 0])
         }
         switch (feature, r.function) {
-        case (0x0001, 0): return reply([UInt8(features.count)])
+        case (0x0001, 0): return reply(responses[Call(0x0001, 0)] ?? [UInt8(features.count)])
         case (0x0001, 1):
             guard let index = p.first, let id = features[index] else { return FakeTransport.error(to: r, code: 2) }
             return reply([UInt8(id >> 8), UInt8(id & 0xFF)])
