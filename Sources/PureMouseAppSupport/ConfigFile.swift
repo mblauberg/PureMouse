@@ -26,9 +26,26 @@ public struct ConfigFile {
     /// generation (`config.json.bak`).
     public var backupURL: URL { target.deletingLastPathComponent().appending(path: target.lastPathComponent + ".bak") }
 
+    /// Every write (save, replace, create) is one read-merge-replace under an exclusive `flock` on
+    /// `config.json.lock` beside the target, so writers in other processes never drop each
+    /// other's keys. Hand edits do not take it; replaying edits onto the file as it is keeps them.
+    public var lockURL: URL { FileLock.url(for: target) }
+
+    private func locked<T>(_ body: () throws -> T) throws -> T {
+        do {
+            return try FileLock.withLock(lockURL, body)
+        } catch let error as FileLock.Failed {
+            throw SaveError.writeFailed(error)
+        }
+    }
+
     /// Replays `changes` onto the current file and writes the result when it differs. Returns
     /// the tree and the bytes now on disk (nil when there is still no file).
     public func save(_ changes: [ConfigTree.Change]) throws -> (tree: ConfigTree, data: Data?) {
+        try locked { try saveLocked(changes) }
+    }
+
+    private func saveLocked(_ changes: [ConfigTree.Change]) throws -> (tree: ConfigTree, data: Data?) {
         let current: Data?
         var tree: ConfigTree
         do {
@@ -55,6 +72,10 @@ public struct ConfigFile {
     /// is nothing to keep: no file, or one that parses to an object with no keys (an earlier
     /// backup is then left alone). If the backup cannot be written, the file is left as it was.
     public func replace(with data: Data, keepingBackup: Bool) throws {
+        try locked { try replaceLocked(with: data, keepingBackup: keepingBackup) }
+    }
+
+    private func replaceLocked(with data: Data, keepingBackup: Bool) throws {
         if keepingBackup {
             do {
                 let target = target
@@ -75,14 +96,17 @@ public struct ConfigFile {
     /// file was already there.
     @discardableResult
     public func createIfMissing() throws -> Data? {
-        guard !FileManager.default.fileExists(atPath: url.path) else { return nil }
-        let data = ConfigTree().data()
-        try write(data)
-        return data
+        try locked {
+            guard !FileManager.default.fileExists(atPath: url.path) else { return nil }
+            let data = ConfigTree().data()
+            try write(data)
+            return data
+        }
     }
 
-    /// Replaces the file. A symlinked config (dotfiles) has its target replaced, not the link.
-    public func write(_ data: Data) throws {
+    /// Replaces the file; the caller holds the lock. A symlinked config (dotfiles) has its target
+    /// replaced, not the link.
+    private func write(_ data: Data) throws {
         let target = target
         do {
             try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)

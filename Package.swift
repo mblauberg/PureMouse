@@ -33,6 +33,17 @@ let package = Package(
         .testTarget(name: "PureMouseTests", dependencies: ["puremouse", "HIDPPTesting"]),
         .testTarget(name: "PureMouseKitTests", dependencies: ["PureMouseKit"]),
         .testTarget(name: "PureMouseMenuTests", dependencies: ["PureMouseMenu"]),
-        .testTarget(name: "PureMouseAppSupportTests", dependencies: ["PureMouseAppSupport"]),
+        .testTarget(
+            name: "PureMouseAppSupportTests",
+            dependencies: ["PureMouseAppSupport", "ConfigWriterProbe"],
+            exclude: ["Probe"]
+        ),
+        // A second config and control writer for the two-process lock test. Test-only: no product
+        // and not in the app bundle.
+        .executableTarget(
+            name: "ConfigWriterProbe",
+            dependencies: ["PureMouseAppSupport", "PureMouseKit"],
+            path: "Tests/PureMouseAppSupportTests/Probe"
+        ),
     ]
 )

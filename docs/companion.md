@@ -67,6 +67,17 @@ The menu edits `config.json` as a JSON tree: it changes only the keys a control 
 keys, and writes with `.prettyPrinted, .sortedKeys`. Before writing, it validates the whole file
 with `ConfigCheck.validate`, which runs the daemon's own decoder.
 
+Every config write (a save, Reset All Settings or Restore Last Working with its `config.json.bak`,
+creating a missing file) is one read-merge-replace under an exclusive `flock` on `config.json.lock`
+beside the resolved config (`ConfigFile`, `FileLock`), so two writer processes never drop each
+other's keys; a writer waits while another holds it. The lock is a separate file because the
+config is replaced atomically. Hand edits take no lock: saves replay their keys onto the file as
+it is. `control.json` writes likewise lock `control.json.lock` in the companion directory, read
+the file and change only the fields the writer owns (`DaemonLink.ControlFields`: the status menu
+owns `paused`, Settings owns `capture`, both may send `useConfiguredDPI`), keeping the others as
+written. `paused` is written only with a pending request and `useConfiguredDPI` only when new;
+with no file, `paused` starts from the status.
+
 The daemon watches the config's directory with a `DispatchSource` (the file is replaced atomically,
 so the file's own descriptor goes stale). It reloads when the file's bytes change, debounced
 about 150 ms, exactly as for SIGHUP. Hand edits therefore apply on save. A failed load keeps the
