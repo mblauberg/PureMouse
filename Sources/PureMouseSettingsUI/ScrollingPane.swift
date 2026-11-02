@@ -144,16 +144,21 @@ private struct ScrollingAdvancedSheet: View {
                         if layout.shows(.acceleration) {
                             ValueSlider(title: "Acceleration", help: "Extra distance when you spin the wheel fast.",
                                         value: model.number(["smoothScroll", "acceleration"], default: 1, step: 0.1),
-                                        range: 0...3, low: "Off", high: "Strong", format: Format.strength)
+                                        range: 0...3, low: "Off", high: "Strong", format: Format.strength,
+                                        availability: layout.availability(.acceleration))
                         }
                         if layout.shows(.glide) {
                             ValueSlider(title: "Glide", help: "0 scrolls instantly.",
                                         value: model.number(["smoothScroll", "smoothingMs"], default: 125, step: 25),
-                                        range: 0...500, low: "Short", high: "Long", format: Format.milliseconds)
+                                        range: 0...500, low: "Short", high: "Long", format: Format.milliseconds,
+                                        availability: layout.availability(.glide))
                         }
                         if layout.shows(.shiftScrollsSideways) {
-                            Toggle("Hold Shift to scroll sideways",
-                                   isOn: model.toggle(["smoothScroll", "shiftScrollsHorizontally"], default: true))
+                            Toggle(isOn: model.toggle(["smoothScroll", "shiftScrollsHorizontally"], default: true)) {
+                                RowLabel("Hold Shift to scroll sideways",
+                                         availability: layout.availability(.shiftScrollsSideways))
+                            }
+                            .accessibilityLabel("Hold Shift to scroll sideways")
                         }
                     }
                     .disabled(!config.smoothScrollEnabled)
@@ -163,7 +168,7 @@ private struct ScrollingAdvancedSheet: View {
                 }
                 if !layout.advancedThumbWheelRows.isEmpty {
                     Section("Thumb Wheel") {
-                        ThumbWheelRows(path: ["thumbWheel"], rows: .advanced)
+                        ThumbWheelRows(path: ["thumbWheel"], rows: .advanced, availability: layout.availability(.thumbWheelAction))
                     }
                 }
             }

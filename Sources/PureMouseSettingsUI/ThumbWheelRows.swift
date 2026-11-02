@@ -21,8 +21,12 @@ struct ThumbWheelRows: View {
     /// In an app: its display name, which names the controls where several panes' rows read alike
     /// ("in Safari") and the editors that open from them.
     var appName: String?
-    /// The mouse lacks a thumb wheel but a value is set: the Action row says so.
+    /// The mouse lacks a thumb wheel but a value is set: the Action row says so, and so do the
+    /// advanced rows when they are all there is (`.advanced`).
     var availability = ControlAvailability.available
+
+    /// The caption for the advanced rows: under `.all` the Action row above already carries it.
+    private var advancedAvailability: ControlAvailability { rows == .advanced ? availability : .available }
 
     private var spokenSuffix: String { appName.map { " in \($0)" } ?? "" }
 
@@ -102,7 +106,8 @@ struct ThumbWheelRows: View {
             case .speed:
                 ValueSlider(title: "Speed", spokenTitle: "Thumb wheel speed",
                             value: model.number(["smoothScroll", "horizontalSpeed"], default: 1, step: 0.05),
-                            range: 0.25...3, low: "Slow", high: "Fast", format: Format.multiplier)
+                            range: 0.25...3, low: "Slow", high: "Fast", format: Format.multiplier,
+                            availability: advancedAvailability)
                     // A scrolling speed: it applies while smooth scrolling is on.
                     .disabled(!config.smoothScrollEnabled)
             }
@@ -115,7 +120,7 @@ struct ThumbWheelRows: View {
         return Toggle(isOn: model.toggle(path + ["inverted"], default: false)) {
             RowLabel("Reverse direction",
                      help: scrollsHere ? "Reverses this wheel." : "Reverses this wheel in apps where it scrolls.",
-                     mouseDefault: inverted == nil)
+                     mouseDefault: inverted == nil, availability: advancedAvailability)
         }
         .accessibilityLabel("Reverse thumb wheel direction")
     }
@@ -135,7 +140,7 @@ struct ThumbWheelRows: View {
                     .accessibilityValue("\(state.step)")
             }
         } label: {
-            RowLabel("Turn distance", help: "How far to turn before the action repeats.")
+            RowLabel("Turn distance", help: "How far to turn before the action repeats.", availability: advancedAvailability)
         }
     }
 
@@ -147,7 +152,7 @@ struct ThumbWheelRows: View {
         if inherited == nil {
             Toggle(isOn: Binding(get: { state.reversed },
                                  set: { on in model.update { $0.setThumbWheelReversed(on, at: path) } })) {
-                RowLabel("Swap directions", help: caption)
+                RowLabel("Swap directions", help: caption, availability: advancedAvailability)
             }
             .accessibilityLabel("Swap thumb wheel directions\(spokenSuffix)")
         } else {
@@ -159,7 +164,7 @@ struct ThumbWheelRows: View {
                     model.update { $0.setThumbWheelReversed(new, at: path) }
                 }
             } label: {
-                RowLabel("Swap directions", help: value.caption ?? caption)
+                RowLabel("Swap directions", help: value.caption ?? caption, availability: advancedAvailability)
             }
         }
     }
