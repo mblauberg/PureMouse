@@ -84,8 +84,8 @@ line, which lists the features PureMouse resolved once the settings were applied
 the complete feature table, SmartShift Enhanced state, legacy battery state and haptic capabilities.
 Move the mouse first so it is awake. The command does not play effects or change settings.
 
-For button-level detail, stop the agent with `puremouse unregister`, run
-`puremouse --verbose run` in a terminal, then start the agent again with `puremouse register`. A
+For button-level detail, stop PureMouse with `puremouse stop`, run `puremouse --verbose run` in a
+terminal, then start it again with `puremouse start`. This leaves Open at login as it was. A
 terminal-run PureMouse uses the terminal's permissions.
 
 ## After a macOS upgrade

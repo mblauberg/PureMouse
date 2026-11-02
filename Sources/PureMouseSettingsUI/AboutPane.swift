@@ -18,39 +18,52 @@ struct AboutPane: View {
                 .frame(width: 112, height: 112)
                 .accessibilityHidden(true)
             Text("PureMouse")
-                .font(.system(size: 22, weight: .semibold))
+                .font(.title2.weight(.semibold))
             Text("Version \(Locations.version)")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
             if let daemonVersion, daemonVersion != Locations.version, Locations.version != "dev" {
-                Label("The running PureMouse is version \(daemonVersion). Reinstall to match.",
+                // Quit PureMouse stops the background process and opening the app starts it again
+                // from the installed copy (`puremouse register`), so the new version runs.
+                Label("PureMouse \(daemonVersion) is still running. Quit and reopen PureMouse to finish updating.",
                       systemImage: "exclamationmark.triangle.fill")
                     .symbolRenderingMode(.multicolor)
                     .font(.callout)
+                    .multilineTextAlignment(.center)
             }
-            Text("No account, no telemetry. The network is used only when you check for updates.")
-                .padding(.top, 2)
-            HStack(spacing: 18) {
-                Link("GitHub", destination: Links.repository)
-                Link("Releases", destination: Links.releases)
-                Link("MIT Licence", destination: Links.licence)
-            }
-            .padding(.top, 2)
-            Link("Support PureMouse", destination: Links.sponsors)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
             UpdateRow()
                 .padding(.top, 6)
-            Text("Not affiliated with Logitech.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .padding(.top, 12)
+            HStack(spacing: 8) {
+                Link("GitHub", destination: Links.repository)
+                separator
+                Link("Releases", destination: Links.releases)
+                separator
+                Link("Licence", destination: Links.licence)
+                separator
+                Link("Support PureMouse", destination: Links.sponsors)
+            }
+            .padding(.top, 6)
+            VStack(spacing: 2) {
+                Text("No account, no telemetry. The network is used only when you check for updates.")
+                Text("Not affiliated with Logitech.")
+            }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .padding(.top, 12)
         }
         .padding(.top, 32)
         .padding(.bottom, 36)
         .padding(.horizontal, 40)
         .frame(maxWidth: .infinity)
+    }
+
+    /// Between links; read aloud as nothing.
+    private var separator: some View {
+        Text("\u{00B7}")
+            .foregroundStyle(.secondary)
+            .accessibilityHidden(true)
     }
 
     /// The app icon in the window's appearance. `NSWorkspace` hands back the light rendering of
@@ -80,7 +93,7 @@ private struct UpdateRow: View {
                 .accessibilityLabel("Check for Updates")
             switch outcome {
             case .upToDate?:
-                Text("Up to date").font(.callout).foregroundStyle(.secondary)
+                Text("PureMouse is up to date").font(.callout).foregroundStyle(.secondary)
             case .available(let release)?:
                 HStack(spacing: 8) {
                     Text("PureMouse \(release.version.parts.map(String.init).joined(separator: ".")) is available")
@@ -88,7 +101,7 @@ private struct UpdateRow: View {
                     Button("View Release") { NSWorkspace.shared.open(release.page) }
                 }
             case .failed?:
-                Text("Couldn\u{2019}t check").font(.callout).foregroundStyle(.secondary)
+                Text("Could not check for updates. Try again later.").font(.callout).foregroundStyle(.secondary)
             case nil:
                 EmptyView()
             }

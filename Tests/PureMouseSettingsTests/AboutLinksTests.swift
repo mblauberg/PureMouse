@@ -48,4 +48,17 @@ import Testing
         let allowed = offenders.filter { $0.contains("Support PureMouse") }
         #expect(offenders.count == allowed.count, "\(offenders)")
     }
+
+    @Test func theAboutPaneUsesNoFixedFontSize() throws {
+        let about = try String(contentsOf: Self.sources.appending(path: "PureMouseSettingsUI/AboutPane.swift"), encoding: .utf8)
+        #expect(!about.contains(".system(size:"))
+    }
+
+    @Test func theAboutPaneLeadsWithVersionAndUpdatesBeforeLinksAndFootnote() throws {
+        let about = try String(contentsOf: Self.sources.appending(path: "PureMouseSettingsUI/AboutPane.swift"), encoding: .utf8)
+        let order = ["Image(nsImage:", #"Text("PureMouse")"#, #"Text("Version "#, "UpdateRow()",
+                     #"Link("GitHub""#, "No account, no telemetry.", "Not affiliated with Logitech."]
+        let positions = try order.map { try #require(about.range(of: $0)).lowerBound }
+        #expect(positions == positions.sorted())
+    }
 }
