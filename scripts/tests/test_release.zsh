@@ -327,3 +327,48 @@ test_release_clears_the_images_an_earlier_run_left_beside_its_checksum() {
     [[ $images == PureMouse-1.2.3.dmg ]] || { print -u2 -- "dist holds: $images"; return 1; }
     [[ $(awk '{print $2}' $repo/.build/dist/SHA256SUMS) == PureMouse-1.2.3.dmg ]] || { print -u2 -- "$(<$repo/.build/dist/SHA256SUMS)"; return 1; }
 }
+
+test_release_refuses_a_symlinked_dist_and_leaves_what_it_points_at() {
+    local repo output
+    release_flow PureMouse codesign-self-signed.txt
+    mkdir -p $tmp/elsewhere $repo/.build
+    touch $tmp/elsewhere/PureMouse-important.dmg $tmp/elsewhere/SHA256SUMS
+    ln -s $tmp/elsewhere $repo/.build/dist
+    if output=$($repo/scripts/release.sh 2>&1); then return 1; fi
+    [[ $output == *'.build/dist is a symlink'* ]] || { print -u2 -- $output; return 1; }
+    expect "the files outside survive" test -f $tmp/elsewhere/PureMouse-important.dmg -a -f $tmp/elsewhere/SHA256SUMS
+    expect "nothing was built" test ! -e $repo/.build/app
+}
+
+test_release_refuses_a_symlinked_notary_directory_and_leaves_what_it_points_at() {
+    local repo output
+    release_flow PureMouse codesign-self-signed.txt
+    mkdir -p $tmp/elsewhere $repo/.build
+    touch $tmp/elsewhere/keep
+    ln -s $tmp/elsewhere $repo/.build/notary
+    if output=$($repo/scripts/release.sh 2>&1); then return 1; fi
+    [[ $output == *'.build/notary is a symlink'* ]] || { print -u2 -- $output; return 1; }
+    expect "the file outside survives" test -f $tmp/elsewhere/keep
+}
+
+# A script that sets its own TERM and HUP traps, runs with_dmg_mounted, then is signalled.
+test_a_callers_signal_traps_survive_with_dmg_mounted() {
+    fake_command hdiutil 'exit 0'
+    local output
+    output=$(TMPDIR=$tmp zsh -c 'source "$1/scripts/lib.zsh"
+trap "print caller-term; exit 0" TERM
+trap "print caller-hup; exit 0" HUP
+body() { true }
+with_dmg_mounted /nowhere.dmg body
+kill -TERM $$; sleep 5; print not-trapped' zsh $root 2>&1)
+    [[ $output == caller-term ]] || { print -u2 -- "got: $output"; return 1; }
+}
+
+test_a_dmg_that_cannot_be_detached_fails_even_when_its_command_passes() {
+    fake_command hdiutil '[[ $1 == detach ]] && exit 1
+exit 0'
+    local output code=0
+    output=$(run_mounted 'true' 2>&1) || code=$?
+    (( code )) || { print -u2 -- "succeeded: $output"; return 1; }
+    [[ $output == *'could not unmount'*'hdiutil detach -force'* && $output != *finished* ]] || { print -u2 -- $output; return 1; }
+}

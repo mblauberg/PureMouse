@@ -248,6 +248,7 @@ load_env_file() {
 # (forced if need be) and removed however this ends: the command failing or exiting the script, or
 # HUP, INT or TERM, which the cleanup is registered for before anything is attached. Do not nest it.
 with_dmg_mounted() {
+    setopt localtraps   # the caller's own traps come back when this returns
     local dmg=$1 command=$2 result=0
     shift 2
     dmg_mount_point=$(mktemp -d) || return 1
@@ -261,17 +262,19 @@ with_dmg_mounted() {
         print -u2 -- "could not mount ${dmg:t}"
         result=1
     fi
-    detach_dmg
-    trap - EXIT HUP INT TERM
+    detach_dmg || result=1   # an image left attached is a failure even when the command passed
     return $result
 }
 
-# detach_dmg: with_dmg_mounted's cleanup; harmless when nothing is mounted.
+# detach_dmg: with_dmg_mounted's cleanup; harmless (and successful) when nothing is mounted, and
+# non-zero when the image could not be detached.
 detach_dmg() {
     [[ -n ${dmg_mount_point:-} ]] || return 0
     local mount=$dmg_mount_point
     dmg_mount_point=
-    hdiutil detach -quiet $mount 2>/dev/null || hdiutil detach -quiet -force $mount 2>/dev/null ||
+    if ! hdiutil detach -quiet $mount 2>/dev/null && ! hdiutil detach -quiet -force $mount 2>/dev/null; then
         print -u2 -- "could not unmount $mount; detach it with: hdiutil detach -force $mount"
+        return 1
+    fi
     rmdir $mount 2>/dev/null || true
 }

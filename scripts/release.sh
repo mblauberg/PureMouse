@@ -112,6 +112,10 @@ dist=.build/dist
 dmg=$dist/PureMouse-$version.dmg
 
 # Only this run's artefacts may sit beside its checksum: clear what an earlier run left.
+# A symlink there would send the cleanup (and the build's output) somewhere else.
+for directory in .build $dist .build/notary; do
+    [[ ! -L $directory ]] || die "$directory is a symlink; remove it so the release is built inside the repository"
+done
 mkdir -p $dist
 rm -rf -- .build/notary $dist/PureMouse-*.dmg(N) $dist/SHA256SUMS
 

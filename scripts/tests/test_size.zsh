@@ -56,7 +56,7 @@ test_budgets_and_the_readme_follow_the_measured_sizes() {
         tenths=$(( (measured + 50000) / 100000 ))
         mb[$name]="$(( tenths / 10 )).$(( tenths % 10 ))"
     done
-    grep -q "^| Download | ${mb[DMG]} MB dmg, ${mb[INSTALLED]} MB installed;" $root/README.md ||
+    grep -qF "| Download | ${mb[DMG]} MB dmg, ${mb[INSTALLED]} MB installed;" $root/README.md ||
         problems+="the README's Download row is not '${mb[DMG]} MB dmg, ${mb[INSTALLED]} MB installed'"
     (( ! $#problems )) || { print -u2 -- ${(F)problems}; return 1; }
 }
