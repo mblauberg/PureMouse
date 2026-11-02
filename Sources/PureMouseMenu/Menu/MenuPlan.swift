@@ -64,6 +64,7 @@ enum MenuAction {
     case setDPI(Int)
     case start
     case setPaused(Bool)
+    case reloadConfig
     case showLog
     case quit
     case hideMenuBarIcon
@@ -95,9 +96,9 @@ struct MenuItem {
 enum MenuPlan {
     static let offSubtitle = "The mouse works as it does without PureMouse"
 
-    /// The rows in order. `option`: ⌥ was held as the menu opened, which adds Show Log in Finder
-    /// (the headers' and Hide Menu Bar Icon's alternates are always there). There is no Reload
-    /// Config: the config applies on save.
+    /// The rows in order. `option`: ⌥ was held as the menu opened, which adds Reload Config and
+    /// Show Log in Finder (the headers' and Hide Menu Bar Icon's alternates are always there).
+    /// The config applies on save; Reload Config is the recovery for what saving cannot redo.
     static func rows(for state: MenuState, option: Bool) -> [MenuRow] {
         var rows: [MenuRow] = []
         let running = state.daemonRunning
@@ -131,6 +132,7 @@ enum MenuPlan {
             let paused = state.paused
             rows.append(.item(MenuItem(title: paused ? "Resume PureMouse" : "Pause PureMouse", action: .setPaused(!paused))))
             if option {
+                rows.append(.item(MenuItem(title: "Reload Config", action: .reloadConfig)))
                 rows.append(.item(MenuItem(title: "Show Log in Finder", action: .showLog)))
             }
         }
@@ -152,7 +154,7 @@ enum MenuPlan {
     /// The warning rows; with PureMouse off, only a status too new to read.
     static func attentionRows(_ state: MenuState) -> [MenuRow] {
         var rows: [MenuRow] = []
-        if state.statusTooNew { rows.append(attention("View Latest Release", .openReleases)) }
+        if state.statusTooNew { rows.append(attention("Update PureMouse", .openReleases)) }
         guard state.daemonRunning else { return rows }
         if state.accessibilityMissing {
             rows.append(attention("Allow Accessibility Access", .openPrivacy(.accessibility)))

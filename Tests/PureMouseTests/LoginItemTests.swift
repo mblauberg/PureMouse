@@ -497,7 +497,7 @@ private final class Rig: @unchecked Sendable {
         let alert = LoginItem.runningAlert
         #expect(alert.title == "PureMouse is running.")
         #expect(alert.body == "It will open at login. macOS will ask you to allow Accessibility and Input Monitoring. "
-            + "Choose Allow for each, or turn them on in System Settings > Privacy & Security.")
+            + "Choose Allow for each, or turn them on in System Settings › Privacy & Security.")
         #expect(!alert.body.contains("/"))
     }
 
@@ -506,5 +506,11 @@ private final class Rig: @unchecked Sendable {
             == "puremouse: can't register: PureMouse needs to be in your Applications folder. Move it there, then open it again.")
         #expect(CLIError.line("unknown or device-only action", "explode")
             == "puremouse: unknown or device-only action: explode")
+    }
+
+    @Test func aMultiLineReasonStaysOneLine() {
+        let line = CLIError.line("can't start", "Bootstrap failed: 5: Input/output error\n  Try re-running as root.\r\n\n")
+        #expect(line == "puremouse: can't start: Bootstrap failed: 5: Input/output error; Try re-running as root.")
+        #expect(!line.contains("\n"))
     }
 }

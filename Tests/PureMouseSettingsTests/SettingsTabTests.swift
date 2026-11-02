@@ -120,3 +120,70 @@ private final class PaneFactory {
         #expect(tab.selection.segment == .scrolling)
     }
 }
+
+@MainActor @Suite struct SettingsTabsSelectionTests {
+    @Test func noSelectionIsNotATab() {
+        let tabs = SettingsTabs()
+        #expect(tabs.selectedTabViewItemIndex == -1)
+        #expect(tabs.selectedTab == nil)
+        tabs.refit()
+    }
+}
+
+// Find by Pressing belongs to Mouse › Buttons: any way of leaving it ends one under way.
+@MainActor @Suite struct CaptureEndsWhenLeavingButtonsTests {
+    private func mouseTab(_ segment: MouseSegment) -> MouseTab {
+        MouseTab(segment: segment, header: { _ in NSView() }, make: { _ in
+            let pane = NSViewController()
+            pane.view = NSView()
+            return pane
+        })
+    }
+
+    @Test func aRequestForAnotherSegmentEndsItButStayingOnButtonsDoesNot() {
+        let tab = mouseTab(.buttons)
+        var ended = 0
+        tab.willLeaveButtons = { ended += 1 }
+        _ = tab.view
+        tab.select(.buttons)
+        #expect(ended == 0)
+        tab.select(.pointer)
+        #expect(ended == 1)
+        tab.select(.scrolling)
+        #expect(ended == 1, "only leaving Buttons counts")
+    }
+
+    @Test func theStripAndARequestShareThePath() {
+        let tab = mouseTab(.buttons)
+        var ended = 0
+        tab.willLeaveButtons = { ended += 1 }
+        _ = tab.view
+        tab.selection.select(.scrolling)
+        #expect(ended == 1)
+    }
+
+    private func tabs() -> SettingsTabs {
+        let tabs = SettingsTabs()
+        _ = tabs.view  // the tab view reports its selections to the controller once loaded
+        for tab in SettingsTab.shown {
+            let item = NSTabViewItem(viewController: NSViewController())
+            item.identifier = tab.rawValue
+            tabs.addTabViewItem(item)
+        }
+        return tabs
+    }
+
+    @Test func leavingTheMouseTabEndsItAndOtherChangesDoNot() {
+        let tabs = tabs()
+        var ended = 0
+        tabs.didLeaveMouse = { ended += 1 }
+        tabs.selectedTabViewItemIndex = SettingsTab.shown.firstIndex(of: .general)!
+        tabs.selectedTabViewItemIndex = SettingsTab.shown.firstIndex(of: .apps)!
+        #expect(ended == 0)
+        tabs.selectedTabViewItemIndex = SettingsTab.shown.firstIndex(of: .mouse)!
+        tabs.selectedTabViewItemIndex = SettingsTab.shown.firstIndex(of: .mouse)!
+        #expect(ended == 0)
+        tabs.open(.tab(.about))
+        #expect(ended == 1)
+    }
+}

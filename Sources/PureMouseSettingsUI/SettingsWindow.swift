@@ -47,6 +47,8 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
         window.delegate = self
         tabs.didSelect = { defaults.set($0.rawValue, forKey: Self.tabKey) }
         tabs.didSelectSegment = { defaults.set($0.rawValue, forKey: Self.segmentKey) }
+        // Find by Pressing belongs to Mouse › Buttons, so leaving Mouse ends one under way.
+        tabs.didLeaveMouse = { [weak model] in model?.cancelCapture() }
         // Titled before the first pane loads, so "Untitled" never shows.
         window.title = saved.tab.title
         tabs.open(.tab(saved.tab))
@@ -82,6 +84,7 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
                 tabs?.selectSegment($0)
                 context.refit()
             }
+            mouse.willLeaveButtons = { [weak model] in model?.cancelCapture() }
             tabs.mouse = mouse
             return mouse
         }
@@ -121,13 +124,21 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
 final class SettingsTabs: NSTabViewController {
     var didSelect: (SettingsTab) -> Void = { _ in }
     var didSelectSegment: (MouseSegment) -> Void = { _ in }
+    /// Called when another tab replaces Mouse, whichever way the change came.
+    var didLeaveMouse: () -> Void = {}
+    private var shownTab: SettingsTab?
     /// The Mouse tab's segment, kept while another tab shows and used when Mouse is first built.
     private(set) var segment: MouseSegment = .buttons
     /// The Mouse tab, once built.
     weak var mouse: MouseTab?
 
+    /// The selected tab's item; nil while nothing is selected (the index is -1).
+    private var selectedItem: NSTabViewItem? {
+        tabViewItems.indices.contains(selectedTabViewItemIndex) ? tabViewItems[selectedTabViewItemIndex] : nil
+    }
+
     var selectedTab: SettingsTab? {
-        (tabViewItems[selectedTabViewItemIndex].identifier as? String).flatMap(SettingsTab.init)
+        (selectedItem?.identifier as? String).flatMap(SettingsTab.init)
     }
 
     /// Shows Mouse on this segment, now if Mouse is built, else when it is.
@@ -148,7 +159,12 @@ final class SettingsTabs: NSTabViewController {
 
     override func tabView(_ tabView: NSTabView, didSelect tabViewItem: NSTabViewItem?) {
         super.tabView(tabView, didSelect: tabViewItem)
-        if let id = tabViewItem?.identifier as? String, let tab = SettingsTab(rawValue: id) { didSelect(tab) }
+        if let id = tabViewItem?.identifier as? String, let tab = SettingsTab(rawValue: id) {
+            // The controller moves its index before telling us, so the tab left is the one last shown.
+            if shownTab == .mouse, tab != .mouse { didLeaveMouse() }
+            shownTab = tab
+            didSelect(tab)
+        }
         fitWindow(animated: view.window?.isVisible == true)
         // No field or button starts focused: Tab still reaches them.
         DispatchQueue.main.async { [weak self] in self?.view.window?.makeFirstResponder(nil) }
@@ -156,7 +172,7 @@ final class SettingsTabs: NSTabViewController {
 
     override func preferredContentSizeDidChange(for viewController: NSViewController) {
         super.preferredContentSizeDidChange(for: viewController)
-        guard viewController === tabViewItems[selectedTabViewItemIndex].viewController else { return }
+        guard let selected = selectedItem?.viewController, viewController === selected else { return }
         fitWindow(animated: view.window?.isVisible == true)
     }
 
@@ -165,7 +181,7 @@ final class SettingsTabs: NSTabViewController {
     /// up (the Apps pane calls it when its list grows or shrinks; the Mouse tab when its
     /// segment changes).
     func refit() {
-        guard let pane = tabViewItems[selectedTabViewItemIndex].viewController,
+        guard let pane = selectedItem?.viewController,
               let host = pane.children.first else { return }
         (host as? MouseTab)?.fit()
         pane.preferredContentSize = LazyPane.fitted(host.preferredContentSize)
@@ -173,7 +189,7 @@ final class SettingsTabs: NSTabViewController {
 
     private func fitWindow(animated: Bool) {
         guard let window = view.window,
-              let content = tabViewItems[selectedTabViewItemIndex].viewController else { return }
+              let content = selectedItem?.viewController else { return }
         let size = content.preferredContentSize
         guard size.height > 0 else { return }
         let maxHeight = (window.screen ?? NSScreen.main)?.visibleFrame.height ?? 900
