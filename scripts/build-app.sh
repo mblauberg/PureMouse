@@ -36,6 +36,13 @@ done
 version=$(resolve_version)
 build=$(resolve_build_number)
 identity=$(signing_identity)
+# Keep the linked SDK independent of the deployment target. Swift Build currently stamps the
+# triple's minimum as the SDK; native lets the Swift driver record the actual SDK (ADR 0020).
+sdk=$(xcrun --sdk macosx --show-sdk-path)
+sdk_version=$(xcrun --sdk macosx --show-sdk-version)
+[[ ${sdk_version%%.*} == <-> ]] && (( ${sdk_version%%.*} >= minimum_sdk )) ||
+    die "macOS SDK $minimum_sdk or later is required, found $sdk_version"
+build_flags=(--build-system native --sdk $sdk)
 if [[ $identity == - && ${PUREMOUSE_SIGN_IDENTITY:-} == - ]]; then
     echo "Signing ad hoc (PUREMOUSE_SIGN_IDENTITY=-), so permissions must be granted again"
 elif [[ $identity == - ]]; then
@@ -47,7 +54,7 @@ if (( universal )); then
     mkdir -p .build/slices
     for arch in arm64 x86_64; do
         for product in $products; do
-            flags=(-c release --product $product --triple $arch-apple-macosx$minimum $link)
+            flags=($build_flags -c release --product $product --triple $arch-apple-macosx$minimum $link)
             swift build $flags
             cp "$(swift build $flags --show-bin-path)/$product" .build/slices/$product-$arch
         done
@@ -60,10 +67,11 @@ if (( universal )); then
         strip -x $bin/$product
     done
 else
+    flags=($build_flags -c release --triple $(uname -m)-apple-macosx$minimum $link)
     for product in $products; do
-        swift build -c release --product $product $link
+        swift build $flags --product $product
     done
-    bin="$(swift build -c release --show-bin-path)"
+    bin="$(swift build $flags --show-bin-path)"
 fi
 
 assemble_bundle $bin $app $version $build
