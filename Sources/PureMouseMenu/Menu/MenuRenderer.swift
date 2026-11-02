@@ -34,7 +34,7 @@ struct MenuRenderer {
             item = NSMenuItem(title: plan.title, action: nil, keyEquivalent: plan.key)
         }
         if plan.alternate {
-            item.keyEquivalentModifierMask = .option
+            item.keyEquivalentModifierMask = plan.key.isEmpty ? .option : [.command, .option]
             item.isAlternate = true
         }
         if plan.checked { item.state = .on }

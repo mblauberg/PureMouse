@@ -84,7 +84,8 @@ struct MenuItem {
     /// Shown with a warning triangle in the checkmark column.
     var attention = false
     var enabled = true
-    /// Replaces the item before it while ⌥ is held (the renderer gives it the ⌥ modifier).
+    /// Replaces the item before it while ⌥ is held (the renderer adds ⌥ to its modifiers). AppKit
+    /// folds an alternate into the item before it only when both share the key equivalent.
     var alternate = false
     var action: MenuAction?
     var submenu: [MenuRow]?
@@ -137,7 +138,7 @@ enum MenuPlan {
         rows.append(.item(MenuItem(title: "Settings…", key: ",", action: .openSettings(nil))))
         rows.append(.item(MenuItem(title: "Quit PureMouse", key: "q", action: .quit)))
         // No key equivalent: macOS reserves ⌥⌘Q for "Quit and Keep Windows".
-        rows.append(.item(MenuItem(title: "Hide Menu Bar Icon", alternate: true, action: .hideMenuBarIcon)))
+        rows.append(.item(MenuItem(title: "Hide Menu Bar Icon", key: "q", alternate: true, action: .hideMenuBarIcon)))
         return rows
     }
 

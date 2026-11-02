@@ -28,8 +28,9 @@ lands with the text it changes.
   then what to do ("20% left. Charge it soon.").
 - **CLI.** Success is a sentence on stdout. A failure is one line on stderr led by `puremouse: `
   ("puremouse: cannot register: …") and a non-zero exit status.
-- **Key equivalents.** A menu item never claims one macOS reserves (⌥⌘Q is "Quit and Keep
-  Windows"); an alternate that has no natural one has none.
+- **Key equivalents.** An ⌥ alternate shares the key equivalent of the item it replaces, since
+  AppKit pairs them only then (Hide Menu Bar Icon is ⌥⌘Q under Quit's ⌘Q; the status menu has no
+  windows to keep).
 - **Spelling.** Australian English in docs and prose. UI text uses macOS's own names for macOS
   places ("Applications folder", "Login Items", "Privacy & Security").
 - **Accessibility labels** say what a control does in words; never read a separator ("·") or a

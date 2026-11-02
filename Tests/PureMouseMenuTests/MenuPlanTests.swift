@@ -38,7 +38,7 @@ struct MenuPlanTests {
         ---
         Settings… [⌘,, -> openSettings(nil)]
         Quit PureMouse [⌘q, -> quit]
-        Hide Menu Bar Icon [alternate, -> hideMenuBarIcon]
+        Hide Menu Bar Icon [⌘q, alternate, -> hideMenuBarIcon]
         """
 
     static func mouse(_ id: String, name: String = "MX Master 3S", connection: Status.Device.Connection = .receiver,
@@ -210,15 +210,16 @@ struct MenuPlanTests {
             """))
     }
 
-    /// macOS reserves ⌥⌘Q for "Quit and Keep Windows", so the alternate has no key equivalent.
-    @Test func hideMenuBarIconHasNoKeyEquivalent() throws {
+    /// AppKit folds an alternate into the item before it only when the key equivalents match, so
+    /// Hide Menu Bar Icon shares Quit's Q (shown as ⌥⌘Q while ⌥ is held).
+    @Test func hideMenuBarIconSharesQuitsKeyEquivalent() throws {
         let rows = MenuPlan.rows(for: Self.running(), option: false)
         let hide = try #require(rows.compactMap { row -> MenuItem? in
             if case let .item(item) = row, item.title == "Hide Menu Bar Icon" { return item }
             return nil
         }.first)
         #expect(hide.alternate)
-        #expect(hide.key.isEmpty)
+        #expect(hide.key == "q")
     }
 
     @Test func theSpokenHeaderReadsNoSeparatorDot() {
