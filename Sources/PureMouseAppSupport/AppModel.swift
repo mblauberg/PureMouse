@@ -127,6 +127,9 @@ public final class AppModel {
 
     public func cancelCapture() { capture.cancel() }
 
+    /// Asks the daemon to reload the config now (it also reloads on its own when the file changes).
+    public func reloadDaemonConfig() { link.reloadDaemonConfig() }
+
     // MARK: Config
 
     public var config: ConfigTree { store.config }

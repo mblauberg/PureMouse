@@ -95,7 +95,9 @@ Each level has one mechanism, and each label says what it reveals.
 - **⌥ alternates** use one modifier and are never the only way to do something: the detail line's
   facts are in Settings (pointer speed on Pointer, wheel mode on Scrolling, version in About), Show
   Log in Finder is in General › Advanced…, and Hide Menu Bar Icon is General › Show in menu bar.
-  The menu has no Reload Config: the config applies on save.
+  Reload Config is the exception: the config applies on save, so it stays as the ⌥ recovery. A
+  manual reload re-runs adoption retries and re-arms the permission poll, which saving identical
+  bytes does not.
 
 ## Permissions and first run
 
