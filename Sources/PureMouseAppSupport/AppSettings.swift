@@ -167,7 +167,7 @@ extension ConfigTree {
         let scope = Self.appScope(app)
         var parts: [String] = []
         let choice = thumbWheelChoice(at: scope + ["thumbWheel"])
-        let direction = bool(scope + ["thumbWheel", "reversed"]).map { $0 ? "reversed" : "normal direction" }
+        let direction = bool(scope + ["thumbWheel", "reversed"]).map { $0 ? "directions swapped" : "directions not swapped" }
         switch (choice != .inherit, direction) {
         case (true, let direction?): parts.append("Thumb wheel: \(choice.label), \(direction)")
         case (true, nil): parts.append("Thumb wheel: \(choice.label)")

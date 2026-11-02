@@ -330,9 +330,9 @@ private func resolved(_ wheel: Config.ThumbWheel) -> Resolved {
     #expect(config.appSummary("e.f") == "No custom settings")
     // Direction alone is an override too.
     let directions = try tree(#"{"apps": {"a.b": {"thumbWheel": {"reversed": true}}, "c.d": {"thumbWheel": {"reversed": false}}, "e.f": {"thumbWheel": {"action": "tabs", "reversed": true}}}}"#)
-    #expect(directions.appSummary("a.b") == "Thumb wheel: Reversed")
-    #expect(directions.appSummary("c.d") == "Thumb wheel: Normal direction")
-    #expect(directions.appSummary("e.f") == "Thumb wheel: Switch Tabs, reversed")
+    #expect(directions.appSummary("a.b") == "Thumb wheel: Directions swapped")
+    #expect(directions.appSummary("c.d") == "Thumb wheel: Directions not swapped")
+    #expect(directions.appSummary("e.f") == "Thumb wheel: Switch Tabs, directions swapped")
 }
 
 @Test func customScrollingSaysWhatTheAppsScrollingDoes() throws {
