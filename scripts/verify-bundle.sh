@@ -9,8 +9,8 @@
 #
 #   --release  also: the version is a release version (X.Y.Z or X.Y.Z-rc.N), and when
 #              PUREMOUSE_TEAM_ID is set every component is signed by a Developer ID Application
-#              identity of that team. When the variable is unset, scripts/release.env (if present)
-#              sets it; set but empty means no team, and only the base checks run.
+#              identity of that team. A variable already set wins; otherwise scripts/release.env
+#              sets it. Empty means no team, and only the base checks run.
 set -euo pipefail
 source "${0:A:h}/lib.zsh"
 
@@ -23,9 +23,7 @@ for argument; do
     esac
 done
 [[ -n $app && -d $app ]] || die "usage: verify-bundle.sh <app> [--release]"
-if (( release )) && [[ -z ${PUREMOUSE_TEAM_ID+set} && -f $root/scripts/release.env ]]; then
-    source $root/scripts/release.env
-fi
+(( ! release )) || load_env_file $root/scripts/release.env
 team=${PUREMOUSE_TEAM_ID:-}
 [[ -z $team || $team =~ '^[A-Z0-9]{10}$' ]] || die "PUREMOUSE_TEAM_ID '$team' is not a 10-character team ID"
 

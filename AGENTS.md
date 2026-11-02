@@ -47,18 +47,20 @@ one. This file covers how to work on it safely.
   watches the file and its directory, reloading when the bytes change) or with
   `launchctl kill HUP gui/$UID/io.github.mblauberg.puremouse`, no rebuild. Never edit the live
   config to test: run a dev daemon against a copy.
-- Other Macs: `./scripts/package.sh` builds the universal release zip. On a test Mac over SSH,
+- Other Macs: `scripts/release.sh --dry-run --version 0.0.0-ci.local` builds the universal dmg (for a
+  test Mac, `PUREMOUSE_SIGN_IDENTITY=PureMouse` first). On a test Mac over SSH,
   drive the installed app with `puremouse register`/`unregister`. Over SSH nobody can answer a
   Gatekeeper dialog or grant permissions, so leave those to whoever is at the Mac. Machine-specific
   notes belong in the uncommitted `CLAUDE.local.md`.
 - Releases: tag `vX.Y.Z` on a clean `main` (the bundle version is the tag without the `v`), run
-  `PUREMOUSE_SIGN_IDENTITY=PureMouse ./scripts/package.sh` on a Mac holding that identity (the
-  identity order is in `docs/development.md`, Signing), and attach
-  `.build/dist/PureMouse-X.Y.Z.zip` to a GitHub release with its SHA-256. A release signed by any
-  other identity makes every user grant permissions again. CI (`.github/workflows/ci.yml`) builds,
-  tests and bundles ad hoc, verifies the signatures, checks the size budget
-  (`scripts/size-budget.env`) and runs `scripts/tests/run.sh` on each push to `main` and each pull
-  request; its actions are pinned to full SHAs.
+  `PUREMOUSE_SIGN_IDENTITY=PureMouse ./scripts/release.sh` on a Mac holding that identity (the
+  identity order is in `docs/development.md`, Signing), and attach `.build/dist/PureMouse-X.Y.Z.dmg`
+  and `SHA256SUMS` to a GitHub release. `release.sh` refuses an untagged or dirty tree and notarises
+  only when all three `NOTARY_*` variables are set (ADR 14). A release signed by any other identity
+  makes every user grant permissions again. CI (`.github/workflows/ci.yml`) builds and tests, runs
+  `release.sh --dry-run` (universal bundle signed ad hoc, signatures verified, both size budgets in
+  `scripts/size-budget.env` checked, dmg and checksum made) and `scripts/tests/run.sh` on each push
+  to `main` and each pull request, and uploads the dmg; its actions are pinned to full SHAs.
 - The icon is an Icon Composer document, `assets/AppIcon.icon`: a top-down mouse in three
   monochrome glass layers (buttons with the centre seam, palm, floating wheel), grey fills with
   light and dark specializations, on the system's light/dark background, so macOS 26+ renders
@@ -322,7 +324,8 @@ one. This file covers how to work on it safely.
   permission grants are keyed to identifier plus certificate, which also holds on Macs that do not
   trust the certificate; an ad-hoc signature makes macOS drop them on every install.
   `scripts/verify-bundle.sh` checks every component and every architecture of it. install.sh
-  stops the agent before replacing the binary.
+  and uninstall.sh stop every component's agent and nested process (the names are in
+  `components`, as `id:path:executable`) before touching the app, signalling only this user's.
 - Gatekeeper: launching a quarantined copy parks it at `_dyld_start` behind an on-screen dialog.
   On a test Mac, later launches at that path stayed parked even after clearing the flag and putting
   a fresh copy there (presumably until the dialog is answered). Clear the flag before the first

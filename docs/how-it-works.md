@@ -82,7 +82,7 @@ Sources/PureMouseMenu/  the menu bar app (AppKit status item and menu, SwiftUI S
 Sources/HIDPPTesting/   test support only: in-memory transport and stateful HID++ mouse from probe dumps
 Tests/                  request handling and device behaviour against fakes, framing and event parsing,
                         config, gestures, scroll maths, config editing, the menu's rows
-scripts/                build, install, uninstall, package, signing identity, icon
+scripts/                build, install, uninstall, release, signing identity, icon
 assets/                 app icon (Icon Composer source, compiled icon, README images), menu bar glyph
 ```
 

@@ -1,4 +1,5 @@
-# Shared by the build, sign and verify scripts: source it, do not run it.
+# Shared by the build, sign, verify, install, uninstall and release scripts and their tests: source
+# it, do not run it.
 #
 # Bundle layout, identifiers, the one Info.plist writer, version handling and identity choice live
 # here so that every script agrees on them. The identifiers are frozen: macOS keys permission grants
@@ -11,12 +12,13 @@ minimum=14.0
 copyright="Copyright © 2026 Michael Blauberg. MIT licence."
 category=public.app-category.utilities
 
-# Every signed bundle as "identifier:path inside the app" ("." is the app itself), innermost first:
-# sign-bundle.sh signs in this order and verify-bundle.sh checks each one. A new nested bundle is one
-# more entry, before the bundle that contains it. Read entries with component_id and component_path.
+# Every signed bundle as "identifier:path inside the app:executable" ("." is the app itself),
+# innermost first: sign-bundle.sh signs in this order, verify-bundle.sh checks each one and
+# stop_agents stops the nested ones' processes. A new nested bundle is one more entry, before the
+# bundle that contains it. Read entries with component_id, component_path and component_executable.
 components=(
-    "$menu_label:Contents/Library/LoginItems/PureMouse Menu.app"
-    "$label:."
+    "$menu_label:Contents/Library/LoginItems/PureMouse Menu.app:PureMouseMenu"
+    "$label:.:puremouse"
 )
 
 die() {
@@ -31,12 +33,58 @@ component_id() {
 
 # component_path <app> <component>: where that entry's bundle sits in <app>.
 component_path() {
-    print -r -- ${${:-$1/${2#*:}}%/.}
+    print -r -- ${${:-$1/${${2#*:}%:*}}%/.}
+}
+
+# component_executable <component>: the name of that entry's executable (its process name).
+component_executable() {
+    print -r -- ${1##*:}
 }
 
 # menu_component: the `components` entry of the nested menu bar app.
 menu_component() {
     print -r -- ${(M)components:#$menu_label:*}
+}
+
+# Where install.sh puts PureMouse.app and uninstall.sh takes it from. PUREMOUSE_INSTALL_DIR exists
+# for the script tests, which must never touch /Applications.
+install_dir=${PUREMOUSE_INSTALL_DIR:-/Applications}
+
+# stop_agents <consequence>: boots out every component's login agent (the menu bar app's first, the
+# daemon's last; a component without an agent is simply not loaded), ends this user's nested apps
+# started some other way (the Finder starts the menu bar app without launchd) and waits until none
+# is running, so their files can be replaced or removed. bootout returns before the old instance
+# has finished restoring the mouse, and replacing a running binary can get it killed for an
+# invalid signature first. Otherwise it dies with "PureMouse is still running, so <consequence>"
+# and the command that would stop it. Only this user's processes count: with fast user switching
+# another account's menu bar app is none of this script's business. PUREMOUSE_STOP_TENTHS (default
+# 50) is how many tenths of a second to wait, for the script tests.
+stop_agents() {
+    local component executable loaded running
+    local nested=()
+    for component in $components; do
+        launchctl bootout gui/$UID/$(component_id $component) 2>/dev/null || true
+        [[ ${${component#*:}%:*} == . ]] || nested+=$(component_executable $component)
+    done
+    for executable in $nested; do
+        pkill -x -u $UID $executable 2>/dev/null || true
+    done
+    local _
+    for _ in {1..${PUREMOUSE_STOP_TENTHS:-50}}; do
+        loaded= running=
+        for component in $components; do
+            ! launchctl print gui/$UID/$(component_id $component) >/dev/null 2>&1 || loaded=$(component_id $component)
+        done
+        for executable in $nested; do
+            ! pgrep -x -u $UID $executable >/dev/null || running=$executable
+        done
+        [[ -n $loaded || -n $running ]] || return 0
+        sleep 0.1
+    done
+    if [[ -n $loaded ]]; then
+        die "PureMouse is still running, so $1; try: launchctl bootout gui/$UID/$loaded"
+    fi
+    die "PureMouse is still running, so $1; try: pkill -x -u $UID $running"
 }
 
 # plist_value <plist> <key>: a top-level value, or a non-zero status when the key is missing.
@@ -145,10 +193,17 @@ assemble_bundle() {
 make_menu_bundle() {
     local binary=$1 menu_app=$2 identifier=$3 version=$4 build=$5
     mkdir -p "$menu_app/Contents/"{MacOS,Resources}
-    cp $binary "$menu_app/Contents/MacOS/PureMouseMenu"
+    local executable=$(component_executable "$(menu_component)")
+    cp $binary "$menu_app/Contents/MacOS/$executable"
     cp $root/assets/{Assets.car,AppIcon.icns,AppIcon.png,AppIcon-dark.png,MenuBarIcon.pdf} \
         "$menu_app/Contents/Resources/"
-    write_info_plist "$menu_app/Contents/Info.plist" $identifier PureMouseMenu $version $build menu
+    write_info_plist "$menu_app/Contents/Info.plist" $identifier $executable $version $build menu
+}
+
+# developer_id_signed <codesign -dvv output>: whether a Developer ID Application identity signed it.
+# The one test for whether a build is a Developer ID build.
+developer_id_signed() {
+    print -r -- $1 | grep '^Authority=Developer ID Application: ' >/dev/null
 }
 
 # check_release_signature <codesign -dvv output> <team ID> <component>
@@ -156,7 +211,7 @@ make_menu_bundle() {
 # text rather than running codesign, so tests can feed it fixtures.
 check_release_signature() {
     local text=$1 team=$2 name=$3 ok=0
-    if ! print -r -- $text | grep '^Authority=Developer ID Application: ' >/dev/null; then
+    if ! developer_id_signed "$text"; then
         print -u2 -- "$name: not signed by a Developer ID Application identity"
         ok=1
     fi
@@ -172,4 +227,54 @@ check_release_signature() {
 # Apple's root (the OIDs mark the Developer ID intermediate and leaf), for `codesign --verify -R`.
 developer_id_requirement() {
     print -r -- "anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = \"$1\""
+}
+
+# load_env_file <file>: sources a `NAME=value` settings file (scripts/*.env), except that a variable
+# already set in the environment, even to nothing, keeps its value.
+load_env_file() {
+    local name
+    local -A kept
+    for name in ${(f)"$(sed -n 's/^\([A-Z_][A-Z0-9_]*\)=.*/\1/p' $1)"}; do
+        [[ -z ${(P)name+x} ]] || kept[$name]=${(P)name}
+    done
+    source $1
+    for name in ${(k)kept}; do
+        typeset -g $name=$kept[$name]
+    done
+}
+
+# with_dmg_mounted <dmg> <command> [args...]: attaches the dmg read-only, out of sight of the Finder,
+# runs `<command> <mount point> [args...]` and returns its status. The mount point is detached
+# (forced if need be) and removed however this ends: the command failing or exiting the script, or
+# HUP, INT or TERM, which the cleanup is registered for before anything is attached. Do not nest it.
+with_dmg_mounted() {
+    setopt localtraps   # the caller's own traps come back when this returns
+    local dmg=$1 command=$2 result=0
+    shift 2
+    dmg_mount_point=$(mktemp -d) || return 1
+    trap 'detach_dmg' EXIT
+    trap 'detach_dmg; exit 129' HUP
+    trap 'detach_dmg; exit 130' INT
+    trap 'detach_dmg; exit 143' TERM
+    if hdiutil attach -nobrowse -readonly -noverify -mountpoint $dmg_mount_point $dmg >/dev/null; then
+        $command $dmg_mount_point "$@" || result=$?
+    else
+        print -u2 -- "could not mount ${dmg:t}"
+        result=1
+    fi
+    detach_dmg || result=1   # an image left attached is a failure even when the command passed
+    return $result
+}
+
+# detach_dmg: with_dmg_mounted's cleanup; harmless (and successful) when nothing is mounted, and
+# non-zero when the image could not be detached.
+detach_dmg() {
+    [[ -n ${dmg_mount_point:-} ]] || return 0
+    local mount=$dmg_mount_point
+    dmg_mount_point=
+    if ! hdiutil detach -quiet $mount 2>/dev/null && ! hdiutil detach -quiet -force $mount 2>/dev/null; then
+        print -u2 -- "could not unmount $mount; detach it with: hdiutil detach -force $mount"
+        return 1
+    fi
+    rmdir $mount 2>/dev/null || true
 }

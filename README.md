@@ -35,7 +35,7 @@ the mouse is idle, so is PureMouse.
 
 | | PureMouse (main), as measured |
 |---|---|
-| Download | 5.6 MB zip, 8.4 MB installed; universal (Apple silicon and Intel) |
+| Download | 5.7 MB dmg, 8.3 MB installed; universal (Apple silicon and Intel) |
 | Memory | Background process: 4-6 MB. Menu bar app: about 10 MB fresh, about 14 MB once its menu has been opened (medians of 5 on macOS 27.0.1) |
 | Idle CPU | Zero in normal use: no polling, no timers, no wake-ups* |
 | Processes | Two: the background process and an optional menu bar app |
@@ -144,8 +144,8 @@ to an issue is the quickest way to get it supported.
 
 Requires macOS 14 or later.
 
-1. Download `PureMouse-<version>.zip` from the
-   [latest release](https://github.com/mblauberg/PureMouse/releases/latest), unzip it and move
+1. Download `PureMouse-<version>.dmg` from the
+   [latest release](https://github.com/mblauberg/PureMouse/releases/latest), open it and drag
    `PureMouse.app` to Applications.
 2. PureMouse is signed but not notarised, so macOS blocks its first launch. Clear the quarantine
    flag **before** opening it (or see [Opening a blocked app](docs/troubleshooting.md#opening-a-blocked-app)):
