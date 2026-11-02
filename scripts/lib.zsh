@@ -146,19 +146,21 @@ signing_identity() {
 
 # write_info_plist <file> <identifier> <executable> <version> <build> daemon|menu|settings
 # The daemon's bundle is background-only; the menu app and the Settings helper have a display name,
-# and the helper is a regular app (Dock icon, Cmd-Tab). The menu app also has the allocator setting
-# its agent sets (LoginItem.menuDefinition), for Finder launches. Nothing else differs.
+# and the helper is a regular app (Dock icon, Cmd-Tab). Both have the allocator setting the menu's
+# agent sets (LoginItem.menuDefinition): the menu app for Finder launches, the helper for the opens
+# that do not come from the menu app (the daemon's, the Finder's). Nothing else differs.
 write_info_plist() {
     local file=$1 identifier=$2 executable=$3 version=$4 build=$5 role=$6
     local display= background= environment= element='<true/>'
+    local allocator=$'\n  <key>LSEnvironment</key><dict><key>MallocSpaceEfficient</key><string>1</string></dict>'
     case $role in
         daemon) background=$'\n  <key>LSBackgroundOnly</key><true/>' ;;
         menu)
             display=$'\n  <key>CFBundleDisplayName</key><string>PureMouse</string>'
-            environment=$'\n  <key>LSEnvironment</key><dict><key>MallocSpaceEfficient</key><string>1</string></dict>'
-            ;;
+            environment=$allocator ;;
         settings)
             display=$'\n  <key>CFBundleDisplayName</key><string>PureMouse Settings</string>'
+            environment=$allocator
             element='<false/>' ;;
         *) die "write_info_plist: role must be daemon, menu or settings, not '$role'" ;;
     esac

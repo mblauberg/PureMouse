@@ -71,8 +71,10 @@ test_settings_plist_is_a_regular_app_with_its_own_identifier() {
     local menu="$(menu_of $app)/Contents/Info.plist" settings="$(settings_of $app)/Contents/Info.plist"
     plutil -lint -s "$settings"
     local differing=$(diff "$menu" "$settings" | sed -n 's/^[<>] *<key>\([^<]*\)<.*/\1/p' | sort -u)
-    local expected=$'CFBundleDisplayName\nCFBundleExecutable\nCFBundleIdentifier\nLSEnvironment\nLSUIElement'
+    local expected=$'CFBundleDisplayName\nCFBundleExecutable\nCFBundleIdentifier\nLSUIElement'
     [[ $differing == $expected ]] || { print -u2 -- "differing keys: ${(f)differing}"; return 1; }
+    # Its own allocator setting, for the opens that do not pass on the menu app's environment.
+    [[ $(/usr/libexec/PlistBuddy -c "Print :LSEnvironment:MallocSpaceEfficient" "$settings") == 1 ]] || return 1
     [[ $(plist_value "$settings" CFBundleIdentifier) == io.github.mblauberg.puremouse.settings ]]
     [[ $(plist_value "$settings" LSUIElement) == false ]]
     [[ $(plist_value "$settings" CFBundleDisplayName) == "PureMouse Settings" ]]

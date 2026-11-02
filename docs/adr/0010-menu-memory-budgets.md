@@ -24,10 +24,10 @@ dirty freed malloc memory. An earlier target of 10 MB is below that floor.
   or five times, at most 11 MB, and the helper itself at most 37 MB with its window open. Its cold
   start, from the menu being asked to the window on screen, is budgeted at the median plus half,
   rounded up to 100 ms (800 ms).
-- `MallocSpaceEfficient=1` is set for the menu app (launchd environment and `LSEnvironment`). The
-  gate was the baseline build against the branch build, 5 runs each: 14.08 MB after three opens
-  against 19.86 (0.71 times, the rule is at most 0.75), and 10.14 MB fresh against 13.83
-  (`docs/companion.md`, Footprint).
+- `MallocSpaceEfficient=1` is set for the menu app (launchd environment and `LSEnvironment`) and the
+  Settings helper (`LSEnvironment`). The gate was the baseline build against the branch build, 5
+  runs each: 14.08 MB after three opens against 19.86 (0.71 times, the rule is at most 0.75), and
+  10.14 MB fresh against 13.83 (`docs/companion.md`, Footprint).
 - `NSMenu` stays.
 
 ## Alternatives rejected

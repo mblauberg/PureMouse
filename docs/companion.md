@@ -232,8 +232,8 @@ read them as "about" and repeat the rig after each macOS release. The bare AppKi
 
 The shipped column is the rig, which passes on the Info.plist's `LSEnvironment` (the agent's plist
 sets the same variable); the other column is the same build without it (same Mac, same day). The
-helper has no variable of its own: LaunchServices passes the menu app's environment on to the app
-it opens, so the helper the menu opens runs with it too. The cold start's slowest run was each
+helper's Info.plist sets the variable too, so it has it however it is opened (LaunchServices also
+passes the menu app's environment on to the app it opens). The cold start's slowest run was each
 time the first (1154 and 972 ms).
 
 What the numbers say:

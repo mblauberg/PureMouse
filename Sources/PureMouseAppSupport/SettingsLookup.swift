@@ -49,8 +49,8 @@ public enum SettingsLookup {
 
     /// The development overrides the helper inherits, so that it edits the same fixture config
     /// and talks to the same stub daemon as the menu bar app that opened it. Nothing else is
-    /// named here; LaunchServices supplies the rest (the opener's, as observed on macOS 27, which is
-    /// how the helper gets the menu app's `MallocSpaceEfficient`).
+    /// named here; LaunchServices supplies the rest (the opener's, as observed on macOS 27, plus the
+    /// helper's own `LSEnvironment`).
     public static func environment(from environment: [String: String]) -> [String: String] {
         environment.filter { $0.key.hasPrefix("PUREMOUSE_") }
     }
