@@ -161,7 +161,7 @@ stop_menu() {
 write_status() {  # battery percent
     cat > $fx/status.json.tmp <<JSON
 {
-  "schema": 1, "pid": $stub_pid, "startedAt": "2026-01-01T00:00:00Z", "version": "rig",
+  "schema": 2, "pid": $stub_pid, "startedAt": "2026-01-01T00:00:00Z", "version": "rig",
   "running": true, "paused": false,
   "permissions": { "accessibility": true, "inputMonitoring": true },
   "logiOptionsRunning": false,
@@ -170,7 +170,8 @@ write_status() {  # battery percent
     "id": "0-1", "name": "MX Master 3S", "connection": "receiver", "online": true,
     "battery": { "percent": $1, "level": "good", "charging": false },
     "dpi": 1600, "dpiSteps": [800, 1600, 3200], "wheelMode": "ratchet",
-    "hasSmartShift": true, "hasThumbWheel": true,
+    "model": "mb03440910000", "kind": "mouse",
+    "capabilities": { "dpi": true, "smartShift": true, "smoothScroll": true, "thumbWheel": true, "battery": true },
     "controls": [{ "cid": 83, "name": "back" }, { "cid": 86, "name": "forward" }, { "cid": 195, "name": "gesture" }]
   }]
 }
