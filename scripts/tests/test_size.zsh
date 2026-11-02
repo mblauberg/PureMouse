@@ -38,3 +38,25 @@ test_dmg_within_budget_passes_whatever_the_installed_budget() {
     head -c 5000 /dev/zero > $dmg
     DMG_MAX_BYTES=5000 INSTALLED_MAX_BYTES=1 scripts/check-size.sh $dmg >/dev/null
 }
+
+# The budgets are the measurements plus 15%, rounded up to 0.1 MB, and the README quotes the
+# measurements rounded to 0.1 MB: none of the three is maintained by hand.
+test_budgets_and_the_readme_follow_the_measured_sizes() {
+    local INSTALLED_MEASURED_BYTES DMG_MEASURED_BYTES INSTALLED_MAX_BYTES DMG_MAX_BYTES
+    source $root/scripts/size-budget.env
+    local problems=() name measured tenths
+    for name in INSTALLED DMG; do
+        measured=${(P)${:-${name}_MEASURED_BYTES}}
+        (( (measured * 115 + 9999999) / 10000000 * 100000 == ${(P)${:-${name}_MAX_BYTES}} )) ||
+            problems+="${name}_MAX_BYTES is not ${name}_MEASURED_BYTES plus 15%, rounded up to 0.1 MB"
+    done
+    local -A mb
+    for name in INSTALLED DMG; do
+        measured=${(P)${:-${name}_MEASURED_BYTES}}
+        tenths=$(( (measured + 50000) / 100000 ))
+        mb[$name]="$(( tenths / 10 )).$(( tenths % 10 ))"
+    done
+    grep -q "^| Download | ${mb[DMG]} MB dmg, ${mb[INSTALLED]} MB installed;" $root/README.md ||
+        problems+="the README's Download row is not '${mb[DMG]} MB dmg, ${mb[INSTALLED]} MB installed'"
+    (( ! $#problems )) || { print -u2 -- ${(F)problems}; return 1; }
+}

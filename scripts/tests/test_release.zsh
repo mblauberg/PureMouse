@@ -102,7 +102,10 @@ release_flow() {
     : ${flow_tags=v1.2.3}
     release_repo_init
     stub_build_app $repo
+    # The verifier passes, except that FAKE_MOUNTED_BUNDLE_FAILS makes it reject the bundle inside
+    # the mounted dmg (the only one named by an absolute path).
     print -r -- '#!/bin/zsh
+[[ -z ${FAKE_MOUNTED_BUNDLE_FAILS:-} || $1 != /* ]] || { print -u2 "verify: the bundle in the dmg is broken"; exit 1; }
 exit 0' > $repo/scripts/verify-bundle.sh
     release_repo_commit $flow_tags
     fake_command codesign "[[ \$* == *-dvv* ]] && cat $fixtures/${2:-codesign-developer-id.txt}
@@ -301,4 +304,26 @@ test_release_refuses_when_git_cannot_report_the_tree_status() {
     release_repo v1.2.3
     print garbage > $repo/.git/index
     expect_release_refused $repo 'git status failed'
+}
+
+test_release_stops_when_the_bundle_in_the_dmg_does_not_verify() {
+    local repo output
+    release_flow PureMouse codesign-self-signed.txt
+    if output=$(FAKE_MOUNTED_BUNDLE_FAILS=1 $repo/scripts/release.sh 2>&1); then return 1; fi
+    [[ $output == *'the bundle in the dmg is broken'* && $output == *"the dmg's PureMouse.app does not verify"* ]] ||
+        { print -u2 -- $output; return 1; }
+    expect "no checksum is published" test ! -e $repo/.build/dist/SHA256SUMS
+    expect "the sizes were not checked after it" test -z "$(print -r -- $output | grep 'dmg size')"
+}
+
+test_release_clears_the_images_an_earlier_run_left_beside_its_checksum() {
+    local repo output
+    release_flow PureMouse codesign-self-signed.txt
+    output=$($repo/scripts/release.sh --dry-run --version 0.0.0-ci.abc1234 2>&1) || { print -u2 -- $output; return 1; }
+    expect "the dry run made its dmg" test -f $repo/.build/dist/PureMouse-0.0.0-ci.abc1234.dmg
+    rm $repo/build-args.log   # the stub build's log, which would make the tree unclean
+    output=$($repo/scripts/release.sh 2>&1) || { print -u2 -- $output; return 1; }
+    local images=($repo/.build/dist/*.dmg(N:t))
+    [[ $images == PureMouse-1.2.3.dmg ]] || { print -u2 -- "dist holds: $images"; return 1; }
+    [[ $(awk '{print $2}' $repo/.build/dist/SHA256SUMS) == PureMouse-1.2.3.dmg ]] || { print -u2 -- "$(<$repo/.build/dist/SHA256SUMS)"; return 1; }
 }

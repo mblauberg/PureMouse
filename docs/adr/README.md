@@ -24,7 +24,7 @@ Consequences. Keep each to about 40 lines.
 | [11](0011-shared-logic-library.md) | Accepted, not built | A shared logic library and an `AppModel` split |
 | [12](0012-multi-device-settings-scopes.md) | Accepted, not built | Multi-device Settings: path-prefix scopes with per-leaf fallback |
 | [13](0013-silhouettes.md) | Accepted, not built | Silhouettes as bundled vector PDFs plus a Swift callout table |
-| [14](0014-signing-identity-is-configuration.md) | Accepted (notarisation not built) | Signing identity is configuration; hardened runtime always |
+| [14](0014-signing-identity-is-configuration.md) | Accepted (notarisation built, not yet run with real credentials) | Signing identity is configuration; hardened runtime always |
 | [15](0015-protected-release-workflow.md) | Accepted, not built | Releases are built by a protected GitHub Actions workflow |
 | [16](0016-daemon-owns-its-log.md) | Accepted | The daemon owns its log file |
 | [17](0017-github-releases-is-the-changelog.md) | Accepted | GitHub Releases is the changelog |

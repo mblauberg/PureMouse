@@ -111,6 +111,10 @@ app=.build/app/PureMouse.app
 dist=.build/dist
 dmg=$dist/PureMouse-$version.dmg
 
+# Only this run's artefacts may sit beside its checksum: clear what an earlier run left.
+mkdir -p $dist
+rm -rf -- .build/notary $dist/PureMouse-*.dmg(N) $dist/SHA256SUMS
+
 scripts/build-app.sh $build_options
 scripts/verify-bundle.sh $app $release_opts
 scripts/check-size.sh $app
@@ -130,8 +134,6 @@ else
     echo "no notary credentials: skipping notarisation"
 fi
 
-mkdir -p $dist
-rm -f $dist/SHA256SUMS
 scripts/make-dmg.sh $app $dmg $dmg_options
 if (( notarizing )); then
     notarize $dmg
