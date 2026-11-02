@@ -24,6 +24,7 @@ enum DevHooks {
     #if DEBUG
     private static func screenshots(app: AppController) {
         let environment = ProcessInfo.processInfo.environment
+        // The helper's `PureMouseSettingsUI.DevHooks` reads the same variable the same way.
         switch environment["PUREMOUSE_DEV_APPEARANCE"] {
         case "light": NSApp.appearance = NSAppearance(named: .aqua)
         case "dark": NSApp.appearance = NSAppearance(named: .darkAqua)
