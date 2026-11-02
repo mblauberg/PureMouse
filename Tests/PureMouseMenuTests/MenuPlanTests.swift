@@ -276,4 +276,14 @@ struct MenuPlanTests {
         state.dpiPresets = [750]
         #expect(lines(state).contains("  750 DPI [on, -> setDPI(750)]"))
     }
+
+    /// Start PureMouse starts it now and leaves Open at login as it is: `start`, never `register`.
+    @Test func startPureMouseRunsStartNotRegister() throws {
+        let start = try #require(MenuPlan.rows(for: MenuState(), option: false).compactMap { row -> MenuAction? in
+            if case let .item(item) = row, item.title == "Start PureMouse" { return item.action }
+            return nil
+        }.first)
+        #expect(start.command == .start)
+        #expect(MenuAction.setPaused(true).command == nil)
+    }
 }

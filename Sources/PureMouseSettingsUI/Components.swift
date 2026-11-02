@@ -151,7 +151,7 @@ struct PaneBanners: View {
             Section {
                 Banner(title: "PureMouse is off", message: "The mouse works as it does without PureMouse. Changes here apply when it starts.",
                        symbol: "pause.circle.fill", tint: .secondary) {
-                    Button("Start PureMouse") { model.perform(.register) }
+                    Button("Start PureMouse") { model.perform(LoginAction.running(true).command) }
                 }
             }
         }
