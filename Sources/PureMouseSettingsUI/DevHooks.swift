@@ -8,6 +8,7 @@ import PureMouseAppSupport
 /// appearance. On Mouse › Buttons, `PUREMOUSE_DEV_PICKER=<button>` opens a button's action picker
 /// and `PUREMOUSE_DEV_SHORTCUT=<button>` its shortcut sheet. On the Apps pane,
 /// `PUREMOUSE_DEV_APP=<bundle id>` opens (or adds) that app's settings.
+/// `PUREMOUSE_DEV_CAPTURE=<file.png>` saves the windows to that file and quits (`DevCapture`).
 @MainActor
 public enum DevHooks {
     public static func run(show: (SettingsPane) -> Void) {
@@ -23,6 +24,7 @@ public enum DevHooks {
             // A launch from a terminal is not allowed to take focus cooperatively.
             NSApp.activate(ignoringOtherApps: true)
         }
+        DevCapture.schedule(environment)
     }
 }
 #endif
