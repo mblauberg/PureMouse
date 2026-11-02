@@ -38,7 +38,8 @@ and a change to this page lands with the text it changes.
   verb so it can't read as a state ("Pause PureMouse" / "Resume PureMouse").
 - **Segments** are nouns, all text or all symbols.
 - **Errors.** Shown next to the problem: what failed, then one sentence on what to do. Raw command
-  output and paths go to the log, not the alert.
+  output and paths go to the log, not the alert. A config error names the bad value and where it
+  is ("buttons.back: unknown action “explode”") and never lists the choices.
 - **Empty states.** What's missing, then what to do: "No mouse found. Turn on Bluetooth or plug in
   the receiver."
 - **Permissions.** Active voice, one specific sentence on what it's for and what stops working
