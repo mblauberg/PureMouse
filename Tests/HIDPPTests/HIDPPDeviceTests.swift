@@ -94,6 +94,8 @@ struct HIDPPDeviceTests {
     @Test func closeFailsPendingAndQueuedWithoutSendingThem() async throws {
         let transport = FakeTransport()
         let device = HIDPPDevice(interface: transport, index: directDeviceIndex)
+        // Long enough that only `close` ends the first request, however slow the runner.
+        device.timeout = .seconds(10)
         let first = Task { try await device.request(featureIndex: 1, function: 0) }
         try await waitForSends(1, on: transport)
         let second = Task { try await device.request(featureIndex: 2, function: 0) }
