@@ -1,5 +1,6 @@
 import AppKit
 import PureMouseAppSupport
+import PureMouseKit
 
 /// A running copy of the Settings helper, as `SettingsLauncher` sees it.
 @MainActor
@@ -25,6 +26,8 @@ final class SettingsLauncher {
         var find: () -> Result<SettingsLookup.Helper, SettingsLookup.Failure>
         /// Writes the `ShowRequest` and rings the doorbell.
         var post: (SettingsPane?) -> Void
+        /// Leaves the quit stamp a helper that starts late reads (`SettingsRequest.markQuit`).
+        var markQuit: () -> Void
         /// Opens the app; the completion runs on the main actor with what LaunchServices returned.
         var open: (URL, @escaping @MainActor ((any RunningHelper)?, (any Error)?) -> Void) -> Void
         /// The running copies of the app at this location.
@@ -37,7 +40,8 @@ final class SettingsLauncher {
 
     /// How long to wait before opening again when the first open found only a quitting helper.
     static let retryDelay: TimeInterval = 0.3
-    /// How long Quit PureMouse waits for an open under way before going on without it.
+    /// How long Quit PureMouse waits for an open under way before going on without it. A helper
+    /// that open starts later reads the quit stamp and quits at once.
     static let quitWait: TimeInterval = 3
 
     private let system: System
@@ -112,10 +116,12 @@ final class SettingsLauncher {
 
     /// Quit PureMouse: quits the helper, which saves its edits and cancels a select by pressing as
     /// it goes, then runs `done`. An open still under way is waited for (up to `quitWait`) and the
-    /// helper it starts is quit too, so none is left running once PureMouse stops. Only the copy
-    /// this app opens, found by its location: a development copy never quits an installed one.
+    /// helper it starts is quit too; one it starts after that finds the quit stamp and quits
+    /// itself. So none is left running once PureMouse stops. Only the copy this app opens, found by
+    /// its location: a development copy never quits an installed one.
     func quit(then done: @escaping @MainActor () -> Void) {
         quitting = true
+        system.markQuit()
         quitRunning()
         guard pending > 0 else { return done() }
         var finished = false
@@ -153,6 +159,7 @@ extension SettingsLauncher.System {
                                 exists: { FileManager.default.isExecutableFile(atPath: $0.path) })
         },
         post: { ShowRequest.post(pane: $0) },
+        markQuit: { SettingsRequest.markQuit() },
         open: { app, completion in
             NSApp.yieldActivation(toApplicationWithBundleIdentifier: SettingsLookup.bundleIdentifier)
             let configuration = NSWorkspace.OpenConfiguration()

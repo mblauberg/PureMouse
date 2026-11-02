@@ -23,11 +23,13 @@ final class FakeSystem {
     var running: [Helper] = []
     var delayed: [(TimeInterval, @MainActor () -> Void)] = []
     var alerts: [String] = []
+    var quitMarks = 0
 
     var system: SettingsLauncher.System {
         SettingsLauncher.System(
             find: { [app] in .success(.app(app)) },
             post: { [unowned self] in posts.append($0) },
+            markQuit: { [unowned self] in quitMarks += 1 },
             open: { [unowned self] _, completion in opens.append(completion) },
             running: { [unowned self] _ in running },
             after: { [unowned self] delay, work in delayed.append((delay, work)) },
@@ -100,6 +102,26 @@ struct SettingsLauncherTests {
         // Nothing opens once quitting.
         launcher.open()
         #expect(fake.opens.isEmpty)
+    }
+
+    /// The wait for the open is bounded, so Quit goes on first; the stamp it left beforehand is
+    /// what stops the helper that open starts (`SettingsRequestTests`), and if this process is
+    /// still here when the open answers, it quits that helper too.
+    @Test func quitThatStopsWaitingBeforeTheOpenAnswersHasLeftTheStamp() {
+        let fake = FakeSystem()
+        let launcher = SettingsLauncher(system: fake.system)
+        launcher.open()
+        var quit = 0
+        launcher.quit { quit += 1 }
+        #expect(fake.quitMarks == 1, "stamped before waiting")
+        #expect(fake.delayed.map(\.0) == [SettingsLauncher.quitWait])
+        fake.runDelayed() // the bound fires first
+        #expect(quit == 1)
+        let late = FakeSystem.Helper(alive: true)
+        fake.running = [late]
+        fake.answer(late)
+        #expect(late.quitCount >= 1)
+        #expect(quit == 1)
     }
 
     @Test func quitDuringARetryWaitOpensNothingMore() {

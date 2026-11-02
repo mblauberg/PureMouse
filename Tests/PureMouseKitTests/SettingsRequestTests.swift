@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import PureMouseKit
 
-// `show-settings`, in a temporary directory.
+// `show-settings` and the quit stamp beside it, in a temporary directory.
 
 private func requestFile() -> URL {
     FileManager.default.temporaryDirectory
@@ -38,4 +38,19 @@ private func requestFile() -> URL {
     SettingsRequest.write("apps", to: file)
     #expect(SettingsRequest.take(from: file)?.body == "apps")
     #expect(SettingsRequest.take(from: file) == nil)
+}
+
+/// Quit PureMouse's stamp stops a helper that starts late, until a newer request or `quitHold`.
+@Test func aQuitStampHoldsUntilANewerRequestOrItsTimeRunsOut() throws {
+    let file = requestFile()
+    #expect(!SettingsRequest.quitUnderWay(beside: file))
+    SettingsRequest.write("pointer", to: file) // sent before Quit, still to be answered
+    SettingsRequest.markQuit(beside: file)
+    #expect(SettingsRequest.quitUnderWay(beside: file))
+    let stamped = try #require(try FileManager.default.attributesOfItem(
+        atPath: SettingsRequest.quitStamp(beside: file).path)[.modificationDate] as? Date)
+    #expect(!SettingsRequest.quitUnderWay(beside: file, now: stamped.addingTimeInterval(SettingsRequest.quitHold)))
+    // Opening Settings again (the menu, or the daemon after the Finder) clears it.
+    SettingsRequest.write("", to: file)
+    #expect(!SettingsRequest.quitUnderWay(beside: file))
 }

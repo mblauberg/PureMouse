@@ -2,6 +2,7 @@
 // on demand by the menu bar app and gone once its window closes, so the resident menu bar app
 // never holds AppKit's and SwiftUI's window memory (docs/adr/0009-settings-helper-app.md).
 import AppKit
+import PureMouseKit
 
 MainActor.assumeIsolated {
     let app = NSApplication.shared
@@ -16,6 +17,9 @@ MainActor.assumeIsolated {
         running.activate()
         exit(0)
     }
+    // Opened by a request sent before Quit PureMouse, which LaunchServices answered after the menu
+    // bar app had gone (`SettingsRequest.markQuit`).
+    if SettingsRequest.quitUnderWay() { exit(0) }
 
     let controller = SettingsApp()
     app.delegate = controller
