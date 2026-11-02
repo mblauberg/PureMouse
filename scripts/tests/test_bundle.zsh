@@ -25,6 +25,11 @@ test_stand_in_bundle_signs_with_runtime_and_verifies() {
         expect "$bundle flags (adhoc,runtime)" eval '[[ $details == *"flags=0x10002(adhoc,runtime)"* ]]'
     done
     scripts/verify-bundle.sh $app
+    local signed=() component
+    for component in $components; do
+        signed+=$(codesign -dv "${${:-$app/${component#*:}}%/.}" 2>&1 | sed -n 's/^Identifier=//p')
+    done
+    [[ ${(j: :)signed} == "$menu_label $label" ]] || { print -u2 -- "signed as: $signed"; return 1; }
 }
 
 test_verify_names_a_component_with_the_wrong_identifier() {
@@ -108,4 +113,67 @@ test_release_versions() {
     for bad in 0.3.0-5-gabc1234 0.3.0-dirty v1.2.3 1.2 dev 0.0.0-ci.abc1234 1.2.3-rc; do
         expect "$bad rejected" eval '! release_version_ok $bad'
     done
+}
+
+test_stand_in_plists_carry_the_build_number() {
+    local app=$(stand_in_app $tmp 1.2.3)
+    for plist in $app/Contents/Info.plist "$(menu_of $app)/Contents/Info.plist"; do
+        expect "build 42 in $plist" \
+            eval '[[ $(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$plist") == 42 ]]'
+    done
+}
+
+test_verify_names_a_menu_app_with_another_version() {
+    local app=$(stand_in_app $tmp 1.2.3) output
+    /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString 9.9.9" "$(menu_of $app)/Contents/Info.plist"
+    scripts/sign-bundle.sh $app --identity - 2>/dev/null
+    if output=$(scripts/verify-bundle.sh $app 2>&1); then return 1; fi
+    [[ $output == *"PureMouse Menu.app: CFBundleShortVersionString is '9.9.9', not '1.2.3' as in the app"* ]]
+}
+
+test_verify_names_a_plist_with_the_wrong_identifier() {
+    local app=$(stand_in_app $tmp 1.2.3) output
+    /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.example.other" "$(menu_of $app)/Contents/Info.plist"
+    scripts/sign-bundle.sh $app --identity - 2>/dev/null
+    if output=$(scripts/verify-bundle.sh $app 2>&1); then return 1; fi
+    [[ $output == *"PureMouse Menu.app: CFBundleIdentifier is 'com.example.other'"* ]]
+}
+
+test_verify_names_a_plist_that_does_not_parse() {
+    local app=$(stand_in_app $tmp 1.2.3) output
+    scripts/sign-bundle.sh $app --identity - 2>/dev/null
+    print 'not a plist' > "$(menu_of $app)/Contents/Info.plist"
+    if output=$(scripts/verify-bundle.sh $app 2>&1); then return 1; fi
+    [[ $output == *"PureMouse Menu.app: Info.plist does not parse"* ]]
+}
+
+test_verify_names_a_bundle_changed_after_signing() {
+    local app=$(stand_in_app $tmp 1.2.3) output
+    scripts/sign-bundle.sh $app --identity - 2>/dev/null
+    print extra >> "$(menu_of $app)/Contents/Resources/AppIcon.png"
+    if output=$(scripts/verify-bundle.sh $app 2>&1); then return 1; fi
+    [[ $output == *"PureMouse Menu.app: signature does not verify"* ]]
+}
+
+test_release_signature_needs_a_developer_id_authority() {
+    local output
+    if output=$(check_release_signature $'Authority=Some CA\nTeamIdentifier=ABCDE12345' ABCDE12345 PureMouse.app 2>&1); then
+        return 1
+    fi
+    [[ $output == "PureMouse.app: not signed by a Developer ID Application identity" ]]
+}
+
+test_developer_id_requirement_compiles_and_rejects_ad_hoc() {
+    local app=$(stand_in_app $tmp 1.2.3)
+    scripts/sign-bundle.sh $app --identity - 2>/dev/null
+    local requirement=$(developer_id_requirement ABCDE12345)
+    csreq -r="$requirement" -t >/dev/null
+    ! codesign --verify --strict -R="$requirement" $app 2>/dev/null
+}
+
+test_release_verify_rejects_a_malformed_team() {
+    local app=$(stand_in_app $tmp 1.2.3) output
+    scripts/sign-bundle.sh $app --identity - 2>/dev/null
+    if output=$(PUREMOUSE_TEAM_ID='AB"C' scripts/verify-bundle.sh $app --release 2>&1); then return 1; fi
+    [[ $output == *"is not a 10-character team ID"* ]]
 }

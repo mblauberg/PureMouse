@@ -15,6 +15,9 @@ for file in $here/test_*.zsh; do source $file; done
 
 filter=${1:-}
 integer passed=0 failed=0 skipped=0
+tmp=
+trap 'rm -rf ${tmp:-/nonexistent}' EXIT
+trap 'exit 130' INT TERM
 for name in ${(ok)functions[(I)test_*]}; do
     [[ -z $filter || $name == *$filter* ]] || continue
     tmp=$(mktemp -d)

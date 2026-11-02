@@ -37,7 +37,8 @@ resolve_version() {
     print -r -- ${described#v}
 }
 
-# CFBundleVersion: the number of commits on HEAD, so it only grows along main.
+# CFBundleVersion: the number of commits on HEAD, so it only grows along main (in a full clone; a
+# shallow CI checkout counts 1).
 resolve_build_number() {
     git -C $root rev-list --count HEAD 2>/dev/null || print 0
 }

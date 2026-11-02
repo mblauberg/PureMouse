@@ -7,9 +7,9 @@
 #   verify-bundle.sh <app> [--release]
 #
 #   --release  also: the version is a release version (X.Y.Z or X.Y.Z-rc.N), and when
-#              PUREMOUSE_TEAM_ID is set (scripts/release.env, if present, sets it) every component
-#              is signed by a Developer ID Application identity of that team. With no team ID only
-#              the base checks run.
+#              PUREMOUSE_TEAM_ID is set every component is signed by a Developer ID Application
+#              identity of that team. When the variable is unset, scripts/release.env (if present)
+#              sets it; set but empty means no team, and only the base checks run.
 set -euo pipefail
 source "${0:A:h}/lib.zsh"
 
@@ -22,10 +22,11 @@ for argument; do
     esac
 done
 [[ -n $app && -d $app ]] || die "usage: verify-bundle.sh <app> [--release]"
-if (( release )) && [[ -z ${PUREMOUSE_TEAM_ID:-} && -f $root/scripts/release.env ]]; then
+if (( release )) && [[ -z ${PUREMOUSE_TEAM_ID+set} && -f $root/scripts/release.env ]]; then
     source $root/scripts/release.env
 fi
 team=${PUREMOUSE_TEAM_ID:-}
+[[ -z $team || $team =~ '^[A-Z0-9]{10}$' ]] || die "PUREMOUSE_TEAM_ID '$team' is not a 10-character team ID"
 
 failed=0
 fail() {
@@ -54,10 +55,10 @@ for component in $components; do
     fi
     plutil -lint -s $plist || fail "$name: Info.plist does not parse"
     identifier=$(plist_value $plist CFBundleIdentifier || true)
-    [[ $identifier == $expected ]] || fail "$name: CFBundleIdentifier is '$identifier', not $expected"
+    [[ $identifier == "$expected" ]] || fail "$name: CFBundleIdentifier is '$identifier', not $expected"
     for key in CFBundleShortVersionString:$app_version CFBundleVersion:$app_build; do
         value=$(plist_value $plist ${key%%:*} || true)
-        [[ $value == ${key#*:} ]] || fail "$name: ${key%%:*} is '$value', not '${key#*:}' as in the app"
+        [[ $value == "${key#*:}" ]] || fail "$name: ${key%%:*} is '$value', not '${key#*:}' as in the app"
     done
 
     if ! codesign --verify --strict $bundle 2>/dev/null; then
@@ -65,7 +66,7 @@ for component in $components; do
     fi
     details=$(codesign -dvv $bundle 2>&1) || { fail "$name: not signed"; continue; }
     signed_as=$(print -r -- $details | sed -n 's/^Identifier=//p')
-    [[ $signed_as == $expected ]] || fail "$name: signed as '$signed_as', not $expected"
+    [[ $signed_as == "$expected" ]] || fail "$name: signed as '$signed_as', not $expected"
     print -r -- $details | grep '^CodeDirectory .*flags=0x[0-9a-f]*(.*runtime.*)' >/dev/null ||
         fail "$name: no hardened runtime ($(print -r -- $details | grep -o 'flags=[^ ]*'))"
     if (( release )) && [[ -n $team ]]; then
