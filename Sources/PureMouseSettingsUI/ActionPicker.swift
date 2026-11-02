@@ -62,8 +62,11 @@ struct PickerEntry: Identifiable, Equatable {
         }
     }
 
+    /// The search as typed, without its surrounding spaces; empty means no search.
+    static func searchTerm(_ query: String) -> String { query.trimmingCharacters(in: .whitespaces) }
+
     static func filter(_ entries: [PickerEntry], query: String) -> [PickerEntry] {
-        let query = query.trimmingCharacters(in: .whitespaces)
+        let query = searchTerm(query)
         guard !query.isEmpty else { return entries }
         return entries.filter {
             $0.label.localizedStandardContains(query) || ($0.group?.localizedStandardContains(query) ?? false)
@@ -98,7 +101,7 @@ enum PickerItem: Identifiable, Equatable {
     /// The rows for a search: the haptic entries fold into their group's row, which is open while
     /// `hapticsOpen` or while the search matches one of them.
     static func visible(_ entries: [PickerEntry], query: String, hapticsOpen: Bool) -> [PickerItem] {
-        let searching = !query.trimmingCharacters(in: .whitespaces).isEmpty
+        let searching = !PickerEntry.searchTerm(query).isEmpty
         let expanded = hapticsOpen || searching
         var items: [PickerItem] = []
         for entry in PickerEntry.filter(entries, query: query) {
