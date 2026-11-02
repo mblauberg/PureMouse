@@ -152,6 +152,28 @@ Each level has one mechanism, and each label says what it reveals.
 - The app icon is the Icon Composer document (`assets/AppIcon.icon`, AGENTS.md). Check it at 16
   to 1024 px in default, dark, clear and tinted, in the Dock, Finder, About and alerts.
 
+## Where PureMouse goes further
+
+System Settings › Mouse adjusts blind: a slider with no sample, no undo, nothing tied to the app in
+use. PureMouse goes further only where the HIG's own principles (feedback, forgiveness, direct
+manipulation) lead and the system still draws everything: standard controls, no new chrome, no idle
+cost. Planned (epic #114):
+
+- **Try it.** A collapsed "Try it" disclosure under Feel and Speed on Scrolling reveals a short
+  plain-text scroll area, so smoothing is felt where it is set. Trackpad shows its gestures; Mouse
+  shows nothing.
+- **Undo.** ⌘Z and ⇧⌘Z undo and redo each settings change, named in the Edit menu ("Undo Pointer
+  Speed"). One slider drag is one step.
+- **Settings for the app in use.** The status menu offers "Settings for <app>…" for the frontmost
+  app (not Finder or PureMouse), opening its sheet in Apps. It is read once as the menu opens.
+- **Feel a haptic.** Choosing a haptic action in the picker plays it once on a mouse with haptics,
+  as Trackpad's Click slider does.
+
+Not adopted: a 3D or photographic mouse map with glowing callouts (the device card stays original
+line art with plain markers, #56); an acceleration curve editor (macOS owns acceleration, so it
+would duplicate System Settings); a floating per-app indicator (it polls and covers content);
+display-density DPI hints and live gesture highlighting (more text and motion than they earn).
+
 ## Layout
 
 | Place | Shown by default | Advanced |
