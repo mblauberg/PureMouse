@@ -116,12 +116,14 @@ final class MouseTab: NSViewController {
 /// It stays put between segments: same controls, same height.
 struct MouseHeader: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.settings) private var settings
     let selection: MouseSelection
 
     var body: some View {
         ZStack {
             HStack {
                 // The leading slot is the mouse pop-up's, with two or more mice (docs/ui-design.md).
+                if model.showsMouseMenu { MousePopUp() }
                 Spacer()
                 if selection.segment == .buttons { findByPressing }
             }
@@ -135,6 +137,8 @@ struct MouseHeader: View {
         // In line with the grouped boxes below, whose form insets them by the same margin.
         .padding(.horizontal, 20)
         .padding(.top)
+        // The pop-up and its note come and go with the mice known, which changes the strip's height.
+        .onChange(of: model.showsMouseMenu) { settings?.refit() }
         .onChange(of: model.captureOutcome) { _, outcome in
             if let outcome { AccessibilityNotification.Announcement(outcome.message).post() }
         }
@@ -150,5 +154,41 @@ struct MouseHeader: View {
                 .disabled(!model.daemonRunning || model.paused || model.readOnly)
                 .help(model.daemonRunning ? "Press a mouse button to find its row" : "PureMouse is off")
         }
+    }
+}
+
+/// The pop-up that chooses which mouse the panes edit: All Mice, then each known mouse by name. The
+/// choice is remembered. The note that Apps is global is the menu's last line, and the pop-up's
+/// tooltip: a line under the pop-up would take 15 pt from a strip every segment shares, and
+/// Scrolling has 6 pt to spare (docs/ui-design.md, "Fit").
+struct MousePopUp: View {
+    @Environment(AppModel.self) private var model
+
+    /// The longest name the closed pop-up shows whole; the menu lists the full one.
+    private static let shownCharacters = 18
+
+    static let appsNote = "Apps are the same for every mouse."
+
+    private var closedText: String {
+        guard let name = model.selectedMouse?.name else { return InheritedScope.allMice }
+        return name.count > Self.shownCharacters ? String(name.prefix(Self.shownCharacters - 1)) + "…" : name
+    }
+
+    var body: some View {
+        PopUpMenu(text: closedText) {
+            Picker("Mouse", selection: Binding<String?>(get: { model.selectedMouse?.key }, set: { model.selectMouse($0) })) {
+                Text(InheritedScope.allMice).tag(nil as String?)
+                Divider()
+                ForEach(model.knownMice) { Text($0.name).tag($0.key as String?) }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+            Divider()
+            Text(Self.appsNote)
+        }
+        .help(Self.appsNote)
+        .accessibilityLabel("Mouse")
+        .accessibilityValue(model.selectedMouse?.name ?? InheritedScope.allMice)
+        .accessibilityHint(Self.appsNote)
     }
 }

@@ -379,14 +379,18 @@ struct ActionButton: View {
     var sameAsEverywhere: String?
     /// `sameAsEverywhere` as VoiceOver says it (a shortcut in words); the label itself when nil.
     var spokenEverywhere: String?
+    /// The wider scope `sameAsEverywhere` comes from: Everywhere for an app, All Mice for a mouse.
+    var source = InheritedScope.everywhere
+    /// The scope whose mice decide whether the haptic waveforms are listed.
+    var scope = ConfigScope.global
     @State private var openedFromKeyboard = false
 
-    /// An app's binding as its row shows it: `.standard` leaves it to `everywhere`.
-    static func inherited(_ action: ButtonAction, everywhere: String) -> InheritedValue<String> {
-        InheritedValue(own: action == .standard ? nil : action.label, inherited: everywhere, source: InheritedScope.everywhere)
+    /// A scope's binding as its row shows it: `.standard` leaves it to `everywhere`.
+    static func inherited(_ action: ButtonAction, everywhere: String, source: String = InheritedScope.everywhere) -> InheritedValue<String> {
+        InheritedValue(own: action == .standard ? nil : action.label, inherited: everywhere, source: source)
     }
 
-    private var inherited: InheritedValue<String>? { sameAsEverywhere.map { Self.inherited(action, everywhere: $0) } }
+    private var inherited: InheritedValue<String>? { sameAsEverywhere.map { Self.inherited(action, everywhere: $0, source: source) } }
 
     /// Longer labels (a command) are shortened in the middle to this many characters.
     static let labelLimit = 32
@@ -395,16 +399,17 @@ struct ActionButton: View {
 
     /// What VoiceOver reads as the value: a shortcut in words ("Shift Command 4"), not glyphs, and
     /// an inherited one with its source ("Mission Control, same as Everywhere").
-    static func spokenValue(for action: ButtonAction, everywhere: String?, spokenEverywhere: String?) -> String {
+    static func spokenValue(for action: ButtonAction, everywhere: String?, spokenEverywhere: String?,
+                            source: String = InheritedScope.everywhere) -> String {
         guard let everywhere else { return action.spokenLabel }
         let own = action == .standard ? nil : action.spokenLabel
-        return InheritedValue(own: own, inherited: spokenEverywhere ?? everywhere, source: InheritedScope.everywhere).spoken
+        return InheritedValue(own: own, inherited: spokenEverywhere ?? everywhere, source: source).spoken
     }
 
     /// The haptic waveforms, unless the mouse is known to have no motor; a bound one still shows.
-    private var offersHaptics: Bool { Self.offersHaptics(for: action, devices: model.capabilityDevices) }
+    private var offersHaptics: Bool { Self.offersHaptics(for: action, devices: model.capabilityDevices(in: scope)) }
 
-    /// Whether the picker lists the haptic waveforms for `devices` (`AppModel.capabilityDevices`):
+    /// Whether the picker lists the haptic waveforms for `devices` (`AppModel.capabilityDevices(in:)`):
     /// unless one is known to lack the motor, or when `action` is a waveform already bound.
     static func offersHaptics(for action: ButtonAction, devices: [Status.Device]) -> Bool {
         let bound = if case .haptic = action { true } else { false }
@@ -421,7 +426,7 @@ struct ActionButton: View {
         .fixedSize()
         .help(Self.tooltip(for: action))
         .accessibilityLabel(accessibilityName)
-        .accessibilityValue(Self.spokenValue(for: action, everywhere: sameAsEverywhere, spokenEverywhere: spokenEverywhere))
+        .accessibilityValue(Self.spokenValue(for: action, everywhere: sameAsEverywhere, spokenEverywhere: spokenEverywhere, source: source))
         .accessibilityHint("Opens the list of actions")
         .popover(isPresented: $isPresented, arrowEdge: .bottom) {
             ActionPicker(current: action,

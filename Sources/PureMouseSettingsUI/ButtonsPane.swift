@@ -16,8 +16,17 @@ struct ButtonsPane: View {
 
     static let restoreMessage = "Buttons and gestures return to the mouse's defaults. App settings don't change."
 
+    /// What Restore Defaults says for one mouse: its own values go, and it follows All Mice.
+    static func restoreMessage(for mouse: String) -> String {
+        "\(mouse) goes back to the All Mice buttons and gestures. App settings don't change."
+    }
+
+    private var scope: ConfigScope { model.scope }
+    private var isMouse: Bool { scope.deviceKey != nil }
+
     var body: some View {
         let usesGestures = model.config.usesGestures
+        let scope = model.scope, target = model.scopeTarget
         PaneForm {
             PaneBanners(needsAccessibility: true)
             Section {
@@ -39,8 +48,8 @@ struct ButtonsPane: View {
             } footer: {
                 // Advanced… holds the gesture distance and repeat, so only while some button
                 // (globally or in an app) is Hold and Move.
-                PaneFooter(restoreDefaults: { model.update { $0.restoreButtonDefaults() } },
-                           restoreMessage: Self.restoreMessage,
+                PaneFooter(restoreDefaults: { model.update(in: target) { $0.restoreButtonDefaults(in: scope) } },
+                           restoreMessage: model.selectedMouse.map { Self.restoreMessage(for: $0.name) } ?? Self.restoreMessage,
                            advanced: usesGestures ? { showingAdvanced = true } : nil)
             }
             .disabled(model.readOnly)
@@ -60,6 +69,7 @@ struct ButtonsPane: View {
         .onAppear {
             if DevHooks.sheet(on: "buttons") == .advanced, usesGestures { showingAdvanced = true }
             let environment = ProcessInfo.processInfo.environment
+            if environment["PUREMOUSE_DEV_OTHERS"] != nil { showOthers = true }
             if let key = environment["PUREMOUSE_DEV_PICKER"] {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { presented = key }
             }
@@ -85,33 +95,88 @@ struct ButtonsPane: View {
 
     // MARK: Rows
 
-    /// Controls the connected mice have (nil when no mouse has reported any).
+    /// Controls the mice in the scope have (nil when none has reported any).
     private var deviceCIDs: Set<UInt16>? {
-        let controls = model.devices.flatMap(\.controls)
-        return controls.isEmpty ? nil : Set(controls.map(\.cid))
+        let cids = model.reportedControlIDs(in: scope)
+        return cids.isEmpty ? nil : Set(cids)
     }
 
-    private var configKeys: [String] { (model.config[["buttons"]] as? [String: Any]).map { Array($0.keys) } ?? [] }
+    private var configKeys: [String] { model.boundButtonKeys(in: scope) }
 
     private var namedRows: [String] {
         ButtonRows.named(deviceCIDs: deviceCIDs, configKeys: configKeys).map(\.rawValue)
     }
 
     private var otherRows: [String] {
-        ButtonRows.others(deviceCIDs: model.devices.flatMap(\.controls).map(\.cid), configKeys: configKeys)
+        ButtonRows.others(deviceCIDs: model.reportedControlIDs(in: scope), configKeys: configKeys)
     }
 
     /// Where an "Other controls" entry lives, for its help line.
     private func caption(_ key: String) -> String? {
         guard NamedButton(rawValue: key) == nil, let cid = NamedButton.cid(forKey: key) else { return nil }
         // No devices: none connected, or paused (the daemon then reports none).
-        guard !model.devices.isEmpty else { return nil }
-        let owners = model.devices.filter { $0.controls.contains { $0.cid == cid } }.map(\.name)
+        let devices = model.devices(in: scope)
+        guard !devices.isEmpty else { return nil }
+        let owners = devices.filter { $0.controls.contains { $0.cid == cid } }.map(\.name)
         return owners.isEmpty ? ControlAvailability.unsupportedCaption : owners.joined(separator: ", ")
     }
 
     @ViewBuilder
     private func row(_ key: String, indented: Bool = false) -> some View {
+        if isMouse { mouseRow(key, indented: indented) } else { globalRow(key, indented: indented) }
+    }
+
+    /// A button on a mouse: its own binding, or "Same as All Mice" with the one that applies
+    /// dimmed (`InheritedValue`, as in an app's sheet).
+    @ViewBuilder
+    private func mouseRow(_ key: String, indented: Bool) -> some View {
+        let state = model.config.scopedButton(key, in: scope)
+        let everywhere = state.everywhere.label
+        let spokenEverywhere = state.everywhere.spokenLabel
+        let caption = ActionButton.inherited(state.own, everywhere: everywhere, source: InheritedScope.allMice).caption
+        if state.directions.isEmpty {
+            LabeledContent {
+                actionButton(state.own, target: BindingTarget(button: key), sameAsEverywhere: everywhere, spokenEverywhere: spokenEverywhere)
+            } label: {
+                RowLabel(NamedButton.title(forKey: key), help: caption ?? self.caption(key))
+            }
+            .padding(.leading, indented ? 16 : 0)
+            .listRowBackground(rowFill(key))
+        } else {
+            let isExpanded = Binding(get: { expanded.contains(key) },
+                                     set: { if $0 { expanded.insert(key) } else { expanded.remove(key) } })
+            LabeledContent {
+                actionButton(state.own, target: BindingTarget(button: key), sameAsEverywhere: everywhere, spokenEverywhere: spokenEverywhere)
+            } label: {
+                DisclosureLabel(title: NamedButton.title(forKey: key), help: caption,
+                                spokenTitle: "\(NamedButton.title(forKey: key)) directions", isExpanded: isExpanded)
+            }
+            .padding(.leading, indented ? 16 : 0)
+            .listRowBackground(rowFill(key))
+            if isExpanded.wrappedValue {
+                Text("Hold the button and move the mouse. Release without moving to click.")
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, indented ? 38 : 22)
+                ForEach(state.directions, id: \.name) { direction in
+                    // A direction the mouse leaves out follows the All Mice gesture, if there is one;
+                    // else it does nothing.
+                    let inherited = direction.everywhere.map { ($0 == .standard ? ButtonAction.named("none") : $0) }
+                    let own = direction.own == .standard && inherited == nil ? .named("none") : direction.own
+                    LabeledContent {
+                        actionButton(own, target: BindingTarget(button: key, direction: direction.name),
+                                     sameAsEverywhere: inherited?.label, spokenEverywhere: inherited?.spokenLabel)
+                    } label: {
+                        RowLabel(Gesture.label(direction.name),
+                                 help: inherited.flatMap { ActionButton.inherited(own, everywhere: $0.label, source: InheritedScope.allMice).caption })
+                    }
+                    .padding(.leading, indented ? 38 : 22)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func globalRow(_ key: String, indented: Bool) -> some View {
         let action = model.config.binding(key)
         if action == .gesture {
             let isExpanded = Binding(get: { expanded.contains(key) },
@@ -152,16 +217,23 @@ struct ButtonsPane: View {
         highlighted == key ? Color(nsColor: .unemphasizedSelectedContentBackgroundColor) : nil
     }
 
-    private func actionButton(_ action: ButtonAction, target: BindingTarget) -> some View {
+    private func actionButton(_ action: ButtonAction, target: BindingTarget, sameAsEverywhere: String? = nil,
+                              spokenEverywhere: String? = nil) -> some View {
         let id = target.direction.map { "\(target.button).\($0)" } ?? target.button
         let isDirection = target.direction != nil
+        let inherits = sameAsEverywhere != nil
         return ActionButton(
             action: isDirection && action == .standard ? .named("none") : action,
-            allowsDefault: !isDirection,
+            // A mouse's rows take "Same as All Mice" in its place.
+            allowsDefault: !isDirection && !inherits,
             allowsGesture: !isDirection,
             isPresented: Binding(get: { presented == id }, set: { presented = $0 ? id : nil }),
             choose: { entry in choose(entry, for: target, current: action) },
-            accessibilityName: target.title)
+            accessibilityName: target.title + (inherits && model.selectedMouse != nil ? ", \(model.selectedMouse?.name ?? "")" : ""),
+            sameAsEverywhere: sameAsEverywhere,
+            spokenEverywhere: spokenEverywhere,
+            source: InheritedScope.allMice,
+            scope: scope)
     }
 
     private func choose(_ entry: PickerEntry, for target: BindingTarget, current: ButtonAction) {
@@ -182,11 +254,12 @@ struct ButtonsPane: View {
     }
 
     private func apply(_ action: ButtonAction, to target: BindingTarget) {
-        model.update {
+        let scope = scope
+        model.update(in: model.scopeTarget) {
             if let direction = target.direction {
-                $0.bind(target.button, direction: direction, to: action)
+                $0.bind(target.button, direction: direction, to: action, in: scope)
             } else {
-                $0.bind(target.button, to: action)
+                $0.bind(target.button, to: action, in: scope)
             }
         }
     }
@@ -197,14 +270,17 @@ private struct ButtonsAdvancedSheet: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
+        let target = model.scopeTarget
         AdvancedSheet(title: "Advanced") {
             Section("Hold and Move") {
                 ValueSlider(title: "Distance", help: "How far to move while holding before a direction fires.",
-                            value: model.number(["gesture", "distanceMm"], default: 4, step: 0.5),
-                            range: 2...12, low: "Short", high: "Long", format: Format.millimetres)
+                            value: model.number(["gesture", "distanceMm"], default: 4, step: 0.5, in: target),
+                            range: 2...12, low: "Short", high: "Long", format: Format.millimetres,
+                            inheritance: model.inheritance(of: [["gesture", "distanceMm"]], in: target))
                 ValueSlider(title: "Repeat", help: "Keep moving to repeat, such as across several Spaces.",
-                            value: model.number(["gesture", "repeatIntervalMs"], default: 400, step: 50),
-                            range: 150...1000, low: "Fast", high: "Slow", format: Format.milliseconds)
+                            value: model.number(["gesture", "repeatIntervalMs"], default: 400, step: 50, in: target),
+                            range: 150...1000, low: "Fast", high: "Slow", format: Format.milliseconds,
+                            inheritance: model.inheritance(of: [["gesture", "repeatIntervalMs"]], in: target))
             }
             .disabled(model.readOnly)
         }

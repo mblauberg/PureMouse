@@ -1,6 +1,7 @@
 import Foundation
 import PureMouseAppSupport
 import PureMouseKit
+import SwiftUI
 import Testing
 @testable import PureMouseSettingsUI
 
@@ -141,14 +142,54 @@ import Testing
         #expect(ButtonsPane.restoreMessage == "Buttons and gestures return to the mouse's defaults. App settings don't change.")
         #expect(ScrollingPane.restoreMessage
             == "Scrolling and thumb wheel settings return to the mouse's defaults. App settings don't change.")
-        for (file, restore) in [("ButtonsPane.swift", "restoreButtonDefaults()"), ("ScrollingPane.swift", "restoreScrollingDefaults()")] {
+        for (file, restore) in [("ButtonsPane.swift", "restoreButtonDefaults(in:"), ("ScrollingPane.swift", "restoreScrollingDefaults(in:")] {
             let text = try Self.source(file)
             // The only call is PaneFooter's, which runs it from its confirmation's button.
             let lines = text.components(separatedBy: "\n").filter { $0.contains(restore) }
             #expect(lines.count == 1 && lines[0].contains("PaneFooter(restoreDefaults:"), "\(file)")
-            #expect(text.contains("restoreMessage: Self.restoreMessage"), "\(file)")
+            #expect(text.contains("?? Self.restoreMessage"), "\(file)")
         }
         let footer = try Self.source("Components.swift")
         #expect(footer.contains(#"Button("Restore Defaults", action: restoreDefaults)"#))
     }
+}
+
+// MARK: A mouse's inherited values (#54)
+
+private func styleName(_ style: HierarchicalShapeStyle) -> String { String(describing: style) }
+
+@Test func aMouseAndAnAppShowAnInheritedValueThroughTheSameType() {
+    // One type, one rule: the effective value is dimmed with "Same as <source>", an own value is primary.
+    let app = InheritedValue<String>(own: nil, inherited: "Mute", source: InheritedScope.everywhere)
+    let mouse = InheritedValue<String>(own: nil, inherited: "Mute", source: InheritedScope.allMice)
+    #expect(type(of: app) == type(of: mouse))
+    #expect(app.effective == mouse.effective && styleName(app.style) == styleName(mouse.style) && styleName(app.style) == styleName(.secondary))
+    #expect(app.caption == "Same as Everywhere" && mouse.caption == "Same as All Mice")
+    let own = InheritedValue<String>(own: "Volume Up", inherited: "Mute", source: InheritedScope.allMice)
+    #expect(own.effective == "Volume Up" && own.caption == nil && styleName(own.style) == styleName(.primary))
+    // The Buttons list builds both from the same function.
+    let button = ActionButton.inherited(.standard, everywhere: "Mission Control", source: InheritedScope.allMice)
+    #expect(button.caption == "Same as All Mice" && button.effective == "Mission Control")
+    #expect(ActionButton.inherited(.named("mute"), everywhere: "Mission Control", source: InheritedScope.allMice).caption == nil)
+}
+
+@Test func anOverriddenRowOffersToUseTheAllMiceSettingAndAnInheritingOneSaysSame() {
+    var given = 0
+    let own = InheritedRow(source: InheritedScope.allMice, isOverridden: true) { given += 1 }
+    #expect(own.caption == nil && styleName(own.style) == styleName(.primary))
+    #expect(own.resetTitle == "Use All Mice Setting")
+    own.reset()
+    #expect(given == 1)
+    let inheriting = InheritedRow(source: InheritedScope.allMice, isOverridden: false) { given += 1 }
+    #expect(inheriting.caption == "Same as All Mice" && styleName(inheriting.style) == styleName(.secondary))
+}
+
+@Test func theMousePopUpSaysAppsAreSharedAndNamesTheMouseItEdits() throws {
+    #expect(MousePopUp.appsNote == "Apps are the same for every mouse.")
+    let source = try String(contentsOf: URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appending(path: "Sources/PureMouseSettingsUI/MouseTab.swift"), encoding: .utf8)
+    // It shows only when the model offers the choice, and carries the note in its tooltip and hint.
+    #expect(source.contains("model.showsMouseMenu"))
+    #expect(source.contains(".help(Self.appsNote)") && source.contains(".accessibilityHint(Self.appsNote)"))
 }

@@ -92,6 +92,8 @@ struct ValueSlider: View {
     var availability = ControlAvailability.available
     /// The key is absent and the mouse keeps its own setting (`RowLabel.mouseDefault`).
     var mouseDefault = false
+    /// On a mouse: whether the value is its own or All Mice's (`InheritedRow`).
+    var inheritance: InheritedRow?
 
     var body: some View {
         LabeledContent {
@@ -109,11 +111,12 @@ struct ValueSlider: View {
                 }
                 .frame(minWidth: 56, alignment: .trailing)
                 .monospacedDigit()
-                .foregroundStyle(.secondary)
+                .foregroundStyle(inheritance?.style ?? .secondary)
                 .accessibilityHidden(true)
+                if let inheritance { InheritedReset(row: inheritance) }
             }
         } label: {
-            RowLabel(title, help: help, mouseDefault: mouseDefault, availability: availability)
+            RowLabel(title, help: inheritance?.caption ?? help, mouseDefault: mouseDefault, availability: availability)
         }
     }
 }
@@ -151,6 +154,36 @@ struct EndLabeledSlider: View {
 }
 
 extension AppModel {
+    /// A binding to a numeric key as it applies in `target`'s scope, showing `fallback` when absent.
+    /// Writes are debounced and land in that scope only.
+    func number(_ path: [String], default fallback: Double, step: Double, in target: ScopeTarget) -> Binding<Double> {
+        Binding {
+            self.config.number(path, in: target.scope, default: fallback)
+        } set: {
+            self.set(Format.snap($0, step: step), at: path, in: target, debounce: true)
+        }
+    }
+
+    /// How a row for `paths` stands on a mouse: its own value or All Mice's, and the action that
+    /// gives it back. nil for All Mice, which has no wider scope.
+    func inheritance(of paths: [[String]], in target: ScopeTarget) -> InheritedRow? {
+        guard target.scope.deviceKey != nil else { return nil }
+        return InheritedRow(source: InheritedScope.allMice,
+                            isOverridden: paths.contains { config.isOverridden($0, in: target.scope) },
+                            reset: { [self] in update(in: target) { $0.removeOverrides(paths, in: target.scope) } })
+    }
+
+    /// A pop-up row's value on a mouse: its own if it sets one, else All Mice's, else `fallback`.
+    func inheritedBool(_ path: [String], in target: ScopeTarget, default fallback: Bool) -> InheritedValue<Bool> {
+        InheritedValue(own: config.isOverridden(path, in: target.scope) ? config.resolvedBool(path, in: target.scope) : nil,
+                       inherited: config.bool(path) ?? fallback, source: InheritedScope.allMice)
+    }
+
+    func inheritedString(_ path: [String], in target: ScopeTarget, default fallback: String) -> InheritedValue<String> {
+        InheritedValue(own: config.isOverridden(path, in: target.scope) ? config.resolved(path, in: target.scope) as? String : nil,
+                       inherited: config.string(path) ?? fallback, source: InheritedScope.allMice)
+    }
+
     /// A binding to a numeric config key, showing `fallback` when absent. Writes are debounced.
     func number(_ path: [String], default fallback: Double, step: Double) -> Binding<Double> {
         Binding {

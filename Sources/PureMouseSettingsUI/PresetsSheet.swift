@@ -13,7 +13,8 @@ struct PresetsSheet: View {
     let apply: (Int) -> Void
 
     var body: some View {
-        let presets = model.config.dpiPresets
+        let scope = model.scope
+        let presets = model.config.dpiPresets(in: scope)
         let checked = DPIPresets.selected(in: presets, current: current, steps: steps)
         AdvancedSheet(title: "Presets") {
             Section {
@@ -36,6 +37,14 @@ struct PresetsSheet: View {
                         .help("Removes the checked preset")
                     if presets.count >= DPIPresets.limit {
                         Text("Up to \(DPIPresets.limit) presets.")
+                    }
+                    if let inheritance = model.inheritance(of: [["dpiPresets"]], in: model.scopeTarget) {
+                        Spacer()
+                        if inheritance.isOverridden {
+                            Button(inheritance.resetTitle) { inheritance.reset() }
+                        } else {
+                            Text(inheritance.caption ?? "")
+                        }
                     }
                 }
                 // Borderless, as under System Settings' lists: a section footer draws bordered
@@ -73,11 +82,11 @@ struct PresetsSheet: View {
     }
 
     private func add(_ presets: [Int]) {
-        model.update { $0.dpiPresets = DPIPresets.adding(current, to: presets) }
+        model.update(in: model.scopeTarget) { $0.setDPIPresets(DPIPresets.adding(current, to: presets), in: model.scope) }
     }
 
     private func remove(_ preset: Int, from presets: [Int]) {
         guard !model.readOnly else { return }
-        model.update { $0.dpiPresets = DPIPresets.removing(preset, from: presets) }
+        model.update(in: model.scopeTarget) { $0.setDPIPresets(DPIPresets.removing(preset, from: presets), in: model.scope) }
     }
 }
