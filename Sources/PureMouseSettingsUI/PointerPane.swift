@@ -25,44 +25,53 @@ struct PointerPane: View {
         let steps = steps
         let reported = !reportedSteps.isEmpty
         let presets = model.config.dpiPresets
+        let layout = PointerLayout(config: model.config, devices: model.capabilityDevices)
         PaneForm {
             PaneBanners()
             Section {
-                ValueSlider(title: "Pointer Speed", spokenTitle: "Pointer speed",
-                            help: "Higher moves the pointer further for the same hand movement. Available speeds depend on your mouse."
-                                + (estimate ? " Using the mouse's own setting." : ""),
-                            value: Binding(get: { Double(DPIReading.index(of: current, in: steps)) },
-                                           set: { DPIReading.step(at: $0, in: steps).map { setDPI($0, debounce: true) } }),
-                            range: 0...Double(max(steps.count - 1, 1)),
-                            low: reported ? Format.number(steps.first ?? 0) : "",
-                            high: reported ? Format.number(steps.last ?? 0) : "",
-                            format: { _ in reading.readout(live: live, configured: configured) })
-                    // A sensor with a single setting has nothing to slide between.
-                    .disabled(steps.count < 2)
-                LabeledContent {} label: {
-                    DisclosureLabel(title: "Exact value", isExpanded: $exactValue)
-                }
-                if exactValue {
-                    LabeledContent {
-                        HStack(spacing: 4) {
-                            TextField("Pointer speed", value: Binding(get: { typed ?? current }, set: { typed = $0 }),
-                                      format: .number.grouping(.automatic))
-                                .textFieldStyle(.plain)
-                                .multilineTextAlignment(.trailing)
-                                .labelsHidden()
-                                .onSubmit { commitTyped(steps) }
-                                .accessibilityLabel("Pointer speed in DPI")
-                            Text("DPI").foregroundStyle(.secondary).accessibilityHidden(true)
-                        }
-                    } label: {
-                        Text("Pointer speed")
+                if layout.showsRows {
+                    ValueSlider(title: "Pointer Speed", spokenTitle: "Pointer speed",
+                                help: "Higher moves the pointer further for the same hand movement. Available speeds depend on your mouse."
+                                    + (estimate ? " Using the mouse's own setting." : ""),
+                                value: Binding(get: { Double(DPIReading.index(of: current, in: steps)) },
+                                               set: { DPIReading.step(at: $0, in: steps).map { setDPI($0, debounce: true) } }),
+                                range: 0...Double(max(steps.count - 1, 1)),
+                                low: reported ? Format.number(steps.first ?? 0) : "",
+                                high: reported ? Format.number(steps.last ?? 0) : "",
+                                format: { _ in reading.readout(live: live, configured: configured) },
+                                availability: layout.availability)
+                        // A sensor with a single setting has nothing to slide between.
+                        .disabled(steps.count < 2)
+                    LabeledContent {} label: {
+                        DisclosureLabel(title: "Exact value", isExpanded: $exactValue)
                     }
-                    .disclosedRow()
-                }
-                LabeledContent {
-                    Button("Edit Presets…") { settings?.sheet = .presets }
-                } label: {
-                    RowLabel("Presets", help: DPIPresets.summary(presets))
+                    if exactValue {
+                        LabeledContent {
+                            HStack(spacing: 4) {
+                                TextField("Pointer speed", value: Binding(get: { typed ?? current }, set: { typed = $0 }),
+                                          format: .number.grouping(.automatic))
+                                    .textFieldStyle(.plain)
+                                    .multilineTextAlignment(.trailing)
+                                    .labelsHidden()
+                                    .onSubmit { commitTyped(steps) }
+                                    .accessibilityLabel("Pointer speed in DPI")
+                                Text("DPI").foregroundStyle(.secondary).accessibilityHidden(true)
+                            }
+                        } label: {
+                            Text("Pointer speed")
+                        }
+                        .disclosedRow()
+                    }
+                    LabeledContent {
+                        Button("Edit Presets…") { settings?.sheet = .presets }
+                    } label: {
+                        RowLabel("Presets", help: DPIPresets.summary(presets), availability: layout.availability)
+                    }
+                } else {
+                    // Nothing else on the pane applies, so say why it is bare.
+                    LabeledContent {} label: {
+                        RowLabel("Pointer Speed", help: ControlAvailability.unsupportedCaption)
+                    }
                 }
             } footer: {
                 VStack(alignment: .leading, spacing: 8) {

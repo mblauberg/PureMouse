@@ -126,6 +126,18 @@ private func tree(_ json: String) throws -> ConfigTree { try ConfigTree(data: Da
     #expect(ControlAvailability.of([\.dpi], devices: [mouse(.init(dpi: true))], configured: false) == .available)
 }
 
+@Test func pointerRowsHideForAMouseWithoutAdjustableDPIUnlessSet() {
+    let noDPI = [mouse(.init(dpi: false))]
+    #expect(!PointerLayout(config: ConfigTree(), devices: noDPI).showsRows)
+    var dpiSet = ConfigTree()
+    dpiSet.set(1600, at: ["dpi"])
+    #expect(PointerLayout(config: dpiSet, devices: noDPI).availability == .unsupportedButConfigured)
+    var presetsSet = ConfigTree()
+    presetsSet.set([800, 1600], at: ["dpiPresets"])
+    #expect(PointerLayout(config: presetsSet, devices: noDPI).showsRows)
+    #expect(PointerLayout(config: ConfigTree(), devices: []).availability == .available)
+}
+
 @Test func aNotchedWheelKeepsReverseDirectionWithoutWheelModeOrSmartShift() {
     let layout = ScrollingLayout(config: ConfigTree(), devices: [mouse(m750)])
     #expect(layout.mainWheelRows == [.reverseDirection])
