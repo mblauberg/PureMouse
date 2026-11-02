@@ -1,7 +1,7 @@
 import Foundation
 import PureMouseKit
 import Testing
-@testable import PureMouseMenu
+@testable import PureMouseAppSupport
 
 private func tree(_ json: String) throws -> ConfigTree { try ConfigTree(data: Data(json.utf8)) }
 private func decoded(_ tree: ConfigTree) throws -> Config { try JSONDecoder().decode(Config.self, from: tree.data()) }

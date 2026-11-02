@@ -9,6 +9,13 @@ let package = Package(
         .target(name: "HIDPP"),
         // Shared by the daemon and the menu bar app: config model and the status/control channel.
         .target(name: "PureMouseKit"),
+        // The menu side's logic, shared by the menu bar app and the Settings helper: config editing,
+        // the config and daemon files, select by pressing. Foundation and Observation only.
+        .target(
+            name: "PureMouseAppSupport",
+            dependencies: ["PureMouseKit"],
+            swiftSettings: [.unsafeFlags(["-Osize"], .when(configuration: .release))]
+        ),
         // The daemon: config, gesture recognition, actions, reconnect handling.
         .executableTarget(
             name: "puremouse",
@@ -18,7 +25,7 @@ let package = Package(
         // The menu bar app: status menu and Settings window. Edits the config; never touches HID.
         .executableTarget(
             name: "PureMouseMenu",
-            dependencies: ["PureMouseKit"],
+            dependencies: ["PureMouseKit", "PureMouseAppSupport"],
             swiftSettings: [.unsafeFlags(["-Osize"], .when(configuration: .release))]
         ),
         .target(name: "HIDPPTesting", dependencies: ["HIDPP"]),
@@ -26,5 +33,6 @@ let package = Package(
         .testTarget(name: "PureMouseTests", dependencies: ["puremouse", "HIDPPTesting"]),
         .testTarget(name: "PureMouseKitTests", dependencies: ["PureMouseKit"]),
         .testTarget(name: "PureMouseMenuTests", dependencies: ["PureMouseMenu"]),
+        .testTarget(name: "PureMouseAppSupportTests", dependencies: ["PureMouseAppSupport"]),
     ]
 )
