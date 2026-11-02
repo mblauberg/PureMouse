@@ -21,7 +21,9 @@ protocol NotificationCentre: AnyObject {
 @MainActor
 final class NotificationDelivery {
     private let centre: NotificationCentre?
-    /// The post in flight for each id; withdrawing the id, or posting it again, replaces it.
+    /// The latest post of each id; withdrawing the id removes it, and posting it again replaces it.
+    /// It stays after the post completes, so an older post finishing late can tell a newer one
+    /// owns the id from a withdrawal.
     private var tickets: [String: Int] = [:]
     private var lastTicket = 0
 
@@ -53,8 +55,9 @@ final class NotificationDelivery {
         return Task {
             guard await requestIfNeeded(), let centre, tickets[id] == ticket else { return }
             await centre.add(id: id, title: title, body: body)
-            // Withdrawn while it was being added: it is on screen now, so take it down.
-            if tickets[id] == ticket { tickets[id] = nil } else { centre.removeDelivered(ids: [id]) }
+            // Withdrawn while it was being added, and not posted again since: it is on screen now,
+            // so take it down. A newer post owns the id; it or a later withdrawal handles it.
+            if tickets[id] == nil { centre.removeDelivered(ids: [id]) }
         }
     }
 

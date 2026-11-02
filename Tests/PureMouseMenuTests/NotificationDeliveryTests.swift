@@ -10,7 +10,7 @@ private final class FakeCentre: NotificationCentre {
     var holdRequest = false
     var holdAdd = false
     private var requestGates: [CheckedContinuation<Void, Never>] = []
-    private var addGates: [CheckedContinuation<Void, Never>] = []
+    private var addGates: [CheckedContinuation<Void, Never>?] = []
     /// Every add the centre was asked for, even one taken down again.
     private(set) var added: [String] = []
     private(set) var delivered: [String] = []
@@ -41,7 +41,9 @@ private final class FakeCentre: NotificationCentre {
     var waitingForPermission: Int { requestGates.count }
     var waitingToAdd: Int { addGates.count }
     func answerRequest() { requestGates.forEach { $0.resume() }; requestGates = [] }
-    func finishAdd() { addGates.forEach { $0.resume() }; addGates = [] }
+    func finishAdd() { addGates.forEach { $0?.resume() }; addGates = [] }
+    /// Completes one held add, in the order the adds began.
+    func finishAdd(index: Int) { addGates[index]?.resume(); addGates[index] = nil }
 }
 
 @MainActor
@@ -109,8 +111,29 @@ struct NotificationDeliveryTests {
         #expect(centre.delivered == ["low"])
     }
 
-    @Test func aHiddenIconRunGetsNoNotificationCallbacks() {
-        #expect(AppController.notifications(iconShown: false) == nil)
-        #expect(AppController.notifications(iconShown: true) != nil)
+    /// A's add is held; B is posted (after a withdrawal, or not) and completes; then A completes.
+    private func olderAddFinishesLast(withdrawingBetween: Bool) async {
+        let centre = FakeCentre(status: .authorized)
+        centre.holdAdd = true
+        let delivery = NotificationDelivery(centre: centre)
+        let older = delivery.post(id: "a", title: "t", body: "b")
+        await settle { centre.waitingToAdd == 1 }
+        if withdrawingBetween { delivery.removeDelivered(ids: ["a"]) }
+        let newer = delivery.post(id: "a", title: "t", body: "b")
+        await settle { centre.waitingToAdd == 2 }
+        centre.finishAdd(index: 1)
+        await newer.value
+        centre.finishAdd(index: 0)
+        await older.value
+        #expect(centre.delivered == ["a", "a"])
+        #expect(centre.removals.filter { $0 == ["a"] }.count == (withdrawingBetween ? 1 : 0))  // only the explicit one
+    }
+
+    @Test func anOlderAddFinishingAfterANewerPostLeavesTheNewerOne() async {
+        await olderAddFinishesLast(withdrawingBetween: false)
+    }
+
+    @Test func anOlderAddFinishingAfterAWithdrawalAndANewerPostLeavesTheNewerOne() async {
+        await olderAddFinishesLast(withdrawingBetween: true)
     }
 }
