@@ -56,7 +56,7 @@ struct ButtonsPane: View {
         }
         #if DEBUG
         .onAppear {
-            if DevHooks.sheet == .advanced, usesGestures { showingAdvanced = true }
+            if DevHooks.sheet(on: "buttons") == .advanced, usesGestures { showingAdvanced = true }
             let environment = ProcessInfo.processInfo.environment
             if let key = environment["PUREMOUSE_DEV_PICKER"] {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { presented = key }

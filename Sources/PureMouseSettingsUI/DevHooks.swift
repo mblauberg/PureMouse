@@ -14,8 +14,12 @@ import PureMouseAppSupport
 /// `PUREMOUSE_DEV_CAPTURE=<file.png>` saves the windows to that file and quits (`DevCapture`).
 @MainActor
 public enum DevHooks {
-    static var sheet: DevSheet? {
-        ProcessInfo.processInfo.environment["PUREMOUSE_DEV_SHEET"].flatMap(DevSheet.init(rawValue:))
+    /// The sheet to open on `pane`, only when `PUREMOUSE_DEV_PANE` names it: Mouse builds more
+    /// than the segment shown, so a check without the pane opened Scrolling's sheet over Buttons.
+    static func sheet(on pane: String) -> DevSheet? {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["PUREMOUSE_DEV_PANE"] == pane else { return nil }
+        return environment["PUREMOUSE_DEV_SHEET"].flatMap(DevSheet.init(rawValue:))
     }
 
     public static func run(show: (ShowRequest) -> Void) {
@@ -39,8 +43,8 @@ public enum DevHooks {
     }
 }
 
-/// A sheet `PUREMOUSE_DEV_SHEET` opens: one case per sheet; a pane checks `DevHooks.sheet` as it
-/// appears.
+/// A sheet `PUREMOUSE_DEV_SHEET` opens: one case per sheet; a pane checks `DevHooks.sheet(on:)` as
+/// it appears.
 enum DevSheet: String {
     /// The pane's Advanced… sheet (Mouse › Buttons, Mouse › Scrolling).
     case advanced

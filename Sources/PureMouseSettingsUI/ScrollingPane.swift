@@ -79,7 +79,7 @@ struct ScrollingPane: View {
         }
         .onChange(of: layout.hasAdvanced) { _, has in if !has { showingAdvanced = false } }
         #if DEBUG
-        .onAppear { if DevHooks.sheet == .advanced, layout.hasAdvanced { showingAdvanced = true } }
+        .onAppear { if DevHooks.sheet(on: "scrolling") == .advanced, layout.hasAdvanced { showingAdvanced = true } }
         #endif
     }
 
