@@ -24,6 +24,8 @@ public final class HIDPPDevice {
     private var busy = false
     private var waiters: [CheckedContinuation<Void, Never>] = []
     private var nextToken = 0
+    /// Requests waiting behind the one in flight, so tests can tell a request has queued.
+    public var queuedRequests: Int { waiters.count }
 
     private struct Pending {
         let token: Int
@@ -169,11 +171,6 @@ public final class HIDPPDevice {
         } catch {
             return .noAnswer
         }
-    }
-
-    public func protocolVersion() async -> (major: UInt8, minor: UInt8)? {
-        guard case .hidpp20(let major, let minor) = await ping() else { return nil }
-        return (major, minor)
     }
 
     // MARK: Plumbing

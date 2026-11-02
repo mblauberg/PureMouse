@@ -55,10 +55,7 @@ struct HIDPPDeviceTests {
     }
 
     private func waitForSends(_ count: Int, on transport: FakeTransport) async throws {
-        let deadline = ContinuousClock.now + .seconds(2)
-        while transport.sent.count < count, ContinuousClock.now < deadline { await Task.yield() }
-        #expect(transport.sent.count >= count)
-        try #require(transport.sent.count >= count)
+        try await eventually { transport.sent.count >= count }
     }
 
     @Test func lateReplyDoesNotCompleteNextRequest() async throws {
@@ -86,7 +83,7 @@ struct HIDPPDeviceTests {
         let first = Task { try await device.request(featureIndex: 2, function: 0) }
         try await waitForSends(1, on: transport)
         let queued = Task { try await device.request(featureIndex: 3, function: 0) }
-        await Task.yield()
+        try await eventually { device.queuedRequests == 1 }
         first.cancel()
         await #expect(throws: CancellationError.self) { try await first.value }
         try await waitForSends(2, on: transport)
@@ -101,8 +98,10 @@ struct HIDPPDeviceTests {
         try await waitForSends(1, on: transport)
         let second = Task { try await device.request(featureIndex: 2, function: 0) }
         let third = Task { try await device.request(featureIndex: 3, function: 0) }
-        await Task.yield()
+        // Both must be queued behind the first, not stopped by `send`'s check before queueing.
+        try await eventually { device.queuedRequests == 2 }
         device.close()
+        #expect(device.queuedRequests == 0)
         for task in [first, second, third] {
             await #expect(throws: HIDPPError.closed) { try await task.value }
         }

@@ -63,6 +63,26 @@ public final class FakeDevice {
 
     public func feature(of request: Report) -> UInt16? { request.featureIndex == 0 ? 0 : features[request.featureIndex] }
 
+    /// Requests sent so far to `feature`'s `function`.
+    public func requests(feature: UInt16, function: UInt8) -> [Report] {
+        transport.sent.filter { self.feature(of: $0) == feature && $0.function == function }
+    }
+
+    /// setCidReporting (0x1B04 function 3) requests sent so far for `cid`.
+    public func controlWrites(cid: UInt16) -> [Report] {
+        requests(feature: 0x1B04, function: 3).filter {
+            $0.params.count >= 2 && UInt16($0.params[0]) << 8 | UInt16($0.params[1]) == cid
+        }
+    }
+
+    public func control(_ cid: UInt16) -> Control? { controls.first { $0.cid == cid } }
+
+    /// Sets the reporting flags `cid` reads back with, as left by another program or process.
+    public func setReporting(_ cid: UInt16, diverted: Bool = false, persistent: Bool = false, rawXY: Bool = false) {
+        guard let i = controls.firstIndex(where: { $0.cid == cid }) else { preconditionFailure("no control \(cid)") }
+        controls[i].reporting[2] = (diverted ? 1 : 0) | (persistent ? 4 : 0) | (rawXY ? 0x10 : 0)
+    }
+
     private func answer(_ r: Report) throws -> Report? {
         let feature = feature(of: r) ?? 0xFFFF
         if let failure = failures[Call(feature, r.function)] {
