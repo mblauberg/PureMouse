@@ -4,6 +4,8 @@ struct SessionEnvironment {
     var canPostEvents: Bool
     var configureRetryDelay: Duration = .seconds(5)
     var now: () -> ContinuousClock.Instant = { .now }
+    /// How the daemon waits between attempts to adopt an endpoint that did not answer (`Backoff`).
+    var adoptionSleep: (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
     /// The scroll engine's frame clock and where it posts: a test supplies its own of each.
     var frameClock: @MainActor () -> FrameClock = { FrameClock() }
     var postScroll: (Int, Int) -> Void = { ScrollEvent.post(dx: $0, dy: $1) }

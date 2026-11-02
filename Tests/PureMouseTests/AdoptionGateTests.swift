@@ -22,25 +22,20 @@ struct AdoptionGateTests {
         #expect(Daemon.gates(kind: kind, hasControls: hasControls, hasDPI: hasDPI) == adopted)
     }
 
-    enum DPI: CaseIterable { case none, adjustable, extended }
-
     /// The rule as the issue states it, written out from the spec rather than from `Daemon.gates`:
     /// DPI of either kind adopts; else a mouse or trackball does; else, with no type, controls do.
-    private static func shouldAdopt(_ kind: Kind?, controls: Bool, dpi: DPI) -> Bool {
-        if dpi != .none { return true }
+    private static func shouldAdopt(_ kind: Kind?, controls: Bool, adjustable: Bool, extended: Bool) -> Bool {
+        if adjustable || extended { return true }
         guard let kind else { return controls }
         return kind == .mouse || kind == .trackball
     }
 
     /// A device of `kind` with the features given and nothing else the gate could read.
-    private static func device(_ kind: Kind?, controls: Bool, dpi: DPI) -> FakeDevice {
+    private static func device(_ kind: Kind?, controls: Bool, adjustable: Bool, extended: Bool) -> FakeDevice {
         var features: [UInt8: UInt16] = [1: 0x0001, 2: 0x0003, 3: 0x0005]
         if controls { features[4] = 0x1B04 }
-        switch dpi {
-        case .none: break
-        case .adjustable: features[5] = 0x2201
-        case .extended: features[5] = 0x2202
-        }
+        if adjustable { features[5] = 0x2201 }
+        if extended { features[6] = 0x2202 }
         let fake = FakeDevice(name: "Gate fixture", features: features)
         fake.transport.productID = 0xC0DE
         var info = [UInt8](repeating: 0, count: 16)
@@ -55,23 +50,21 @@ struct AdoptionGateTests {
     @Test func everyTypeAndFeatureCombinationIsGatedAsTheRuleSays() async throws {
         let kinds: [Kind?] = Kind.allCases.map { $0 } + [nil]
         for kind in kinds {
-            for controls in [false, true] {
-                for dpi in DPI.allCases {
-                    let h = try DaemonHarness("{}")
-                    defer { h.close() }
-                    let result = await h.tryAdopting(Self.device(kind, controls: controls, dpi: dpi))
-                    let expected = Self.shouldAdopt(kind, controls: controls, dpi: dpi)
-                    #expect((result == .adopted) == expected,
-                            "\(kind.map { "\($0)" } ?? "no type") controls=\(controls) dpi=\(dpi) gave \(result)")
-                    #expect(result == (expected ? .adopted : .notAMouse))
-                }
+            for bits in 0..<8 {  // controls, 0x2201, 0x2202 each independently present or not
+                let (controls, adjustable, extended) = (bits & 1 != 0, bits & 2 != 0, bits & 4 != 0)
+                let h = try DaemonHarness("{}")
+                defer { h.close() }
+                let result = await h.tryAdopting(Self.device(kind, controls: controls, adjustable: adjustable, extended: extended))
+                let expected = Self.shouldAdopt(kind, controls: controls, adjustable: adjustable, extended: extended)
+                #expect(result == (expected ? .adopted : .notAMouse),
+                        "\(kind.map { "\($0)" } ?? "no type") controls=\(controls) 0x2201=\(adjustable) 0x2202=\(extended) gave \(result)")
             }
         }
     }
 
     @Test func aKeyboardWithOnlyExtendedDPIIsAdopted() async throws {
         // The 0x2202-only path of identification: no 0x2201 and no 0x1B04 to qualify it.
-        let keyboard = Self.device(.keyboard, controls: false, dpi: .extended)
+        let keyboard = Self.device(.keyboard, controls: false, adjustable: false, extended: true)
         let (h, result) = try await adopt(keyboard)
         defer { h.close() }
         #expect(result == .adopted)
@@ -134,15 +127,20 @@ struct AdoptionGateTests {
     }
 
     @Test func aDeviceThatDoesNotAnswerTheTypeIsRetriedNotJudged() async throws {
+        // On a receiver slot, whose endpoint is retried on `Backoff.adoption`.
         let sleeping = FakeDevice.m750
+        sleeping.onReceiver(slot: 1)
         sleeping.failures[.init(0x0005, 2)] = .timeout
         sleeping.features = sleeping.features.filter { $0.value != 0x2201 }
-        let (h, result) = try await adopt(sleeping)
+        // It wakes during the first wait, so the scheduled attempt after it finds it answering.
+        var waits: [Duration] = []
+        let h = try DaemonHarness("{}", adoptionSleep: { waits.append($0); sleeping.failures[.init(0x0005, 2)] = nil })
         defer { h.close() }
-        #expect(result == .noAnswer)
-        #expect(h.daemon.sessions.isEmpty)
-        // Awake on the retry, it answers and is adopted: the first outcome judged nothing.
-        sleeping.failures[.init(0x0005, 2)] = nil
-        #expect(await h.tryAdopting(sleeping) == .adopted)
+        let endpoint = h.daemon.listen(sleeping.transport, index: sleeping.index)
+        endpoint.timeout = .milliseconds(100)
+        defer { endpoint.close() }
+        await h.daemon.adoptRetrying(endpoint)
+        try await eventually { !h.daemon.sessions.isEmpty }
+        #expect(waits == [.seconds(1)])  // one wait, then adopted: not judged on the first silence
     }
 }

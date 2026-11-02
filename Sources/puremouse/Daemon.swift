@@ -574,7 +574,7 @@ final class Daemon {
     /// connection notifications, so it keeps being tried once a minute (`Backoff.bluetooth`).
     /// Resume, wake and reload try every endpoint again. Attach, those and connection
     /// notifications share the endpoint's one retry; pause, detach and shutdown cancel it.
-    private func adoptRetrying(_ device: HIDPPDevice) async {
+    func adoptRetrying(_ device: HIDPPDevice) async {
         let key = Key(device)
         guard await adopt(device) == .noAnswer, retries[key] == nil,
               endpoints[key] === device, accepting else { return }
@@ -585,7 +585,7 @@ final class Daemon {
             // A cancelled retry was already removed, perhaps replaced by a newer one.
             defer { if !Task.isCancelled { retries[key] = nil } }
             let backoff = device.interface.isReceiver ? Backoff.adoption : Backoff.bluetooth
-            await backoff.retry {
+            await backoff.retry(sleep: environment.adoptionSleep) {
                 guard endpoints[key] === device, accepting else { return false }
                 return await adopt(device) == .noAnswer
             }
