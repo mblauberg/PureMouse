@@ -1,10 +1,13 @@
 import AppKit
 import PureMouseAppSupport
+import PureMouseKit
 import SwiftUI
 
 struct GeneralPane: View {
     @Environment(AppModel.self) private var model
-    @State private var startsAtLogin = false  // read on appear
+    @Environment(\.settings) private var settings
+    @State private var login: LoginStatus?  // read on appear; nil until `login-status` answers
+    @State private var changingRunning = false
     @State private var showsInMenuBar = true
     @State private var confirmingReset = false
     @State private var notificationsDenied = false
@@ -14,10 +17,26 @@ struct GeneralPane: View {
         PaneForm {
             PaneBanners()
             Section {
-                Toggle(isOn: Binding(get: { startsAtLogin }, set: { setStartsAtLogin($0) })) {
-                    RowLabel("Start PureMouse at login", help: "Off stops PureMouse now and returns the mouse to normal.")
+                Toggle(isOn: Binding(get: { openAtLogin.isOn }, set: { perform(.openAtLogin($0)) })) {
+                    RowLabel("Open at login", help: "Turning it off does not stop PureMouse.")
                 }
-                .accessibilityLabel("Start PureMouse at login")
+                .accessibilityLabel("Open at login")
+                if openAtLogin.needsApproval {
+                    LabeledContent {
+                        Button("Open Login Items…") { NSWorkspace.shared.open(OpenAtLogin.settingsURL) }
+                    } label: {
+                        RowLabel("Approve PureMouse", help: "In System Settings › General › Login Items, allow PureMouse to run in the background.")
+                    }
+                }
+                LabeledContent {
+                    HStack {
+                        Text(model.daemonRunning ? "Yes" : "No").foregroundStyle(.secondary)
+                        Button(model.daemonRunning ? "Stop" : "Start") { setRunning(!model.daemonRunning) }
+                            .disabled(changingRunning)
+                    }
+                } label: {
+                    RowLabel("PureMouse is running", help: "Stop returns the mouse to normal. Open at login stays as it is.")
+                }
                 Toggle(isOn: Binding(get: { showsInMenuBar }, set: { setShowsInMenuBar($0) })) {
                     RowLabel("Show in menu bar", help: "When hidden, open PureMouse from Applications to get back here.")
                 }
@@ -90,13 +109,15 @@ struct GeneralPane: View {
             }
         }
         .onAppear {
-            refreshStartsAtLogin()
+            refreshLogin()
             showsInMenuBar = model.locations.showsInMenuBar
             // The menu bar app records the answer as it learns it, and may learn it while this shows.
             notificationsDenied = NotificationPermission.denied(in: NotificationPermission.menuDefaults)
             deniedWatch = NotificationPermission.Watch(NotificationPermission.menuDefaults) { notificationsDenied = $0 }
         }
         .onDisappear { deniedWatch = nil }
+        // The approval row comes and goes with the answer, after the window was sized.
+        .onChange(of: openAtLogin.needsApproval) { settings?.refit() }
         .confirmationDialog("Reset all settings?", isPresented: $confirmingReset) {
             Button("Reset All Settings", role: .destructive) { model.resetAll() }
         } message: {
@@ -104,20 +125,23 @@ struct GeneralPane: View {
         }
     }
 
+    private var openAtLogin: OpenAtLogin { OpenAtLogin(login) }
+
     /// Reads the answer from `puremouse login-status`; until it arrives, or if it cannot be had, off.
-    private func refreshStartsAtLogin() {
-        Lifecycle.readLoginStatus(daemon: model.locations.daemon) { startsAtLogin = $0?.startsAtLogin ?? false }
+    private func refreshLogin() {
+        Lifecycle.readLoginStatus(daemon: model.locations.daemon) { login = $0 }
     }
 
-    private func setStartsAtLogin(_ on: Bool) {
-        if on {
-            model.perform(.register) { refreshStartsAtLogin() }
-        } else if Alerts.confirm("Stop PureMouse?",
-                                 "The mouse returns to normal, the menu bar icon goes, and PureMouse no longer starts at login. Open PureMouse from Applications to start it again.",
-                                 action: "Stop PureMouse") {
-            model.flush()
-            model.perform(.unregister) { refreshStartsAtLogin() }
-        }
+    /// Runs the command for a control, then reads `login-status` again, so the switch shows what is
+    /// so whether or not it worked.
+    private func perform(_ action: LoginAction) {
+        model.perform(action.command, then: { refreshLogin() }, otherwise: { refreshLogin() })
+    }
+
+    private func setRunning(_ on: Bool) {
+        changingRunning = true
+        model.perform(LoginAction.running(on).command, then: { changingRunning = false },
+                      otherwise: { changingRunning = false })
     }
 
     /// The menu bar app posts the notifications, and macOS asks per app, so the menu bar app asks

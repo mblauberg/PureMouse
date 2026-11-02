@@ -14,6 +14,28 @@ import Testing
         return script
     }
 
+    /// A stand-in daemon that answers every command with the arguments it was given.
+    private func echoingDaemon() throws -> URL {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "pm-lifecycle-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let script = directory.appending(path: "puremouse")
+        try Data("#!/bin/sh\necho \"$@\"\n".utf8).write(to: script)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        return script
+    }
+
+    @Test(arguments: [
+        (LoginAction.openAtLogin(true), "login on"), (.openAtLogin(false), "login off"),
+        (.running(true), "start"), (.running(false), "stop"),
+    ])
+    func eachControlReachesTheCLIAsItsOwnCommand(action: LoginAction, expected: String) async throws {
+        let daemon = try echoingDaemon()
+        let output = await withCheckedContinuation { continuation in
+            Lifecycle.run(action.command, daemon: daemon) { continuation.resume(returning: (try? $0.get()) ?? "failed") }
+        }
+        #expect(output == expected)
+    }
+
     private func read(from daemon: URL?) async -> LoginStatus? {
         await withCheckedContinuation { continuation in
             Lifecycle.readLoginStatus(daemon: daemon) { continuation.resume(returning: $0) }

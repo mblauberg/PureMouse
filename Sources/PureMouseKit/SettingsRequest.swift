@@ -1,7 +1,7 @@
 import Foundation
 
 /// The `show-settings` file every opener of Settings writes (the menu bar app with a pane, the
-/// daemon's `openMenu` empty) and the app that shows Settings takes, and the `settings-quit` stamp
+/// daemon's `openSettings` empty) and the app that shows Settings takes, and the `settings-quit` stamp
 /// Quit PureMouse leaves beside it. All of it happens under `show-settings.lock`: a request written
 /// while another is being read and removed would otherwise be read half written or removed unread.
 public enum SettingsRequest {

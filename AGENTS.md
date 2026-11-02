@@ -339,7 +339,11 @@ one. This file covers how to work on it safely.
   plist first, without registering anything (an unregistered job runs from a plist under the
   companion directory that launchd does not load at login), `stop` boots out and keeps the registration
   (table in `docs/companion.md`). `puremouse login-status` prints `LoginStatus` (Kit) as JSON, and
-  Settings reads "starts at login" from it, not from a plist file.
+  Settings reads "starts at login" from it, not from a plist file. General's Open at login switch
+  runs `login on|off` and never stops anything; its PureMouse is running row runs `start` / `stop`
+  (the control-to-command mapping is `LoginAction`, tested in `LoginActionTests`). Opening the
+  app from the Finder runs `register`, then `LoginItem.openSettings` opens the Settings helper
+  directly (the alert is kept for a build without one).
 - Builds are signed by `scripts/sign-bundle.sh`: inside out from `scripts/lib.zsh`'s `components`
   (a new nested bundle is one more entry), no `--deep`, always the hardened runtime, with the
   identity `signing_identity` picks (the order is in `docs/development.md`, Signing). The

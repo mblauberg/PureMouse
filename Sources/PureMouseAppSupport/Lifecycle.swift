@@ -2,17 +2,21 @@ import Foundation
 import PureMouseKit
 
 /// Login and lifecycle changes, all made by the daemon's CLI (docs/companion.md, "Login and
-/// lifecycle"): `register`, `unregister`, `stop`, `menu on|off`, and the read of `login-status`.
+/// lifecycle"): `register`, `unregister`, `start`, `stop`, `login on|off`, `menu on|off`, and the
+/// read of `login-status`.
 @MainActor
 public enum Lifecycle {
     public enum Command: Sendable {
-        case register, unregister, stop, menuOn, menuOff, loginStatus
+        case register, unregister, start, stop, loginOn, loginOff, menuOn, menuOff, loginStatus
         var arguments: [String] {
             switch self {
             case .loginStatus: ["login-status"]
             case .register: ["register"]
             case .unregister: ["unregister"]
+            case .start: ["start"]
             case .stop: ["stop"]
+            case .loginOn: ["login", "on"]
+            case .loginOff: ["login", "off"]
             case .menuOn: ["menu", "on"]
             case .menuOff: ["menu", "off"]
             }
