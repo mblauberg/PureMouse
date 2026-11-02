@@ -18,11 +18,12 @@ struct Identification: Equatable, Sendable {
     var unit: String?
     var kind: DeviceName.Kind?
 
-    /// `productID` is the one the daemon knows for the endpoint (the interface's, or the
-    /// receiver slot's), the key's fallback when the mouse has no usable model ID.
-    static func read(_ device: HIDPPDevice, productID: UInt16?) async -> Identification {
+    /// `kind` is the type the daemon already read to decide adoption. `productID` is the one the
+    /// daemon knows for the endpoint (the interface's, or the receiver slot's), the key's
+    /// fallback when the mouse has no usable model ID.
+    static func read(_ device: HIDPPDevice, kind: DeviceName.Kind?, productID: UInt16?) async -> Identification {
         var result = Identification()
-        result.kind = try? await DeviceName.kind(device)
+        result.kind = kind
         do {
             let info = try await DeviceIdentity.info(device)
             result.keyedByProduct = Config.deviceKey(modelID: info.modelID, productID: nil) == nil
