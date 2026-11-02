@@ -142,11 +142,10 @@ one. This file covers how to work on it safely.
   through the companion channel and the daemon CLI (`docs/companion.md`). Its logic that needs no
   AppKit or SwiftUI lives in `Sources/PureMouseAppSupport` (config editing and saving,
   `Locations`, status words), tested in `Tests/PureMouseAppSupportTests`; keep UI frameworks out
-  of it. It must not poll: it
-  wakes on notifications, file events and the daemon's process exit. Its Settings window and view
-  tree are built when shown (each pane on its first visit); once Settings closes the process starts
-  over (`Relaunch`): the agent's copy exits 75 for launchd to restart, since AppKit and SwiftUI keep
-  about 35 MB otherwise. Never `exec` in place (LaunchServices then withholds the status item). The
+  of it. It must not poll: it wakes on notifications, file events and the daemon's process exit.
+  Its Settings window and view tree are built when shown (each pane on its first visit); once
+  Settings closes the process starts over (`Relaunch`): the agent's copy exits 75 for launchd to
+  restart, since AppKit and SwiftUI keep about 35 MB otherwise. Never `exec` in place (LaunchServices then withholds the status item). The
   menu is rebuilt on open. Settings controls carry their own accessibility label where a `RowLabel`
   (title plus caption) leaves them unnamed. Shortcut specs are parsed and named by Kit's `Keystroke` only; the menu adds
   glyphs and spoken words.
@@ -168,7 +167,10 @@ one. This file covers how to work on it safely.
   removing a key that is not there is a no-op, so it never prunes an ancestor); with no
   pending edit nothing is written. It refuses to build on a file that does not parse or
   validate, and writes through `JSON.encode` (shortest decimals, sorted keys, whole and big
-  numbers kept digit for digit), never `JSONSerialization`.
+  numbers kept digit for digit), never `JSONSerialization`. Only Reset All Settings and Restore
+  Last Working replace the whole file, and they keep the previous one as `config.json.bak`
+  first (`ConfigFile.replace`; nothing kept for no file or `{}`); Open Config File only creates a
+  missing file (`createIfMissing`).
 - The Buttons and Apps panes list a named button when a connected mouse reports it or the config
   binds it; with no report, those `NamedButton.listedByDefault` (not the MX Master 4's thumb panel)
   (`ButtonRows.named`). Haptic picker entries come from Kit's `HapticWaveform.allCases`; the menu

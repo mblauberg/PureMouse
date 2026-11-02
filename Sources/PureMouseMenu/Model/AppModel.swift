@@ -131,6 +131,11 @@ final class AppModel {
 
     func restoreLastWorking() { store.restoreLastWorking() }
 
+    func createConfigIfMissing() { store.createIfMissing() }
+
+    /// The file Reset All Settings and Restore Last Working keep the previous config in.
+    var backupName: String { ConfigFile(url: store.locations.config).backupURL.lastPathComponent }
+
     /// Sets the saved DPI and puts every mouse on it. A mouse on a DPI chosen by Cycle Pointer
     /// Speed keeps it through a reload that leaves `dpi` alone, and choosing the value already
     /// saved changes nothing on disk, so once the file is written the daemon is also asked to

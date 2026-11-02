@@ -135,39 +135,59 @@ public final class ConfigStore {
         }
     }
 
-    /// Replaces the whole file with `{}` (every setting back to the mouse's own).
+    /// Replaces the whole file with `{}` (every setting back to the mouse's own), keeping the
+    /// previous file as `config.json.bak` (`ConfigFile.replace`).
     public func resetAll() {
-        cancelPendingWrite?()
-        cancelPendingWrite = nil
-        pendingChanges = []
-        config = ConfigTree()
-        configProblem = nil
-        write(config.data())
+        replace(with: ConfigTree().data())
     }
 
     /// Puts back the last config that loaded, after a hand edit broke it.
     public var canRestoreLastWorking: Bool { lastGood != nil && configProblem != nil }
 
+    /// Puts back the last config that loaded, keeping the broken file as `config.json.bak`.
     public func restoreLastWorking() {
-        guard let lastGood, let tree = try? ConfigTree(data: lastGood) else { return }
-        cancelPendingWrite?()
-        cancelPendingWrite = nil
-        pendingChanges = []
-        config = tree
-        configProblem = nil
-        write(lastGood)
+        guard let lastGood else { return }
+        replace(with: lastGood)
     }
 
-    private func write(_ data: Data) {
+    /// Opens the way for Open Config File: creates `{}` when there is no file. Never resets or
+    /// backs up, and leaves edits waiting to be saved as they are.
+    public func createIfMissing() {
         do {
-            try file.write(data)
+            guard let data = try file.createIfMissing() else { return }
+            if pendingChanges.isEmpty {
+                config = ConfigTree()
+                configProblem = nil
+                lastGood = data
+            }
             diskBytes = data
-            lastGood = data
             writeError = nil
             if directoryWatch == nil { startWatching() }
         } catch {
             writeError = describeSave(error)
         }
+    }
+
+    private func replace(with data: Data) {
+        guard let tree = try? ConfigTree(data: data) else { return }
+        cancelPendingWrite?()
+        cancelPendingWrite = nil
+        pendingChanges = []
+        do {
+            try file.replace(with: data, keepingBackup: true)
+            config = tree
+            configProblem = nil
+            diskBytes = data
+            lastGood = data
+            writeError = nil
+            if directoryWatch == nil { startWatching() }
+        } catch {
+            // Nothing was replaced: show the file as it is, then say why.
+            diskBytes = nil
+            reloadConfig()
+            writeError = describeSave(error)
+        }
+        changed()
     }
 
     private func describeSave(_ error: Error) -> String {
@@ -178,6 +198,9 @@ public final class ConfigStore {
             ConfigCheck.message(for: reason)
         case ConfigFile.SaveError.writeFailed(let reason):
             "PureMouse could not save \(Format.tildePath(locations.config.path)): \(reason.localizedDescription)"
+        case ConfigFile.SaveError.backupFailed(let reason):
+            "PureMouse could not keep the current file as \(ConfigFile(url: locations.config).backupURL.lastPathComponent), "
+                + "so this change was not saved: \(reason.localizedDescription)"
         default:
             error.localizedDescription
         }
