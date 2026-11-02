@@ -16,22 +16,75 @@ import Testing
     #expect(try Companion.decoder.decode(Status.self, from: data) == status)
 }
 
-@Test func statusReadsWithoutAway() throws {
-    // An older daemon writes no `away`.
-    var status = Status(
-        pid: 1, startedAt: Date(timeIntervalSince1970: 0), version: "dev", running: true, paused: false,
-        permissions: .init(accessibility: true, inputMonitoring: true), logiOptionsRunning: false,
-        config: .init(path: "/tmp/c.json", error: nil), devices: [], capture: nil, away: false)
-    var json = try JSONSerialization.jsonObject(with: Companion.encoder.encode(status)) as! [String: Any]
-    json["away"] = nil
-    status.away = nil
-    let old = try Companion.decoder.decode(Status.self, from: JSONSerialization.data(withJSONObject: json))
-    #expect(old == status)
-}
-
-@Test func controlReadsWithoutNewerKeys() throws {
-    let old = try Companion.decoder.decode(Control.self, from: Data(#"{"paused": true}"#.utf8))
-    #expect(old == Control(paused: true))
+@Test func controlOptionalFieldsMayBeOmitted() throws {
+    let minimal = try Companion.decoder.decode(Control.self, from: Data(#"{"paused": true}"#.utf8))
+    #expect(minimal == Control(paused: true))
     let control = Control(paused: false, capture: .init(token: 7), useConfiguredDPI: 9)
     #expect(try Companion.decoder.decode(Control.self, from: Companion.encoder.encode(control)) == control)
+}
+
+// MARK: - Device identity, capabilities and aimed requests
+
+/// A status with every field the current types carry set.
+private func fullStatus() -> Status {
+    Status(
+        pid: 7, startedAt: Date(timeIntervalSince1970: 1_800_000_000), version: "0.4.0", running: true,
+        paused: false, permissions: .init(accessibility: true, inputMonitoring: true),
+        logiOptionsRunning: false, config: .init(path: "/tmp/c.json", error: nil),
+        devices: [
+            .init(id: "1-1", name: "MX Master 3S", connection: .receiver, online: true,
+                  battery: .init(percent: 80, level: .good, charging: false), dpi: 1600, dpiSteps: [200, 250],
+                  wheelMode: .ratchet, hasSmartShift: true, hasThumbWheel: true,
+                  controls: [.init(cid: 0x53, name: "back", gestures: true), .init(cid: 0xFD, name: nil, gestures: false)],
+                  model: "m4082b0230000", unit: "0a1b2c3d", kind: "mouse",
+                  capabilities: .init(dpi: true, smartShift: true, smoothScroll: false, thumbWheel: true,
+                                      haptics: false, battery: true, features: ["0001", "2201", "2110"])),
+            .init(id: "2-1", name: "M750", connection: .bluetooth, online: true, battery: nil, dpi: nil,
+                  dpiSteps: [], wheelMode: nil, hasSmartShift: false, hasThumbWheel: false, controls: [],
+                  model: "pb02c", kind: "mouse"),
+        ],
+        capture: .init(token: 4, state: .pressed, cid: 0xFD, deviceID: "2-1", model: "pb02c"), away: false)
+}
+
+@Suite struct CompanionContractTests {
+    @Test func aStatusWithEveryFieldRoundTrips() throws {
+        let status = fullStatus()
+        let back = try Companion.decoder.decode(Status.self, from: Companion.encoder.encode(status))
+        #expect(back == status)
+        #expect(back.devices[0].model == "m4082b0230000" && back.devices[0].unit == "0a1b2c3d")
+        #expect(back.devices[0].capabilities?.smoothScroll == false && back.devices[0].controls[1].gestures == false)
+        #expect(back.capture?.model == "pb02c")
+    }
+
+    @Test func requestsAimedAtOneMouseRoundTrip() throws {
+        let control = Control(paused: false, capture: .init(token: 9, device: "m4082b0230000"),
+                              useConfiguredDPI: 5, device: "pb02c")
+        #expect(try Companion.decoder.decode(Control.self, from: Companion.encoder.encode(control)) == control)
+        #expect(Control().device == nil && Control.Capture(token: 1).device == nil)
+    }
+
+    @Test func unknownCapabilitiesAreLeftOutOfTheJSONNotNull() throws {
+        let capabilities = Status.Device.Capabilities(dpi: true, battery: false)
+        let json = try #require(try JSONSerialization.jsonObject(
+            with: Companion.encoder.encode(capabilities)) as? [String: Any])
+        #expect(Set(json.keys) == ["dpi", "battery"])
+        #expect(json["dpi"] as? Bool == true && json["battery"] as? Bool == false)
+        let text = String(decoding: try Companion.encoder.encode(capabilities), as: UTF8.self)
+        #expect(!text.contains("null") && !text.contains("smartShift") && !text.contains("features"))
+        let back = try Companion.decoder.decode(Status.Device.Capabilities.self, from: Data(#"{"dpi": true}"#.utf8))
+        #expect(back.smartShift == nil && back.features == nil)
+    }
+
+    @Test func nilIdentityFieldsAreLeftOutOfADeviceToo() throws {
+        let device = Status.Device(id: "1", name: "x", connection: .receiver, online: true, battery: nil, dpi: nil,
+                                   dpiSteps: [], wheelMode: nil, hasSmartShift: false, hasThumbWheel: false,
+                                   controls: [.init(cid: 1, name: nil)])
+        let text = String(decoding: try Companion.encoder.encode(device), as: UTF8.self)
+        for key in ["model", "unit", "kind", "capabilities", "gestures"] { #expect(!text.contains(key), "\(key)") }
+    }
+
+    @Test func theSchemaIsStillOne() {
+        #expect(Status.currentSchema == 1)
+        #expect(fullStatus().schema == 1)
+    }
 }

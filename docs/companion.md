@@ -74,6 +74,34 @@ previous config and reports `config.error`.
 
 Slider writes from the menu are debounced to about 300 ms.
 
+## Versioning
+
+The menu and the daemon ship together in one bundle, so the status and control formats change with
+the bundle and nothing is kept for older versions. `schema` is bumped when they change; a menu that
+sees a higher `schema` shows "update PureMouse" (`AppModel.statusTooNew`). A capability member that
+is missing means unknown: a reader shows the option, and hiding needs an explicit `false`.
+
+### Device identity and capabilities (Status)
+
+All optional; nil members are left out of the JSON.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `devices[].model` | String | The device key used by `devices.<key>` in the config: `m` plus the 12 lowercase hex digits of the 0x0003 model ID when the mouse reports one, else `p` plus the 4-digit lowercase hex product ID (e.g. `pb02c`). Absent when neither is known. Two mice of one model share it |
+| `devices[].unit` | String | The 0x0003 unit ID as 8 lowercase hex digits, when known. Stable for one physical mouse, for per-unit state such as low-battery alerts. Never written to the config |
+| `devices[].kind` | String | A word such as `mouse`, `trackball` or `keyboard`. |
+| `devices[].capabilities` | object | What the mouse reports. Members: `dpi`, `smartShift`, `smoothScroll`, `thumbWheel`, `haptics`, `battery` (each Bool: true has it, false reported not to; absent unknown, e.g. a lookup that failed transiently) and `features` ([String], HID++ feature IDs in hex, for support) |
+| `devices[].controls[].gestures` | Bool | The control can report raw XY movement. Absent when unknown |
+| `capture.model` | String | The device key (`devices[].model`) of the mouse whose control was pressed |
+
+### Requests aimed at one mouse (Control)
+
+| Field | Type | Meaning |
+|---|---|---|
+| `capture.device` | String | Listen on the mouse with this device key (`devices[].model`) only. Absent means every mouse |
+| `device` | String | Qualifies `useConfiguredDPI`: set only the mouse with this device key to the config's `dpi`. Absent means every mouse |
+
+
 ## New config keys
 
 | Key | Type | Meaning |
@@ -143,7 +171,7 @@ Choices the contract left open, as the daemon implements them:
 - **Universal Control.** `away` is true while the pointer is on another Mac and
   `universalControl.handOff` is on: each session keeps its settings but leaves the wheels and
   controls native (`Session.setAway`). Going away cancels a listening capture. The menu shows "On
-  another Mac" in the device line. Older daemons omit the key.
+  another Mac" in the device line.
 - **Capture.** Only controls not already bound are diverted for it (bound ones already reach the
   daemon). A capture still listening when the config reloads or the daemon pauses reports
   `cancelled`. A mouse adopted during a capture joins it; one lost during it simply drops out.

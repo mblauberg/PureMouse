@@ -543,6 +543,8 @@ private func scratchStore() -> (BatteryAlertStore, URL) {
     for button in Config.Button.allCases {
         #expect(NamedButton(rawValue: button.rawValue)?.cid == button.cid)
         #expect(NamedButton.config(cid: button.cid) == button.rawValue)
+        // The shared table names each config button as the menu does.
+        #expect(ControlNames.name(button.cid) == NamedButton(rawValue: button.rawValue)?.label)
     }
 }
 

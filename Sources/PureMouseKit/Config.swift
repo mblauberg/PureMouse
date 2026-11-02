@@ -35,46 +35,89 @@ public struct Config: Decodable, Sendable {
     /// for the log. The daemon logs them once, at load.
     public internal(set) var warnings: [String] = []
 
-    private enum CodingKeys: String, CodingKey {
-        case dpi, dpiPresets, scrollWheel, thumbWheel, smoothScroll, buttons, gesture, apps
-        case universalControl
-    }
+    private init() {}
 
     public init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        dpi = try c.decodeIfPresent(Int.self, forKey: .dpi, in: Self.dpiRange)
-        if c.contains(.dpiPresets) {
-            var list = try c.nestedUnkeyedContainer(forKey: .dpiPresets)
+        try self.init(decoder.container(keyedBy: AnyKey.self), base: nil)
+    }
+
+    /// The top-level sections `c` names, each decoded on top of the same section of `base` (or of
+    /// the defaults), so a caller can layer one set of settings over another. A section `c` leaves
+    /// out is `base`'s; `dpiPresets` replaces `base`'s whole and a binding replaces `base`'s for
+    /// that control.
+    ///
+    /// `apps`, `warnings` and `unknownButtons` are never taken from `base`: they start empty, and
+    /// `apps` in `c` is decoded against the layered result. Per-app settings snapshot the globals
+    /// they inherit, so a caller that owns precedence (top level, then device, then app) layers
+    /// the device sections first and decodes the top-level `apps` against that result.
+    init(_ c: KeyedDecodingContainer<AnyKey>, base: Config?) throws {
+        let base = base ?? Config()
+        self = base
+        apps = [:]
+        warnings = []
+        unknownButtons = []
+        dpi = try c.decodeIfPresent(Int.self, forKey: AnyKey("dpi"), in: Self.dpiRange) ?? base.dpi
+        if c.contains(AnyKey("dpiPresets")) {
+            let key = AnyKey("dpiPresets")
+            var presets: [Int] = []
+            var list = try c.nestedUnkeyedContainer(forKey: key)
             while !list.isAtEnd {
-                guard dpiPresets.count < Self.dpiPresetsCount.upperBound else {
-                    throw DecodingError.dataCorruptedError(forKey: .dpiPresets, in: c,
+                guard presets.count < Self.dpiPresetsCount.upperBound else {
+                    throw DecodingError.dataCorruptedError(forKey: key, in: c,
                         debugDescription: "dpiPresets has more than \(Self.dpiPresetsCount.upperBound) entries")
                 }
                 let value = try list.decode(Int.self)
                 guard Self.dpiRange.contains(value) else {
-                    throw DecodingError.dataCorruptedError(forKey: .dpiPresets, in: c,
-                        debugDescription: "dpiPresets[\(dpiPresets.count)] must be \(Self.dpiRange.lowerBound)–\(Self.dpiRange.upperBound), not \(value)")
+                    throw DecodingError.dataCorruptedError(forKey: key, in: c,
+                        debugDescription: "dpiPresets[\(presets.count)] must be \(Self.dpiRange.lowerBound)–\(Self.dpiRange.upperBound), not \(value)")
                 }
-                dpiPresets.append(value)
+                presets.append(value)
             }
+            dpiPresets = presets
         }
-        scrollWheel = try c.decodeIfPresent(ScrollWheel.self, forKey: .scrollWheel)
-        thumbWheel = try c.decodeIfPresent(ThumbWheel.self, forKey: .thumbWheel)
-        smoothScroll = try c.decodeIfPresent(SmoothScroll.self, forKey: .smoothScroll)
-        buttons = try c.decodeIfPresent([String: Binding].self, forKey: .buttons) ?? [:]
-        gesture = try c.decodeIfPresent(GestureSettings.self, forKey: .gesture) ?? GestureSettings()
-        universalControl = try c.decodeIfPresent(UniversalControl.self, forKey: .universalControl) ?? UniversalControl()
-        for (name, binding) in buttons {
-            guard let cid = Button.cid(for: name) else {
-                unknownButtons.append(name)
-                continue
-            }
-            bindings[cid] = binding
+        if let section = try c.nestedContainerIfPresent(forKey: AnyKey("scrollWheel")) {
+            scrollWheel = try ScrollWheel(section, base: base.scrollWheel)
         }
-        unknownButtons.sort()
-        if c.contains(.apps) {
-            try decodeApps(try c.nestedContainer(keyedBy: AnyKey.self, forKey: .apps))
+        if let section = try c.nestedContainerIfPresent(forKey: AnyKey("thumbWheel")) {
+            thumbWheel = try ThumbWheel(global: section, base: base.thumbWheel ?? ThumbWheel())
         }
+        if let section = try c.nestedContainerIfPresent(forKey: AnyKey("smoothScroll")) {
+            smoothScroll = try SmoothScroll(section, base: base.smoothScroll ?? SmoothScroll())
+        }
+        if let section = try c.nestedContainerIfPresent(forKey: AnyKey("buttons")) {
+            try decodeButtons(section)
+        }
+        if let section = try c.nestedContainerIfPresent(forKey: AnyKey("gesture")) {
+            gesture = try GestureSettings(section, base: base.gesture)
+        }
+        if let section = try c.nestedContainerIfPresent(forKey: AnyKey("universalControl")) {
+            universalControl = try UniversalControl(section, base: base.universalControl)
+        }
+        if c.contains(AnyKey("apps")) {
+            try decodeApps(try c.nestedContainer(keyedBy: AnyKey.self, forKey: AnyKey("apps")))
+        }
+    }
+
+    /// Adds the bindings `c` names to `buttons` and `bindings`. A name for a control that `buttons`
+    /// held before replaces the earlier name and binding, and a gesture keeps the directions it
+    /// leaves out. Names within `c` do not layer on each other; if two name one control, the last
+    /// in sorted order binds it and all of them stay in `buttons`.
+    private mutating func decodeButtons(_ c: KeyedDecodingContainer<AnyKey>) throws {
+        let before = bindings
+        let earlier = Set(buttons.keys)
+        var named: [String: Binding] = [:]
+        var bound: [UInt16: Binding] = [:]
+        var unknown: Set<String> = Set(unknownButtons)
+        for name in c.allKeys.sorted(by: { $0.stringValue < $1.stringValue }) {
+            let cid = Button.cid(for: name.stringValue)
+            let binding = try Binding.decode(c, forKey: name, base: cid.flatMap { before[$0] })
+            named[name.stringValue] = binding
+            if let cid { bound[cid] = binding } else { unknown.insert(name.stringValue) }
+        }
+        for name in earlier where Button.cid(for: name).map({ bound[$0] != nil }) == true { buttons[name] = nil }
+        buttons.merge(named) { _, new in new }
+        bindings.merge(bound) { _, new in new }
+        unknownButtons = unknown.sorted()
     }
 
     public struct ScrollWheel: Decodable, Sendable {
@@ -88,10 +131,16 @@ public struct Config: Decodable, Sendable {
         public var smartShiftThreshold: UInt8?
 
         public init(from decoder: Decoder) throws {
-            let c = try decoder.container(keyedBy: AnyKey.self)
-            inverted = try c.decodeIfPresent(Bool.self, forKey: AnyKey("inverted"))
-            mode = try c.decodeIfPresent(WheelMode.self, forKey: AnyKey("mode"))
+            try self.init(decoder.container(keyedBy: AnyKey.self), base: nil)
+        }
+
+        /// The keys `c` names, the rest from `base` (or unset).
+        init(_ c: KeyedDecodingContainer<AnyKey>, base: ScrollWheel?) throws {
+            if let base { self = base }
+            inverted = try c.decodeIfPresent(Bool.self, forKey: AnyKey("inverted")) ?? inverted
+            mode = try c.decodeIfPresent(WheelMode.self, forKey: AnyKey("mode")) ?? mode
             smartShiftThreshold = try c.decodeIfPresent(UInt8.self, forKey: AnyKey("smartShiftThreshold"), in: 1...255)
+                ?? smartShiftThreshold
         }
     }
 
@@ -132,9 +181,13 @@ public struct Config: Decodable, Sendable {
         public init() {}
 
         public init(from decoder: Decoder) throws {
-            let c = try decoder.container(keyedBy: AnyKey.self)
-            try self.init(c, base: ThumbWheel())
-            inverted = try c.decodeIfPresent(Bool.self, forKey: AnyKey("inverted"))
+            try self.init(global: decoder.container(keyedBy: AnyKey.self), base: ThumbWheel())
+        }
+
+        /// As `init(_:base:)`, and `inverted` too: the top-level section, where it applies.
+        init(global c: KeyedDecodingContainer<AnyKey>, base: ThumbWheel) throws {
+            try self.init(c, base: base)
+            inverted = try c.decodeIfPresent(Bool.self, forKey: AnyKey("inverted")) ?? inverted
         }
 
         /// The keys `c` names, on top of `base`. `action` picks a pair and, if that changes the
@@ -219,7 +272,12 @@ public struct Config: Decodable, Sendable {
         public init() {}
 
         public init(from decoder: Decoder) throws {
-            let c = try decoder.container(keyedBy: AnyKey.self)
+            try self.init(decoder.container(keyedBy: AnyKey.self), base: GestureSettings())
+        }
+
+        /// The keys `c` names, on top of `base`.
+        init(_ c: KeyedDecodingContainer<AnyKey>, base: GestureSettings) throws {
+            self = base
             distanceMm = try c.decodeIfPresent(Double.self, forKey: AnyKey("distanceMm"), in: Self.distanceMmRange)
                 ?? distanceMm
             repeatIntervalMs = try c.decodeIfPresent(Int.self, forKey: AnyKey("repeatIntervalMs"),
@@ -235,7 +293,12 @@ public struct Config: Decodable, Sendable {
         public init() {}
 
         public init(from decoder: Decoder) throws {
-            let c = try decoder.container(keyedBy: AnyKey.self)
+            try self.init(decoder.container(keyedBy: AnyKey.self), base: UniversalControl())
+        }
+
+        /// The keys `c` names, on top of `base`.
+        init(_ c: KeyedDecodingContainer<AnyKey>, base: UniversalControl) throws {
+            self = base
             handOff = try c.decodeIfPresent(Bool.self, forKey: AnyKey("handOff")) ?? handOff
         }
     }
@@ -338,6 +401,12 @@ public struct Config: Decodable, Sendable {
 }
 
 extension KeyedDecodingContainer {
+    /// The object at `key`, or nil when the key is absent or null (as `decodeIfPresent` treats them).
+    func nestedContainerIfPresent(forKey key: Key) throws -> KeyedDecodingContainer<AnyKey>? {
+        guard contains(key), try !decodeNil(forKey: key) else { return nil }
+        return try nestedContainer(keyedBy: AnyKey.self, forKey: key)
+    }
+
     /// Decodes a number that must lie within `range`. Out-of-range values (and so NaN) are a
     /// decoding error naming the field, e.g. "smoothScroll.speed must be 0.1–10, not 1e+300".
     public func decodeIfPresent<T: Decodable & Comparable>(_ type: T.Type, forKey key: Key,

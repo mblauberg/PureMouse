@@ -152,7 +152,10 @@ case name the same app: the log warns, and the entry last in sorted key order ap
 **Buttons:** `gesture` (thumb), `back`, `forward`, `top` (behind the wheel), `middle` (wheel
 press), `thumbPanel` (MX Master 4 haptic/Actions Ring panel, 0x01A0), or any hex control ID such
 as `"0x00c4"`. Names apply only when the mouse has that control. **Select by Pressing** in Settings › Buttons, or
-`puremouse probe`, finds a control's ID.
+`puremouse probe`, finds a control's ID. The shared library also holds a table of display names for
+common mouse controls, apart from these config names (for example 0x00fd is the "DPI button");
+the log and the menu adopt it in later changes. Any control works by its hex ID whether or not it
+has a name.
 
 **Actions:** `missionControl`, `appExpose`, `showDesktop`, `launchpad`, `spaceLeft`, `spaceRight`,
 `navigateBack`, `navigateForward`, `toggleScrollMode`, `cycleDPI`, `volumeUp`, `volumeDown`, `mute`,
