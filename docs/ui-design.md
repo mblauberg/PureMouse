@@ -78,7 +78,11 @@ Each level has one mechanism, and each label says what it reveals.
   elsewhere (keyboard shortcut, shell command) opens as a popover anchored to its row.
 - Every advanced control has a safe default that the pane's Restore Defaults covers.
 - **Hide or dim.** Dim a row when a switch above turns its feature off. Hide rows that do not apply
-  to the current mode or mouse.
+  to the current mode or mouse. A control is hidden for the mouse only when the primary mouse,
+  online with PureMouse running, reports every capability it needs as false; unknown counts as
+  available, and with no mouse known every control shows. A control the config already sets stays,
+  captioned "Not supported by this mouse." (`ControlAvailability`). A section whose rows are all
+  hidden goes too.
 
 ## Status menu and menu bar icon
 
@@ -154,8 +158,8 @@ Each level has one mechanism, and each label says what it reveals.
 |---|---|---|
 | General | Status (PureMouse running/paused/off, Start or Stop, active notices), Open at login, Show in menu bar, Low battery notification, Permissions | Advanced… sheet: Work with Universal Control, Config file, Log, Reset All Settings… |
 | Mouse header | Buttons, Scrolling, Pointer segments; mouse pop-up with two or more mice; Find by Pressing… and the device card on Buttons | — |
-| Mouse › Buttons | One row per button with its action | Gesture directions (disclosure, collapsed, caption summarises them); Other controls (disclosure); Advanced… sheet: gesture distance and repeat |
-| Mouse › Scrolling | Smooth scrolling, Feel, Speed; Reverse direction, Wheel mode, SmartShift (when the mouse has them); thumb wheel Action (Turn left/right when Custom) | Advanced… sheet: acceleration, glide, Shift for sideways; SmartShift threshold; thumb wheel reverse, turn distance, speed |
+| Mouse › Buttons | One row per button with its action | Gesture directions (disclosure, collapsed, caption summarises them; choosing Hold and Move expands it); Other controls (disclosure); Advanced… sheet, only while some button anywhere is Hold and Move: gesture Distance and Repeat |
+| Mouse › Scrolling | Smooth scrolling, Feel, Speed; Main Wheel: Reverse direction, Wheel mode, SmartShift; Thumb Wheel: Action (Turn left/right when Custom); each when the mouse has it | Advanced… sheet, each row only when it applies: Acceleration, Glide, Hold Shift to scroll sideways (dimmed while smooth scrolling is off); Switches at (while SmartShift is on); thumb wheel Reverse direction (when it scrolls here or in some app), Swap directions and Turn distance (when it has actions), Speed (when it scrolls) |
 | Mouse › Pointer | Pointer Speed slider with its value; Presets summary row | Exact value (disclosure); Edit Presets… sheet (also opened from the menu) |
 | Apps | App list with summaries, Add App in the footer, routing note; empty state with Add App | Each app opens in a sheet; inside it, gesture directions, other controls and more thumb wheel options are disclosures |
 | About | Icon, name, version, Check for Updates, links, Support PureMouse | — |

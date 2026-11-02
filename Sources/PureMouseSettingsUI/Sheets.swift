@@ -9,14 +9,39 @@ struct BindingTarget: Hashable {
     var direction: String?
     /// The app whose binding this is (`apps.<key>`), or nil for the global one.
     var app: String?
-    /// What the sheet calls the control, where it is not a button ("the thumb wheel turned left").
+    /// What the sheet calls the control, where it is not a button ("turning the thumb wheel left").
     var label: String?
+    /// The app's display name, for an app's binding ("Safari").
+    var appName: String?
 
     var title: String {
         if let label { return label }
         let name = NamedButton.title(forKey: button)
         guard let direction else { return name }
         return "\(name), \(Gesture.label(direction).lowercased())"
+    }
+
+    /// The control in a sentence: "the top button", "the gesture button", "control 0x00c3".
+    var spokenName: String {
+        if let label { return label }
+        return switch NamedButton(rawValue: button) {
+        case .gesture: "the gesture button"
+        case .back: "the back button"
+        case .forward: "the forward button"
+        case .top: "the top button"
+        case .middle: "the wheel button"
+        case .thumbPanel: "the thumb panel"
+        case nil: "control \(button)"
+        }
+    }
+
+    /// A sheet's subtitle, naming the control and the app: "For the top button in Safari.",
+    /// "For the gesture button, move up."
+    var subtitle: String {
+        var text = "For \(spokenName)"
+        if let appName { text += " in \(appName)" }
+        if let direction, label == nil { text += ", \(Gesture.label(direction).lowercased())" }
+        return text + "."
     }
 }
 
@@ -30,6 +55,11 @@ struct SheetRequest: Identifiable {
 
 /// Records a keyboard shortcut: press it, or type it as the config spells it.
 struct ShortcutSheet: View {
+    static let title = "Keyboard Shortcut"
+    static let typingPrompt = "Or enter it, such as ctrl+left"
+    static let caption = "macOS keeps some shortcuts, such as ⌃←. Enter those instead."
+    static let syntaxError = "Use cmd, shift, opt or ctrl with a key, such as a, 4, left, f11, space or return."
+
     let request: SheetRequest
     let save: (String) -> Void
     @Environment(\.dismiss) private var dismiss
@@ -49,27 +79,32 @@ struct ShortcutSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Keyboard Shortcut").font(.headline)
-                Text("What \(request.target.title) presses.").foregroundStyle(.secondary)
+                Text(Self.title).font(.headline)
+                Text(request.target.subtitle).foregroundStyle(.secondary)
             }
             RecorderField(recorder: recorder)
             VStack(alignment: .leading, spacing: 4) {
-                Text("Some shortcuts never reach PureMouse (macOS keeps ⌃← and similar). Type those instead:")
-                    .font(.callout).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                TextField("Type it instead, e.g. ctrl+left", text: $typed)
+                TextField(Self.typingPrompt, text: $typed)
                     .textFieldStyle(.roundedBorder)
                     .font(.body.monospaced())
                     .focused($typing)
                     .onChange(of: typing) { _, focused in if focused { recorder.stop() } }
-                    .accessibilityLabel("Type the shortcut instead")
+                    .accessibilityLabel("Enter the shortcut")
+                Text(Self.caption)
+                    .font(.callout).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 if !typed.isEmpty {
                     if typedValid, let display = Shortcut.display(typed) {
                         Label(display, systemImage: "checkmark.circle.fill").foregroundStyle(.secondary)
                             .labelStyle(StatusLabelStyle())
                     } else {
-                        Text("Use names like cmd, shift, opt, ctrl with a key: a, 4, left, f11, space, return.")
-                            .font(.callout).foregroundStyle(.red)
+                        Label {
+                            Text(Self.syntaxError)
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill").symbolRenderingMode(.multicolor)
+                        }
+                        .font(.callout)
+                        .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
@@ -162,36 +197,21 @@ final class ShortcutRecorder {
 }
 
 /// The recorder's field: shows the shortcut in ⌃⌥⇧⌘ glyphs; click it to record again.
-private struct RecorderField: View {
+struct RecorderField: View {
     let recorder: ShortcutRecorder
 
-    private var text: String {
-        if recorder.recording {
-            let held = Shortcut.display(heldSpec) ?? ""
-            return held.isEmpty ? "Type a shortcut" : held
-        }
-        return recorder.spec.flatMap(Shortcut.display) ?? "Click to record"
-    }
-
-    /// The held modifiers with a placeholder key, for display only.
-    private var heldSpec: String {
-        let names = [(Shortcut.Modifiers.control, "ctrl"), (.option, "opt"), (.shift, "shift"), (.command, "cmd")]
-            .filter { recorder.held.contains($0.0) }.map(\.1)
-        return names.isEmpty ? "" : (names + ["…"]).joined(separator: "+")
-    }
+    static let idle = "Record Shortcut"
+    static let recording = "Recording…"
 
     var body: some View {
         Button {
             recorder.recording ? recorder.stop() : recorder.start()
         } label: {
             HStack {
-                Text(recorder.recording && recorder.held.isEmpty ? "Type a shortcut" : displayText)
+                Text(displayText)
                     .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(recorder.recording && recorder.held.isEmpty ? .secondary : .primary)
+                    .foregroundStyle(recorder.spec == nil || recorder.recording && recorder.held.isEmpty ? .secondary : .primary)
                 Spacer()
-                if recorder.recording {
-                    Text("Recording").font(.subheadline).foregroundStyle(.secondary)
-                }
             }
             .padding(.horizontal, 10)
             .frame(maxWidth: .infinity, minHeight: 36)
@@ -210,21 +230,26 @@ private struct RecorderField: View {
         .focusEffectDisabled(recorder.recording)
         .accessibilityLabel("Shortcut")
         .accessibilityValue(recorder.spec.map(Shortcut.spoken) ?? "None")
-        .accessibilityHint(recorder.recording ? "Press the shortcut now" : "Click to record a new shortcut")
+        .accessibilityHint(recorder.recording ? "Press the shortcut now" : "Records a new shortcut")
     }
 
+    /// "Recording…" until a modifier is held, then the held modifiers; idle, the shortcut, else
+    /// "Record Shortcut".
     private var displayText: String {
         if recorder.recording {
             let names = [(Shortcut.Modifiers.control, "⌃"), (.option, "⌥"), (.shift, "⇧"), (.command, "⌘")]
                 .filter { recorder.held.contains($0.0) }.map(\.1)
-            return names.joined()
+            return names.isEmpty ? Self.recording : names.joined()
         }
-        return recorder.spec.flatMap(Shortcut.display) ?? "Click to record"
+        return recorder.spec.flatMap(Shortcut.display) ?? Self.idle
     }
 }
 
 /// Edits a shell command.
 struct CommandSheet: View {
+    static let title = "Run Command"
+    static let caption = "Runs as your user account. Output isn't shown."
+
     let request: SheetRequest
     let save: (String) -> Void
     @Environment(\.dismiss) private var dismiss
@@ -233,15 +258,15 @@ struct CommandSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Run Shell Command").font(.headline)
-                Text("What \(request.target.title) runs.").foregroundStyle(.secondary)
+                Text(Self.title).font(.headline)
+                Text(request.target.subtitle).foregroundStyle(.secondary)
             }
             TextField("open -a Safari", text: $command, axis: .vertical)
                 .textFieldStyle(.roundedBorder)
                 .font(.body.monospaced())
                 .lineLimit(3...8)
                 .accessibilityLabel("Command")
-            Text("Runs with /bin/sh as you. PureMouse doesn't show its output.")
+            Text(Self.caption)
                 .font(.callout).foregroundStyle(.secondary)
             HStack {
                 Spacer()

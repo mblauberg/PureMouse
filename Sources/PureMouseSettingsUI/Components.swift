@@ -10,16 +10,23 @@ struct RowLabel: View {
     var help: String?
     /// Shown after the help when the key is absent and the mouse keeps its own setting.
     var mouseDefault = false
+    /// A control the mouse lacks, kept because its value is set: says so after the help.
+    var availability = ControlAvailability.available
 
-    init(_ title: String, help: String? = nil, mouseDefault: Bool = false) {
+    init(_ title: String, help: String? = nil, mouseDefault: Bool = false,
+         availability: ControlAvailability = .available) {
         self.title = title
         self.help = help
         self.mouseDefault = mouseDefault
+        self.availability = availability
     }
+
+    static let mouseDefaultCaption = "Using the mouse's own setting."
 
     var body: some View {
         Text(title)
-        if let caption = [help, mouseDefault ? "Mouse default." : nil].compactMap({ $0 }).joined(separator: " ").nilIfEmpty {
+        let parts = [help, mouseDefault ? Self.mouseDefaultCaption : nil, availability.caption]
+        if let caption = parts.compactMap({ $0 }).joined(separator: " ").nilIfEmpty {
             Text(caption)
         }
     }
@@ -42,6 +49,7 @@ struct ValueSlider: View {
     let high: String
     let format: (Double) -> String
     var width: CGFloat = 200
+    var availability = ControlAvailability.available
 
     var body: some View {
         LabeledContent {
@@ -56,7 +64,7 @@ struct ValueSlider: View {
                     .accessibilityHidden(true)
             }
         } label: {
-            RowLabel(title, help: help)
+            RowLabel(title, help: help, availability: availability)
         }
     }
 }

@@ -9,9 +9,14 @@ import PureMouseAppSupport
 /// and `PUREMOUSE_DEV_SHORTCUT=<button>` its shortcut sheet. On the Apps pane,
 /// `PUREMOUSE_DEV_APP=<bundle id>` opens (or adds) that app's sheet, and with it
 /// `PUREMOUSE_DEV_SHORTCUT=<button>` opens that button's shortcut editor popover.
-/// `PUREMOUSE_DEV_SHEET=<name>` opens a pane's sheet: `presets` (Mouse › Pointer).
+/// `PUREMOUSE_DEV_SHEET=<name>` opens a sheet: `presets` (Mouse › Pointer) through a `ShowRequest`,
+/// or a sheet on the pane shown (`DevSheet`).
 @MainActor
 public enum DevHooks {
+    static var sheet: DevSheet? {
+        ProcessInfo.processInfo.environment["PUREMOUSE_DEV_SHEET"].flatMap(DevSheet.init(rawValue:))
+    }
+
     public static func run(show: (ShowRequest) -> Void) {
         let environment = ProcessInfo.processInfo.environment
         // The menu bar app's `DevHooks` reads the same variable the same way.
@@ -30,5 +35,12 @@ public enum DevHooks {
         default: break
         }
     }
+}
+
+/// A sheet `PUREMOUSE_DEV_SHEET` opens: one case per sheet; a pane checks `DevHooks.sheet` as it
+/// appears.
+enum DevSheet: String {
+    /// The pane's Advanced… sheet (Mouse › Buttons, Mouse › Scrolling).
+    case advanced
 }
 #endif

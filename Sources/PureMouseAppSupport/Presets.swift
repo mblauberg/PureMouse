@@ -16,6 +16,12 @@ public enum Feel: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    /// Feel's caption: what it changes, or, with values no preset matches (no segment selected),
+    /// where to change them.
+    public static func caption(for selection: Feel?) -> String {
+        selection == nil ? "Custom. Adjust in Advanced." : "How long a scroll glides, and how far fast flicks go."
+    }
+
     var values: (acceleration: Double, smoothingMs: Double)? {
         switch self {
         case .precise: (0.5, 60)
@@ -136,6 +142,12 @@ public enum Format {
 
     public static func multiplier(_ value: Double) -> String {
         value.formatted(.number.precision(.fractionLength(value * 10 == (value * 10).rounded() ? 1 : 2))) + "×"
+    }
+
+    /// Scroll acceleration: a strength without a unit, since the distance it adds varies with
+    /// the wheel's speed. 0 reads "Off".
+    public static func strength(_ value: Double) -> String {
+        value == 0 ? "Off" : value.formatted(.number.precision(.fractionLength(1)))
     }
 
     public static func millimetres(_ value: Double) -> String {
