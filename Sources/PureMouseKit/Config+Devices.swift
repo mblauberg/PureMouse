@@ -7,8 +7,9 @@ import Foundation
 
 extension Config {
     /// The sections a device entry may set. An entry may also hold a `name` for the user's own
-    /// reference, which is ignored; anything else is ignored with a warning.
-    static let deviceSections: Set = [
+    /// reference, which is ignored; anything else is ignored with a warning. Public so the menu
+    /// bar app's `ConfigTree` writes under a device only what the decoder reads.
+    public static let deviceSections: Set = [
         "dpi", "dpiPresets", "scrollWheel", "thumbWheel", "smoothScroll", "buttons", "gesture",
     ]
 

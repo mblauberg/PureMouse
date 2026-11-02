@@ -48,11 +48,11 @@ extension ConfigTree {
     public func hasApp(_ bundleID: String) -> Bool { contains(["apps", appKey(bundleID)]) }
 
     /// Where an app's sections live, for `bind(_:to:in:)` and the thumb wheel helpers.
-    public static func appScope(_ key: String) -> [String] { ["apps", key] }
+    public static func appScope(_ key: String) -> ConfigScope { .app(key) }
 
     /// Removes an app's entry, every key in it included.
     public mutating func removeApp(_ bundleID: String) {
-        set(nil, at: Self.appScope(appKey(bundleID)))
+        set(nil, at: [], in: Self.appScope(appKey(bundleID)))
     }
 
     // MARK: Buttons
@@ -67,7 +67,7 @@ extension ConfigTree {
             return
         }
         if case .gesture = self.binding(button, in: scope) { return }
-        let path = scope + ["buttons", buttonKey(button, in: scope)]
+        let path = scope.prefix + ["buttons", buttonKey(button, in: scope)]
         let click: Any
         if let own = self[path], own is String || own is [String: Any] {
             click = own
@@ -88,7 +88,7 @@ extension ConfigTree {
     public mutating func bindInApp(_ app: String, button: String, direction: String, to binding: ButtonAction) {
         let scope = Self.appScope(app)
         let key = buttonKey(button, in: scope)
-        let path = scope + ["buttons", key]
+        let path = scope.prefix + ["buttons", key]
         switch binding {
         case .standard:
             let others = (self[path] as? [String: Any])?.keys.filter { $0 != direction } ?? []
@@ -106,13 +106,13 @@ extension ConfigTree {
 
     /// The app sets its own scrolling speed or glide ("Custom scrolling").
     public func overridesScrolling(_ app: String) -> Bool {
-        Self.scrollOverrideKeys.contains { contains(Self.appScope(app) + ["smoothScroll", $0]) }
+        Self.scrollOverrideKeys.contains { contains(Self.appScope(app).prefix + ["smoothScroll", $0]) }
     }
 
     /// Turns the app's own speed and glide on, starting from the global values, or off, removing
     /// them (and `smoothScroll` and the app's entry when nothing else is left in them).
     public mutating func setOverridesScrolling(_ app: String, _ on: Bool) {
-        let path = Self.appScope(app) + ["smoothScroll"]
+        let path = Self.appScope(app).prefix + ["smoothScroll"]
         if on {
             guard !overridesScrolling(app) else { return }
             set(double(["smoothScroll", "speed"]) ?? 1, at: path + ["speed"])
@@ -125,7 +125,7 @@ extension ConfigTree {
     /// Whether the app's scrolling glides: its own `smoothScroll.enabled`, else the global one's.
     /// A `smoothScroll` in the app turns it on where there is none globally (Kit's `decodeApps`).
     public func scrollsSmoothly(_ app: String) -> Bool {
-        let own = Self.appScope(app) + ["smoothScroll"]
+        let own = Self.appScope(app).prefix + ["smoothScroll"]
         if let enabled = bool(own + ["enabled"]) { return enabled }
         if contains(["smoothScroll"]) { return smoothScrollEnabled }
         return contains(own)
@@ -166,15 +166,15 @@ extension ConfigTree {
     public func appSummary(_ app: String) -> String {
         let scope = Self.appScope(app)
         var parts: [String] = []
-        let choice = thumbWheelChoice(at: scope + ["thumbWheel"])
-        let direction = bool(scope + ["thumbWheel", "reversed"]).map { $0 ? "directions swapped" : "directions not swapped" }
+        let choice = thumbWheelChoice(at: scope.prefix + ["thumbWheel"])
+        let direction = bool(scope.prefix + ["thumbWheel", "reversed"]).map { $0 ? "directions swapped" : "directions not swapped" }
         switch (choice != .inherit, direction) {
         case (true, let direction?): parts.append("Thumb wheel: \(choice.label), \(direction)")
         case (true, nil): parts.append("Thumb wheel: \(choice.label)")
         case (false, let direction?): parts.append("Thumb wheel: \(direction.prefix(1).uppercased() + direction.dropFirst())")
         case (false, nil): break
         }
-        let buttons = (self[scope + ["buttons"]] as? [String: Any])?.count ?? 0
+        let buttons = (self[scope.prefix + ["buttons"]] as? [String: Any])?.count ?? 0
         if buttons > 0 { parts.append(buttons == 1 ? "1 button changed" : "\(buttons) buttons changed") }
         if overridesScrolling(app) { parts.append("Custom scrolling") }
         return parts.isEmpty ? AppList.noCustomSettings : parts.joined(separator: ", ")

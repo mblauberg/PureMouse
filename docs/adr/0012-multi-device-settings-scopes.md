@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted, not built
+Accepted. The `ConfigTree` half is built (`ConfigScope`, `resolved`, `isOverridden`, `set(_:at:in:)`,
+`deviceEntries`, and a parity test against `Config.forDevice`); the device menu and the per-row
+inheritance in the panes are not.
 
 ## Context
 

@@ -19,8 +19,11 @@ public struct ConfigTree {
         root = object
     }
 
-    /// Objects that mean something even when empty: `smoothScroll: {}` turns smooth scrolling on.
-    static let keptWhenEmpty: Set<String> = ["smoothScroll"]
+    /// Objects that mean something even when empty: `smoothScroll: {}` turns smooth scrolling on,
+    /// at the top level and in a device entry (`devices.<key>.smoothScroll`).
+    static func keptWhenEmpty(_ path: [String]) -> Bool {
+        path == ["smoothScroll"] || (path.count == 3 && path[0] == "devices" && path[2] == "smoothScroll")
+    }
 
     public subscript(path: [String]) -> Any? {
         var node: Any = root
@@ -35,7 +38,7 @@ public struct ConfigTree {
 
     /// Sets the value at `path`, or removes it when `value` is nil. Intermediate values that are
     /// not objects are replaced by objects. Objects left empty by a removal are pruned, except
-    /// those in `keptWhenEmpty`. Removing a key that is not there changes nothing, so it cannot
+    /// those `keptWhenEmpty` names. Removing a key that is not there changes nothing, so it cannot
     /// prune an empty object it passes through (which `changes(to:)` would then record).
     public mutating func set(_ value: Any?, at path: [String]) {
         guard !path.isEmpty, value != nil || contains(path) else { return }
@@ -53,8 +56,7 @@ public struct ConfigTree {
         let child = dict[key] as? [String: Any]
         if child == nil, value == nil { return dict }
         let updated = setting(value, at: path.dropFirst(), in: child ?? [:], prefix: prefix + [key])
-        let childPath = (prefix + [key]).joined(separator: ".")
-        if updated.isEmpty, !keptWhenEmpty.contains(childPath) {
+        if updated.isEmpty, !keptWhenEmpty(prefix + [key]) {
             dict[key] = nil
         } else {
             dict[key] = updated
@@ -64,18 +66,22 @@ public struct ConfigTree {
 
     // MARK: Typed reads
 
-    public func bool(_ path: [String]) -> Bool? {
-        guard let value = self[path] as? NSNumber, JSON.isBool(value) else { return nil }
+    public func bool(_ path: [String]) -> Bool? { Self.bool(self[path]) }
+    public func double(_ path: [String]) -> Double? { Self.double(self[path]) }
+    public func int(_ path: [String]) -> Int? { Self.int(self[path]) }
+
+    static func bool(_ value: Any?) -> Bool? {
+        guard let value = value as? NSNumber, JSON.isBool(value) else { return nil }
         return value.boolValue
     }
 
-    public func double(_ path: [String]) -> Double? {
-        guard let value = self[path] as? NSNumber, !JSON.isBool(value) else { return nil }
+    static func double(_ value: Any?) -> Double? {
+        guard let value = value as? NSNumber, !JSON.isBool(value) else { return nil }
         return value.doubleValue
     }
 
-    public func int(_ path: [String]) -> Int? {
-        guard let value = self[path] as? NSNumber, !JSON.isBool(value) else { return nil }
+    static func int(_ value: Any?) -> Int? {
+        guard let value = value as? NSNumber, !JSON.isBool(value) else { return nil }
         // Whole numbers and big ones (NSDecimalNumber) read exactly from their digits.
         if value is NSDecimalNumber || !JSON.isFloatingPoint(value) { return Int(value.stringValue) }
         let double = value.doubleValue
@@ -105,27 +111,41 @@ public struct ConfigTree {
     /// object is added key by key too, so it merges into one a hand edit added meanwhile (an empty
     /// one is set whole). An object that disappeared is removed key by key (it may only have been
     /// pruned as empty), except one that means something when empty (`keptWhenEmpty`) or that was
-    /// empty, which is removed whole.
+    /// empty, which is removed whole. A device entry that disappeared leaves its `name` out of
+    /// that: `apply` removes the name with the entry's last other key, so an entry a hand edit gave
+    /// other keys meanwhile keeps its name.
     func changes(to after: ConfigTree) -> [Change] {
         var out: [Change] = []
-        Self.diff(root, after.root, path: [], into: &out)
+        Self.diff(root, after.root, path: [], vanishing: false, into: &out)
         return out
     }
 
+    /// Replays `changes`. A device entry left holding only its `name` by a removal goes too, as
+    /// `set(_:at:in:name:)` removes it, since a name says nothing without an override.
     mutating func apply(_ changes: [Change]) {
-        for change in changes { set(change.value, at: change.path) }
+        for change in changes {
+            let removing = change.value == nil && contains(change.path)
+            set(change.value, at: change.path)
+            let entry = Array(change.path.prefix(2))
+            if removing, change.path.count > 2, change.path[0] == "devices",
+               let rest = self[entry] as? [String: Any], rest.keys.allSatisfy({ $0 == "name" }) {
+                set(nil, at: entry)
+            }
+        }
     }
 
-    private static func diff(_ before: [String: Any], _ after: [String: Any], path: [String], into out: inout [Change]) {
+    private static func diff(_ before: [String: Any], _ after: [String: Any], path: [String],
+                             vanishing: Bool, into out: inout [Change]) {
         for key in Set(before.keys).union(after.keys).sorted() {
             let path = path + [key]
+            if vanishing, path.count == 3, path[0] == "devices", key == "name" { continue }
             switch (before[key], after[key]) {
             case let (old as [String: Any], new as [String: Any]):
-                diff(old, new, path: path, into: &out)
-            case let (old as [String: Any], nil) where !old.isEmpty && !keptWhenEmpty.contains(path.joined(separator: ".")):
-                diff(old, [:], path: path, into: &out)
+                diff(old, new, path: path, vanishing: false, into: &out)
+            case let (old as [String: Any], nil) where !old.isEmpty && !keptWhenEmpty(path):
+                diff(old, [:], path: path, vanishing: path.count == 2 && path[0] == "devices" && old.keys.contains { $0 != "name" }, into: &out)
             case let (nil, new as [String: Any]) where !new.isEmpty:
-                diff([:], new, path: path, into: &out)
+                diff([:], new, path: path, vanishing: false, into: &out)
             case let (old?, new) where new == nil || JSON.encode(old) != JSON.encode(new!):
                 out.append(Change(path: path, value: new))
             case let (nil, new?):
