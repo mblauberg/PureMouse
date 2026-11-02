@@ -247,7 +247,7 @@ struct LaunchdAgentService: LoginService {
         var description: String {
             switch self {
             case .stillRunning(let target, let output):
-                "the running PureMouse did not stop (\(output)); try `launchctl bootout \(target)`"
+                "PureMouse did not stop (\(output)); try `launchctl bootout \(target)`"
             case .bootstrap(let output):
                 "launchd would not start PureMouse (\(output)); check it is allowed under System Settings › General › Login Items"
             case .kickstart(let output):

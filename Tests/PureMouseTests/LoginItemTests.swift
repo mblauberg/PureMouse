@@ -471,4 +471,40 @@ private final class Rig: @unchecked Sendable {
         // login-status only reads.
         #expect(rig.item.loginStatus().service == "fake")
     }
+
+    // MARK: What the user is told
+
+    @Test func aCopyOutsideApplicationsIsToldToMoveIt() {
+        let alert = LoginItem.startFailureAlert(LoginItem.Failure.translocated)
+        #expect(alert.title == "PureMouse needs to be in your Applications folder")
+        #expect(alert.body == "Move it there, then open it again.")
+    }
+
+    @Test func aCopyThatIsNotInstalledIsToldToInstallIt() {
+        let alert = LoginItem.startFailureAlert(LoginItem.Failure.notInBundle)
+        #expect(alert.title == "This copy of PureMouse cannot open at login")
+        #expect(alert.body == "Install it from the disk image, then open it again.")
+    }
+
+    @Test func anyOtherFailureGetsTheNextStepNotTheRawError() {
+        struct Raw: Error, CustomStringConvertible { var description: String { "Bootstrap failed: 5" } }
+        let alert = LoginItem.startFailureAlert(Raw())
+        #expect(alert.title == "PureMouse could not start")
+        #expect(alert.body == "Try again. If it keeps happening, restart your Mac.")
+    }
+
+    @Test func theFinderAlertHasNoPathsAndAsksForTheTwoPermissions() {
+        let alert = LoginItem.runningAlert
+        #expect(alert.title == "PureMouse is running")
+        #expect(alert.body == "It will open at login. macOS will ask you to allow Accessibility and Input Monitoring. "
+            + "Choose Allow for each, or turn them on in System Settings > Privacy & Security.")
+        #expect(!alert.body.contains("/"))
+    }
+
+    @Test func aCommandLineFailureNamesTheProgram() {
+        #expect(CLIError.line("cannot register", LoginItem.Failure.translocated)
+            == "puremouse: cannot register: PureMouse needs to be in your Applications folder. Move it there, then open it again.")
+        #expect(CLIError.line("unknown or device-only action", "explode")
+            == "puremouse: unknown or device-only action: explode")
+    }
 }

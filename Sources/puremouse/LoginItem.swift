@@ -331,15 +331,38 @@ struct LoginItem {
                                        header as CFString, message as CFString, nil, nil, nil, &response)
     }
 
+    /// What opening from the Finder says when the agents are running but Settings did not open.
+    /// "Running" holds whether `register` started PureMouse or restarted it.
+    static let runningAlert = (
+        title: "PureMouse is running",
+        body: """
+            It will open at login. macOS will ask you to allow Accessibility and Input Monitoring. \
+            Choose Allow for each, or turn them on in System Settings > Privacy & Security.
+            """)
+
+    /// What a Finder launch that threw says: a `Failure` has its own words; anything else (launchd's
+    /// output, say) goes to the log and the user gets the next step.
+    static func startFailureAlert(_ error: Error) -> (title: String, body: String) {
+        if let failure = error as? Failure { return failure.alert }
+        return ("PureMouse could not start", "Try again. If it keeps happening, restart your Mac.")
+    }
+
     enum Failure: Error, CustomStringConvertible {
         case notInBundle, translocated, noMenuApp
 
-        var description: String {
+        /// What a failed Finder launch tells the user: what failed, then what to do.
+        var alert: (title: String, body: String) {
             switch self {
-            case .notInBundle: "only an installed PureMouse.app can register itself to start at login"
-            case .translocated: "move PureMouse to the Applications folder, then open it again"
-            case .noMenuApp: "this build of PureMouse has no menu bar app"
+            case .notInBundle:
+                ("This copy of PureMouse cannot open at login", "Install it from the disk image, then open it again.")
+            case .translocated:
+                ("PureMouse needs to be in your Applications folder", "Move it there, then open it again.")
+            case .noMenuApp:
+                ("This copy of PureMouse has no menu bar icon", "Install it from the disk image, then open it again.")
             }
         }
+
+        /// The same on one line, for the CLI.
+        var description: String { "\(alert.title). \(alert.body)" }
     }
 }
