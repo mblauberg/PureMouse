@@ -26,6 +26,7 @@ set -euo pipefail
 zmodload zsh/datetime
 # An unexpected command failure is a harness error (2), not a budget failure (1).
 TRAPZERR() { exit 2 }
+source "${0:A:h}/menu-bundle.zsh"
 cd "${0:A:h}/.."
 
 runs=5
@@ -51,7 +52,7 @@ while (( $# )); do
         --keep) keep=1 ;;
         --plugin-path) plugin_path=$2; shift ;;
         --env) rig_env+=($2); shift ;;
-        -h|--help) sed -n '2,24p' $0 | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' $0; exit 0 ;;
         *) print -u2 "unknown option $1"; exit 2 ;;
     esac
     shift
@@ -72,6 +73,22 @@ for tool in footprint notifyutil codesign swift launchctl; do
     command -v $tool >/dev/null || fail "$tool not found"
 done
 [[ $(uname) == Darwin ]] || fail "macOS only"
+
+# Every limit is a whole number, and the scenarios a change to the menu could regress each have one:
+# a gate must not pass for lack of a limit.
+check_budgets() {
+    [[ -f $budgets ]] || fail "no budgets file at $budgets"
+    local name limit
+    while IFS=$'\t' read -r name limit; do
+        [[ $name == \#* || -z $name ]] && continue
+        [[ $limit == <-> ]] || fail "$budgets: the limit for '$name' is '$limit', not a whole number"
+    done < $budgets
+    for name in fresh open-1 open-10 doorbells-200; do
+        [[ $(awk -F'\t' -v s=$name '$1 == s { print $2 }' $budgets) == <-> ]] \
+            || fail "$budgets needs exactly one whole-number limit for '$name'"
+    done
+}
+(( write_budgets )) || check_budgets
 
 # --- The installed agents: only ever read -------------------------------------------------------
 installed_pid() {
@@ -97,22 +114,7 @@ bin=$(swift build -c release --product PureMouseMenu --scratch-path $scratch/bui
 [[ -x $bin/PureMouseMenu ]] || fail "no built menu at $bin (run without --no-build)"
 
 rm -rf $app
-mkdir -p $app/Contents/{MacOS,Resources}
-cp $bin/PureMouseMenu $exe
-cp assets/{Assets.car,AppIcon.icns,AppIcon.png,AppIcon-dark.png,MenuBarIcon.pdf} $app/Contents/Resources/
-cat > $app/Contents/Info.plist <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-  <key>CFBundleIdentifier</key><string>$rig_label</string>
-  <key>CFBundleName</key><string>PureMouse Rig</string>
-  <key>CFBundleExecutable</key><string>PureMouseMenu</string>
-  <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>rig</string>
-  <key>LSMinimumSystemVersion</key><string>14.0</string>
-  <key>LSUIElement</key><true/>
-</dict></plist>
-PLIST
+make_menu_bundle $bin/PureMouseMenu $rig_label "PureMouse Rig" rig 14.0 $app
 codesign --force --sign - --identifier $rig_label $app >/dev/null 2>&1 || fail "could not sign the rig bundle"
 
 # The Settings helper, once it exists, is built and measured too.
@@ -129,7 +131,7 @@ fi
 results=$scratch/results; mkdir -p $results
 stamp=$(date +%Y%m%d-%H%M%S)
 [[ -n $tsv ]] || tsv=$results/measure-menu-$stamp.tsv
-printf 'scenario\trun\tfootprint_mb\tpeak_mb\n' > $tsv
+printf 'scenario\trun\tvalue\tpeak\tunit\n' > $tsv
 
 fixtures=()
 menu_pid=
@@ -231,7 +233,7 @@ sample() {
     fp=$(print -r -- $out | awk '$1 == "phys_footprint:" { print $2 }')
     peak=$(print -r -- $out | awk '$1 == "phys_footprint_peak:" { print $2 }')
     [[ $fp == <-> && $peak == <-> ]] || fail "could not read footprint for pid $menu_pid: $out"
-    printf '%s\t%s\t%.2f\t%.2f\n' $1 $2 $(( fp / 1048576.0 )) $(( peak / 1048576.0 )) >> $tsv
+    printf '%s\t%s\t%.2f\t%.2f\tMB\n' $1 $2 $(( fp / 1048576.0 )) $(( peak / 1048576.0 )) >> $tsv
 }
 
 # --- Scenarios (one run each) --------------------------------------------------------------------
@@ -251,6 +253,7 @@ run_doorbells() {  # 200 status doorbells, the status changing each time
     for i in {1..200}; do
         write_status $(( 50 + i % 40 ))
         notifyutil -p $status_bell
+        sleep 0.01  # posts sent back to back can coalesce into one
     done
     sleep $settle; sample doorbells-200 $1
     stop_menu
@@ -274,7 +277,7 @@ run_helper() {  # only with a built helper: the menu's footprint while it is ope
     for i in {1..100}; do [[ -e $fx/settings-visible ]] && break; sleep 0.1; done
     [[ -e $fx/settings-visible ]] || fail "the helper never wrote $fx/settings-visible"
     stamped=$(stat -f %Fm $fx/settings-visible)
-    printf 'helper-cold-start\t%s\t%.2f\t0\n' $1 $(( (stamped - asked) * 1000.0 )) >> $tsv
+    printf 'helper-cold-start\t%s\t%.2f\t0\tms\n' $1 $(( (stamped - asked) * 1000.0 )) >> $tsv
     sleep 2; sample helper-open $1
     rig settings-close; sleep 2; sample helper-closed $1
     stop_menu
@@ -296,8 +299,8 @@ if (( blocks )); then
     for i in {1..30}; do rig menu; done
     sleep $settle
     blocks_dir=$results/blocks-$stamp; mkdir -p $blocks_dir
-    heap $menu_pid -addresses=all > $blocks_dir/heap.txt 2>&1 || true
-    heap $menu_pid > $blocks_dir/heap-summary.txt 2>&1 || true
+    heap $menu_pid -addresses=all > $blocks_dir/heap.txt 2>&1 || fail "heap failed (output: $blocks_dir/heap.txt)"
+    grep -q '^0x[0-9a-f]*:' $blocks_dir/heap.txt || fail "heap listed no blocks (output: $blocks_dir/heap.txt)"
     # 272 KB is 278528 bytes: the size of the blocks the earlier diagnosis could not place
     # (PUREMOUSE_RIG_BLOCK_BYTES picks another size to look for). Lines read "0x...: type in zone Z (N bytes)".
     size=${PUREMOUSE_RIG_BLOCK_BYTES:-278528}
@@ -326,14 +329,14 @@ installed_after="$(installed_pid $menu_label) $(installed_pid $daemon_label)"
 # scenario  median  min  max, in first-seen order. Medians of the footprint column.
 summary=$(awk -F'\t' '
     NR == 1 { next }
-    { if (!($1 in n)) order[++count] = $1; v[$1, ++n[$1]] = $3 }
+    { if (!($1 in n)) order[++count] = $1; v[$1, ++n[$1]] = $3; unit[$1] = $5 }
     END {
         for (i = 1; i <= count; i++) {
             s = order[i]; m = n[s]
             for (a = 1; a <= m; a++) x[a] = v[s, a] + 0
             for (a = 2; a <= m; a++) { t = x[a]; b = a - 1; while (b >= 1 && x[b] > t) { x[b + 1] = x[b]; b-- } x[b + 1] = t }
             med = (m % 2) ? x[(m + 1) / 2] : (x[m / 2] + x[m / 2 + 1]) / 2
-            printf "%s\t%.2f\t%.2f\t%.2f\t%d\n", s, med, x[1], x[m], m
+            printf "%s\t%.2f\t%.2f\t%.2f\t%d\t%s\n", s, med, x[1], x[m], m, unit[s]
         }
     }' $tsv)
 
@@ -345,19 +348,14 @@ if (( write_budgets )); then
       print -r -- $summary | awk -F'\t' '$1 ~ /^(fresh|open-1|open-10|doorbells-200)$/ { printf "%s\t%d\n", $1, ($2 + 2 == int($2 + 2)) ? $2 + 2 : int($2 + 2) + 1 }'; } > $budgets
     print "wrote $budgets"
 fi
-[[ -f $budgets ]] || fail "no budgets file at $budgets"
-for name in ${(f)"$(awk -F'\t' '/^#/ || NF < 2 { next } { print $1 }' $budgets)"}; do
-    print -r -- $summary | awk -F'\t' -v s=$name '$1 == s { found = 1 } END { exit !found }' \
-        || fail "$budgets has a budget for '$name', which this run did not measure"
-done
+check_budgets
 
 print
 printf '%-22s %8s %8s %8s %8s   %s\n' scenario median min max budget result
 verdict_code=0
 exceeded=()
-while IFS=$'\t' read -r name median low high n; do
+while IFS=$'\t' read -r name median low high n unit; do
     limit=$(awk -F'\t' -v s=$name '$1 == s { print $2 }' $budgets)
-    unit=MB; [[ $name == *cold-start ]] && unit=ms
     verdict=
     if [[ -n $limit ]]; then
         if (( median > limit )); then
