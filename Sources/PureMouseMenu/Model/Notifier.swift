@@ -2,7 +2,7 @@ import Foundation
 import PureMouseAppSupport
 import UserNotifications
 
-/// Posts the low-battery notification. Permission is asked for lazily: when the user turns the
+/// Posts the low-battery notification, and takes it down when it stops being true. Permission is asked for lazily: when the user turns the
 /// setting on in Settings (`AppController` sees the config change), or the first time a
 /// notification is due. Each answer it learns is recorded for Settings' hint
 /// (`NotificationPermission`). Without a bundle (a development run outside an app) it does
@@ -46,6 +46,11 @@ enum Notifier {
         let status = await center.notificationSettings().authorizationStatus
         NotificationPermission.record(denied: status == .denied, in: .standard)
         return status
+    }
+
+    /// Takes delivered notifications down (the mouse charged, or a deeper warning replaced them).
+    static func removeDelivered(ids: [String]) {
+        center?.removeDeliveredNotifications(withIdentifiers: ids)
     }
 
     static func post(id: String, title: String, body: String) {

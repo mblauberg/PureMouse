@@ -6,7 +6,7 @@ import PureMouseKit
 /// (`SettingsLauncher`), so this process never holds a window.
 @MainActor
 final class AppController: NSObject, NSApplicationDelegate {
-    let model = AppModel(alert: Alerts.show, announce: Notifier.post)
+    let model = AppModel(alert: Alerts.show, notifications: (Notifier.post, Notifier.removeDelivered))
     private var statusMenu: StatusMenu?
     private var lowBatteryNotificationsOn = true
 
