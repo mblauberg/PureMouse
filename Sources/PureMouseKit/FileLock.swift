@@ -16,7 +16,7 @@ public enum FileLock {
         public let path: String
         public let reason: String
         public var errorDescription: String? {
-            "PureMouse could not lock \((path as NSString).abbreviatingWithTildeInPath): \(reason)"
+            "PureMouse couldn't lock \((path as NSString).abbreviatingWithTildeInPath): \(reason)"
         }
 
         init(_ lock: URL, errno code: Int32) { self.init(path: lock.path, reason: String(cString: strerror(code))) }

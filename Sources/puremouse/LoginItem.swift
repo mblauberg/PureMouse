@@ -130,7 +130,7 @@ struct LoginItem {
         try exclusive { _ in
             let wasRunning = try service.stop(.daemon)
             try service.stop(.menu)
-            guard wasRunning else { return "PureMouse was not running." }
+            guard wasRunning else { return "PureMouse wasn't running." }
             return service.status(.daemon) == .enabled ? "PureMouse stopped; it starts again at login." : "PureMouse stopped."
         }
     }
@@ -156,8 +156,8 @@ struct LoginItem {
             try service.unregister(.daemon)
             try service.unregister(.menu)
             return running
-                ? "PureMouse will not start at login; it keeps running until you quit it (`puremouse stop`)."
-                : "PureMouse will not start at login."
+                ? "PureMouse won't start at login; it keeps running until you quit it (`puremouse stop`)."
+                : "PureMouse won't start at login."
         }
     }
 
@@ -334,7 +334,7 @@ struct LoginItem {
     /// What opening from the Finder says when the agents are running but Settings did not open.
     /// "Running" holds whether `register` started PureMouse or restarted it.
     static let runningAlert = (
-        title: "PureMouse is running",
+        title: "PureMouse is running.",
         body: """
             It will open at login. macOS will ask you to allow Accessibility and Input Monitoring. \
             Choose Allow for each, or turn them on in System Settings > Privacy & Security.
@@ -344,7 +344,7 @@ struct LoginItem {
     /// output, say) goes to the log and the user gets the next step.
     static func startFailureAlert(_ error: Error) -> (title: String, body: String) {
         if let failure = error as? Failure { return failure.alert }
-        return ("PureMouse could not start", "Try again. If it keeps happening, restart your Mac.")
+        return ("PureMouse couldn't start.", "Try again. If it keeps happening, restart your Mac.")
     }
 
     enum Failure: Error, CustomStringConvertible {
@@ -354,15 +354,15 @@ struct LoginItem {
         var alert: (title: String, body: String) {
             switch self {
             case .notInBundle:
-                ("This copy of PureMouse cannot open at login", "Install it from the disk image, then open it again.")
+                ("This copy of PureMouse can't open at login.", "Install it from the disk image, then open it again.")
             case .translocated:
-                ("PureMouse needs to be in your Applications folder", "Move it there, then open it again.")
+                ("PureMouse needs to be in your Applications folder.", "Move it there, then open it again.")
             case .noMenuApp:
-                ("This copy of PureMouse has no menu bar icon", "Install it from the disk image, then open it again.")
+                ("This copy of PureMouse has no menu bar icon.", "Install it from the disk image, then open it again.")
             }
         }
 
         /// The same on one line, for the CLI.
-        var description: String { "\(alert.title). \(alert.body)" }
+        var description: String { "\(alert.title) \(alert.body)" }
     }
 }
