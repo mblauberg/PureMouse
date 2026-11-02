@@ -90,7 +90,7 @@ struct EndLabeledSlider: View {
                     Spacer(minLength: 8)
                     Text(high)
                 }
-                .font(.system(size: 10))
+                .font(.caption)
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
             }
