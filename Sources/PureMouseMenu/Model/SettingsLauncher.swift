@@ -44,11 +44,12 @@ enum SettingsLauncher {
     }
 
     /// Quits the helper, which saves its edits and cancels a select by pressing as it goes. Only
-    /// this app's own helper: a development copy never quits an installed one.
+    /// the copy this app opens, found by its location: a development copy never quits an installed
+    /// one, and the footprint rig's helper (another identifier) quits too.
     static func quit() {
         switch lookup() {
         case .success(.app(let app)):
-            NSRunningApplication.runningApplications(withBundleIdentifier: SettingsLookup.bundleIdentifier)
+            NSWorkspace.shared.runningApplications
                 .filter { $0.bundleURL?.standardizedFileURL == app.standardizedFileURL }
                 .forEach { $0.terminate() }
         case .success(.binary), .failure:

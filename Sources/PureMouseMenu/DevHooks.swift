@@ -60,7 +60,7 @@ enum DevHooks {
 /// `rig-ack` once the verb is done. `rig-ready` lists the doorbells this process listens on.
 ///
 /// Verbs: `menu` opens the menu and closes it again, `settings` opens the Settings helper and
-/// `settings-close` quits it, `relief` runs `malloc_zone_pressure_relief`.
+/// `settings-close` quits it.
 @MainActor
 private enum Rig {
     private static var token: Int32 = -1
@@ -98,9 +98,6 @@ private enum Rig {
             done()
         case "settings-close":
             SettingsLauncher.quit()
-            done()
-        case "relief":
-            malloc_zone_pressure_relief(nil, 0)
             done()
         default:
             break

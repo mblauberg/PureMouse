@@ -25,11 +25,35 @@ final class SettingsApp: NSObject, NSApplicationDelegate {
         }
         settings = SettingsWindowController(model: model)
         settings?.didClose = { NSApp.terminate(nil) }
+        #if DEBUG || DEVHOOKS
+        stampWhenVisible()
+        #endif
         show(ShowRequest.consume()?.pane)
         #if DEBUG
         DevHooks.run { [weak self] in self?.show($0) }
         #endif
     }
+
+    #if DEBUG || DEVHOOKS
+    private var visibleObserver: NSObjectProtocol?
+
+    /// For the footprint rig (`scripts/measure-menu.sh`), only with `PUREMOUSE_COMPANION_DIR` set:
+    /// writes this process's pid to `settings-visible` there once the window is first on screen.
+    /// Its time, less the request's, is the rig's cold start.
+    private func stampWhenVisible() {
+        guard Companion.overrideDirectory != nil, let window = settings?.window else { return }
+        visibleObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, let observer = self.visibleObserver, window.occlusionState.contains(.visible) else { return }
+                NotificationCenter.default.removeObserver(observer)
+                self.visibleObserver = nil
+                let stamp = Locations.live.companion.appending(path: "settings-visible")
+                try? Data("\(getpid())".utf8).write(to: stamp, options: .atomic)
+            }
+        }
+    }
+    #endif
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         show(nil)
