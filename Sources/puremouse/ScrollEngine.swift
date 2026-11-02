@@ -39,10 +39,14 @@ final class ScrollEngine {
     private var horizontalCarry = PixelCarry()
     private var naturalScrolling = SystemScrollSettings.naturalScrolling
     private var lastInput: ContinuousClock.Instant?
-    private let clock = FrameClock()
+    private let clock: FrameClock
+    /// Where whole-pixel scrolls go, as `dx`, `dy`.
+    private let post: (Int, Int) -> Void
 
-    init(profile: Profile) {
+    init(profile: Profile, clock: FrameClock, post: @escaping (Int, Int) -> Void) {
         self.profile = profile
+        self.clock = clock
+        self.post = post
         // Smoothing is the time the glide takes to come to rest, about three time constants.
         let tau = profile.smoothing.seconds / 3
         vertical = ScrollAnimator(timeConstant: tau)
@@ -84,7 +88,7 @@ final class ScrollEngine {
     private func scroll(dx: Double = 0, dy: Double = 0) {
         guard profile.smoothing > .zero else {
             let x = horizontalCarry.take(dx), y = verticalCarry.take(dy)
-            if x != 0 || y != 0 { ScrollEvent.post(dx: x, dy: y) }
+            if x != 0 || y != 0 { post(x, y) }
             return
         }
         horizontal.add(dx)
@@ -128,7 +132,7 @@ final class ScrollEngine {
     private func frame(_ dt: Double) {
         let dy = vertical.step(dt).whole
         let dx = horizontal.step(dt).whole
-        if dx != 0 || dy != 0 { ScrollEvent.post(dx: dx, dy: dy) }
+        if dx != 0 || dy != 0 { post(dx, dy) }
         if vertical.isIdle && horizontal.isIdle { clock.stop() }
     }
 }
@@ -160,7 +164,7 @@ enum ScrollEvent {
 /// Calls `onFrame` with the frame duration once per refresh of the display under the pointer,
 /// so each frame of a glide moves an even distance. Runs only between `start` and `stop`.
 @MainActor
-final class FrameClock {
+class FrameClock {
     var onFrame: ((Double) -> Void)?
 
     private var link: CVDisplayLink?

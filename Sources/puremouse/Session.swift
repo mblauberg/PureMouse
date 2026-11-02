@@ -68,6 +68,9 @@ final class Session {
     /// Device state that outlives a config (see `DeviceState`).
     var state: DeviceState
     var hapticCapabilities: Haptic.Capabilities?
+    /// What reports the battery, in the order `apply` prefers them.
+    enum BatterySource { case unified, legacy, voltage }
+
     /// Something the mouse lacks for the config, said once per session (`notice`); a replacement
     /// session says it again. A snapped DPI is once per mouse instead (`DeviceState.snapLogged`).
     enum Notice: Hashable { case hapticMissing, smoothScrollUnsupported, toggleUnsupported }
@@ -106,16 +109,21 @@ final class Session {
         /// Set by `cycleDPI`, overriding `config.dpi`; cleared by a reload that changes `dpi` or
         /// `dpiPresets` (see `Daemon.reload`) and by `useConfiguredDPI`.
         var liveDPI: Int?
+        /// The feature DPI is set through, found once per mouse (`dpiFeature`).
+        var dpiFeature: DPIFeature?
         /// The sensor's supported resolutions, read once per mouse.
         var resolutions: AdjustableDPI.Resolutions?
+        /// The mouse read back another resolution than the one written, as an onboard profile may
+        /// leave it (0x8100, never written), so PureMouse no longer sets its DPI.
+        var dpiRefused = false
         var online = true
         var dpi: Int?
         var wheelMode: SmartShift.Mode?
         var battery: UnifiedBattery.State?
         /// Level bits the battery's reports mean anything for (0x1004 getCapabilities), read once.
         var batteryLevels: UInt8?
-        /// The battery is read from legacy 0x1000, the mouse lacking 0x1004; chosen by `apply`.
-        var legacyBatterySelected = false
+        /// Where the battery is read from, chosen by `apply`: 0x1004, else 0x1000, else 0x1001.
+        var batterySource: BatterySource?
         /// An apply has succeeded, so feature lookups have been made and `capabilities` can be
         /// reported from them.
         var applied = false
@@ -180,7 +188,7 @@ final class Session {
         // when any scope gives it actions. Either way scrolling then runs here.
         smoothAnywhere = scopes.contains { $0.smoothScroll?.enabled == true }
         let thumbActions = scopes.contains { $0.thumbWheel.mode != .scroll }
-        scroll = smoothAnywhere || thumbActions ? ScrollEngine(profile: globalProfile) : nil
+        scroll = smoothAnywhere || thumbActions ? ScrollEngine(profile: globalProfile, clock: environment.frameClock(), post: environment.postScroll) : nil
         away = inherited.away
         diversion = SerialChain(after: inherited.diversionAfter)
         self.wheelsMayBeDiverted = inherited.wheelsMayBeDiverted || scroll != nil
@@ -239,14 +247,14 @@ final class Session {
         guard state.applied else { return nil }
         func has(_ feature: UInt16) -> Bool? { device.knownPresence(of: feature) }
         return Status.Device.Capabilities(
-            dpi: has(AdjustableDPI.id), smartShift: hasAny(of: [SmartShift.id, SmartShiftEnhanced.id]),
+            dpi: state.dpiRefused ? false : hasAny(of: [AdjustableDPI.id, ExtendedDPI.id]), smartShift: hasAny(of: [SmartShift.id, SmartShiftEnhanced.id]),
             smoothScroll: scrollsSmoothly, thumbWheel: has(ThumbWheel.id), haptics: has(Haptic.id),
-            battery: hasAny(of: [UnifiedBattery.id, LegacyBattery.id]))
+            battery: hasAny(of: [UnifiedBattery.id, LegacyBattery.id, BatteryVoltage.id]))
     }
 
     /// Whether the main wheel can scroll smoothly, from known presence (nil while unknown): it
-    /// needs the feature PureMouse takes the main wheel over through (`Wheel.main`).
-    var scrollsSmoothly: Bool? { device.knownPresence(of: Wheel.main.feature) }
+    /// needs one of the features PureMouse takes the main wheel over through (`Wheel.mainWheels`).
+    var scrollsSmoothly: Bool? { hasAny(of: Wheel.mainWheels.map(\.feature)) }
 
     /// Publishes `capabilities` when a lookup after apply, such as a haptic action's, has changed
     /// them.
@@ -399,9 +407,11 @@ final class Session {
         // Keep the previous selection if an informational lookup fails during reconnect.
         do {
             if try await device.hasFeature(UnifiedBattery.id) {
-                state.legacyBatterySelected = false
+                state.batterySource = .unified
+            } else if try await device.hasFeature(LegacyBattery.id) {
+                state.batterySource = .legacy
             } else {
-                state.legacyBatterySelected = try await device.hasFeature(LegacyBattery.id)
+                state.batterySource = try await device.hasFeature(BatteryVoltage.id) ? .voltage : nil
             }
         } catch { }
 
@@ -409,7 +419,7 @@ final class Session {
         try await serialised(on: diversion) { try await $0.applyInputs(wheels: true) }
         // Likewise with device actions: a `cycleDPI` mid-apply is neither undone nor overwritten.
         try await serialised(on: deviceActions) { session in
-            if try await session.device.hasFeature(AdjustableDPI.id) { try await session.applyDPI() }
+            try await session.applyDPI()
             try await session.applyScrollMode()
         }
         await readBattery()
@@ -419,31 +429,22 @@ final class Session {
     }
 
     /// Battery state is informational, read from the source `apply` selected: 0x1004, or legacy
-    /// 0x1000 only in its absence.
+    /// 0x1000, or 0x1001's voltage (a level only), each only in the absence of those before it.
     private func readBattery() async {
         do {
             try ensureOpen()
-            if state.legacyBatterySelected {
-                state.battery = try await LegacyBattery.status(device)
-            } else if try await device.hasFeature(UnifiedBattery.id) {
+            switch state.batterySource {
+            case .unified:
                 if state.batteryLevels == nil { state.batteryLevels = try await UnifiedBattery.levels(device) }
                 try ensureOpen()
                 state.battery = try await UnifiedBattery.status(device, levels: state.batteryLevels ?? UnifiedBattery.allLevels)
+            case .legacy: state.battery = try await LegacyBattery.status(device)
+            case .voltage: state.battery = try await BatteryVoltage.status(device)
+            case nil: break
             }
         } catch {
             if !stops(error) { Log.debug("\(name): reading battery failed: \(error)") }
         }
-    }
-
-    /// Sets the DPI wanted now (`liveDPI`, else the config's, if any), snapped to the sensor's
-    /// list, and reads back the one in effect. Runs on `deviceActions`.
-    func applyDPI() async throws {
-        try await readResolutions()
-        if let target = state.liveDPI ?? config.dpi {
-            try ensureOpen()
-            try await AdjustableDPI.set(device, dpi: supportedDPI(near: target))
-        }
-        try await readDPI()
     }
 
     /// The wheel's clutch: SmartShift 0x2110 whenever present (the tested path), else Enhanced 0x2111.
@@ -498,45 +499,24 @@ final class Session {
         }
     }
 
-    /// Reads the resolution in effect, for the status and the gesture distance, which is
-    /// physical and so scales with it.
-    func readDPI() async throws {
-        let current = try await AdjustableDPI.get(device)
-        state.dpi = current
-        recognizer.threshold = GestureRecognizer.counts(millimetres: config.gesture.distanceMm, dpi: current)
-    }
-
-    /// Reads the sensor's supported resolutions once per mouse. A device answer (error or
-    /// malformed reply) is logged and retried on the next apply, and meanwhile DPI targets are
-    /// sent unchanged; a timeout or transport failure fails the apply, so configure retries.
-    private func readResolutions() async throws {
-        guard state.resolutions == nil else { return }
-        do {
-            state.resolutions = try await AdjustableDPI.resolutions(device)
-        } catch where Self.isDeviceAnswer(error) {
-            Log.error("\(name): reading supported DPI failed: \(error); DPI is set as configured")
-        }
-    }
-
-    /// `target` snapped to a resolution the sensor accepts, or unchanged if the list is unknown.
-    func supportedDPI(near target: Int) -> Int {
-        let dpi = state.resolutions?.nearest(to: target) ?? target
-        if dpi != target, state.snapLogged.insert(target).inserted {
-            Log.info("\(name): dpi \(target) is not supported; using \(dpi)")
-        }
-        return dpi
-    }
-
     /// Each request `restore` makes waits this long at most, so one the mouse misses still leaves
     /// time for every other before the daemon's deadline (`Daemon.shutdownDeadline`).
     static let restoreTimeout: Duration = .milliseconds(400)
 
     /// The hand-backs `restore` makes, each one request when feature indices are cached.
     var restoreSteps: Int {
-        // A wheel of unknown presence counts: `restore` may still look it up and write it.
-        let wheels = wheelsMayBeDiverted
-            ? [HiResWheel.id, ThumbWheel.id].filter { device.knownPresence(of: $0) != false }.count : 0
-        return wheels + divertedControls.count
+        wheelsToRestore.count + divertedControls.count
+    }
+
+    /// The wheels `restore` may have to hand back. One of unknown presence counts, since
+    /// `restore` may still look it up and write it; the notched wheel is the main wheel only
+    /// where there is no high-resolution one.
+    private var wheelsToRestore: [Wheel] {
+        guard wheelsMayBeDiverted else { return [] }
+        return Wheel.allCases.filter {
+            device.knownPresence(of: $0.feature) != false
+                && !($0 == .notched && device.knownPresence(of: Wheel.main.feature) == true)
+        }
     }
 
     /// Hands the mouse back in its native state: buttons undiverted and wheels reporting as
@@ -557,6 +537,11 @@ final class Session {
                 if try await self.device.hasFeature(HiResWheel.id) {
                     try await HiResWheel.setMode(self.device, .init(diverted: false, highResolution: false,
                                                                     inverted: self.config.scrollWheel?.inverted ?? false))
+                }
+            }
+            await attempt("restore notched wheel") {
+                if try await self.hasNotchedMainWheel() {
+                    try await LowResWheel.setDiverted(self.device, false)
                 }
             }
             await attempt("restore thumb wheel") {

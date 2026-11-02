@@ -162,20 +162,30 @@ extension Session {
         if smoothAnywhere, scrollsSmoothly == false { notice(.smoothScrollUnsupported, Self.smoothScrollUnsupported) }
     }
 
-    /// Said once per session when smooth scrolling is configured and the main wheel lacks
-    /// `Wheel.main.feature`.
-    static let smoothScrollUnsupported = "smooth scrolling needs HID++ 0x2121, which this mouse lacks; its wheel scrolls natively"
+    /// Said once per session when smooth scrolling is configured and the mouse has none of the
+    /// features the main wheel is taken over through (`Wheel.mainWheels`).
+    static let smoothScrollUnsupported = "smooth scrolling needs HID++ 0x2121 or 0x2130, which this mouse lacks; its wheel scrolls natively"
 
-    /// The wheels PureMouse takes over, each through one feature.
+    /// The wheels PureMouse takes over, each through one feature. A mouse has one main wheel:
+    /// the high-resolution one (0x2121) whenever it has it, else the notched one (0x2130).
     enum Wheel: CaseIterable {
-        case main, thumb
+        case main, notched, thumb
 
         var feature: UInt16 {
             switch self {
             case .main: HiResWheel.id
+            case .notched: LowResWheel.id
             case .thumb: ThumbWheel.id
             }
         }
+
+        static let mainWheels: [Wheel] = allCases.filter { $0 != .thumb }
+    }
+
+    /// Whether the main wheel is the notched one: 0x2130 present and no 0x2121 to take precedence.
+    func hasNotchedMainWheel() async throws -> Bool {
+        if try await device.hasFeature(HiResWheel.id) { return false }
+        return try await device.hasFeature(Wheel.notched.feature)
     }
 
     /// The main wheel reports to PureMouse only for smooth scrolling; the thumb wheel whenever
@@ -194,6 +204,16 @@ extension Session {
             }
             try ensureOpen()
             try await HiResWheel.setMode(device, .init(diverted: smooth, highResolution: smooth, inverted: inverted))
+        case .notched:
+            // The notched wheel has no mode but reporting, and no direction in hardware.
+            guard try await hasNotchedMainWheel() else { return }
+            try ensureOpen()
+            if smooth {
+                try await LowResWheel.setDiverted(device, true)
+            } else if try await LowResWheel.diverted(device) {
+                try ensureOpen()
+                try await LowResWheel.setDiverted(device, false)  // left so by a previous process
+            }
         case .thumb:
             guard try await device.hasFeature(wheel.feature) else { return }
             var inverted = false
