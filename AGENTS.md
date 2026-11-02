@@ -230,6 +230,15 @@ one. This file covers how to work on it safely.
   `config.json.lock` beside the resolved config, and `control.json` writes under
   `control.json.lock`, changing only the fields that request sets; the daemon's startup delete of
   it takes the same lock (`docs/companion.md`).
+- Settings reads and writes a device through `ConfigScope` (`ConfigScope.swift`): `.device(key)` exists
+  only for a key Kit accepts (`Config.isDeviceKey`), `set(_:at:in:)` refuses a section outside
+  `Config.deviceSections`, writes `name` once when it creates an entry and prunes an entry left with
+  only a `name`. `resolved(_:in:)` mirrors the decoder's merge (a button per control, a gesture per
+  direction, the other sections per key, `dpiPresets` whole) and `DeviceScopeTests` checks it against
+  `Config.forDevice` on seeded generated trees: a change to `Config.decodeSections` must keep that test
+  green. The thumb wheel's `action` resets `step` and replaces `left` and `right`, so it is read by
+  layering (`thumbWheel(in:)`), never from the per-key merge. `binding(_:in:)` is the scope's own
+  binding, not the one that applies.
 - Mouse › Buttons and the Apps tab list a named button when a connected mouse reports it or the config
   binds it; with no report, those `NamedButton.listedByDefault` (not the MX Master 4's thumb panel)
   (`ButtonRows.named`). Haptic picker entries come from Kit's `HapticWaveform.allCases`; the menu
@@ -472,7 +481,8 @@ one. This file covers how to work on it safely.
   its range checks and adds cases to the golden decode test (`ConfigGoldenTests`).
 - Per-device settings: a new per-device section needs a case in `Config.deviceSections` and
   decoding in `Config.decodeSections`, the one layering point: the top level decodes its sections
-  there, and each device entry decodes its own there on top of the top level's.
+  there, and each device entry decodes its own there on top of the top level's. Add it to
+  `ConfigTree.resolved` and the generator in `DeviceScopeTests` too.
 - Thumb-wheel actions: `Config.ThumbWheel.presets` (Kit) names action pairs; `ThumbStepper` counts
   rotation into steps (remainder kept, reset at each movement's start), paced per action
   (`ThumbStepper.pacing`: media keys free, shortcuts 50 ms, zoom 40 ms, animated actions 300 ms

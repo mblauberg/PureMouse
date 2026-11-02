@@ -191,6 +191,14 @@ direction), the `scrollWheel`, `thumbWheel`, `smoothScroll` and `gesture` keys i
 `apps` over that. An app that binds `forward` overrides the entry's `forward` in that app, while
 the entry's `back` still applies there.
 
+What Settings writes under `devices` (`ConfigTree`, `ConfigScope.device`): only the keys a control sets
+under the mouse's own entry, and only the sections above; `apps`, `universalControl` and
+`notifications` are never written there. The first value for a mouse creates its entry with a
+`name` (the mouse's name, else its key), written once. Putting a control back to "All Mice" removes its key
+there, and removing the last one removes the entry, so an entry with only a `name` is not kept
+(keys Settings does not know are kept, and keep the entry). A key the decoder would skip is
+never written.
+
 A key that is neither form (a typo, or a mouse's name) matches no mouse: the log warns and the entry
 is skipped, though a bad value in it still fails the load. Keys that differ only in case warn, and
 the last one applies. A cycled DPI (`cycleDPI`) is kept on reload unless that mouse's own `dpi` or
