@@ -523,11 +523,15 @@ final class Daemon {
     /// device there retires the session, as if its mouse had gone, and is adopted afresh on a new
     /// endpoint. A mouse adopted before the slot's product was known, and keyed by its product,
     /// gets its key when it next links up, with a session on that key's settings in place of this
-    /// one. Returns whether the session was replaced either way.
+    /// one. While quitting or paused (not `accepting`) it only records the product: the session
+    /// may already be in a restore's snapshot, so nothing replaces or configures it. Returns
+    /// whether it dealt with the announcement, so the session does nothing more with it.
     private func sessionSlotAnnounced(_ session: Session, _ report: Report) -> Bool {
         let key = Key(session.device)
         guard sessions[key] === session, let product = Receiver.productID(report) else { return false }
-        guard productAnnounced(product, key) else {
+        let isNewDevice = productAnnounced(product, key)
+        guard accepting else { return true }
+        guard isNewDevice else {
             let identity = session.identity.keyed(byProduct: product)
             guard identity != session.identity, Receiver.isLinkEstablished(report) else { return false }
             Log.info("\(session.name): model=\(identity.deviceKey ?? "unknown") from its slot's pid=\(String(format: "0x%04x", product))")
@@ -741,7 +745,23 @@ final class Daemon {
     /// Restores every mouse to native behaviour, then exits. Gives up after `shutdownDeadline` so
     /// a sleeping mouse cannot hold up logout; it resets itself on its next reconnect anyway.
     private func shutdown() {
-        guard !shuttingDown else { return }
+        guard let (restoring, deadline) = quit() else { return }
+        Task {
+            await restoring.value
+            exitReporting()
+        }
+        Task {
+            try? await Task.sleep(for: deadline)
+            Log.error("restore timed out")
+            exitReporting()
+        }
+    }
+
+    /// `shutdown` short of exiting, so tests can run it: stops adopting and restores every mouse,
+    /// alongside the pauses still restoring. Returns that restore and how long quitting waits for
+    /// it; nil when already quitting.
+    func quit() -> (restoring: Task<Void, Never>, deadline: Duration)? {
+        guard !shuttingDown else { return nil }
         shuttingDown = true
         Log.info("quitting")
         universalControl?.stop()
@@ -750,18 +770,13 @@ final class Daemon {
         let all = Array(sessions.values)
         let deadline = Self.shutdownDeadline(restoreSteps: Self.restoreSteps(
             quitting: all.map(\.restoreSteps), pausing: Array(pauseRestoreSteps.values)))
-        Task { [pausing] in
+        let restoring = Task { [pausing] in
             await withTaskGroup(of: Void.self) { group in
                 for session in all { group.addTask { await session.restore() } }
                 if let pausing { group.addTask { await pausing.value } }
             }
-            exitReporting()
         }
-        Task {
-            try? await Task.sleep(for: deadline)
-            Log.error("restore timed out")
-            exitReporting()
-        }
+        return (restoring, deadline)
     }
 
     /// The restore steps quitting must allow for: the mice restore side by side, alongside the

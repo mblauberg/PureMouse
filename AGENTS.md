@@ -221,9 +221,9 @@ one. This file covers how to work on it safely.
   (`Config.deviceKey`, read at adoption by `Identification`; a 0x0003 timeout leaves it nil and the
   top level applies). A receiver mouse keyed by its product but adopted before its slot was
   announced gets its key, and a session on that key's settings, when it next links up
-  (`Daemon.sessionSlotAnnounced`). The daemon hands each session `config.forDevice(deviceKey)` at
-  adoption and on reload; permission decisions cover every scope (`Config.everyScope`,
-  `Daemon.postsEvents`). The adoption gate (`Daemon.gates`) checks every bound control
+  (`Daemon.sessionSlotAnnounced`); while quitting or paused that only records the product. The
+  daemon hands each session `config.forDevice(deviceKey)` at adoption and on reload; permission
+  decisions cover every scope (`Config.everyScope`, `Daemon.postsEvents`). The adoption gate (`Daemon.gates`) checks every bound control
   (`Config.everyBoundControl`) before identification, then the mouse's own settings. Nothing
   is special-cased by model or product ID: a session uses what its mouse reports, and a bound
   control it lacks is a debug line once per session.

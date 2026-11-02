@@ -141,6 +141,54 @@ struct SessionDeviceConfigTests {
         }
     }
 
+    /// An M750 keyed by nothing yet, adopted on a receiver slot: the top level diverts forward,
+    /// while its product's entry (`pb02c`) would also divert back and set 800 DPI.
+    private func unkeyedReceiverM750() async throws -> (DaemonHarness, FakeDevice, Session) {
+        let h = try DaemonHarness(#"""
+            {"buttons": {"forward": "navigateForward"},
+             "devices": {"pb02c": {"dpi": 800, "buttons": {"back": "navigateBack"}}}}
+            """#)
+        let m750 = FakeDevice.m750
+        m750.features[2] = nil  // 0x0003
+        m750.onReceiver(slot: 2)
+        let session = try await h.adopt(m750)
+        #expect(session.deviceKey == nil && m750.control(0x56)?.diverted == true)
+        return (h, m750, session)
+    }
+
+    /// The writes `fake` gets over a while, for showing none follow a restore.
+    private func writes(to fake: FakeDevice, over wait: Duration = .milliseconds(100)) async throws -> Int {
+        let before = fake.transport.sent.count
+        try await Task.sleep(for: wait)
+        return fake.transport.sent.count - before
+    }
+
+    /// An announcement between quitting's snapshot of the sessions and their restore neither
+    /// replaces nor configures the session: the restore reaches the mouse and nothing follows it.
+    @Test func anAnnouncementWhileQuittingLeavesTheSessionToItsRestore() async throws {
+        let (h, m750, session) = try await unkeyedReceiverM750()
+        defer { h.close() }
+        let (restoring, _) = try #require(h.daemon.quit())
+        m750.announce(product: 0xB02C)
+        await restoring.value
+        #expect(try await writes(to: m750) == 0)
+        #expect(h.daemon.sessions.count == 1 && h.daemon.sessions.values.first === session)
+        #expect(m750.control(0x56)?.diverted == false && m750.control(0x53)?.diverted == false)
+        #expect(m750.dpi != 800)
+    }
+
+    /// The same while paused: the session has already been dropped, and no new one is adopted.
+    @Test func anAnnouncementWhilePausedAdoptsNothing() async throws {
+        let (h, m750, _) = try await unkeyedReceiverM750()
+        defer { h.close() }
+        h.daemon.handle(Control(paused: true))
+        m750.announce(product: 0xB02C)
+        try await eventually { m750.control(0x56)?.diverted == false }
+        #expect(try await writes(to: m750) == 0)
+        #expect(h.daemon.sessions.isEmpty)
+        #expect(m750.control(0x53)?.diverted == false && m750.dpi != 800)
+    }
+
     @Test(arguments: [true, false])
     func theM750sKeyFollowsDeviceInfoAndItsEntryApplies(hasDeviceInfo: Bool) async throws {
         let h = try DaemonHarness(#"{"dpi": 1600}"#)

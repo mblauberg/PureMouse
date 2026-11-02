@@ -24,8 +24,8 @@ final class Session {
     var onChange: (() -> Void)?
     /// Called with the first control pressed while capturing; that press performs nothing.
     var onCapture: ((UInt16) -> Void)?
-    /// Called with each connection notification before the session acts on it; true when the slot
-    /// now holds a different device and the daemon has closed this session to adopt that one.
+    /// Called with each connection notification before the session acts on it; true when the daemon
+    /// dealt with it (it replaced this session, or is quitting or paused), so the session does not.
     var onConnection: ((Report) -> Bool)?
     let config: Config
     let environment: SessionEnvironment
