@@ -49,6 +49,9 @@ struct LoginItem {
         var requestSettings: () -> Void
         /// Whether the request is still in the file: the helper removes it when it reads it.
         var requestPending: () -> Bool
+        /// Whether Quit PureMouse has stamped a quit since the last request was written (a request
+        /// clears the stamp), read as the helper reads it (`SettingsRequest.quitUnderWay`).
+        var quitStamped: () -> Bool
         /// Sleeps for the interval between looks at `requestPending`.
         var pause: (TimeInterval) -> Void
         /// Opens the app, trying up to the given number of times; whether it opened.
@@ -61,6 +64,7 @@ struct LoginItem {
                  calledFromMenu: LoginItem.parentIsMenu, seedConfig: LoginItem.seedConfig,
                  settingsApp: LoginItem.settingsApp, requestSettings: LoginItem.requestSettings,
                  requestPending: { FileManager.default.fileExists(atPath: Companion.showSettingsURL.path) },
+                 quitStamped: { SettingsRequest.quitUnderWay() },
                  pause: Thread.sleep(forTimeInterval:), open: LoginItem.open)
         }
     }
@@ -220,13 +224,15 @@ struct LoginItem {
     /// helper has just quit, LaunchServices can answer with the instance that is exiting, which
     /// never reads the request. The helper removes the request when it reads it (`ShowRequest`),
     /// so a request still there after `settingsWait` means no helper took it, and `open` is
-    /// tried once more, with the request written again so it is fresh for the new instance. False
-    /// if the build has no helper or `open` fails.
+    /// tried once more, with the request written again so it is fresh for the new instance, unless
+    /// Quit PureMouse stamped a quit meanwhile: writing again would clear the stamp and bring
+    /// Settings back after a quit, so nothing more is done (true, so no alert either). False if the
+    /// build has no helper or `open` fails.
     func openSettings() -> Bool {
         guard let settings = host.settingsApp else { return false }
         host.requestSettings()
         guard host.open(settings, 2) else { return false }
-        if requestTaken() { return true }
+        if requestTaken() || host.quitStamped() { return true }
         host.requestSettings()
         return host.open(settings, 2)
     }

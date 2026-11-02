@@ -78,6 +78,10 @@ private final class Rig: @unchecked Sendable {
     var helperReads: Set<Int> = [0]
     private var pending = false
     var pauses: [TimeInterval] = []
+    /// Quit PureMouse's stamp; a request clears it, as `SettingsRequest.write` does.
+    var quitStamp = false
+    /// Quit PureMouse runs while the daemon waits.
+    var quitsDuringWait = false
     private let menuApp: URL?
     private let settingsApp: URL?
     private let executable: () throws -> URL
@@ -96,9 +100,13 @@ private final class Rig: @unchecked Sendable {
         lockFile: directory.appending(path: "lifecycle.lock"), lockTimeout: lockTimeout,
         calledFromMenu: { [unowned self] _ in menuIsCaller }, seedConfig: { [unowned self] in seeded += 1 },
         settingsApp: settingsApp,
-        requestSettings: { [unowned self] in requests += 1; pending = true; service.calls.append("request settings") },
+        requestSettings: { [unowned self] in requests += 1; pending = true; quitStamp = false; service.calls.append("request settings") },
         requestPending: { [unowned self] in pending },
-        pause: { [unowned self] in pauses.append($0) },
+        quitStamped: { [unowned self] in quitStamp },
+        pause: { [unowned self] in
+            pauses.append($0)
+            if quitsDuringWait { quitStamp = true }
+        },
         open: { [unowned self] app, attempts in
             if helperReads.contains(opened.count) { pending = false }
             opened.append((app, attempts))
@@ -243,6 +251,17 @@ private final class Rig: @unchecked Sendable {
         #expect(rig.opened.map(\.app) == [helperURL, helperURL])
         #expect(rig.requests == 2)
         #expect(rig.pauses.reduce(0, +) >= LoginItem.settingsWait.total)
+    }
+
+    /// Writing again would clear the stamp, and the second open would bring Settings back.
+    @Test func aQuitDuringTheWaitIsNotUndoneByTheSecondOpen() {
+        let rig = Rig()
+        rig.helperReads = []
+        rig.quitsDuringWait = true
+        #expect(rig.item.openSettings())
+        #expect(rig.opened.count == 1)
+        #expect(rig.requests == 1)
+        #expect(rig.quitStamp)
     }
 
     @Test func aHelperThatReadsTheRequestIsOpenedOnce() {
