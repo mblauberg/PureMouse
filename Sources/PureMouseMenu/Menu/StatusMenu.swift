@@ -37,16 +37,6 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     func close() { menu.cancelTracking() }
     #endif
 
-    private(set) var isOpen = false
-
-    func menuWillOpen(_ menu: NSMenu) { isOpen = true }
-
-    func menuDidClose(_ menu: NSMenu) {
-        isOpen = false
-        // An action chosen in the menu runs after this; let it start first.
-        DispatchQueue.main.async { [app] in app.relaunchIfIdle() }
-    }
-
     private var shown: (dimmed: Bool, badge: StatusIcon.Badge, label: String)?
 
     /// Redraws the glyph and relabels it only when what they show has changed.

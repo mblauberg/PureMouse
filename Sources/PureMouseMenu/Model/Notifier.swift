@@ -1,9 +1,12 @@
 import Foundation
+import PureMouseAppSupport
 import UserNotifications
 
 /// Posts the low-battery notification. Permission is asked for lazily: when the user turns the
-/// setting on, or the first time a notification is due. Without a bundle (a development run
-/// outside an app) it does nothing: `UNUserNotificationCenter` would trap.
+/// setting on in Settings (`AppController` sees the config change), or the first time a
+/// notification is due. Each answer it learns is recorded for Settings' hint
+/// (`NotificationPermission`). Without a bundle (a development run outside an app) it does
+/// nothing: `UNUserNotificationCenter` would trap.
 @MainActor
 enum Notifier {
     private static var center: UNUserNotificationCenter? {
@@ -17,26 +20,32 @@ enum Notifier {
     }
     private static let delegate = Delegate()
 
-    /// Whether macOS will show our notifications (nil: not asked yet, or no bundle).
-    static func isAllowed() async -> Bool? {
-        guard let center else { return nil }
-        switch await center.notificationSettings().authorizationStatus {
-        case .authorized, .provisional: return true
-        case .denied: return false
-        default: return nil
-        }
-    }
-
     /// Asks once; a denial stays denied and shows no prompt again. Returns whether we may post.
     @discardableResult
     static func requestIfNeeded() async -> Bool {
         guard let center else { return false }
         center.delegate = delegate
-        switch await center.notificationSettings().authorizationStatus {
+        switch await status(center) {
         case .authorized, .provisional: return true
-        case .notDetermined: return (try? await center.requestAuthorization(options: [.alert, .sound])) ?? false
+        case .notDetermined:
+            let granted = (try? await center.requestAuthorization(options: [.alert, .sound])) ?? false
+            _ = await status(center)
+            return granted
         default: return false
         }
+    }
+
+    /// Reads the answer without asking (at launch, and as Settings opens, since it may have been
+    /// changed in System Settings meanwhile).
+    static func refresh() async {
+        guard let center else { return }
+        _ = await status(center)
+    }
+
+    private static func status(_ center: UNUserNotificationCenter) async -> UNAuthorizationStatus {
+        let status = await center.notificationSettings().authorizationStatus
+        NotificationPermission.record(denied: status == .denied, in: .standard)
+        return status
     }
 
     static func post(id: String, title: String, body: String) {

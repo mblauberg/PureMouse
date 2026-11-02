@@ -24,24 +24,29 @@ one. This file covers how to work on it safely.
   once.
   (`puremouse permissions` answers for whoever launches it, so from a terminal it reports the
   terminal's permissions, not the app's.)
-- Menu bar app (`Sources/PureMouseMenu`): run `.build/debug/PureMouseMenu` alongside the installed
-  agent, but point it away from the real files first: `PUREMOUSE_CONFIG` (config file),
+- Menu bar app (`Sources/PureMouseMenu`) and Settings helper (`Sources/PureMouseSettings`): run
+  `.build/debug/PureMouseMenu` or `.build/debug/PureMouseSettings` alongside the installed agent,
+  but point it away from the real files first: `PUREMOUSE_CONFIG` (config file),
   `PUREMOUSE_DAEMON` (the binary it runs for register/stop/menu commands; a stub script is fine)
   and `PUREMOUSE_COMPANION_DIR` (the status/control channel; a fixture `status.json` there stands
-  in for the daemon). Without them it edits the live config and drives the installed agent. Debug
-  builds also take `PUREMOUSE_DEV_PANE=<pane>`, `PUREMOUSE_DEV_MENU=1`,
-  `PUREMOUSE_DEV_APPEARANCE=light|dark`, `PUREMOUSE_DEV_PICKER=<button>`,
-  `PUREMOUSE_DEV_SHORTCUT=<button>` (Buttons pane) and `PUREMOUSE_DEV_APP=<bundle id>` (Apps pane;
-  adds the app without writing) for screenshots (`DevHooks.swift`); `--login` launches it as
-  launchd does (no Settings window). `PUREMOUSE_DEV_MENU=1` puts a plain backdrop under the menu,
-  since its glass shows whatever is behind it. A window capture (`screencapture -l`) leaves out
-  that blur, so the README's menu shots take the shape and shadow from one and the body from a
-  screen capture of the same rect. Check its footprint with `footprint <pid>` before and after
-  opening Settings, or reproduce the published figures with `scripts/measure-menu.sh` on a spare
-  Mac (never the one whose PureMouse you use; `docs/development.md`, "Footprint rig"). Its release
-  build carries `DevHooks` only with `-DDEVHOOKS`, and acts only when `PUREMOUSE_COMPANION_DIR` is
-  set, which also gives the doorbells names of their own (`Companion.doorbell`), so a debug build
-  with `PUREMOUSE_COMPANION_DIR` set no longer hears the installed daemon's bell.
+  in for the daemon). Without them it edits the live config and drives the installed agent. The
+  menu opens the helper it finds by `SettingsLookup` (`PUREMOUSE_SETTINGS`, the nested app, then
+  the sibling `PureMouseSettings` binary) and passes it the `PUREMOUSE_*` variables. Debug builds
+  of the menu take `PUREMOUSE_DEV_MENU=1` and `PUREMOUSE_DEV_APPEARANCE=light|dark`
+  (`Sources/PureMouseMenu/DevHooks.swift`); `--login` launches it as launchd does (no Settings).
+  Debug builds of the helper take `PUREMOUSE_DEV_PANE=<pane>`, `PUREMOUSE_DEV_APPEARANCE`,
+  `PUREMOUSE_DEV_PICKER=<button>`, `PUREMOUSE_DEV_SHORTCUT=<button>` (Buttons pane) and
+  `PUREMOUSE_DEV_APP=<bundle id>` (Apps pane; adds the app without writing) for screenshots
+  (`Sources/PureMouseSettingsUI/DevHooks.swift`). `PUREMOUSE_DEV_MENU=1` puts a plain backdrop
+  under the menu, since its glass shows whatever is behind it. A window capture
+  (`screencapture -l`) leaves out that blur, so the README's menu shots take the shape and shadow
+  from one and the body from a screen capture of the same rect. Check the menu's footprint with
+  `footprint <pid>` before and after opening and closing Settings, or reproduce the published
+  figures with `scripts/measure-menu.sh` on a spare Mac (never the one whose PureMouse you use;
+  `docs/development.md`, "Footprint rig"). Its release build carries `DevHooks` only with
+  `-DDEVHOOKS`, and acts only when `PUREMOUSE_COMPANION_DIR` is set, which also gives the
+  doorbells names of their own (`Companion.doorbell`), so a debug build with
+  `PUREMOUSE_COMPANION_DIR` set no longer hears the installed daemon's bell.
 - The user's live config is `~/.config/puremouse/config.json`; keep `config.example.json` in step
   with it (its test checks shape, not values). Config changes apply on save (`ConfigWatcher`
   watches the file and its directory, reloading when the bytes change) or with
@@ -141,31 +146,37 @@ one. This file covers how to work on it safely.
   `statusChanged()` (Daemon) or `changed()` (Session) after anything in `Status` changes; writes
   are coalesced to one per main-queue turn. On shutdown, `running: false` is written last, after
   the mice are restored (`exitReporting`).
-- Keep it light: no dependencies, and no AppKit or SwiftUI in the daemon or PureMouseKit (only
-  `PureMouseMenu` may link them). Idle cost is zero CPU, with one bounded exception: while a
+- Keep it light: no dependencies, and no AppKit or SwiftUI in the daemon or PureMouseKit. Only
+  `PureMouseSettingsUI` and the Settings helper link SwiftUI; the menu bar app links AppKit only
+  (`otool -L .build/release/PureMouseMenu` names no SwiftUI). Idle cost is zero CPU, with one bounded exception: while a
   permission needed now is missing, a `puremouse permissions` child runs after 2, 4, 8, 16 and
   32 s and then once a minute, until 10 minutes after the latest start, wake, reload, control
   change or Bluetooth attach (`Daemon.pollPermissions`). The display link runs only while a
   scroll is gliding, never with `smoothingMs` 0 (`PixelCarry` posts at once).
-- The menu bar app never opens HID devices: it edits the config file and talks to the daemon only
-  through the companion channel and the daemon CLI (`docs/companion.md`). Its logic that needs no
-  AppKit or SwiftUI lives in `Sources/PureMouseAppSupport` (config editing and saving,
-  `Locations`, status words), tested in `Tests/PureMouseAppSupportTests`; keep UI frameworks out
-  of it. It must not poll: it wakes on notifications, file events and the daemon's process exit.
-  Its Settings window and view tree are built when shown (each pane on its first visit); once
-  Settings closes the process starts over (`Relaunch`): the agent's copy exits 75 for launchd to
-  restart, since AppKit and SwiftUI keep about 25 MB otherwise (against about 10 MB fresh;
-  `docs/companion.md`, Footprint). Never `exec` in place (LaunchServices then withholds the status
-  item). The menu is rebuilt on open. Settings controls carry their own accessibility label where a
-  `RowLabel` (title plus caption) leaves them unnamed. Shortcut specs are parsed and named by Kit's
-  `Keystroke` only; the menu adds glyphs and spoken words.
-- Notifications and the update check live in the menu app only (the daemon stays free of
-  UserNotifications and the network). The low-battery notification (`BatteryAlert`,
+- The menu bar app and the Settings helper never open HID devices: they edit the config file and
+  talk to the daemon only through the companion channel and the daemon CLI (`docs/companion.md`).
+  Their shared logic lives in `Sources/PureMouseAppSupport` (`AppModel`, config editing and
+  saving, `Locations`, `ShowRequest`, `SettingsLookup`, status words), tested in
+  `Tests/PureMouseAppSupportTests`; keep UI frameworks out of it. Neither may poll: they wake on
+  notifications, file events and the daemon's process exit. Settings is an app of its own
+  (`PureMouse Settings.app`, docs/adr/0009-settings-helper-app.md): the menu writes the pane to
+  `show-settings`, rings the doorbell and opens the helper (`SettingsLauncher`), and the helper
+  quits when its window closes, saving its edits and cancelling a select by pressing as it goes
+  (`applicationWillTerminate`, also on SIGTERM). So the resident menu process never holds a
+  window or SwiftUI, and never restarts itself. Quit PureMouse quits the helper first. The
+  menu is rebuilt on open. Settings controls carry their own accessibility label where a `RowLabel`
+  (title plus caption) leaves them unnamed. Shortcut specs are parsed and named by Kit's `Keystroke` only; the menu adds
+  glyphs and spoken words.
+- Notifications live in the menu app and the update check in the Settings helper (the daemon
+  stays free of UserNotifications and the network). The low-battery notification (`BatteryAlert`,
   `Notifier`) is decided on each status the daemon writes, from the band already announced per
-  mouse (keyed by status device id), kept in `battery-alerts.json` in the companion directory so a relaunch cannot repeat it;
+  mouse (keyed by status device id), kept in `battery-alerts.json` in the companion directory so a restart cannot repeat it;
   the first reading of a mouse after it connects (or this process starts) only records. It does not run while the icon is hidden. Permission
-  is requested lazily (toggle on, or first notification); `UNUserNotificationCenter` needs a
-  bundle, so a bare dev run posts nothing. "Check for Updates" (About pane, `UpdateCheck`) makes
+  is requested lazily (first notification, or the menu app seeing the switch turned on in the
+  config: macOS asks per app, so the helper cannot ask for it). The menu app records a denial in
+  its own defaults domain as it learns it (`NotificationPermission`, read at launch and as Settings
+  opens), and the helper reads it there for the General pane's hint;
+  `UNUserNotificationCenter` needs a bundle, so a bare dev run posts nothing. "Check for Updates" (About pane, `UpdateCheck`) makes
   one GET of the latest GitHub release per press: no background checks.
 - The DPI the menu and the Pointer pane show is the mouse's live value (a `cycleDPI` press
   changes it without touching the config), then the configured one; a change made in the pane
@@ -195,7 +206,7 @@ one. This file covers how to work on it safely.
   a grouped form builds every row, so `onAppear` is not enough, and macOS 14 lacks
   `onScrollVisibilityChange`), and Applications is never listed (adding goes through an
   open panel or the running apps). A pane is no taller than the screen (`LazyPane.fitted`). A pane
-  whose height changes while shown calls `AppController.refitSettings()`: a nested
+  whose height changes while shown calls `SettingsContext.refit()`: a nested
   `NSHostingController` updates its `preferredContentSize` without telling the tab controller, so
   `SettingsTabs.refit()` copies it across.
 - Settings shows no focus ring until the keyboard is used: windows, panes, the action picker and
@@ -325,7 +336,7 @@ one. This file covers how to work on it safely.
   plist first, without registering anything (an unregistered job runs from a plist under the
   companion directory that launchd does not load at login), `stop` boots out and keeps the registration
   (table in `docs/companion.md`). `puremouse login-status` prints `LoginStatus` (Kit) as JSON, and
-  the menu reads "starts at login" from it, not from a plist file.
+  Settings reads "starts at login" from it, not from a plist file.
 - Builds are signed by `scripts/sign-bundle.sh`: inside out from `scripts/lib.zsh`'s `components`
   (a new nested bundle is one more entry), no `--deep`, always the hardened runtime, with the
   identity `signing_identity` picks (the order is in `docs/development.md`, Signing). The

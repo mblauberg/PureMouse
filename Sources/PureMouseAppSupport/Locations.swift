@@ -25,8 +25,9 @@ public struct Locations: Sendable {
     }
 
     /// Resolves every location as an installed app (or a development run with overrides) would.
-    /// `bundle` is the menu app's bundle: the daemon is looked for in the app it is nested in,
-    /// `PureMouse.app/Contents/Library/LoginItems/PureMouse Menu.app` → `PureMouse.app/Contents/MacOS/puremouse`.
+    /// `bundle` is this app's bundle: the daemon is looked for in the app it is nested in, the
+    /// nearest enclosing `Contents` (`PureMouse.app/Contents/Library/LoginItems/PureMouse Menu.app`
+    /// and `PureMouse.app/Contents/Helpers/PureMouse Settings.app` → `PureMouse.app/Contents/MacOS/puremouse`).
     init(environment: [String: String], home: URL, bundle: URL,
                 isExecutable: (URL) -> Bool = { FileManager.default.isExecutableFile(atPath: $0.path) }) {
         config = environment["PUREMOUSE_CONFIG"].map { URL(fileURLWithPath: $0) }
@@ -35,8 +36,10 @@ public struct Locations: Sendable {
         if let path = environment["PUREMOUSE_DAEMON"] {
             daemon = URL(fileURLWithPath: path)
         } else {
-            let url = bundle.appending(path: "../../../MacOS/puremouse").standardizedFileURL
-            daemon = isExecutable(url) ? url : nil
+            let parents = bundle.standardizedFileURL.pathComponents.dropLast()
+            daemon = parents.lastIndex(of: "Contents").map { index in
+                URL(fileURLWithPath: NSString.path(withComponents: Array(parents[...index]))).appending(path: "MacOS/puremouse")
+            }.flatMap { isExecutable($0) ? $0 : nil }
         }
         companion = Companion.overrideDirectory(in: environment).map { URL(fileURLWithPath: $0, isDirectory: true) }
             ?? home.appending(path: "Library/Application Support/PureMouse")

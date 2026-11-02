@@ -22,16 +22,18 @@ let package = Package(
             dependencies: ["HIDPP", "PureMouseKit"],
             swiftSettings: [.unsafeFlags(["-Osize"], .when(configuration: .release))]
         ),
-        // The Settings window and its SwiftUI panes, over `AppModel`.
+        // The Settings window and its SwiftUI panes, over `AppModel`. Linked by the Settings helper
+        // only: the resident menu bar app links no SwiftUI (docs/adr/0009-settings-helper-app.md).
         .target(
             name: "PureMouseSettingsUI",
             dependencies: ["PureMouseKit", "PureMouseAppSupport"],
             swiftSettings: [.unsafeFlags(["-Osize"], .when(configuration: .release))]
         ),
-        // The menu bar app: status menu and Settings window. Edits the config; never touches HID.
+        // The menu bar app: status item and menu; opens the Settings helper. Edits the config; never
+        // touches HID.
         .executableTarget(
             name: "PureMouseMenu",
-            dependencies: ["PureMouseKit", "PureMouseAppSupport", "PureMouseSettingsUI"],
+            dependencies: ["PureMouseKit", "PureMouseAppSupport"],
             swiftSettings: [.unsafeFlags(["-Osize"], .when(configuration: .release))]
         ),
         // The Settings helper app (`PureMouse Settings.app`), started on demand by the menu bar app.

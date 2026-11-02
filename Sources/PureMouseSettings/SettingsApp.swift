@@ -8,7 +8,7 @@ import notify
 /// (else the last one shown), and quits when it closes. Config edits are saved, and a select by
 /// pressing still listening is cancelled, however the app ends.
 @MainActor
-final class SettingsApp: NSObject, NSApplicationDelegate, SettingsHost {
+final class SettingsApp: NSObject, NSApplicationDelegate {
     private let model = AppModel(alert: Alerts.show)
     private var settings: SettingsWindowController?
     private var showToken: Int32 = -1
@@ -23,7 +23,8 @@ final class SettingsApp: NSObject, NSApplicationDelegate, SettingsHost {
         notify_register_dispatch(Companion.showSettingsNotification, &showToken, .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.show(ShowRequest.consume()?.pane) }
         }
-        settings = SettingsWindowController(model: model, host: self)
+        settings = SettingsWindowController(model: model)
+        settings?.didClose = { NSApp.terminate(nil) }
         show(ShowRequest.consume()?.pane)
         #if DEBUG
         DevHooks.run { [weak self] in self?.show($0) }
@@ -53,26 +54,4 @@ final class SettingsApp: NSObject, NSApplicationDelegate, SettingsHost {
         source.resume()
         return source
     }
-
-    // MARK: SettingsHost
-
-    var showsStatusItem: Bool { model.locations.showsInMenuBar }
-
-    /// Runs `menu on` or `off` now. This app is not in the menu agent's process group, so removing
-    /// that agent leaves it open.
-    func setMenuBarPreference(_ shown: Bool) {
-        guard shown != model.locations.showsInMenuBar else { return }
-        model.flush()
-        model.perform(shown ? .menuOn : .menuOff)
-    }
-
-    func settingsDidClose() {
-        NSApp.terminate(nil)
-    }
-
-    /// The menu bar app posts the notifications, and macOS asks per app, so it asks for itself
-    /// (when it sees the setting turned on); this app can neither ask for it nor read its answer.
-    func requestNotifications() async {}
-
-    func notificationsAllowed() async -> Bool? { nil }
 }

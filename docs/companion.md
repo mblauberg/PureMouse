@@ -1,13 +1,18 @@
 # Menu bar app and daemon: the contract
 
-PureMouse is two processes in one app bundle:
+PureMouse is two resident processes in one app bundle, plus Settings on demand:
 
 - **The daemon** (`PureMouse.app/Contents/MacOS/puremouse`): headless and unchanged in identity
   (bundle ID `io.github.mblauberg.puremouse`, executable path, signature), so existing
   Accessibility and Input Monitoring grants keep matching. It alone talks to the mouse.
 - **The menu bar app** (`PureMouse.app/Contents/Library/LoginItems/PureMouse Menu.app`, bundle ID
-  `io.github.mblauberg.puremouse.menu`, `LSUIElement`): the status item, its menu and the Settings
-  window. It needs no privacy permissions and never opens HID devices.
+  `io.github.mblauberg.puremouse.menu`, `LSUIElement`): the status item and its menu. It needs no
+  privacy permissions and never opens HID devices.
+- **The Settings helper** (`PureMouse.app/Contents/Helpers/PureMouse Settings.app`, bundle ID
+  `io.github.mblauberg.puremouse.settings`, a regular app with a Dock icon): the Settings window.
+  The menu bar app opens it, and it quits when its window closes
+  ([ADR 9](adr/0009-settings-helper-app.md)). It edits the config and sends control requests as
+  the menu bar app does, under the same locks.
 
 Either works without the other. With the menu bar app quit or hidden, the mouse behaves exactly as
 configured; with the daemon stopped, the menu shows "PureMouse Is Off" and can start it.
@@ -134,8 +139,9 @@ All optional; nil members are left out of the JSON.
 ## Login and lifecycle
 
 The daemon CLI owns every launchd change (`LoginItem.swift` holds the policy; a `LoginService`,
-`LaunchdAgentService`, holds the mechanism, so the policy is tested against a fake). The menu
-app runs these commands through the daemon binary at `Bundle.main.bundleURL/../../../MacOS/puremouse`.
+`LaunchdAgentService`, holds the mechanism, so the policy is tested against a fake). The menu app
+and the Settings helper run these commands through the daemon binary in the app they are nested
+in, `PureMouse.app/Contents/MacOS/puremouse` (`Locations`).
 
 "Starts at login" and "is running now" are separate, and each command changes only the axis the
 table gives:
@@ -169,19 +175,31 @@ state: `notRegistered` (does not start at login), `enabled` (does), `requiresApp
 but the user must approve it in System Settings › Login Items; no mechanism reports it yet) or
 `notFound` (the build has no such job, e.g. no menu bar app); `hidden` is whether `menu off` is in
 force. The decoder is `LoginStatus` in `PureMouseKit`. It says nothing about what is running: a
-job started with `start` while unregistered reads `notRegistered`. The menu app reads its "starts
-at login" answer from it rather than looking for a plist file.
+job started with `start` while unregistered reads `notRegistered`. Settings reads its "starts at
+login" answer from it rather than looking for a plist file.
 
-Opening PureMouse.app from the Finder runs `register`, touches `show-settings` in
-`Companion.directory` and opens the menu app, which shows Settings; with the icon hidden it quits
-when Settings closes. `open` is tried twice, since it can reach the instance `register` is booting
-out and fail (`_LSOpenURLsWithCompletionHandler` error -600). The old alert is kept only when
-there is no menu app or it cannot be opened. The menu app keeps a single instance: a second launch
-touches `show-settings`, posts `io.github.mblauberg.puremouse.menu.show` and exits, and the running
-one shows Settings. An instance that starts within 5 s of that stamp (including one launchd starts)
-shows Settings too and removes it, so a request made while the agent restarts is not lost. Reopening
-the app (`applicationShouldHandleReopen`) also shows Settings. If the user has blocked the item
-under System Settings › Menu Bar, opening the app still reaches Settings.
+Settings opens the same way from everywhere (`SettingsLauncher`): `show-settings` in
+`Companion.directory` is written with the pane to show (empty: the last one), the doorbell
+`io.github.mblauberg.puremouse.menu.show` is posted, and the helper is opened with `NSWorkspace`,
+which starts it or brings the running one forward (one instance per bundle ID). A running helper
+reads the file on the doorbell; a starting one reads it at launch. Only a stamp from the last 5 s
+counts, and the reader removes it (`ShowRequest`). The menu app no longer listens on the doorbell.
+
+Opening PureMouse.app from the Finder runs `register`, touches `show-settings` and opens the menu
+app. The menu app opens Settings when it was opened by hand rather than by launchd, when it finds a
+fresh stamp at launch (so a request made while `register` restarts the agent is not lost), when its
+icon is hidden (it then quits once Settings is open), and when it is reopened
+(`applicationShouldHandleReopen`). `open` is tried twice, since it can reach the instance
+`register` is booting out and fail (`_LSOpenURLsWithCompletionHandler` error -600). The old alert
+is kept only when there is no menu app or it cannot be opened. The menu app keeps a single
+instance: a second launch opens Settings and exits, and the running one keeps the icon. If the user
+has blocked the item under System Settings › Menu Bar, opening the app still reaches Settings.
+
+The helper runs `menu on` and `menu off` itself. It is not in the menu agent's process group, so
+hiding the icon from Settings leaves Settings open. Turning on Start at login there runs `register`,
+which restarts the menu app's agent (the icon goes and comes back), since the caller is not the menu
+app. Quit PureMouse quits the helper first, which saves its edits and cancels a select by pressing
+still listening, then runs `stop`. Quit in the helper's own menu (⌘Q) quits only Settings.
 
 ## Footprint
 
@@ -236,16 +254,10 @@ What the numbers say:
   preferences domain that we could not reproduce on demand, so the rig clears its domain before
   every launch. An installed app that carries that state may read several MB above these figures.
 
-The Settings window and its view tree are created when shown. Once Settings has closed, the app
-starts over as a fresh copy (`Relaunch`): the agent's copy exits with 75 (EX_TEMPFAIL) and launchd
-restarts it (`KeepAlive` unless successful) within a second, in the same place in the menu bar; it
-waits until 11 s after its own start (launchd's respawn throttle), and while the menu is open or a
-lifecycle command runs. A copy the Finder started (the icon was hidden, then shown again in
-Settings) exits and has launchd start the agent, so the icon is supervised again. `exec` in place
-does not work: LaunchServices keeps the old image's registration for the pid and the new image
-never gets its status item. The menu itself is a plain `NSMenu` built on open (`menuNeedsUpdate`).
-`scripts/measure-menu.budgets` holds the limits the rig checks; measure with the rig, or
-`footprint`/`vmmap --summary`, before and after each change.
+The menu app links no SwiftUI and never shows a window, so it never has to start over. The menu
+itself is a plain `NSMenu` built on open (`menuNeedsUpdate`). `scripts/measure-menu.budgets`
+holds the limits the rig checks; measure with the rig, or `footprint`/`vmmap --summary`, before and
+after each change, and the menu app again after Settings has opened and closed.
 
 ## Daemon decisions
 

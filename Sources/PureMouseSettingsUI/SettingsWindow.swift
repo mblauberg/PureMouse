@@ -3,7 +3,8 @@ import PureMouseAppSupport
 import SwiftUI
 
 /// The Settings window: native toolbar tabs (`NSTabViewController`, `.toolbar` style) over
-/// SwiftUI grouped forms. Created when first shown and released when closed.
+/// SwiftUI grouped forms. The helper shows one for its whole life, and quits when it closes
+/// (`didClose`).
 @MainActor
 public final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     static let width: CGFloat = 600
@@ -11,9 +12,11 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
 
     private let context: SettingsContext
     private let tabs = SettingsTabs()
+    /// Runs once the window has closed, unless it was shown again meanwhile.
+    public var didClose: () -> Void = {}
 
-    public init(model: AppModel, host: SettingsHost) {
-        let context = SettingsContext(host: host)
+    public init(model: AppModel) {
+        let context = SettingsContext()
         context.tabs = tabs
         self.context = context
         tabs.tabStyle = .toolbar
@@ -65,8 +68,12 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
     }
 
     public func windowWillClose(_ notification: Notification) {
-        // Let AppKit finish closing before the controller and its views go.
-        DispatchQueue.main.async { [host = context.host] in host.settingsDidClose() }
+        // Let AppKit finish closing first. A request to show Settings in that gap (the menu bar app
+        // rings the doorbell) keeps the window, so the helper stays.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, window?.isVisible != true else { return }
+            didClose()
+        }
     }
 }
 

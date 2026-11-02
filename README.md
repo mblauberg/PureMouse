@@ -42,8 +42,8 @@ the mouse is idle, so is PureMouse.
 | Network | None, unless you press **Check for Updates** |
 | Privacy | No account, no telemetry, nothing stored on the mouse |
 
-The background process uses only system frameworks and no UI toolkit. The menu bar app builds its
-Settings window on demand and hands the memory back when you close it. Smooth scrolling runs in
+The background process uses only system frameworks and no UI toolkit. Settings is a separate app
+that runs only while its window is open, so the menu bar app stays small. Smooth scrolling runs in
 step with the display, and only while the wheel is moving.
 
 <sub>* Two exceptions, both short-lived: while a permission is still to be granted, PureMouse checks

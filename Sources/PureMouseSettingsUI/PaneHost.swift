@@ -10,7 +10,7 @@ struct PaneHost: View {
     var body: some View {
         Group {
             switch pane {
-            case .general: GeneralPane(host: context.host)
+            case .general: GeneralPane()
             case .buttons: ButtonsPane()
             case .scrolling: ScrollingPane()
             case .pointer: PointerPane()

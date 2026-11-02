@@ -89,8 +89,7 @@ public final class AppModel {
         let readings = !daemonRunning ? [] : devices.filter(\.online).compactMap { device in
             device.battery.map { BatteryAlertStore.Reading(id: device.id, name: device.name, battery: $0) }
         }
-        let wanted = config.bool(["notifications", "lowBattery"]) ?? true
-        for alert in batteryAlerts.store.process(readings, enabled: wanted) {
+        for alert in batteryAlerts.store.process(readings, enabled: lowBatteryNotificationsOn) {
             let text = BatteryAlert.message(for: alert.band, device: alert.name, battery: alert.battery)
             batteryAlerts.announce( "battery.\(alert.id).\(alert.band.rawValue)", text.title, text.body)
         }
@@ -122,6 +121,9 @@ public final class AppModel {
     // MARK: Config
 
     public var config: ConfigTree { store.config }
+
+    /// Settings' "Low battery" notifications switch (on unless turned off).
+    public var lowBatteryNotificationsOn: Bool { config.bool(["notifications", "lowBattery"]) ?? true }
     public var writeError: String? { store.writeError }
     public var configError: String? { store.configError }
     public var readOnly: Bool { store.readOnly }

@@ -4,7 +4,6 @@ import SwiftUI
 
 struct GeneralPane: View {
     @Environment(AppModel.self) private var model
-    let host: SettingsHost
     @State private var startsAtLogin = false  // read on appear
     @State private var showsInMenuBar = true
     @State private var confirmingReset = false
@@ -26,7 +25,7 @@ struct GeneralPane: View {
             .disabled(model.locations.daemon == nil)
 
             Section {
-                Toggle(isOn: Binding(get: { model.config.bool(["notifications", "lowBattery"]) ?? true },
+                Toggle(isOn: Binding(get: { model.lowBatteryNotificationsOn },
                                      set: { setLowBatteryNotifications($0) })) {
                     RowLabel("Low battery notification",
                              help: notificationsDenied
@@ -91,8 +90,12 @@ struct GeneralPane: View {
         }
         .onAppear {
             refreshStartsAtLogin()
-            showsInMenuBar = host.showsStatusItem
-            Task { notificationsDenied = await host.notificationsAllowed() == false }
+            showsInMenuBar = model.locations.showsInMenuBar
+            readNotificationsDenied()
+        }
+        // Back from System Settings, or the menu bar app has asked meanwhile.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            readNotificationsDenied()
         }
         .confirmationDialog("Reset all settings?", isPresented: $confirmingReset) {
             Button("Reset All Settings", role: .destructive) { model.resetAll() }
@@ -117,19 +120,23 @@ struct GeneralPane: View {
         }
     }
 
-    /// Turning it on asks macOS for permission now, while the user is here to answer.
+    /// The menu bar app posts the notifications, and macOS asks per app, so the menu bar app asks
+    /// for permission when it sees this turned on, and records the answer for this pane.
     private func setLowBatteryNotifications(_ on: Bool) {
         model.set(on ? nil : false, at: ["notifications", "lowBattery"])
-        guard on else { return }
-        Task {
-            await host.requestNotifications()
-            notificationsDenied = await host.notificationsAllowed() == false
-        }
     }
 
+    private func readNotificationsDenied() {
+        notificationsDenied = NotificationPermission.denied(in: NotificationPermission.menuDefaults)
+    }
+
+    /// Runs `menu on` or `off` now. This app is not in the menu agent's process group, so removing
+    /// that agent leaves it open.
     private func setShowsInMenuBar(_ on: Bool) {
         showsInMenuBar = on
-        host.setMenuBarPreference(on)
+        guard on != model.locations.showsInMenuBar else { return }
+        model.flush()
+        model.perform(on ? .menuOn : .menuOff)
     }
 
     private func openConfig() {

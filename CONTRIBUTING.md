@@ -32,7 +32,7 @@ PureMouse exists to be small and to stay out of the way. A change that breaks on
 very good reason, agreed in an issue first:
 
 - **No dependencies.** System frameworks only. The background process and the shared library use
-  no UI toolkit; only the menu bar app links AppKit and SwiftUI.
+  no UI toolkit; the menu bar app links AppKit, and only the Settings helper links SwiftUI.
 - **Zero idle CPU.** No polling and no timers while nothing is happening: work starts from a device
   event, a file change or a notification. The only exceptions are the two retries the README
   notes under "Lightweight by design".

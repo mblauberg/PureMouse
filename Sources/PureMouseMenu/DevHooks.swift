@@ -4,10 +4,9 @@ import PureMouseAppSupport
 import PureMouseKit
 import notify
 
-/// Development only: `PUREMOUSE_DEV_PANE=<pane>` opens Settings on a pane and
-/// `PUREMOUSE_DEV_MENU=1` opens the menu, so screenshots can be taken without clicking.
-/// `PUREMOUSE_DEV_APPEARANCE=light|dark` overrides the system appearance. The pane hooks are
-/// Settings' own (`PureMouseSettingsUI.DevHooks`).
+/// Development only: `PUREMOUSE_DEV_MENU=1` opens the menu, so screenshots can be taken without
+/// clicking, and `PUREMOUSE_DEV_APPEARANCE=light|dark` overrides the system appearance. Settings'
+/// own hooks are the helper's (`PureMouseSettingsUI.DevHooks`).
 ///
 /// A release build has none of this unless it is built with `-DDEVHOOKS` (`scripts/measure-menu.sh`),
 /// which compiles in only `Rig`, below.
@@ -29,11 +28,6 @@ enum DevHooks {
         case "light": NSApp.appearance = NSAppearance(named: .aqua)
         case "dark": NSApp.appearance = NSAppearance(named: .darkAqua)
         default: break
-        }
-        if let pane = environment["PUREMOUSE_DEV_PANE"].flatMap(SettingsPane.init) {
-            app.showSettings(pane: pane)
-            // A launch from a terminal is not allowed to take focus cooperatively.
-            NSApp.activate(ignoringOtherApps: true)
         }
         if environment["PUREMOUSE_DEV_MENU"] != nil {
             // The menu's glass shows what is under it: a plain desktop, not whatever is on screen.
@@ -65,8 +59,8 @@ enum DevHooks {
 /// script writes `rig-command` as "<number> <verb>" and rings; the answer is the number in
 /// `rig-ack` once the verb is done. `rig-ready` lists the doorbells this process listens on.
 ///
-/// Verbs: `menu` opens the menu and closes it again, `settings` and `settings-close` show and close
-/// the Settings window, `relief` runs `malloc_zone_pressure_relief`.
+/// Verbs: `menu` opens the menu and closes it again, `settings` opens the Settings helper and
+/// `settings-close` quits it, `relief` runs `malloc_zone_pressure_relief`.
 @MainActor
 private enum Rig {
     private static var token: Int32 = -1
@@ -103,7 +97,7 @@ private enum Rig {
             app.showSettings()
             done()
         case "settings-close":
-            app.settingsWindow?.close()
+            SettingsLauncher.quit()
             done()
         case "relief":
             malloc_zone_pressure_relief(nil, 0)

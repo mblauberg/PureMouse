@@ -1,36 +1,30 @@
 import AppKit
 import PureMouseAppSupport
 import PureMouseKit
-import PureMouseSettingsUI
-import notify
 
-/// The app delegate: owns the model, the status item and (only while open) the Settings window.
+/// The app delegate: owns the model and the status item. Settings is an app of its own
+/// (`SettingsLauncher`), so this process never holds a window.
 @MainActor
-final class AppController: NSObject, NSApplicationDelegate, SettingsHost {
-    static var shared: AppController? { NSApp.delegate as? AppController }
-
+final class AppController: NSObject, NSApplicationDelegate {
     let model = AppModel(alert: Alerts.show, announce: Notifier.post)
     private var statusMenu: StatusMenu?
-    private var settings: SettingsWindowController?
-    private var showToken: Int32 = -1
+    private var lowBatteryNotificationsOn = true
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.mainMenu = MainMenu.make(app: self)
-        model.statusChanged = { [weak self] in self?.statusMenu?.updateIcon() }
-        Lifecycle.finished = { [weak self] in self?.relaunchIfIdle() }
+        lowBatteryNotificationsOn = model.lowBatteryNotificationsOn
+        Task { await Notifier.refresh() }
+        model.statusChanged = { [weak self] in self?.statusChanged() }
         model.startWatching()
-        // A second launch (the Finder, `open`) asks this one to show Settings, then exits.
-        notify_register_dispatch(Companion.showSettingsNotification, &showToken, .main) { [weak self] _ in
-            MainActor.assumeIsolated {
-                _ = ShowRequest.consume() // answered now
-                self?.showSettings()
+        if Locations.live.showsInMenuBar { statusMenu = StatusMenu(model: model, app: self) }
+        // Opened by hand, or asked for Settings while starting (`puremouse` opened from the Finder
+        // restarts this agent, then opens it), or with no icon to show: open Settings. With no
+        // icon there is nothing left to do once it is open.
+        let request = ShowRequest.consume()
+        if !Locations.launchedByLaunchd || statusMenu == nil || request != nil {
+            showSettings(pane: request?.pane) { [weak self] in
+                if self?.statusMenu == nil { NSApp.terminate(nil) }
             }
         }
-        if Locations.live.showsInMenuBar { statusMenu = StatusMenu(model: model, app: self) }
-        // A request posted while this instance was still starting (opening the app from the
-        // Finder restarts the menu agent, then opens it) counts too. Consumed either way.
-        let requested = ShowRequest.consume() != nil
-        if !Locations.launchedByLaunchd || statusMenu == nil || requested { showSettings() }
         #if DEBUG || DEVHOOKS
         DevHooks.run(app: self)
         #endif
@@ -46,60 +40,29 @@ final class AppController: NSObject, NSApplicationDelegate, SettingsHost {
         model.flush()
     }
 
-    // MARK: Settings
-
-    func showSettings(pane: SettingsPane? = nil) {
-        if settings == nil {
-            settings = SettingsWindowController(model: model, host: self)
-        }
-        settings?.show(pane: pane)
+    func showSettings(pane: SettingsPane? = nil, then done: @escaping @MainActor () -> Void = {}) {
+        Task { await Notifier.refresh() }
+        SettingsLauncher.open(pane: pane, then: done)
     }
 
-    /// Releases the window and its view tree. With no menu bar icon there is nothing left to do.
-    func settingsDidClose() {
-        settings = nil
-        model.cancelCapture()
-        model.flush()
-        if pendingMenuOff {
-            // Removing the menu agent ends this process, so it waits until Settings closes.
-            pendingMenuOff = false
-            Lifecycle.run(.menuOff) { _ in NSApp.terminate(nil) }
-        } else if statusMenu == nil {
-            NSApp.terminate(nil)
-        } else {
-            relaunchPending = true
-            // After the window's close animation.
-            DispatchQueue.main.asyncAfter(deadline: .now() + Relaunch.delay(launchedAt: launchedAt)) { [weak self] in self?.relaunchIfIdle() }
+    private func statusChanged() {
+        statusMenu?.updateIcon()
+        // macOS asks per app, and this app posts the notifications: when the switch is turned on
+        // in Settings (another app), ask for permission here.
+        let on = model.lowBatteryNotificationsOn
+        if NotificationPermission.shouldRequest(wasOn: lowBatteryNotificationsOn, isOn: on) {
+            Task { await Notifier.requestIfNeeded() }
         }
-    }
-
-    private var relaunchPending = false
-    private let launchedAt = ProcessInfo.processInfo.systemUptime
-
-    /// Settings leaves tens of MB behind in AppKit and SwiftUI caches, so once it has closed, this
-    /// process starts over as a fresh copy (`Relaunch`). It waits while Settings is open again, the
-    /// menu is open or a lifecycle command runs; whichever of those ends last tries again.
-    func relaunchIfIdle() {
-        guard relaunchPending, settings == nil, let statusMenu, !statusMenu.isOpen, Lifecycle.idle,
-              !pendingMenuOff, NSApp.modalWindow == nil else { return }
-        // However it was reached (the menu closing, a command ending), not before launchd would
-        // restart it at once.
-        let wait = Relaunch.delay(launchedAt: launchedAt)
-        if wait > 0.5 {
-            DispatchQueue.main.asyncAfter(deadline: .now() + wait) { [weak self] in self?.relaunchIfIdle() }
-            return
-        }
-        relaunchPending = false
-        model.flush()
-        Relaunch.now()
-        malloc_zone_pressure_relief(nil, 0) // a development copy, or the agent is gone
+        lowBatteryNotificationsOn = on
     }
 
     // MARK: Lifecycle
 
-    /// Quit PureMouse: stops the daemon (which restores the mouse) and this app. Both start again
-    /// at login. `stop` boots out this app's agent too, so launchd may end us first.
+    /// Quit PureMouse: quits Settings, then stops the daemon (which restores the mouse) and this
+    /// app. Both start again at login. `stop` boots out this app's agent too, so launchd may end us
+    /// first.
     func quitAll() {
+        SettingsLauncher.quit()
         model.flush()
         guard Locations.live.daemon != nil else { NSApp.terminate(nil); return }
         Lifecycle.run(.stop) { result in
@@ -110,59 +73,25 @@ final class AppController: NSObject, NSApplicationDelegate, SettingsHost {
         }
     }
 
-    /// Hide Menu Bar Icon: removes the menu app's login agent; the daemon keeps running.
+    /// Hide Menu Bar Icon: removes the menu app's login agent, which ends this app; the daemon
+    /// keeps running.
     func hideMenuBarIcon() {
         model.flush()
         model.perform(.menuOff) { [self] in
-            setShowsInMenuBar(false)
+            statusMenu?.remove()
+            statusMenu = nil
+            NSApp.terminate(nil)
         }
     }
-
-    /// Shows or removes the status item in this process (the agent change is already made).
-    func setShowsInMenuBar(_ shown: Bool) {
-        if shown, statusMenu == nil {
-            statusMenu = StatusMenu(model: model, app: self)
-        } else if !shown, let statusMenu {
-            statusMenu.remove()
-            self.statusMenu = nil
-            if settings == nil { NSApp.terminate(nil) }
-        }
-    }
-
-    var showsStatusItem: Bool { statusMenu != nil }
 
     #if DEBUG || DEVHOOKS
     func openMenuForTesting(appearance: NSAppearance?) { statusMenu?.open(appearance: appearance) }
     func closeMenuForTesting() { statusMenu?.close() }
-    var settingsWindow: NSWindow? { settings?.window }
     #endif
-
-    private var pendingMenuOff = false
-
-    /// Settings' "Show in menu bar". Hiding removes the icon now and the menu agent when Settings
-    /// closes (removing the agent ends this process). Showing writes and boots the agent.
-    func setMenuBarPreference(_ shown: Bool) {
-        if !shown {
-            statusMenu?.remove()
-            statusMenu = nil
-            pendingMenuOff = true
-        } else if pendingMenuOff {
-            pendingMenuOff = false
-            setShowsInMenuBar(true)
-        } else if !Locations.live.showsInMenuBar {
-            model.perform(.menuOn) { [self] in setShowsInMenuBar(true) }
-        } else {
-            setShowsInMenuBar(true)
-        }
-    }
 
     func openPrivacy(_ pane: PrivacyPane) {
         NSWorkspace.shared.open(pane.url)
     }
-
-    func requestNotifications() async { await Notifier.requestIfNeeded() }
-
-    func notificationsAllowed() async -> Bool? { await Notifier.isAllowed() }
 
     func openReleases() {
         NSWorkspace.shared.open(Links.releases)

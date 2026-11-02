@@ -14,8 +14,10 @@ The decisions behind this design, and the alternatives rejected, are recorded in
 - **The daemon** (`Contents/MacOS/puremouse`) does all the work. It is the only process that
   talks to the mouse, and the only one that needs Accessibility and Input Monitoring. It has no
   window and links no UI framework.
-- **The menu bar app** (`Contents/Library/LoginItems/PureMouse Menu.app`) shows status and edits
-  the config. It needs no permissions and never opens a device.
+- **The menu bar app** (`Contents/Library/LoginItems/PureMouse Menu.app`) shows status and opens
+  Settings. It needs no permissions and never opens a device.
+- **The Settings helper** (`Contents/Helpers/PureMouse Settings.app`) is the Settings window, as an
+  app of its own that runs only while the window is open. It edits the config.
 
 Either runs without the other: with the menu bar icon hidden or quit, the mouse behaves exactly as
 configured. They talk through two small JSON files and a Darwin notification after each write, so
@@ -106,9 +108,13 @@ Sources/puremouse/      the daemon: applying config, actions, gestures, smooth s
 Sources/PureMouseAppSupport/
                         the menu side's logic, without AppKit or SwiftUI: the daemon link,
                         config editing and saving, select by pressing, where files live, status
-                        words, update check, battery alerts
-Sources/PureMouseMenu/  the menu bar app (AppKit status item and menu, SwiftUI Settings panes);
-                        the menu's rows come from `MenuPlan`, which `StatusMenu` renders
+                        words, update check, battery alerts, opening Settings
+Sources/PureMouseMenu/  the menu bar app (AppKit status item and menu, no SwiftUI); the menu's
+                        rows come from `MenuPlan`, which `StatusMenu` renders
+Sources/PureMouseSettingsUI/
+                        the Settings window and its SwiftUI panes
+Sources/PureMouseSettings/
+                        the Settings helper app around them
 Sources/HIDPPTesting/   test support only: in-memory transport and stateful HID++ mouse from probe dumps
 Tests/                  request handling and device behaviour against fakes, framing and event parsing,
                         config, gestures, scroll maths, config editing, the menu's rows

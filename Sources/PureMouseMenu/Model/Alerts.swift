@@ -8,6 +8,5 @@ enum Alerts {
         alert.messageText = message
         alert.informativeText = info
         alert.runModal()
-        AppController.shared?.relaunchIfIdle() // it waited for this alert
     }
 }

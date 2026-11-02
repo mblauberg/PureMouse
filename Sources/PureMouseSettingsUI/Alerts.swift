@@ -1,5 +1,4 @@
 import AppKit
-import PureMouseAppSupport
 
 @MainActor
 public enum Alerts {
@@ -12,7 +11,7 @@ public enum Alerts {
     }
 
     /// A confirmation with a destructive default; returns true to go ahead.
-    static func confirm(_ message: String, _ info: String, action: String, window: NSWindow? = NSApp.keyWindow) -> Bool {
+    static func confirm(_ message: String, _ info: String, action: String) -> Bool {
         NSApp.activate()
         let alert = NSAlert()
         alert.messageText = message
@@ -20,7 +19,6 @@ public enum Alerts {
         let button = alert.addButton(withTitle: action)
         button.hasDestructiveAction = true
         alert.addButton(withTitle: "Cancel")
-        let confirmed = alert.runModal() == .alertFirstButtonReturn
-        return confirmed
+        return alert.runModal() == .alertFirstButtonReturn
     }
 }
