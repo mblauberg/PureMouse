@@ -8,6 +8,7 @@ struct GeneralPane: View {
     @State private var showsInMenuBar = true
     @State private var confirmingReset = false
     @State private var notificationsDenied = false
+    @State private var deniedWatch: NotificationPermission.Watch?
 
     var body: some View {
         PaneForm {
@@ -91,12 +92,11 @@ struct GeneralPane: View {
         .onAppear {
             refreshStartsAtLogin()
             showsInMenuBar = model.locations.showsInMenuBar
-            readNotificationsDenied()
+            // The menu bar app records the answer as it learns it, and may learn it while this shows.
+            notificationsDenied = NotificationPermission.denied(in: NotificationPermission.menuDefaults)
+            deniedWatch = NotificationPermission.Watch(NotificationPermission.menuDefaults) { notificationsDenied = $0 }
         }
-        // Back from System Settings, or the menu bar app has asked meanwhile.
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            readNotificationsDenied()
-        }
+        .onDisappear { deniedWatch = nil }
         .confirmationDialog("Reset all settings?", isPresented: $confirmingReset) {
             Button("Reset All Settings", role: .destructive) { model.resetAll() }
         } message: {
@@ -124,10 +124,6 @@ struct GeneralPane: View {
     /// for permission when it sees this turned on, and records the answer for this pane.
     private func setLowBatteryNotifications(_ on: Bool) {
         model.set(on ? nil : false, at: ["notifications", "lowBattery"])
-    }
-
-    private func readNotificationsDenied() {
-        notificationsDenied = NotificationPermission.denied(in: NotificationPermission.menuDefaults)
     }
 
     /// Runs `menu on` or `off` now. This app is not in the menu agent's process group, so removing

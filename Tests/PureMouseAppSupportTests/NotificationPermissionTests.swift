@@ -17,7 +17,21 @@ import Testing
         #expect(menu.object(forKey: NotificationPermission.deniedKey) == nil)
     }
 
+    @Test(.timeLimit(.minutes(1))) @MainActor func theHelperHearsADenialAsTheMenuRecordsIt() async throws {
+        let menu = try #require(UserDefaults(suiteName: suite))
+        defer { menu.removePersistentDomain(forName: suite) }
+        let (heard, ear) = AsyncStream<Bool>.makeStream()
+        let watch = try #require(NotificationPermission.Watch(UserDefaults(suiteName: suite)) { ear.yield($0) })
+        var answers = heard.makeAsyncIterator()
+        NotificationPermission.record(denied: true, in: menu)
+        #expect(await answers.next() == true)
+        NotificationPermission.record(denied: false, in: menu)
+        #expect(await answers.next() == false)
+        withExtendedLifetime(watch) {}
+    }
+
     @Test func noDomainReadsAsNotDenied() {
+        #expect(NotificationPermission.Watch(nil) { _ in } == nil)
         #expect(!NotificationPermission.denied(in: nil))
     }
 

@@ -24,6 +24,30 @@ public enum NotificationPermission {
         defaults?.bool(forKey: deniedKey) ?? false
     }
 
+    /// Calls `changed` with the menu bar app's answer each time it records one, for as long as it is
+    /// kept. Key-value observing on the domain hears another process's writes;
+    /// `UserDefaults.didChangeNotification` does not.
+    public final class Watch: NSObject {
+        private let defaults: UserDefaults
+        private let changed: @MainActor (Bool) -> Void
+
+        public init?(_ defaults: UserDefaults?, changed: @escaping @MainActor (Bool) -> Void) {
+            guard let defaults else { return nil }
+            self.defaults = defaults
+            self.changed = changed
+            super.init()
+            defaults.addObserver(self, forKeyPath: deniedKey, context: nil)
+        }
+
+        deinit { defaults.removeObserver(self, forKeyPath: deniedKey) }
+
+        override public func observeValue(forKeyPath keyPath: String?, of object: Any?,
+                                          change: [NSKeyValueChangeKey: Any]?, context: UnsafeMutableRawPointer?) {
+            let denied = NotificationPermission.denied(in: defaults)
+            Task { @MainActor [changed] in changed(denied) }
+        }
+    }
+
     /// The menu bar app asks for permission when low-battery notifications go from off to on in the
     /// config, while the user who turned them on is there to answer.
     public static func shouldRequest(wasOn: Bool, isOn: Bool) -> Bool {

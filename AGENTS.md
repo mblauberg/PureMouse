@@ -175,7 +175,8 @@ one. This file covers how to work on it safely.
   is requested lazily (first notification, or the menu app seeing the switch turned on in the
   config: macOS asks per app, so the helper cannot ask for it). The menu app records a denial in
   its own defaults domain as it learns it (`NotificationPermission`, read at launch and as Settings
-  opens), and the helper reads it there for the General pane's hint;
+  opens), and the helper reads it there for the General pane's hint, watching it (key-value
+  observing) while that pane shows;
   `UNUserNotificationCenter` needs a bundle, so a bare dev run posts nothing. "Check for Updates" (About pane, `UpdateCheck`) makes
   one GET of the latest GitHub release per press: no background checks.
 - The DPI the menu and the Pointer pane show is the mouse's live value (a `cycleDPI` press
