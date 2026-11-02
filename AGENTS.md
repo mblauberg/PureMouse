@@ -37,7 +37,8 @@ one. This file covers how to work on it safely.
   Debug builds of the helper take `PUREMOUSE_DEV_PANE=<pane>` (a tab, `general`, `mouse`, `apps`,
   `about`, or a Mouse segment, `buttons`, `scrolling`, `pointer`), `PUREMOUSE_DEV_APPEARANCE`,
   `PUREMOUSE_DEV_PICKER=<button>`, `PUREMOUSE_DEV_SHORTCUT=<button>` (Mouse › Buttons) and
-  `PUREMOUSE_DEV_APP=<bundle id>` (Apps tab; adds the app without writing) for screenshots
+  `PUREMOUSE_DEV_APP=<bundle id>` (Apps tab; adds the app without writing) and
+  `PUREMOUSE_DEV_SHEET=<name>` (a pane's sheet: `presets`, Mouse › Pointer) for screenshots
   (`Sources/PureMouseSettingsUI/DevHooks.swift`). `PUREMOUSE_DEV_MENU=1` puts a plain backdrop
   under the menu, since its glass shows whatever is behind it. A window capture
   (`screencapture -l`) leaves out that blur, so the README's menu shots take the shape and shadow

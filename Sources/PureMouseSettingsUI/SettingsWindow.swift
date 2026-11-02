@@ -94,13 +94,16 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
         return host
     }
 
-    public func show(pane: SettingsPane?) {
-        if let pane { tabs.open(pane) }
+    public func show(_ request: ShowRequest?) {
+        if let pane = request?.pane { tabs.open(pane) }
         guard let window else { return }
         if !window.isVisible { window.center() }
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
-        DispatchQueue.main.async { window.makeFirstResponder(nil) }
+        DispatchQueue.main.async { [context] in
+            window.makeFirstResponder(nil)
+            if let sheet = request?.sheet { context.sheet = sheet }
+        }
     }
 
     public func windowWillClose(_ notification: Notification) {

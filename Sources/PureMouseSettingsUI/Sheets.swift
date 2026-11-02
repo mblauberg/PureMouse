@@ -14,7 +14,7 @@ struct BindingTarget: Hashable {
 
     var title: String {
         if let label { return label }
-        let name = NamedButton(rawValue: button)?.label ?? "Control \(button)"
+        let name = NamedButton.title(forKey: button)
         guard let direction else { return name }
         return "\(name), \(Gesture.label(direction).lowercased())"
     }

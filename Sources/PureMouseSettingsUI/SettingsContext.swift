@@ -1,10 +1,14 @@
 import AppKit
+import Observation
 import PureMouseAppSupport
 
 /// What a pane may ask of the window around it.
-@MainActor
+@MainActor @Observable
 final class SettingsContext {
-    weak var tabs: SettingsTabs?
+    @ObservationIgnored weak var tabs: SettingsTabs?
+    /// The sheet open over the pane, if any: a request can ask for one (`ShowRequest`), and the
+    /// pane that owns it presents it.
+    var sheet: SettingsSheet?
 
     var window: NSWindow? { tabs?.view.window }
 

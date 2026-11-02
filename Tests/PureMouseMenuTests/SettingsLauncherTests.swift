@@ -18,7 +18,7 @@ final class FakeSystem {
     }
 
     let app = URL(fileURLWithPath: "/Applications/PureMouse.app/Contents/Helpers/PureMouse Settings.app")
-    var posts: [SettingsPane?] = []
+    var posts: [ShowRequest] = []
     var opens: [@MainActor ((any RunningHelper)?, (any Error)?) -> Void] = []
     var running: [Helper] = []
     var delayed: [(TimeInterval, @MainActor () -> Void)] = []
@@ -54,11 +54,22 @@ final class FakeSystem {
 
 @MainActor
 struct SettingsLauncherTests {
+    @Test func theSheetIsPostedWithThePaneAndAskedForAgain() {
+        let fake = FakeSystem()
+        let launcher = SettingsLauncher(system: fake.system)
+        launcher.open(ShowRequest(sheet: .presets))
+        let dead = FakeSystem.Helper(alive: false)
+        fake.running = [dead]
+        fake.answer(dead)
+        fake.runDelayed()
+        #expect(fake.posts == Array(repeating: ShowRequest(pane: .mouse(.pointer), sheet: .presets), count: 2))
+    }
+
     @Test func anOpenThatFindsOnlyAQuittingHelperIsTriedAgain() {
         let fake = FakeSystem()
         let launcher = SettingsLauncher(system: fake.system)
         var done = 0
-        launcher.open(pane: .mouse(.pointer)) { done += 1 }
+        launcher.open(ShowRequest(pane: .mouse(.pointer))) { done += 1 }
         // The copy that just closed its window is still listed, and is what LaunchServices returns.
         let dead = FakeSystem.Helper(alive: false)
         fake.running = [dead]
@@ -67,7 +78,7 @@ struct SettingsLauncherTests {
         #expect(fake.delayed.map(\.0) == [SettingsLauncher.retryDelay])
         fake.runDelayed()
         #expect(fake.opens.count == 1, "opened again")
-        #expect(fake.posts == [.mouse(.pointer), .mouse(.pointer)], "the pane is asked for again")
+        #expect(fake.posts == Array(repeating: ShowRequest(pane: .mouse(.pointer)), count: 2), "the pane is asked for again")
         let live = FakeSystem.Helper(alive: true)
         fake.running = [live]
         fake.answer(live)
@@ -148,14 +159,14 @@ struct SettingsLauncherTests {
         let fake = FakeSystem()
         let launcher = SettingsLauncher(system: fake.system)
         var done = 0
-        launcher.open(pane: .mouse(.pointer)) { done += 1 }
+        launcher.open(ShowRequest(pane: .mouse(.pointer))) { done += 1 }
         fake.answer(FakeSystem.Helper(alive: false)) // only a quitting copy: a retry is due
-        launcher.open(pane: .tab(.general)) { done += 1 }
+        launcher.open(ShowRequest(pane: .tab(.general))) { done += 1 }
         let live = FakeSystem.Helper(alive: true)
         fake.running = [live]
         fake.answer(live)
         fake.runDelayed() // the pointer open's retry
-        #expect(fake.posts == [.mouse(.pointer), .tab(.general)])
+        #expect(fake.posts == [ShowRequest(pane: .mouse(.pointer)), ShowRequest(pane: .tab(.general))])
         #expect(fake.opens.isEmpty)
         #expect(done == 2)
     }

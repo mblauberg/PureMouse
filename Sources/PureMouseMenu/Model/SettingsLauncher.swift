@@ -33,7 +33,7 @@ final class SettingsLauncher {
     struct System {
         var find: () -> Result<SettingsLookup.Helper, SettingsLookup.Failure>
         /// Writes the `ShowRequest` and rings the doorbell.
-        var post: (SettingsPane?) -> Void
+        var post: (ShowRequest) -> Void
         /// Leaves the quit stamp a helper that starts late reads (`SettingsRequest.markQuit`).
         var markQuit: () -> Void
         /// Opens the app; the completion runs on the main actor with what LaunchServices returned.
@@ -69,13 +69,13 @@ final class SettingsLauncher {
     }
 
     /// `done` runs once the helper is open or the alert saying why not is answered.
-    func open(pane: SettingsPane? = nil, then done: @escaping @MainActor () -> Void = {}) {
+    func open(_ request: ShowRequest = ShowRequest(), then done: @escaping @MainActor () -> Void = {}) {
         guard !quitting else { return done() }
         generation += 1
-        system.post(pane)
+        system.post(request)
         switch system.find() {
         case .success(.app(let app)):
-            launch(app, pane: pane, generation: generation, retries: 1, then: done)
+            launch(app, request: request, generation: generation, retries: 1, then: done)
         case .success(.binary(let url)):
             // A running copy has already heard the doorbell.
             if binary?.isRunning != true {
@@ -97,7 +97,7 @@ final class SettingsLauncher {
         }
     }
 
-    private func launch(_ app: URL, pane: SettingsPane?, generation: Int, retries: Int,
+    private func launch(_ app: URL, request: ShowRequest, generation: Int, retries: Int,
                         then done: @escaping @MainActor () -> Void) {
         pending += 1
         system.open(app) { [self] helper, error in
@@ -124,8 +124,8 @@ final class SettingsLauncher {
                     if pending == 0 { settle() }
                     return done()
                 }
-                system.post(pane)
-                launch(app, pane: pane, generation: generation, retries: retries - 1, then: done)
+                system.post(request)
+                launch(app, request: request, generation: generation, retries: retries - 1, then: done)
             }
         }
     }
@@ -174,7 +174,7 @@ extension SettingsLauncher.System {
                                 executable: Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0]),
                                 exists: { FileManager.default.isExecutableFile(atPath: $0.path) })
         },
-        post: { ShowRequest.post(pane: $0) },
+        post: { $0.post() },
         markQuit: { SettingsRequest.markQuit() },
         open: { app, completion in
             NSApp.yieldActivation(toApplicationWithBundleIdentifier: SettingsLookup.bundleIdentifier)

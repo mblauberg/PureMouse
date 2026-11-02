@@ -42,6 +42,20 @@ public enum SettingsPane: Hashable, Sendable {
     }
 }
 
+/// A sheet a request asks Settings to open over its pane. Its raw value is the word written after
+/// the pane in `show-settings` ("pointer.presets").
+public enum SettingsSheet: String, Sendable {
+    /// Pointer's presets list.
+    case presets
+
+    /// The pane the sheet opens over.
+    public var pane: SettingsPane {
+        switch self {
+        case .presets: .mouse(.pointer)
+        }
+    }
+}
+
 /// What Settings shows: a tab, and the segment the Mouse tab is on (kept while another tab shows).
 public struct SettingsSelection: Equatable, Sendable {
     public var tab: SettingsTab

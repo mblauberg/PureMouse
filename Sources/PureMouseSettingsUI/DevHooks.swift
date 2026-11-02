@@ -7,10 +7,11 @@ import PureMouseAppSupport
 /// `scrolling`, `pointer`), and `PUREMOUSE_DEV_APPEARANCE=light|dark` overrides the system
 /// appearance. On Mouse › Buttons, `PUREMOUSE_DEV_PICKER=<button>` opens a button's action picker
 /// and `PUREMOUSE_DEV_SHORTCUT=<button>` its shortcut sheet. On the Apps pane,
-/// `PUREMOUSE_DEV_APP=<bundle id>` opens (or adds) that app's settings.
+/// `PUREMOUSE_DEV_APP=<bundle id>` opens (or adds) that app's settings. `PUREMOUSE_DEV_SHEET=<name>`
+/// opens a pane's sheet: `presets` (Mouse › Pointer).
 @MainActor
 public enum DevHooks {
-    public static func run(show: (SettingsPane) -> Void) {
+    public static func run(show: (ShowRequest) -> Void) {
         let environment = ProcessInfo.processInfo.environment
         // The menu bar app's `DevHooks` reads the same variable the same way.
         switch environment["PUREMOUSE_DEV_APPEARANCE"] {
@@ -19,9 +20,13 @@ public enum DevHooks {
         default: break
         }
         if let pane = environment["PUREMOUSE_DEV_PANE"].flatMap(SettingsPane.init(rawValue:)) {
-            show(pane)
+            show(ShowRequest(pane: pane))
             // A launch from a terminal is not allowed to take focus cooperatively.
             NSApp.activate(ignoringOtherApps: true)
+        }
+        switch environment["PUREMOUSE_DEV_SHEET"] {
+        case "presets": show(ShowRequest(sheet: .presets))
+        default: break
         }
     }
 }

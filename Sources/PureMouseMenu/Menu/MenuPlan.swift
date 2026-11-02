@@ -56,6 +56,8 @@ enum Standby {
 /// What choosing a row does; `StatusMenu` maps each to the model or `AppController`.
 enum MenuAction {
     case openSettings(SettingsPane?)
+    /// Pointer's presets sheet.
+    case editPresets
     case openReleases
     case openPrivacy(PrivacyPane)
     case toggleSmoothScrolling
@@ -188,7 +190,7 @@ enum MenuPlan {
                                        checked: true, enabled: false)))
         }
         if !rows.isEmpty { rows.append(.separator) }
-        rows.append(.item(MenuItem(title: presets.isEmpty ? "Add Presets…" : "Edit Presets…", action: .openSettings(.mouse(.pointer)))))
+        rows.append(.item(MenuItem(title: presets.isEmpty ? "Add Presets…" : "Edit Presets…", action: .editPresets)))
         return rows
     }
 }
