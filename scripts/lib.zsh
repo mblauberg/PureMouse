@@ -222,16 +222,17 @@ developer_id_signed() {
 }
 
 # make_settings_bundle <helper binary> <app> <identifier> <version> <build>
-# The Settings helper's bundle, unsigned, as make_menu_bundle makes the menu bar app's. Its icon is
-# AppIcon.icns, without a third 1.8 MB copy of the compiled Assets.car. The PNGs are the About
-# pane's icon: NSWorkspace draws PureMouse.app's Icon Composer icon in its light form whatever the
-# window's appearance.
+# The Settings helper's bundle, unsigned, as make_menu_bundle makes the menu bar app's. It has the
+# icon twice over, as PureMouse.app has: Assets.car for its Dock and Cmd-Tab icon in the dark, clear
+# and tinted styles on macOS 26 and later (AppIcon.icns has only the light one), AppIcon.icns for
+# macOS 14 and 15. The PNGs are the About pane's icon: NSWorkspace draws PureMouse.app's Icon
+# Composer icon in its light form whatever the window's appearance.
 make_settings_bundle() {
     local binary=$1 settings_app=$2 identifier=$3 version=$4 build=$5
     mkdir -p "$settings_app/Contents/"{MacOS,Resources}
     local executable=$(component_executable "$(settings_component)")
     cp $binary "$settings_app/Contents/MacOS/$executable"
-    cp $root/assets/{AppIcon.icns,AppIcon.png,AppIcon-dark.png} "$settings_app/Contents/Resources/"
+    cp $root/assets/{Assets.car,AppIcon.icns,AppIcon.png,AppIcon-dark.png} "$settings_app/Contents/Resources/"
     write_info_plist "$settings_app/Contents/Info.plist" $identifier $executable $version $build settings
 }
 

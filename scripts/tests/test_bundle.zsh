@@ -80,6 +80,8 @@ test_settings_plist_is_a_regular_app_with_its_own_identifier() {
     [[ $(plist_value "$settings" CFBundleDisplayName) == "PureMouse Settings" ]]
     [[ $(settings_of $app) == "$app/Contents/Helpers/PureMouse Settings.app" ]]
     [[ -x "$(settings_of $app)/Contents/MacOS/$(plist_value "$settings" CFBundleExecutable)" ]]
+    # The Dock draws its icon from Assets.car in every icon style, as it does PureMouse.app's.
+    cmp -s $app/Contents/Resources/Assets.car "$(settings_of $app)/Contents/Resources/Assets.car"
     # The About pane draws these; the menu bar app shows no About pane.
     [[ -f "$(settings_of $app)/Contents/Resources/AppIcon-dark.png" ]]
     [[ ! -e "$(menu_of $app)/Contents/Resources/AppIcon-dark.png" ]]
