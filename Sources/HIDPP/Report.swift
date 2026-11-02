@@ -99,6 +99,14 @@ public enum HIDPPError: Error, Equatable, CustomStringConvertible {
     case sendFailed(Int32)
     case malformedResponse
 
+    /// The endpoint answered (possibly with an error), rather than failing to communicate.
+    public var isDeviceAnswer: Bool {
+        switch self {
+        case .malformedResponse, .featureNotSupported, .protocol10, .protocol20: true
+        case .timeout, .closed, .sendFailed: false
+        }
+    }
+
     public var description: String {
         switch self {
         case .protocol10(let c): return "HID++ 1.0 error 0x\(String(c, radix: 16))"

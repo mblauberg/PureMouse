@@ -1,0 +1,15 @@
+# partial: from the log, not a probe
+# Source: https://github.com/mblauberg/PureMouse/issues/1
+# Known: 0005 1004 1b04 1d4b 2201; no SmartShift or either divertable wheel.
+# Control metadata, feature indices, battery and DPI list are illustrative; 1650 snaps to 1600.
+  name: Signature Plus M750
+  features: 01:0001 02:0005 03:1004 04:1b04 05:1d4b 06:2201
+  controls (0x1B04 getCidInfo / getCidReporting):
+    cid=0x0052 info=00 52 00 00 20 00 00 00 00 reporting=00 52 00 00 00 00
+    cid=0x0053 info=00 53 00 00 20 00 00 00 00 reporting=00 53 00 00 00 00
+    cid=0x0056 info=00 56 00 00 20 00 00 00 00 reporting=00 56 00 00 00 00
+    cid=0x00fd info=00 fd 00 00 20 00 00 00 00 reporting=00 fd 00 00 00 00
+  dpi 0x2201 sensors: 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  dpi 0x2201 list: 00 01 90 e0 64 0f a0 00 00 00 00 00 00 00 00 00
+  dpi 0x2201 get: 00 06 40 00 00 00 00 00 00 00 00 00 00 00 00 00
+  battery 0x1004 status: 50 04 00 00 00 00 00 00 00 00 00 00 00 00 00 00

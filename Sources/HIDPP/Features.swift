@@ -22,6 +22,26 @@ public enum ReprogControls {
         case rawXY(dx: Int16, dy: Int16)
     }
 
+    public struct Reporting: Equatable, Sendable {
+        public let cid: UInt16
+        public let diverted: Bool
+        public let persistent: Bool
+        public let rawXY: Bool
+    }
+
+    /// getCidReporting (function 2): CID followed by diversion flags.
+    public static func reporting(_ d: HIDPPDevice, cid: UInt16) async throws -> Reporting {
+        guard let reporting = parseReporting(try await d.call(id, 2, cid.bigEndianBytes)),
+              reporting.cid == cid else { throw HIDPPError.malformedResponse }
+        return reporting
+    }
+
+    public static func parseReporting(_ params: [UInt8]) -> Reporting? {
+        guard params.count >= 3 else { return nil }
+        return Reporting(cid: UInt16(bigEndian: params[0], params[1]), diverted: params[2] & 1 != 0,
+                         persistent: params[2] & 4 != 0, rawXY: params[2] & 0x10 != 0)
+    }
+
     public static func controls(_ d: HIDPPDevice) async throws -> [Control] {
         guard let count = try await d.call(id, 0).first else { throw HIDPPError.malformedResponse }
         var controls: [Control] = []

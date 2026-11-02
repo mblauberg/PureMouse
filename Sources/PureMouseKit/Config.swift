@@ -21,6 +21,8 @@ public struct Config: Decodable, Sendable {
     public var smoothScroll: SmoothScroll?
     /// Button name (see `Button`) or hex control ID (e.g. "0x00c4") → binding.
     public var buttons: [String: Binding] = [:]
+    /// Primary clicks must always remain native, including controls reported as divertable.
+    public static let reservedControls: Set<UInt16> = [0x0050, 0x0051]
     public var gesture = GestureSettings()
     public var universalControl = UniversalControl()
     /// `buttons` keyed by control ID.
@@ -98,6 +100,11 @@ public struct Config: Decodable, Sendable {
         }
     }
 
+    /// For a binding of a primary click (`reservedControls`), keyed as the user spelled it.
+    static func reservedWarning(_ path: String) -> String {
+        "\(path): the left and right buttons always click; ignored"
+    }
+
     /// Adds the bindings `c` names to `buttons` and `bindings`. A name for a control that `buttons`
     /// held before replaces the earlier name and binding, and a gesture keeps the directions it
     /// leaves out. Names within `c` do not layer on each other; if two name one control, the last
@@ -111,6 +118,10 @@ public struct Config: Decodable, Sendable {
         for name in c.allKeys.sorted(by: { $0.stringValue < $1.stringValue }) {
             let cid = Button.cid(for: name.stringValue)
             let binding = try Binding.decode(c, forKey: name, base: cid.flatMap { before[$0] })
+            if let cid, Self.reservedControls.contains(cid) {
+                warnings.append(Self.reservedWarning("buttons.\(name.stringValue)"))
+                continue
+            }
             named[name.stringValue] = binding
             if let cid { bound[cid] = binding } else { unknown.insert(name.stringValue) }
         }

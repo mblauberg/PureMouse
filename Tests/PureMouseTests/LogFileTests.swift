@@ -35,7 +35,7 @@ final class LogFixture {
         try Data("earlier run\n".utf8).write(to: fixture.log)
 
         let file = try #require(LogFile.attachStderr(url: fixture.log, fd: fixture.fd))
-        Log.$testFile.withValue(file) { Log.info("PureMouse dev on macOS test") }
+        Log.$testOutput.withValue(.file(file)) { Log.info("PureMouse dev on macOS test") }
 
         let lines = fixture.contents().split(separator: "\n")
         #expect(lines.count == 2)
@@ -46,7 +46,7 @@ final class LogFixture {
     @Test func createsTheLogDirectory() throws {
         let fixture = try LogFixture()
         let file = try #require(LogFile.attachStderr(url: fixture.log, fd: fixture.fd))
-        Log.$testFile.withValue(file) { Log.error("first line") }
+        Log.$testOutput.withValue(.file(file)) { Log.error("first line") }
         #expect(fixture.contents().hasSuffix(" error first line\n"))
     }
 

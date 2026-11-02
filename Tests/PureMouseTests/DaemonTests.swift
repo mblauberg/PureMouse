@@ -3,6 +3,13 @@ import Testing
 
 @MainActor
 struct DaemonTests {
+    @Test func legacyPingIsIgnoredAndSilenceRetried() {
+        #expect(Daemon.adoption(for: .hidpp10) == .notAMouse)
+        #expect(Daemon.adoption(for: .noAnswer) == .noAnswer)
+        #expect(Daemon.adoption(for: .hidpp20(major: 1, minor: 0)) == .notAMouse)
+        #expect(Daemon.adoption(for: .hidpp20(major: 4, minor: 5)) == nil)
+    }
+
     /// Every hand-back gets its turn before quitting gives up, within bounds.
     @Test func shutdownDeadlineCoversEveryRestoreStep() {
         #expect(Daemon.shutdownDeadline(restoreSteps: 0) == .seconds(2))

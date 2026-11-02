@@ -36,7 +36,7 @@ launchctl kill HUP gui/$UID/io.github.mblauberg.puremouse
 | `scrollWheel.smartShiftThreshold` | 1–50 enables SmartShift's automatic free-spin; 255 disables it. Must be 1–255. Requires 0x2110 or 0x2111 |
 | `thumbWheel.inverted` | Invert the thumb wheel's scrolling: in hardware, or in software while PureMouse handles the wheel. Scrolling only: actions follow `reversed`. Global only |
 | `thumbWheel.action`, `left`, `right`, `step`, `reversed` | What turning the thumb wheel does, and which way ([below](#thumb-wheel)) |
-| `buttons` | Button → action or gesture, including play-only haptics ([below](#buttons-actions-and-gestures)) |
+| `buttons` | Button → action or gesture, including play-only haptics ([below](#buttons-actions-and-gestures)). The left and right buttons cannot be bound |
 | `smoothScroll` | If present, PureMouse scrolls both wheels itself ([below](#smooth-scrolling)). If absent, or `enabled` is false, the wheels scroll normally |
 | `gesture.distanceMm` | How far the mouse moves before a gesture fires, in millimetres, 0.5–50. Default 4 |
 | `gesture.repeatIntervalMs` | Minimum gap between repeated gestures in one hold, 0–5000. Default 400 |
@@ -156,6 +156,9 @@ as `"0x00c4"`. Names apply only when the mouse has that control. **Select by Pre
 common mouse controls, apart from these config names (for example 0x00fd is the "DPI button");
 the log and the menu adopt it in later changes. Any control works by its hex ID whether or not it
 has a name.
+
+The left and right buttons (0x0050 and 0x0051) cannot be bound, globally or per app. Their
+bindings are ignored with a warning; **Select by Pressing** always leaves them clicking normally.
 
 **Actions:** `missionControl`, `appExpose`, `showDesktop`, `launchpad`, `spaceLeft`, `spaceRight`,
 `navigateBack`, `navigateForward`, `toggleScrollMode`, `cycleDPI`, `volumeUp`, `volumeDown`, `mute`,

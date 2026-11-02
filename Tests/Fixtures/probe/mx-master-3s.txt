@@ -1,0 +1,27 @@
+# Hand-built from PureMouse's tested MX Master 3S feature list; not a hardware capture.
+# Feature indices and readbacks are illustrative. Replace with an owner-supplied probe dump.
+  name: MX Master 3S
+  device product IDs: bluetoothLE=0xb034 wireless=0x4091
+  features: 01:0001 02:0003 03:0005 04:1b04 05:2110 06:2121 07:2150 08:2201 09:1004 0a:1d4b
+  controls (0x1B04 getCidInfo / getCidReporting):
+    cid=0x0050 info=00 50 00 00 00 00 00 00 00 reporting=00 50 00 00 00 00
+    cid=0x0051 info=00 51 00 00 00 00 00 00 00 reporting=00 51 00 00 00 00
+    cid=0x0052 info=00 52 00 00 20 00 00 00 00 reporting=00 52 00 00 00 00
+    cid=0x0053 info=00 53 00 00 20 00 00 00 00 reporting=00 53 00 00 00 00
+    cid=0x0056 info=00 56 00 00 20 00 00 00 00 reporting=00 56 00 00 00 00
+    cid=0x00c3 info=00 c3 00 00 20 00 00 00 01 reporting=00 c3 00 00 00 00
+    cid=0x00c4 info=00 c4 00 00 20 00 00 00 00 reporting=00 c4 00 00 00 00
+    cid=0x00d7 info=00 d7 00 00 a0 00 00 00 01 reporting=00 d7 00 00 00 00
+  smartshift 0x2110 get: 02 1e 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  smartshift 0x2111 caps: feature 0x2111 not supported
+  smartshift 0x2111 get: feature 0x2111 not supported
+  dpi 0x2201 sensors: 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  dpi 0x2201 list: 00 00 c8 e0 32 1f 40 00 00 00 00 00 00 00 00 00
+  dpi 0x2201 get: 00 03 e8 00 00 00 00 00 00 00 00 00 00 00 00 00
+  hires 0x2121 caps: 0f 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  hires 0x2121 mode: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  thumb 0x2150 info: 00 12 00 78 00 00 00 00 00 00 00 00 00 00 00 00
+  thumb 0x2150 status: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  battery 0x1004 status: 50 04 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  battery 0x1000 status: feature 0x1000 not supported
+  haptic 0x19B0 caps: feature 0x19b0 not supported

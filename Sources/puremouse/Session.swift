@@ -22,6 +22,7 @@ final class Session {
     /// now holds a different device and the daemon has closed this session to adopt that one.
     var onConnection: ((Report) -> Bool)?
     let config: Config
+    let environment: SessionEnvironment
     /// What applies where no app entry matches.
     let global: Config.AppSettings
     /// Controls bound globally or in any app, all diverted; true for those diverted with raw
@@ -37,6 +38,9 @@ final class Session {
     let globalProfile: ScrollEngine.Profile
     /// Controls a previous session diverted that this one no longer binds; released on apply.
     var releasing: Set<UInt16>
+    var needsDiversionScan: Bool
+    /// Another program's persistent settings are never changed, including during capture/restore.
+    var persistentControls: Set<UInt16>
     let scroll: ScrollEngine?
     /// Whether any scope scrolls smoothly, so the main wheel is diverted too.
     let smoothAnywhere: Bool
@@ -63,6 +67,10 @@ final class Session {
     var hapticMissingLogged = false
     var unsupportedHaptics: Set<HapticWaveform> = []
     private var configuring: Task<Void, Never>?
+    private var configureGeneration = 0
+    var isConfiguring: Bool { configuring != nil }
+    private var lastConfigureEnded: ContinuousClock.Instant?
+    static let offlineReconfigureGap: Duration = .seconds(30)
     /// Device actions (toggle scroll mode, cycle DPI, haptics) and `apply`'s DPI and scroll mode
     /// writes, one at a time in the order asked, each reading what is wanted (`liveDPI`,
     /// `scrollMode`) as it runs, so a press and a reconfiguration cannot overwrite each other.
@@ -107,7 +115,10 @@ final class Session {
     struct Inherited {
         var state = DeviceState()
         var diverted: Set<UInt16> = []
+        var persistentControls: Set<UInt16> = []
         var wheelsMayBeDiverted = false
+        /// Only a newly adopted endpoint needs to discover a previous process's diversions.
+        var fresh = false
         /// Not handed down by `inheritance`: the daemon sets it, so a session starts handed back
         /// while the pointer is on another Mac.
         var away = false
@@ -117,21 +128,23 @@ final class Session {
     }
 
     init(device: HIDPPDevice, name: String, id: String, controls: [ReprogControls.Control], config: Config,
-         inheriting inherited: Inherited = Inherited()) {
+         inheriting inherited: Inherited = Inherited(), environment: SessionEnvironment = .live) {
         self.device = device
         self.name = name
         self.id = id
         self.config = config
+        self.environment = environment
         let controls = Dictionary(controls.map { ($0.cid, $0) }, uniquingKeysWith: { a, _ in a })
         self.controls = controls
-        pressable = controls.values.filter { $0.isDivertable && !$0.isVirtual }.map(\.cid).sorted()
+        pressable = controls.values.filter { Self.isDivertable($0.cid, in: controls) && !$0.isVirtual }
+            .map(\.cid).sorted()
             .map { Status.Device.Control(cid: $0, name: Config.Button(cid: $0)?.rawValue) }
         let global = config.global
         self.global = global
         let scopes = [global] + Array(config.apps.values)
         var bound: [UInt16: Bool] = [:]
         for scope in scopes {
-            for (cid, binding) in scope.bindings where controls[cid]?.isDivertable == true {
+            for (cid, binding) in scope.bindings where Self.isDivertable(cid, in: controls) {
                 let isGesture = if case .gesture = binding { true } else { false }
                 bound[cid] = (bound[cid] ?? false) || (isGesture && controls[cid]?.supportsRawXY == true)
             }
@@ -143,6 +156,8 @@ final class Session {
         appProfiles = config.apps.filter { $0.value.setsSmoothScroll }.mapValues { Self.profile($0, config) }
         thumbSettings = global.thumbWheel
         releasing = inherited.diverted.subtracting(bound.keys)
+        needsDiversionScan = inherited.fresh
+        persistentControls = inherited.persistentControls
         state = inherited.state
         // The wheels come to PureMouse when any scope scrolls smoothly; the thumb wheel alone
         // when any scope gives it actions. Either way scrolling then runs here.
@@ -160,15 +175,32 @@ final class Session {
             scroll?.profileForBurst = { [weak self] in self?.profileUnderPointer() ?? ScrollEngine.Profile() }
         }
         for cid in config.boundControls.sorted() where controls[cid]?.isDivertable != true {
-            Log.error("\(name): control 0x\(String(cid, radix: 16)) is missing or not divertable; skipped")
+            Log.error("\(name): control \(ControlNames.describe(cid)) is missing or not divertable; skipped")
         }
     }
 
+    /// A control PureMouse may divert: the mouse reports it divertable and it is not a primary
+    /// click (`Config.reservedControls`), which always stays native.
+    func isDivertable(_ cid: UInt16) -> Bool { Self.isDivertable(cid, in: controls) }
+
+    private static func isDivertable(_ cid: UInt16, in controls: [UInt16: ReprogControls.Control]) -> Bool {
+        controls[cid]?.isDivertable == true && !Config.reservedControls.contains(cid)
+    }
+
+    /// Whether `error` is the device answering (an error code or a malformed reply) rather than
+    /// a timeout, transport failure or cancellation, which must reach configure's retry.
+    static func isDeviceAnswer(_ error: any Error) -> Bool {
+        (error as? HIDPPError)?.isDeviceAnswer == true
+    }
+
     /// Controls this session diverts or still owes a release, for handing to its replacement.
-    var divertedControls: Set<UInt16> { releasing.union(bound.keys).union(capturing ?? []) }
+    var divertedControls: Set<UInt16> {
+        releasing.union(bound.keys).union(capturing ?? []).subtracting(persistentControls)
+    }
 
     var inheritance: Inherited {
-        Inherited(state: state, diverted: divertedControls, wheelsMayBeDiverted: wheelsMayBeDiverted)
+        Inherited(state: state, diverted: divertedControls, persistentControls: persistentControls,
+                  wheelsMayBeDiverted: wheelsMayBeDiverted, fresh: needsDiversionScan)
     }
 
     var status: Status.Device {
@@ -257,12 +289,22 @@ final class Session {
     // MARK: Configuration
 
     /// (Re)applies all settings after `delay`, retrying a few times if the device does not
-    /// answer. Safe to call repeatedly; a newer call supersedes an older one.
+    /// answer. Safe to call repeatedly; a newer call supersedes an older one, so a link-up or
+    /// reconnect mid-configure is never lost (`reconfigureIfOffline` alone defers to one running).
     func configure(after delay: Duration = .zero) {
         guard !finished else { return }
         configuring?.cancel()
         dropHeld()
+        configureGeneration &+= 1
+        let generation = configureGeneration
         configuring = Task {
+            defer {
+                // A superseded task ends after its replacement started; leave the replacement's handle.
+                if configureGeneration == generation {
+                    configuring = nil
+                    lastConfigureEnded = environment.now()
+                }
+            }
             try? await Task.sleep(for: delay)
             for attempt in 1...3 {
                 guard !Task.isCancelled else { return }
@@ -281,7 +323,7 @@ final class Session {
                     Log.error("\(name): configure attempt \(attempt) failed: \(error)")
                 }
                 // Usually the mouse is asleep; its reconnect event will also trigger a retry.
-                try? await Task.sleep(for: .seconds(5))
+                try? await Task.sleep(for: environment.configureRetryDelay)
             }
             guard !Task.isCancelled, !finished, state.online else { return }
             state.online = false
@@ -289,7 +331,15 @@ final class Session {
         }
     }
 
-    private func apply() async throws {
+    /// An offline mouse can return without either reconnect notification. Events drive this
+    /// throttle; there is no periodic work while the device is idle.
+    func reconfigureIfOffline() {
+        guard !finished, !state.online, !isConfiguring,
+              lastConfigureEnded.map({ environment.now() - $0 >= Self.offlineReconfigureGap }) ?? true else { return }
+        configure()
+    }
+
+    func apply() async throws {
         // Resolve the event-bearing features first so their events can be routed.
         _ = try await device.hasFeature(ReprogControls.id)
         _ = try? await device.featureIndex(of: WirelessDeviceStatus.id)
@@ -313,16 +363,6 @@ final class Session {
         await readBattery()
         state.online = true
         changed()
-    }
-
-    /// Unsupported or malformed optional-feature replies can be skipped. Transport failures
-    /// and cancellation must reach the configure retry/lifecycle handling.
-    static func isOptionalFeatureReplyError(_ error: any Error) -> Bool {
-        guard let error = error as? HIDPPError else { return false }
-        switch error {
-        case .malformedResponse, .featureNotSupported, .protocol10, .protocol20: return true
-        case .timeout, .closed, .sendFailed: return false
-        }
     }
 
     /// Battery state is informational, read from the source `apply` selected: 0x1004, or legacy
@@ -362,7 +402,7 @@ final class Session {
         if try await device.hasFeature(SmartShift.id) { return .smartShift }
         do {
             return try await device.hasFeature(SmartShiftEnhanced.id) ? .enhanced : nil
-        } catch where Self.isOptionalFeatureReplyError(error) {
+        } catch where Self.isDeviceAnswer(error) {
             Log.error("\(name): SmartShift Enhanced failed (untested mouse): \(error)")
             return nil
         }
@@ -402,7 +442,7 @@ final class Session {
                 try await setScrollMode(clutch, mode ?? current, autoDisengage: threshold)
             }
             state.wheelMode = mode ?? current
-        } catch where enhanced && Self.isOptionalFeatureReplyError(error) {
+        } catch where enhanced && Self.isDeviceAnswer(error) {
             Log.error("\(name): SmartShift Enhanced failed (untested mouse): \(error)")
         }
     }
@@ -415,17 +455,14 @@ final class Session {
         recognizer.threshold = GestureRecognizer.counts(millimetres: config.gesture.distanceMm, dpi: current)
     }
 
-    /// Reads the sensor's supported resolutions once per mouse. A failure is logged and retried
-    /// on the next apply; meanwhile DPI targets are sent unchanged.
+    /// Reads the sensor's supported resolutions once per mouse. A device answer (error or
+    /// malformed reply) is logged and retried on the next apply, and meanwhile DPI targets are
+    /// sent unchanged; a timeout or transport failure fails the apply, so configure retries.
     private func readResolutions() async throws {
         guard state.resolutions == nil else { return }
         do {
             state.resolutions = try await AdjustableDPI.resolutions(device)
-        } catch let error as CancellationError {
-            throw error
-        } catch HIDPPError.closed {
-            throw HIDPPError.closed
-        } catch {
+        } catch where Self.isDeviceAnswer(error) {
             Log.error("\(name): reading supported DPI failed: \(error); DPI is set as configured")
         }
     }
@@ -444,7 +481,12 @@ final class Session {
     static let restoreTimeout: Duration = .milliseconds(400)
 
     /// The hand-backs `restore` makes, each one request when feature indices are cached.
-    var restoreSteps: Int { (wheelsMayBeDiverted ? 2 : 0) + divertedControls.count }
+    var restoreSteps: Int {
+        // A wheel of unknown presence counts: `restore` may still look it up and write it.
+        let wheels = wheelsMayBeDiverted
+            ? [HiResWheel.id, ThumbWheel.id].filter { device.knownPresence(of: $0) != false }.count : 0
+        return wheels + divertedControls.count
+    }
 
     /// Hands the mouse back in its native state: buttons undiverted and wheels reporting as
     /// ordinary HID scrolling, so it works without PureMouse. Used when PureMouse quits or pauses.
@@ -474,7 +516,7 @@ final class Session {
             }
         }
         for cid in divertedControls {
-            await attempt("release control 0x\(String(cid, radix: 16))") {
+            await attempt("release \(ControlNames.describe(cid))") {
                 try await ReprogControls.setDiverted(self.device, cid: cid, divert: false, rawXY: false)
             }
         }

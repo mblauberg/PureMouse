@@ -94,7 +94,16 @@ final class Daemon {
     }
 
     /// `stopped`: not adopting now (paused or quitting) or the endpoint was replaced, so do not retry.
-    private enum Adoption { case adopted, noAnswer, notAMouse, stopped }
+    enum Adoption { case adopted, noAnswer, notAMouse, stopped }
+
+    /// A nil result continues identification; a legacy answer is final, silence is retried.
+    static func adoption(for ping: HIDPPDevice.Ping) -> Adoption? {
+        switch ping {
+        case .hidpp10: .notAMouse
+        case .noAnswer: .noAnswer
+        case .hidpp20(let major, _): major >= 2 ? nil : .notAMouse
+        }
+    }
 
     init(configURL: URL) {
         self.configURL = configURL
@@ -226,7 +235,6 @@ final class Daemon {
 
     private func beginCapture(_ session: Session) {
         session.onCapture = { [weak self, unowned session] cid in
-            Log.info("\(session.name): pressed 0x\(String(cid, radix: 16)) for selection")
             self?.endCapture(.pressed, cid: cid, deviceID: session.id)
         }
         session.beginCapture()
@@ -456,7 +464,7 @@ final class Daemon {
 
     /// Starts listening on a device index. Until a session adopts it, a receiver slot only
     /// watches for its device connecting.
-    private func listen(_ interface: HIDInterface, index: UInt8) -> HIDPPDevice {
+    private func listen(_ interface: any HIDPPTransport, index: UInt8) -> HIDPPDevice {
         let device = HIDPPDevice(interface: interface, index: index)
         endpoints[Key(device)] = device
         watch(device)
@@ -572,8 +580,7 @@ final class Daemon {
 
     private func identify(_ device: HIDPPDevice) async -> Adoption {
         let key = Key(device)
-        guard let version = await device.protocolVersion() else { return .noAnswer }
-        guard version.major >= 2 else { return .notAMouse }
+        if let result = Self.adoption(for: await device.ping()) { return result }
         let controls: [ReprogControls.Control]
         let hasDPI: Bool
         do {
@@ -593,7 +600,7 @@ final class Daemon {
         guard endpoints[key] === device, sessions[key] == nil else { return .noAnswer }
         Log.info("adopting \(name) pid=\(pidLabel) on \(device.interface.product) index \(device.index)")
         let session = Session(device: device, name: name, id: deviceID(key), controls: controls, config: config,
-                              inheriting: Session.Inherited(away: handingOff))
+                              inheriting: Session.Inherited(fresh: true, away: handingOff))
         add(session, key)
         return .adopted
     }

@@ -34,6 +34,7 @@ extension Session {
             }
             return
         }
+        reconfigureIfOffline()
         let feature = device.feature(at: report.featureIndex)
         // Late wheel and button reports from before a handoff: the pointer is on another Mac.
         if away, let feature, [HiResWheel.id, ThumbWheel.id, ReprogControls.id].contains(feature) { return }
@@ -82,7 +83,10 @@ extension Session {
         let (pressed, released) = held.update(cids)
         released.forEach(release)
         if capturing != nil {
-            if let first = pressed.first { onCapture?(first) }
+            if let first = pressed.first {
+                Log.info("\(name): pressed \(ControlNames.describe(first)) for selection")
+                onCapture?(first)
+            }
             return
         }
         pressed.forEach(press)
@@ -136,7 +140,7 @@ extension Session {
     }
 
     private func press(_ cid: UInt16) {
-        Log.debug("\(name): press 0x\(String(cid, radix: 16))")
+        Log.debug("\(name): press \(ControlNames.describe(cid))")
         switch binding(for: cid) {
         case .action(let action):
             perform(action)

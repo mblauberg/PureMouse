@@ -16,18 +16,23 @@ enum Probe {
                 // Its own software IDs, so replies cannot be confused with the daemon's.
                 let device = HIDPPDevice(interface: interface, index: index, softwareIDs: 0x2...0x7)
                 defer { device.close() }
-                guard let version = await device.protocolVersion() else {
+                switch await device.ping() {
+                case .noAnswer:
                     if !interface.isReceiver { print("  no response") }
                     continue
+                case .hidpp10:
+                    print("\n-- index \(index): HID++ 1.0")
+                    continue
+                case .hidpp20(let major, let minor):
+                    print("\n-- index \(index): HID++ \(major).\(minor)")
+                    guard major >= 2 else { continue }
                 }
-                print("\n-- index \(index): HID++ \(version.major).\(version.minor)")
-                guard version.major >= 2 else { continue }
                 await dump(device)
             }
         }
     }
 
-    private static func dump(_ d: HIDPPDevice) async {
+    static func dump(_ d: HIDPPDevice, print: (String) -> Void = { Swift.print($0) }) async {
         if let name = try? await DeviceName.get(d) { print("  name: \(name)") }
         if let ids = try? await DeviceIdentity.transportIDs(d) {
             let labels = DeviceIdentity.Transport.allCases.compactMap { transport in
@@ -38,9 +43,12 @@ enum Probe {
 
         if let count = try? await d.call(0x0001, 0).first {
             var features: [String] = []
-            for i in 1...count {
-                if let r = try? await d.call(0x0001, 1, [i]), r.count >= 2 {
-                    features.append(String(format: "%02x:%04x", i, UInt16(r[0]) << 8 | UInt16(r[1])))
+            // A count of 0 would make `1...count` trap.
+            if count > 0 {
+                for i in 1...count {
+                    if let r = try? await d.call(0x0001, 1, [i]), r.count >= 2 {
+                        features.append(String(format: "%02x:%04x", i, UInt16(r[0]) << 8 | UInt16(r[1])))
+                    }
                 }
             }
             print("  features: " + features.joined(separator: " "))
@@ -55,23 +63,23 @@ enum Probe {
             }
         }
 
-        await show(d, "smartshift 0x2110 get", 0x2110, 0)
-        await show(d, "smartshift 0x2111 caps", 0x2111, 0)
-        await show(d, "smartshift 0x2111 get", 0x2111, 1)
-        await show(d, "dpi 0x2201 sensors", 0x2201, 0)
-        await show(d, "dpi 0x2201 list", 0x2201, 1, [0])
-        await show(d, "dpi 0x2201 get", 0x2201, 2, [0])
-        await show(d, "hires 0x2121 caps", 0x2121, 0)
-        await show(d, "hires 0x2121 mode", 0x2121, 1)
-        await show(d, "thumb 0x2150 info", 0x2150, 0)
-        await show(d, "thumb 0x2150 status", 0x2150, 1)
-        await show(d, "battery 0x1004 status", 0x1004, 1)
-        await show(d, "battery 0x1000 status", 0x1000, 0)
-        await show(d, "haptic 0x19B0 caps", 0x19B0, 0)
+        await show(d, "smartshift 0x2110 get", 0x2110, 0, print: print)
+        await show(d, "smartshift 0x2111 caps", 0x2111, 0, print: print)
+        await show(d, "smartshift 0x2111 get", 0x2111, 1, print: print)
+        await show(d, "dpi 0x2201 sensors", 0x2201, 0, print: print)
+        await show(d, "dpi 0x2201 list", 0x2201, 1, [0], print: print)
+        await show(d, "dpi 0x2201 get", 0x2201, 2, [0], print: print)
+        await show(d, "hires 0x2121 caps", 0x2121, 0, print: print)
+        await show(d, "hires 0x2121 mode", 0x2121, 1, print: print)
+        await show(d, "thumb 0x2150 info", 0x2150, 0, print: print)
+        await show(d, "thumb 0x2150 status", 0x2150, 1, print: print)
+        await show(d, "battery 0x1004 status", 0x1004, 1, print: print)
+        await show(d, "battery 0x1000 status", 0x1000, 0, print: print)
+        await show(d, "haptic 0x19B0 caps", 0x19B0, 0, print: print)
     }
 
     private static func show(_ d: HIDPPDevice, _ label: String, _ feature: UInt16, _ fn: UInt8,
-                             _ params: [UInt8] = []) async {
+                             _ params: [UInt8] = [], print: (String) -> Void) async {
         do {
             print("  \(label): \(hex(try await d.call(feature, fn, params)))")
         } catch {

@@ -4,7 +4,7 @@ import Foundation
 /// Bluetooth device (index 0xFF). Requests are serialised; one is in flight at a time.
 @MainActor
 public final class HIDPPDevice {
-    public nonisolated let interface: HIDInterface
+    public nonisolated let interface: any HIDPPTransport
     public nonisolated let index: UInt8
     /// Unsolicited reports: HID++ 2.0 events and HID++ 1.0 notifications (`Report.isEvent`).
     public var onEvent: ((Report) -> Void)?
@@ -17,12 +17,15 @@ public final class HIDPPDevice {
     public var timeout: Duration = .milliseconds(1500)
 
     private var featureIndices: [UInt16: UInt8] = [0x0000: 0]
+    private var absentFeatures: Set<UInt16> = []
     private var pending: Pending?
     private var nextSoftwareID: UInt8
     private var closed = false
     private var busy = false
     private var waiters: [CheckedContinuation<Void, Never>] = []
     private var nextToken = 0
+    /// Requests waiting behind the one in flight, so tests can tell a request has queued.
+    public var queuedRequests: Int { waiters.count }
 
     private struct Pending {
         let token: Int
@@ -32,7 +35,7 @@ public final class HIDPPDevice {
         var deadline: Task<Void, Never>?
     }
 
-    public init(interface: HIDInterface, index: UInt8, softwareIDs: ClosedRange<UInt8> = defaultSoftwareIDs) {
+    public init(interface: any HIDPPTransport, index: UInt8, softwareIDs: ClosedRange<UInt8> = defaultSoftwareIDs) {
         precondition(softwareIDs.lowerBound > 0 && softwareIDs.upperBound <= 0xF)
         self.interface = interface
         self.index = index
@@ -116,12 +119,22 @@ public final class HIDPPDevice {
 
     public func featureIndex(of feature: UInt16) async throws -> UInt8 {
         if let cached = featureIndices[feature] { return cached }
+        if absentFeatures.contains(feature) { throw HIDPPError.featureNotSupported(feature) }
         let response = try await request(featureIndex: 0, function: 0, params: feature.bigEndianBytes)
-        guard let featureIndex = response.first, featureIndex != 0 else {
+        guard let featureIndex = response.first else { throw HIDPPError.malformedResponse }
+        guard featureIndex != 0 else {
+            absentFeatures.insert(feature)
             throw HIDPPError.featureNotSupported(feature)
         }
         featureIndices[feature] = featureIndex
         return featureIndex
+    }
+
+    /// Knowledge from this endpoint's root replies; nil until looked up. Only a definite
+    /// index-zero answer caches absence, never a timeout, malformed reply or transport failure.
+    public func knownPresence(of feature: UInt16) -> Bool? {
+        if featureIndices[feature] != nil { return true }
+        return absentFeatures.contains(feature) ? false : nil
     }
 
     /// The cached feature ID at `featureIndex`, for routing events. Only features already
@@ -140,11 +153,24 @@ public final class HIDPPDevice {
         }
     }
 
-    /// HID++ protocol version, or nil if the slot is empty or the device is asleep.
-    public func protocolVersion() async -> (major: UInt8, minor: UInt8)? {
-        guard let r = try? await request(featureIndex: 0, function: 1, params: [0, 0, 0x5A]),
-              r.count >= 2 else { return nil }
-        return (r[0], r[1])
+    public enum Ping: Equatable, Sendable {
+        case hidpp20(major: UInt8, minor: UInt8)
+        case hidpp10
+        case noAnswer
+    }
+
+    /// Invalid sub-ID is a definite HID++ 1.0 answer. Empty/sleeping slots (0x08/0x09),
+    /// malformed replies and transport failures remain retryable by the caller.
+    public func ping() async -> Ping {
+        do {
+            let r = try await request(featureIndex: 0, function: 1, params: [0, 0, 0x5A])
+            guard r.count >= 2 else { return .noAnswer }
+            return .hidpp20(major: r[0], minor: r[1])
+        } catch HIDPPError.protocol10(code: 1) {
+            return .hidpp10
+        } catch {
+            return .noAnswer
+        }
     }
 
     // MARK: Plumbing

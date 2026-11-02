@@ -56,7 +56,12 @@ extension Config {
                         warnings.append("apps.\(id).buttons: unknown button '\(name.stringValue)'")
                         continue
                     }
-                    app.bindings[cid] = try Binding.decode(buttons, forKey: name, base: base.bindings[cid])
+                    let binding = try Binding.decode(buttons, forKey: name, base: base.bindings[cid])
+                    guard !Self.reservedControls.contains(cid) else {
+                        warnings.append(Self.reservedWarning("apps.\(id).buttons.\(name.stringValue)"))
+                        continue
+                    }
+                    app.bindings[cid] = binding
                     app.buttons.insert(cid)
                 }
             }

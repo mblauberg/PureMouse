@@ -9,8 +9,22 @@ enum Log {
     /// other thread logs. Nil from a terminal and for every other command.
     nonisolated(unsafe) static var file: LogFile?
 
-    /// Overrides `file` for one task tree, so tests can log to their own file in parallel.
-    @TaskLocal static var testFile: LogFile?
+    /// One logged line, as a test's `.lines` output receives it.
+    struct Line: Sendable, Equatable {
+        let level: String
+        let message: String
+    }
+
+    /// Where one task tree's lines go instead of `file` or stderr, so tests can log in parallel
+    /// without writing to the runner's stderr. Tasks a session starts inherit it.
+    enum TestOutput: Sendable {
+        /// Formatted lines, written to the test's own log file.
+        case file(LogFile)
+        /// Each line's level and message, unformatted.
+        case lines(@Sendable (Line) -> Void)
+    }
+
+    @TaskLocal static var testOutput: TestOutput?
 
     /// The log moves to PureMouse.log.1 once a write takes it past this size, so the two files
     /// hold about 2 MiB at most.
@@ -32,9 +46,15 @@ enum Log {
         .year().month().day().time(includingFractionalSeconds: true)
 
     private static func write(_ level: String, _ message: String) {
+        if case .lines(let capture)? = testOutput {
+            capture(Line(level: level, message: message))
+            return
+        }
         let time = Date.now.formatted(timeFormat)
         let line = Data("\(time) \(level) \(message)\n".utf8)
-        if let file = testFile ?? file {
+        if case .file(let file)? = testOutput {
+            file.write(line)
+        } else if let file {
             file.write(line)
         } else {
             FileHandle.standardError.write(line)

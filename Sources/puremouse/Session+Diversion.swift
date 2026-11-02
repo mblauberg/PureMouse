@@ -16,6 +16,7 @@ extension Session {
         // A gesture held as capture starts must not act when it is let go.
         held.forgetGesture()
         enqueueDiversion { session in
+            try await session.scanStaleDiversions()
             for cid in extras where session.capturing != nil && !session.away {
                 try await session.setDiverted(cid, true)
             }
@@ -38,7 +39,7 @@ extension Session {
                 try await setDiverted(cid, false)
                 releasing.remove(cid)
             } catch {
-                Log.debug("\(name): releasing 0x\(String(cid, radix: 16)) failed: \(error)")
+                Log.debug("\(name): releasing \(ControlNames.describe(cid)) failed: \(error)")
                 throw error
             }
         }
@@ -49,7 +50,35 @@ extension Session {
     /// A diversion write on this session's behalf; refused once the session is finished.
     private func setDiverted(_ cid: UInt16, _ divert: Bool, rawXY: Bool = false) async throws {
         try ensureOpen()
+        guard !persistentControls.contains(cid) else { return }
         try await ReprogControls.setDiverted(device, cid: cid, divert: divert, rawXY: rawXY)
+    }
+
+    /// Fresh adoption only, on the diversion chain. A control the device answers with an error
+    /// is skipped; a timeout or transport failure leaves the scan pending, and controls already
+    /// discovered still count toward restore even when a later read fails.
+    private func scanStaleDiversions() async throws {
+        guard needsDiversionScan else { return }
+        for cid in controls.keys.sorted() where isDivertable(cid) && bound[cid] == nil {
+            try ensureOpen()
+            let reporting: ReprogControls.Reporting
+            do {
+                reporting = try await ReprogControls.reporting(device, cid: cid)
+            } catch where Self.isDeviceAnswer(error) {
+                Log.debug("\(name): reading \(ControlNames.describe(cid))'s reporting failed: \(error); skipped")
+                continue
+            }
+            try ensureOpen()
+            if reporting.persistent {
+                if persistentControls.insert(cid).inserted {
+                    Log.info("\(name): \(ControlNames.describe(cid)) is persistently diverted; leaving it unchanged (Logi Options+ may own it)")
+                }
+                releasing.remove(cid)
+            } else if reporting.diverted {
+                releasing.insert(cid)
+            }
+        }
+        needsDiversionScan = false
     }
 
     /// Queues `body` to run after every diversion change asked for before it and before any
@@ -69,6 +98,7 @@ extension Session {
     /// Diverts the controls the session wants (`Handoff.wantedControls`) and releases the rest:
     /// those owed a release, and while away the bound and capturing ones too, each independently.
     private func applyDiversion() async throws {
+        try await scanStaleDiversions()
         let wanted = Handoff.wantedControls(bound: Set(bound.keys), capturing: capturing, away: away)
         let unwanted = Set(bound.keys).union(capturing ?? []).subtracting(wanted)
         // Each control stands alone; a failed one keeps counting in `divertedControls` (it is
@@ -114,7 +144,7 @@ extension Session {
     private func applyWheels() async throws {
         try ensureOpen()
         // Taking the wheels over without permission to post scroll events would silence them.
-        let accessibility = Permissions.current.contains(.accessibility)
+        let accessibility = environment.canPostEvents
         let takeOver = Handoff.wheelsDiverted(scrolling: scroll != nil, accessibility: accessibility, away: away)
         if scroll != nil && !accessibility { Log.error("\(name): no Accessibility permission; leaving the wheels native") }
         let smooth = takeOver && smoothAnywhere
