@@ -242,7 +242,7 @@ private func resolved(_ wheel: Config.ThumbWheel) -> Resolved {
     config.bindInApp("com.apple.Safari", button: "back", to: .named("previousTab"))
     #expect(config.string(["apps", "com.apple.Safari", "buttons", "back"]) == "previousTab")
     #expect(config.string(["buttons", "back"]) == "navigateBack")
-    #expect(config.binding("back", in: ["apps", "com.apple.Safari"]) == .named("previousTab"))
+    #expect(config.binding("back", in: .app("com.apple.Safari")) == .named("previousTab"))
     config.bindInApp("com.apple.Safari", button: "back", to: .standard)
     #expect(config.root.keys.sorted() == ["buttons"])
 }
@@ -258,7 +258,7 @@ private func resolved(_ wheel: Config.ThumbWheel) -> Resolved {
 
 @Test func appBindingsUseAHexKeyAlreadyThere() throws {
     var config = try tree(#"{"apps": {"a.b": {"buttons": {"0x0053": "mute"}}}}"#)
-    #expect(config.binding("back", in: ["apps", "a.b"]) == .named("mute"))
+    #expect(config.binding("back", in: .app("a.b")) == .named("mute"))
     config.bindInApp("a.b", button: "back", to: .named("zoomIn"))
     #expect(config[["apps", "a.b", "buttons"]] as? NSDictionary == ["0x0053": "zoomIn"])
 }
@@ -458,7 +458,7 @@ private func resolved(_ wheel: Config.ThumbWheel) -> Resolved {
 @Test func anAppButtonCanPlayAHaptic() throws {
     var config = try tree("{}")
     config.bindInApp("com.apple.Safari", button: "top", to: .haptic("completed"))
-    #expect(config.binding("top", in: ["apps", "com.apple.Safari"]) == .haptic("completed"))
+    #expect(config.binding("top", in: .app("com.apple.Safari")) == .haptic("completed"))
     _ = try decoded(config)
 }
 

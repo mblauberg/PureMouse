@@ -22,7 +22,7 @@ struct AppSheet: View {
     @State private var showOthers = false
     @State private var confirmingRemove = false
 
-    private var scope: [String] { ConfigTree.appScope(key) }
+    private var scope: [String] { ConfigTree.appScope(key).prefix }
     private var spoken: String { " in \(identity.name)" }
 
     /// The binding of `button` (or one `direction` of it) in this app, which names the app in
