@@ -1,3 +1,4 @@
+import Foundation
 import PureMouseAppSupport
 import PureMouseKit
 
@@ -26,6 +27,8 @@ struct MenuState {
     var dpiSteps: [Int] = []
     /// The app in front as the menu opened (read once, never watched); nil when not read.
     var frontmost: FrontmostApp?
+    /// A newer release found by the daily check (`UpdateReminders.offer`), not skipped.
+    var update: UpdateOffer?
 
     /// The status item badges exactly what the menu flags.
     var needsAttention: Bool { !MenuPlan.attentionRows(self).isEmpty }
@@ -92,6 +95,9 @@ enum MenuAction {
     /// Pointer's presets sheet.
     case editPresets
     case openReleases
+    /// The release page of a newer version.
+    case openUpdate(URL)
+    case skipUpdate
     case openPrivacy(PrivacyPane)
     case toggleSmoothScrolling
     case setDPI(Int)
@@ -151,6 +157,7 @@ enum MenuPlan {
             }
         }
         rows += attentionRows(state)
+        rows += updateRows(state)
 
         rows.append(.separator)
         rows.append(.item(MenuItem(title: "Smooth Scrolling", checked: state.smoothScrolling,
@@ -201,6 +208,14 @@ enum MenuPlan {
         if state.configError { rows.append(attention("Fix Config File…", .openSettings(.tab(.general)))) }
         if state.logiOptionsRunning { rows.append(attention("Logi Options+ Is Running…", .openSettings(.tab(.general)))) }
         return rows
+    }
+
+    /// A newer release: a plain row (no warning, no badge on the icon) that opens its page, and
+    /// Skip This Version under it. Both stay until PureMouse is updated or the version is skipped.
+    static func updateRows(_ state: MenuState) -> [MenuRow] {
+        guard let update = state.update else { return [] }
+        return [.item(MenuItem(title: update.menuTitle, action: .openUpdate(update.page))),
+                .item(MenuItem(title: UpdateOffer.skipTitle, action: .skipUpdate))]
     }
 
     /// The header, and with a detail line its ⌥ alternate.

@@ -60,6 +60,8 @@ enum DevHooks {
 /// script writes `rig-command` as "<number> <verb>" and rings; the answer is the number in
 /// `rig-ack` once the verb is done. `rig-ready` lists the doorbells this process listens on.
 ///
+/// `PUREMOUSE_RIG_UPDATES=check` (`--env`) turns automatic update checks on and runs one at launch.
+///
 /// Verbs: `menu` opens the menu and closes it again, `settings` opens the Settings helper and
 /// `settings-close` quits it.
 @MainActor
@@ -71,6 +73,17 @@ private enum Rig {
         let bell = Companion.doorbell("io.github.mblauberg.puremouse.rig")
         notify_register_dispatch(bell, &token, .main) { _ in
             MainActor.assumeIsolated { handle(app: app) }
+        }
+        // `--env PUREMOUSE_RIG_UPDATES=check`: automatic checks on, and one check run now, as the
+        // system scheduler would run it. `update-check` in the directory says what it found (the
+        // rig's version is not a release number, so any release the check reads counts as newer).
+        if ProcessInfo.processInfo.environment["PUREMOUSE_RIG_UPDATES"] == "check" {
+            app.updates.setAutomatic(true)
+            Task {
+                await app.updates.check()
+                let found = app.updates.offer.map { $0.version.text } ?? "none"
+                try? Data("offer \(found)\n".utf8).write(to: Locations.live.companion.appending(path: "update-check"), options: .atomic)
+            }
         }
         let ready = "status \(Companion.statusNotification)\nrig \(bell)\npid \(getpid())\n"
         try? Data(ready.utf8).write(to: Locations.live.companion.appending(path: "rig-ready"), options: .atomic)

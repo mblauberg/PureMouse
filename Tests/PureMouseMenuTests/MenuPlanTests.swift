@@ -1,3 +1,4 @@
+import Foundation
 import PureMouseAppSupport
 import PureMouseKit
 import Testing
@@ -80,6 +81,36 @@ struct MenuPlanTests {
             header PureMouse Is Off, The mouse works as it does without PureMouse
             Update PureMouse [attention, -> openReleases]
             ---
+            """))
+    }
+
+    @Test func aNewerReleaseShowsUpdateAndSkipRowsWithoutAWarning() throws {
+        var state = Self.running()
+        state.update = UpdateOffer(version: try #require(UpdateCheck.Version("0.6.0")),
+                                   page: try #require(URL(string: "https://github.com/mblauberg/PureMouse/releases/tag/v0.6.0")))
+        #expect(lines(state).contains("""
+            v0.3.0
+            Update to 0.6.0… [-> openUpdate(https://github.com/mblauberg/PureMouse/releases/tag/v0.6.0)]
+            Skip This Version [-> skipUpdate]
+            ---
+            Smooth Scrolling
+            """))
+        // Not a warning: no triangle, no badge on the icon.
+        #expect(!state.needsAttention)
+        state.update = nil
+        #expect(!lines(state).contains("Update to"))
+    }
+
+    @Test func theUpdateRowsComeAfterTheWarningsAndLeaveTheStatusFormatRowAlone() throws {
+        var state = Self.running()
+        state.statusTooNew = true
+        state.accessibilityMissing = true
+        state.update = UpdateOffer(version: try #require(UpdateCheck.Version("1.0")), page: try #require(URL(string: "https://example.com/r")))
+        #expect(lines(state).contains("""
+            Update PureMouse [attention, -> openReleases]
+            Allow Accessibility Access [attention, -> openPrivacy(PureMouseAppSupport.PrivacyPane.accessibility)]
+            Update to 1.0… [-> openUpdate(https://example.com/r)]
+            Skip This Version [-> skipUpdate]
             """))
     }
 

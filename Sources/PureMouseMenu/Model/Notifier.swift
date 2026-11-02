@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import PureMouseAppSupport
 import UserNotifications
@@ -9,7 +10,8 @@ protocol NotificationCentre: AnyObject {
     func authorization() async -> UNAuthorizationStatus
     /// Asks the user; whether they allowed it.
     func requestAuthorization() async -> Bool
-    func add(id: String, title: String, body: String) async
+    /// `opening`: a page that clicking the notification opens. `sound`: whether it plays one.
+    func add(id: String, title: String, body: String, opening: URL?, sound: Bool) async
     func removeDelivered(ids: [String])
 }
 
@@ -48,13 +50,13 @@ final class NotificationDelivery {
     func refresh() async { _ = await centre?.authorization() }
 
     @discardableResult
-    func post(id: String, title: String, body: String) -> Task<Void, Never> {
+    func post(id: String, title: String, body: String, opening: URL? = nil, sound: Bool = true) -> Task<Void, Never> {
         lastTicket += 1
         let ticket = lastTicket
         tickets[id] = ticket
         return Task {
             guard await requestIfNeeded(), let centre, tickets[id] == ticket else { return }
-            await centre.add(id: id, title: title, body: body)
+            await centre.add(id: id, title: title, body: body, opening: opening, sound: sound)
             // Withdrawn while it was being added, and not posted again since: it is on screen now,
             // so take it down. A newer post owns the id; it or a later withdrawal handles it.
             if tickets[id] == nil { centre.removeDelivered(ids: [id]) }
@@ -74,6 +76,13 @@ enum Notifier {
         // An accessory app counts as foreground; show the banner anyway.
         func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification)
             async -> UNNotificationPresentationOptions { [.banner, .list] }
+
+        /// Clicking an update reminder opens its release page, in the browser, without bringing PureMouse forward.
+        func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+            guard response.actionIdentifier == UNNotificationDefaultActionIdentifier,
+                  let page = Notifier.page(in: response.notification.request.content.userInfo) else { return }
+            await MainActor.run { _ = NSWorkspace.shared.open(page) }
+        }
     }
 
     /// The system's centre. Without a bundle (a development run outside an app) there is none:
@@ -94,15 +103,23 @@ enum Notifier {
             (try? await center.requestAuthorization(options: [.alert, .sound])) ?? false
         }
 
-        func add(id: String, title: String, body: String) async {
+        func add(id: String, title: String, body: String, opening: URL?, sound: Bool) async {
             let content = UNMutableNotificationContent()
             content.title = title
             content.body = body
-            content.sound = .default
+            if sound { content.sound = .default }
+            if let opening { content.userInfo = [Notifier.pageKey: opening.absoluteString] }
             try? await center.add(UNNotificationRequest(identifier: id, content: content, trigger: nil))
         }
 
         func removeDelivered(ids: [String]) { center.removeDeliveredNotifications(withIdentifiers: ids) }
+    }
+
+    nonisolated static let pageKey = "page"
+
+    /// The https page a notification opens when clicked; anything else in its payload is ignored.
+    nonisolated static func page(in userInfo: [AnyHashable: Any]) -> URL? {
+        (userInfo[pageKey] as? String).flatMap(URL.init(string:)).flatMap { $0.scheme == "https" ? $0 : nil }
     }
 
     private static let delivery = NotificationDelivery(
@@ -112,5 +129,9 @@ enum Notifier {
     static func requestIfNeeded() async -> Bool { await delivery.requestIfNeeded() }
     static func refresh() async { await delivery.refresh() }
     static func post(id: String, title: String, body: String) { delivery.post(id: id, title: title, body: body) }
+    /// A quiet reminder that opens `page` when clicked.
+    static func post(_ offer: UpdateOffer) {
+        delivery.post(id: offer.notificationID, title: offer.title, body: offer.body, opening: offer.page, sound: false)
+    }
     static func removeDelivered(ids: [String]) { delivery.removeDelivered(ids: ids) }
 }

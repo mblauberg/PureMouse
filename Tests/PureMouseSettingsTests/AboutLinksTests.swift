@@ -62,4 +62,16 @@ import Testing
         let positions = try order.map { try #require(about.range(of: $0)).lowerBound }
         #expect(positions == positions.sorted())
     }
+
+    @Test func theAutomaticSwitchSitsInTheUpdateRowAndMakesNoRequestOfItsOwn() throws {
+        let about = try String(contentsOf: Self.sources.appending(path: "PureMouseSettingsUI/AboutPane.swift"), encoding: .utf8)
+        let button = try #require(about.range(of: #"Button(checking ? "Checking…" : "Check for Updates")"#)).lowerBound
+        let toggle = try #require(about.range(of: #"Toggle("Check for updates automatically""#)).lowerBound
+        let outcome = try #require(about.range(of: "switch outcome")).lowerBound
+        #expect(button < toggle && toggle < outcome)
+        // The only request this pane starts is the one the button's `check()` makes.
+        #expect(about.components(separatedBy: "UpdateCheck.fetch").count - 1 == 1)
+        #expect(!about.contains("fetchScheduled") && !about.contains("UpdateReminders("))
+        #expect(about.contains("The network is used only to check for updates."))
+    }
 }

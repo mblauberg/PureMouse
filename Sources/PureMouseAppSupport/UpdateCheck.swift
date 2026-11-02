@@ -1,13 +1,32 @@
 import Foundation
 
-/// "Check for Updates", on demand only: one GET of the latest GitHub release, compared with this
-/// app's version. The logic is pure (`Version`, `parse`); `fetch` is the only network code.
+/// The GET of the latest GitHub release, compared with this app's version: on demand from
+/// Settings › About (`fetch`), and once a day in the menu bar app when the person allows it
+/// (`fetchScheduled`, driven by `UpdateReminders`). The logic is pure (`Version`, `parse`, `request`);
+/// `urlSession` is the only network code, and a test injects a `Fetcher` in its place.
 public enum UpdateCheck {
     static let endpoint = URL(string: "https://api.github.com/repos/mblauberg/PureMouse/releases/latest")!
 
     public struct Release: Equatable, Sendable {
         public var version: Version
         public var page: URL
+
+        public init(version: Version, page: URL) {
+            self.version = version
+            self.page = page
+        }
+    }
+
+    /// Performs a request; throws when none was answered. Tests pass their own, so none reaches GitHub.
+    public typealias Fetcher = @Sendable (URLRequest) async throws -> (Data, HTTPURLResponse)
+
+    /// What a scheduled check learned.
+    public enum Scheduled: Equatable, Sendable {
+        /// 304: the release is the one the last ETag named.
+        case notModified
+        /// 200: the latest release and the ETag that names it, if GitHub sent one.
+        case latest(Release, etag: String?)
+        case failed
     }
 
     public enum Outcome: Equatable, Sendable {
@@ -39,6 +58,9 @@ public enum UpdateCheck {
         }
 
         public static func == (a: Version, b: Version) -> Bool { !(a < b) && !(b < a) }
+
+        /// "1.2.3": the numbers, as the notification and the menu say them.
+        public var text: String { parts.map(String.init).joined(separator: ".") }
     }
 
     /// The release in a `releases/latest` response; nil when it is not one (drafts and
@@ -57,13 +79,42 @@ public enum UpdateCheck {
         return release.version > current ? .available(release) : .upToDate
     }
 
-    public static func fetch(current: String) async -> Outcome {
+    /// The request for the latest release. `scheduled` (the daily check) refuses constrained and
+    /// expensive networks (Low Data Mode, a metered hotspot) and, once an ETag is known, asks only
+    /// whether the release changed (`If-None-Match`). The on-demand check sends neither.
+    static func request(scheduled: Bool = false, etag: String? = nil) -> URLRequest {
         var request = URLRequest(url: endpoint, timeoutInterval: 8)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        guard scheduled else { return request }
+        request.allowsConstrainedNetworkAccess = false
+        request.allowsExpensiveNetworkAccess = false
+        if let etag { request.setValue(etag, forHTTPHeaderField: "If-None-Match") }
+        return request
+    }
+
+    /// An ephemeral session, so no cookies or cache are kept.
+    public static let urlSession: Fetcher = { request in
         let session = URLSession(configuration: .ephemeral)
         defer { session.finishTasksAndInvalidate() }
-        guard let (data, response) = try? await session.data(for: request),
-              (response as? HTTPURLResponse)?.statusCode == 200 else { return .failed }
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        return (data, http)
+    }
+
+    public static func fetch(current: String, fetcher: Fetcher = urlSession) async -> Outcome {
+        guard let (data, response) = try? await fetcher(request()), response.statusCode == 200 else { return .failed }
         return outcome(current: current, data: data)
+    }
+
+    /// The daily check: a 304 is "no change", a 200 the release and its ETag, anything else a failure.
+    public static func fetchScheduled(etag: String?, fetcher: Fetcher = urlSession) async -> Scheduled {
+        guard let (data, response) = try? await fetcher(request(scheduled: true, etag: etag)) else { return .failed }
+        switch response.statusCode {
+        case 304: return .notModified
+        case 200:
+            guard let release = parse(data) else { return .failed }
+            return .latest(release, etag: response.value(forHTTPHeaderField: "ETag"))
+        default: return .failed
+        }
     }
 }

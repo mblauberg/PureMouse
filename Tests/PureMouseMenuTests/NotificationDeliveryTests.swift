@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 import UserNotifications
 @testable import PureMouseMenu
@@ -26,7 +27,7 @@ private final class FakeCentre: NotificationCentre {
         return true
     }
 
-    func add(id: String, title: String, body: String) async {
+    func add(id: String, title: String, body: String, opening: URL?, sound: Bool) async {
         if holdAdd { await withCheckedContinuation { addGates.append($0) } }
         added.append(id)
         delivered.append(id)
