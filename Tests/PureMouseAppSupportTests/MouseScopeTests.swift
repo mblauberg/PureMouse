@@ -371,6 +371,16 @@ private func kitWheel(_ config: ConfigTree, _ key: String) throws -> Config.Thum
     #expect(try kitWheel(config, mx) == before)
 }
 
+@Test func customOnAMouseKeepsTheNameTheEntryAlreadyHas() throws {
+    // The wheel's action is the entry's only setting: removing it first would prune the entry, and
+    // its typed name with it.
+    var config = try tree(#"{"devices":{"\#(mx)":{"name":"My MX","thumbWheel":{"action":"zoom"}}}}"#)
+    let path = config.prefix(of: scope(mx)) + ["thumbWheel"]
+    config.chooseThumbWheel(.custom, at: path, base: config.thumbWheel(at: ["thumbWheel"]))
+    #expect(config.string(["devices", mx, "name"]) == "My MX")
+    #expect(try kitWheel(config, mx) == .actions(left: .zoomOut, right: .zoomIn))
+}
+
 @Test func theThumbWheelGivesBackWithoutLettingAMixedCaseTwinApply() throws {
     var config = try tree(#"{"devices":{"\#(mx.uppercased())":{"thumbWheel":{"action":"zoom"}},"\#(mx)":{"thumbWheel":{"action":"volume"}}}}"#)
     let path = config.prefix(of: scope(mx)) + ["thumbWheel"]

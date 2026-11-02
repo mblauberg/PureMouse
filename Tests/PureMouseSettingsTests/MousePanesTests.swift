@@ -198,7 +198,7 @@ private func styleName(_ style: HierarchicalShapeStyle) -> String { String(descr
 
 private let writeCall = #"(model\.(update|set|setDPI|toggle)(\(|\s*\{)|\$0\.(set|bind)\()"#
 
-/// The write calls in the four panes that edit a mouse, as `(file, line, text)`, that name no scope: a
+/// The write calls in the panes and sheet that edit a mouse, as `(file, line, text)`, that name no scope: a
 /// `model.update`, `model.set`, `model.setDPI` or `model.toggle` without `in:`, and a `$0.set` or
 /// `$0.bind` without `in:`. A line that is meant for All Mice alone says so with a `// All Mice` comment.
 private func unscopedWrites() throws -> [String] {
@@ -207,7 +207,7 @@ private func unscopedWrites() throws -> [String] {
         .appending(path: "Sources/PureMouseSettingsUI")
     let call = try Regex(writeCall)
     var found: [String] = []
-    for file in ["PointerPane", "ButtonsPane", "ScrollingPane", "ThumbWheelRows"] {
+    for file in ["PointerPane", "ButtonsPane", "ScrollingPane", "ThumbWheelRows", "PresetsSheet"] {
         let lines = try String(contentsOf: sources.appending(path: "\(file).swift"), encoding: .utf8)
             .split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         for (number, line) in lines.enumerated() where !line.trimmingCharacters(in: .whitespaces).hasPrefix("//") {

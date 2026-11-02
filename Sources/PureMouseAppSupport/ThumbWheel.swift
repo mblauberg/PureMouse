@@ -184,10 +184,12 @@ extension ConfigTree {
             guard thumbWheelChoice(at: path) != .custom else { return }
             let current = thumbWheel(at: path, base: base)
             let pair = current.pair ?? .init(left: .named("none"), right: .named("none"))
-            put(nil, at: path + ["action"])
-            put(nil, at: path + ["step"])
+            // The pair first: removing `action` while it is the entry's only key would prune a
+            // mouse's entry, and its own `name` with it.
             put(pair.left.json, at: path + ["left"])
             put(pair.right.json, at: path + ["right"])
+            put(nil, at: path + ["action"])
+            put(nil, at: path + ["step"])
             if thumbWheel(at: path, base: base).step != current.step {
                 put(current.step, at: path + ["step"])
             }
