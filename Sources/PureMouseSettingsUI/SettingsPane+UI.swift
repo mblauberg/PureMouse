@@ -1,13 +1,11 @@
 import Foundation
 import PureMouseAppSupport
 
-extension SettingsPane {
+extension SettingsTab {
     var title: String {
         switch self {
         case .general: "General"
-        case .buttons: "Buttons"
-        case .scrolling: "Scrolling"
-        case .pointer: "Pointer"
+        case .mouse: "Mouse"
         case .apps: "Apps"
         case .about: "About"
         }
@@ -17,11 +15,19 @@ extension SettingsPane {
     var symbol: String {
         switch self {
         case .general: "gearshape"
-        case .buttons: "computermouse"
-        case .scrolling: "arrow.up.and.down"
-        case .pointer: "cursorarrow"
+        case .mouse: "computermouse"
         case .apps: "square.grid.2x2"
         case .about: "info.circle"
+        }
+    }
+}
+
+extension MouseSegment {
+    var title: String {
+        switch self {
+        case .buttons: "Buttons"
+        case .scrolling: "Scrolling"
+        case .pointer: "Pointer"
         }
     }
 }

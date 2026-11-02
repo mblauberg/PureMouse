@@ -19,6 +19,9 @@ public enum NotificationPermission {
         }
     }
 
+    /// System Settings › Notifications, at the menu bar app's entry.
+    public static let settingsURL = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=\(Companion.menuLabel)")!
+
     /// Whether the menu bar app last learned that its notifications are off in System Settings.
     public static func denied(in defaults: UserDefaults?) -> Bool {
         defaults?.bool(forKey: deniedKey) ?? false

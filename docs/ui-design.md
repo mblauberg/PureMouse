@@ -25,7 +25,9 @@ overwhelming, and no feature is dropped to get there.
   window width, in light and dark, with one-mouse and two-mouse fixtures. A fresh install shows no
   advanced content.
 - **One disclosure mechanism per level.**
-  - The pane footer's **Advanced…** button opens a sheet, next to Restore Defaults.
+  - The pane footer (`PaneFooter`, below the last group) has Restore Defaults at the leading edge
+    and **Advanced…** at the trailing edge, either optional. Advanced… opens a sheet
+    (`AdvancedSheet`): a title, a grouped form, and Done as the default button.
   - A **disclosure** only for a control's own children (gesture directions, Exact value).
   - **⌥ alternates** only in the status menu.
   - No sheet opens from a sheet; inside a sheet, use disclosures.

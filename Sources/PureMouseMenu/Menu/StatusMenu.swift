@@ -73,12 +73,20 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         case .openPrivacy(let pane): app.openPrivacy(pane)
         case .toggleSmoothScrolling: model.update { $0.smoothScrollEnabled.toggle() }
         case .setDPI(let dpi): model.setDPI(dpi)
-        case .start: model.perform(.register)
+        case .start: action.command.map { model.perform($0) }
         case .setPaused(let paused): model.setPaused(paused)
         case .reloadConfig: model.reloadDaemonConfig()
         case .showLog: NSWorkspace.shared.activateFileViewerSelecting([model.locations.log])
         case .quit: app.quitAll()
         case .hideMenuBarIcon: app.hideMenuBarIcon()
         }
+    }
+}
+
+extension MenuAction {
+    /// The lifecycle command a row runs. Start PureMouse runs `start`, never `register`, so Open at
+    /// login does not change as a side effect (docs/adr/0018-login-service-seam.md).
+    var command: Lifecycle.Command? {
+        if case .start = self { LoginAction.running(true).command } else { nil }
     }
 }

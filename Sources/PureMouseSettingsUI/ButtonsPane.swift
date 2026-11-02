@@ -4,6 +4,7 @@ import SwiftUI
 
 struct ButtonsPane: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.settings) private var settings
     /// The control whose picker is open: a button key, or "button.direction".
     @State private var presented: String?
     @State private var highlighted: String?
@@ -23,20 +24,9 @@ struct ButtonsPane: View {
                     }
                 }
             } header: {
-                HStack {
-                    Text("Buttons")
-                    Spacer()
-                    if model.captureListening {
-                        Text("Press a button on your mouse")
-                            .foregroundStyle(.secondary)
-                            .fontWeight(.regular)
-                        Button("Cancel") { model.cancelCapture() }
-                            .keyboardShortcut(.cancelAction)
-                    } else {
-                        Button("Select by Pressing") { model.startCapture() }
-                            .disabled(!model.daemonRunning || model.paused || model.readOnly)
-                            .help(model.daemonRunning ? "Press a mouse button to find its row" : "PureMouse is off")
-                    }
+                // Find by Pressing… and its Cancel are in the Mouse tab's header strip.
+                if model.captureListening {
+                    Text("Press a button on your mouse")
                 }
             }
             .disabled(model.readOnly)
@@ -77,6 +67,8 @@ struct ButtonsPane: View {
             }
         }
         #endif
+        // The prompt above the rows comes and goes.
+        .onChange(of: model.captureListening) { settings?.refit() }
         .onChange(of: model.capturedButton) { _, key in
             guard let key else { return }
             model.capturedButton = nil

@@ -159,8 +159,8 @@ enum MenuPlan {
         if state.inputMonitoringMissing, state.hasBluetoothDevice {
             rows.append(attention("Allow Input Monitoring…", .openPrivacy(.inputMonitoring)))
         }
-        if state.configError { rows.append(attention("Fix Config File…", .openSettings(.general))) }
-        if state.logiOptionsRunning { rows.append(attention("Logi Options+ Is Running…", .openSettings(.general))) }
+        if state.configError { rows.append(attention("Fix Config File…", .openSettings(.tab(.general)))) }
+        if state.logiOptionsRunning { rows.append(attention("Logi Options+ Is Running…", .openSettings(.tab(.general)))) }
         return rows
     }
 
@@ -189,7 +189,7 @@ enum MenuPlan {
                                        checked: true, enabled: false)))
         }
         if !rows.isEmpty { rows.append(.separator) }
-        rows.append(.item(MenuItem(title: presets.isEmpty ? "Add Presets…" : "Edit Presets…", action: .openSettings(.pointer))))
+        rows.append(.item(MenuItem(title: presets.isEmpty ? "Add Presets…" : "Edit Presets…", action: .openSettings(.mouse(.pointer)))))
         return rows
     }
 }

@@ -14,8 +14,8 @@ private func requestFile() -> URL {
 
 @Test func aRequestNamesThePaneToOpenAndIsConsumedOnce() throws {
     let file = requestFile()
-    ShowRequest.write(pane: .pointer, to: file)
-    #expect(ShowRequest.consume(from: file, now: Date()) == ShowRequest(pane: .pointer))
+    ShowRequest.write(pane: .mouse(.pointer), to: file)
+    #expect(ShowRequest.consume(from: file, now: Date()) == ShowRequest(pane: .mouse(.pointer)))
     #expect(!FileManager.default.fileExists(atPath: file.path))
     #expect(ShowRequest.consume(from: file, now: Date()) == nil)
 }
@@ -33,18 +33,18 @@ private func requestFile() -> URL {
     let file = requestFile()
     ShowRequest.write(pane: nil, to: file)
     try Data("pointer\n".utf8).write(to: file)
-    #expect(ShowRequest.consume(from: file, now: Date()) == ShowRequest(pane: .pointer))
+    #expect(ShowRequest.consume(from: file, now: Date()) == ShowRequest(pane: .mouse(.pointer)))
 }
 
 @Test func aRequestOlderThanFiveSecondsIsDroppedAndRemoved() throws {
     let file = requestFile()
-    ShowRequest.write(pane: .apps, to: file)
+    ShowRequest.write(pane: .tab(.apps), to: file)
     let written = try #require(try FileManager.default.attributesOfItem(atPath: file.path)[.modificationDate] as? Date)
     #expect(ShowRequest.consume(from: file, now: written.addingTimeInterval(5)) == nil)
     #expect(!FileManager.default.fileExists(atPath: file.path))
-    ShowRequest.write(pane: .apps, to: file)
+    ShowRequest.write(pane: .tab(.apps), to: file)
     let again = try #require(try FileManager.default.attributesOfItem(atPath: file.path)[.modificationDate] as? Date)
-    #expect(ShowRequest.consume(from: file, now: again.addingTimeInterval(4.9)) == ShowRequest(pane: .apps))
+    #expect(ShowRequest.consume(from: file, now: again.addingTimeInterval(4.9)) == ShowRequest(pane: .tab(.apps)))
 }
 
 @Test func aRequestIsNeverReadHalfWrittenWhileAnotherIsWritten() {
@@ -55,17 +55,10 @@ private func requestFile() -> URL {
     // that sees the file between its truncation and its write would read no pane.
     DispatchQueue.concurrentPerform(iterations: rounds) { round in
         if round.isMultiple(of: 2) {
-            ShowRequest.write(pane: .pointer, to: file)
-        } else if let request = ShowRequest.consume(from: file, now: Date()), request.pane != .pointer {
+            ShowRequest.write(pane: .mouse(.pointer), to: file)
+        } else if let request = ShowRequest.consume(from: file, now: Date()), request.pane != .mouse(.pointer) {
             bad.withLock { $0 += 1 }
         }
     }
     #expect(bad.withLock { $0 } == 0)
-}
-
-@Test func settingsOpensOnTheRememberedPaneElseButtons() {
-    #expect(SettingsPane.remembered("scrolling") == .scrolling)
-    #expect(SettingsPane.remembered(nil) == .buttons)
-    #expect(SettingsPane.remembered("Scrolling") == .buttons)
-    #expect(SettingsPane.allCases.map(\.rawValue) == ["general", "buttons", "scrolling", "pointer", "apps", "about"])
 }
