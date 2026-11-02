@@ -67,6 +67,7 @@ final class Session {
     var hapticMissingLogged = false
     var unsupportedHaptics: Set<HapticWaveform> = []
     private var configuring: Task<Void, Never>?
+    private var configureGeneration = 0
     var isConfiguring: Bool { configuring != nil }
     private var lastConfigureEnded: ContinuousClock.Instant?
     static let offlineReconfigureGap: Duration = .seconds(30)
@@ -135,17 +136,15 @@ final class Session {
         self.environment = environment
         let controls = Dictionary(controls.map { ($0.cid, $0) }, uniquingKeysWith: { a, _ in a })
         self.controls = controls
-        pressable = controls.values.filter {
-            $0.isDivertable && !$0.isVirtual && !Config.reservedControls.contains($0.cid)
-        }.map(\.cid).sorted()
+        pressable = controls.values.filter { Self.isDivertable($0.cid, in: controls) && !$0.isVirtual }
+            .map(\.cid).sorted()
             .map { Status.Device.Control(cid: $0, name: Config.Button(cid: $0)?.rawValue) }
         let global = config.global
         self.global = global
         let scopes = [global] + Array(config.apps.values)
         var bound: [UInt16: Bool] = [:]
         for scope in scopes {
-            for (cid, binding) in scope.bindings where controls[cid]?.isDivertable == true
-                && !Config.reservedControls.contains(cid) {
+            for (cid, binding) in scope.bindings where Self.isDivertable(cid, in: controls) {
                 let isGesture = if case .gesture = binding { true } else { false }
                 bound[cid] = (bound[cid] ?? false) || (isGesture && controls[cid]?.supportsRawXY == true)
             }
@@ -180,6 +179,20 @@ final class Session {
         }
     }
 
+    /// A control PureMouse may divert: the mouse reports it divertable and it is not a primary
+    /// click (`Config.reservedControls`), which always stays native.
+    func isDivertable(_ cid: UInt16) -> Bool { Self.isDivertable(cid, in: controls) }
+
+    private static func isDivertable(_ cid: UInt16, in controls: [UInt16: ReprogControls.Control]) -> Bool {
+        controls[cid]?.isDivertable == true && !Config.reservedControls.contains(cid)
+    }
+
+    /// Whether `error` is the device answering (an error code or a malformed reply) rather than
+    /// a timeout, transport failure or cancellation, which must reach configure's retry.
+    static func isDeviceAnswer(_ error: any Error) -> Bool {
+        (error as? HIDPPError)?.isDeviceAnswer == true
+    }
+
     /// Controls this session diverts or still owes a release, for handing to its replacement.
     var divertedControls: Set<UInt16> {
         releasing.union(bound.keys).union(capturing ?? []).subtracting(persistentControls)
@@ -187,7 +200,7 @@ final class Session {
 
     var inheritance: Inherited {
         Inherited(state: state, diverted: divertedControls, persistentControls: persistentControls,
-                  wheelsMayBeDiverted: wheelsMayBeDiverted)
+                  wheelsMayBeDiverted: wheelsMayBeDiverted, fresh: needsDiversionScan)
     }
 
     var status: Status.Device {
@@ -276,14 +289,21 @@ final class Session {
     // MARK: Configuration
 
     /// (Re)applies all settings after `delay`, retrying a few times if the device does not
-    /// answer. Safe to call repeatedly; only one configure runs at a time.
+    /// answer. Safe to call repeatedly; a newer call supersedes an older one, so a link-up or
+    /// reconnect mid-configure is never lost (`reconfigureIfOffline` alone defers to one running).
     func configure(after delay: Duration = .zero) {
-        guard !finished, !isConfiguring else { return }
+        guard !finished else { return }
+        configuring?.cancel()
         dropHeld()
+        configureGeneration &+= 1
+        let generation = configureGeneration
         configuring = Task {
             defer {
-                configuring = nil
-                lastConfigureEnded = environment.now()
+                // A superseded task ends after its replacement started; leave the replacement's handle.
+                if configureGeneration == generation {
+                    configuring = nil
+                    lastConfigureEnded = environment.now()
+                }
             }
             try? await Task.sleep(for: delay)
             for attempt in 1...3 {
@@ -382,7 +402,7 @@ final class Session {
         if try await device.hasFeature(SmartShift.id) { return .smartShift }
         do {
             return try await device.hasFeature(SmartShiftEnhanced.id) ? .enhanced : nil
-        } catch where (error as? HIDPPError)?.isDeviceAnswer == true {
+        } catch where Self.isDeviceAnswer(error) {
             SessionLog.error("\(name): SmartShift Enhanced failed (untested mouse): \(error)")
             return nil
         }
@@ -422,7 +442,7 @@ final class Session {
                 try await setScrollMode(clutch, mode ?? current, autoDisengage: threshold)
             }
             state.wheelMode = mode ?? current
-        } catch where enhanced && (error as? HIDPPError)?.isDeviceAnswer == true {
+        } catch where enhanced && Self.isDeviceAnswer(error) {
             SessionLog.error("\(name): SmartShift Enhanced failed (untested mouse): \(error)")
         }
     }
@@ -435,13 +455,14 @@ final class Session {
         recognizer.threshold = GestureRecognizer.counts(millimetres: config.gesture.distanceMm, dpi: current)
     }
 
-    /// Reads the sensor's supported resolutions once per mouse. A failure is logged and retried
-    /// on the next apply; meanwhile DPI targets are sent unchanged.
+    /// Reads the sensor's supported resolutions once per mouse. A device answer (error or
+    /// malformed reply) is logged and retried on the next apply, and meanwhile DPI targets are
+    /// sent unchanged; a timeout or transport failure fails the apply, so configure retries.
     private func readResolutions() async throws {
         guard state.resolutions == nil else { return }
         do {
             state.resolutions = try await AdjustableDPI.resolutions(device)
-        } catch where (error as? HIDPPError)?.isDeviceAnswer == true {
+        } catch where Self.isDeviceAnswer(error) {
             SessionLog.error("\(name): reading supported DPI failed: \(error); DPI is set as configured")
         }
     }
@@ -461,8 +482,9 @@ final class Session {
 
     /// The hand-backs `restore` makes, each one request when feature indices are cached.
     var restoreSteps: Int {
+        // A wheel of unknown presence counts: `restore` may still look it up and write it.
         let wheels = wheelsMayBeDiverted
-            ? [HiResWheel.id, ThumbWheel.id].filter { device.knownPresence(of: $0) == true }.count : 0
+            ? [HiResWheel.id, ThumbWheel.id].filter { device.knownPresence(of: $0) != false }.count : 0
         return wheels + divertedControls.count
     }
 

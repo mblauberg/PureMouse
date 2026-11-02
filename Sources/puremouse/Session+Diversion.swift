@@ -54,14 +54,20 @@ extension Session {
         try await ReprogControls.setDiverted(device, cid: cid, divert: divert, rawXY: rawXY)
     }
 
-    /// Fresh adoption only, on the diversion chain. A failed scan stays pending, and controls
-    /// already discovered still count toward restore even when a later read fails.
+    /// Fresh adoption only, on the diversion chain. A control the device answers with an error
+    /// is skipped; a timeout or transport failure leaves the scan pending, and controls already
+    /// discovered still count toward restore even when a later read fails.
     private func scanStaleDiversions() async throws {
         guard needsDiversionScan else { return }
-        for cid in controls.keys.sorted() where controls[cid]?.isDivertable == true
-            && bound[cid] == nil && !Config.reservedControls.contains(cid) {
+        for cid in controls.keys.sorted() where isDivertable(cid) && bound[cid] == nil {
             try ensureOpen()
-            let reporting = try await ReprogControls.reporting(device, cid: cid)
+            let reporting: ReprogControls.Reporting
+            do {
+                reporting = try await ReprogControls.reporting(device, cid: cid)
+            } catch where Self.isDeviceAnswer(error) {
+                SessionLog.debug("\(name): reading 0x\(String(cid, radix: 16))'s reporting failed: \(error); skipped")
+                continue
+            }
             try ensureOpen()
             if reporting.persistent {
                 if persistentControls.insert(cid).inserted {

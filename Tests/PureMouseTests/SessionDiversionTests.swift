@@ -14,24 +14,22 @@ struct SessionDiversionTests {
 
     @Test func captureBeforeApplyAlsoPreservesPersistentDiversion() async throws {
         let fake = FakeDevice.mxMaster3S
-        let index = try #require(fake.controls.firstIndex { $0.cid == 0x56 })
-        fake.controls[index].reporting[2] = 5
+        fake.setReporting(0x56, diverted: true, persistent: true)
         let h = try await SessionHarness(fake, inheriting: .init(fresh: true))
         defer { h.close() }
         h.session.beginCapture()
         await h.session.diversion.drain()
         await h.session.restore()
-        #expect(!fake.transport.sent.contains { isWrite($0, to: 0x56, on: fake) })
+        #expect(fake.controlWrites(cid: 0x56).isEmpty)
     }
 
     @Test func freshAdoptionReleasesStaleTemporaryDiversion() async throws {
         let fake = FakeDevice.mxMaster3S
-        let index = try #require(fake.controls.firstIndex { $0.cid == 0x56 })
-        fake.controls[index].reporting[2] = 0x11
+        fake.setReporting(0x56, diverted: true, rawXY: true)
         let h = try await SessionHarness(fake, inheriting: .init(fresh: true))
         defer { h.close() }
         try await h.session.apply()
-        #expect(!fake.controls[index].diverted && !fake.controls[index].rawXY)
+        #expect(fake.control(0x56)?.diverted == false && fake.control(0x56)?.rawXY == false)
         // Six divertable, unbound controls in this illustrative 3S fixture (including virtual).
         #expect(reportingReads(fake).count == 6)
         fake.transport.sent.removeAll()
@@ -57,8 +55,7 @@ struct SessionDiversionTests {
 
     @Test func persistentDiversionIsLoggedOnceAndNeverWritten() async throws {
         let fake = FakeDevice.mxMaster3S
-        let index = try #require(fake.controls.firstIndex { $0.cid == 0x56 })
-        fake.controls[index].reporting[2] = 5
+        fake.setReporting(0x56, diverted: true, persistent: true)
         let log = CapturedLog()
         try await Log.$capture.withValue({ log.append($0) }) {
             let h = try await SessionHarness(fake, inheriting: .init(fresh: true))
@@ -71,24 +68,23 @@ struct SessionDiversionTests {
             await h.session.diversion.drain()
             await h.session.restore()
         }
-        #expect(fake.controls[index].persistent && fake.controls[index].diverted)
-        #expect(!fake.transport.sent.contains { isWrite($0, to: 0x56, on: fake) })
+        #expect(fake.control(0x56)?.persistent == true && fake.control(0x56)?.diverted == true)
+        #expect(fake.controlWrites(cid: 0x56).isEmpty)
         #expect(log.lines.filter { $0.level == "info" && $0.message.contains("0x0056") && $0.message.contains("Logi Options+") }.count == 1)
     }
 
     @Test func timeoutLeavesScanPendingForTheNextApply() async throws {
         let fake = FakeDevice.mxMaster3S
-        let index = try #require(fake.controls.firstIndex { $0.cid == 0x56 })
-        fake.controls[index].reporting[2] = 1
+        fake.setReporting(0x56, diverted: true)
         let h = try await SessionHarness(fake, inheriting: .init(fresh: true))
         defer { h.close() }
         fake.failures[.init(0x1B04, 2)] = .timeout
         await #expect(throws: HIDPPError.timeout) { try await h.session.apply() }
-        #expect(fake.controls[index].diverted)
+        #expect(fake.control(0x56)?.diverted == true)
         #expect(reportingReads(fake).count == 1)
         fake.failures.removeAll()
         try await h.session.apply()
-        #expect(!fake.controls[index].diverted)
+        #expect(fake.control(0x56)?.diverted == false)
         #expect(reportingReads(fake).count == 7)
     }
 
@@ -97,20 +93,50 @@ struct SessionDiversionTests {
         defer { h.close() }
         h.fake.failures[.init(0x1B04, 2)] = .timeout
         h.session.configure()
-        try await SessionHarness.eventually { !h.session.status.online && !h.session.isConfiguring }
+        try await eventually { !h.session.status.online && !h.session.isConfiguring }
         #expect(reportingReads(h.fake).count == 3)
         h.fake.failures.removeAll()
         h.session.configure()
-        try await SessionHarness.eventually { h.session.status.online && !h.session.isConfiguring }
+        try await eventually { h.session.status.online && !h.session.isConfiguring }
         #expect(reportingReads(h.fake).count == 9)
     }
 
-    private func reportingReads(_ fake: FakeDevice) -> [Report] {
-        fake.transport.sent.filter { fake.feature(of: $0) == 0x1B04 && $0.function == 2 }
+    @Test func reloadBeforeAFreshScanSucceedsStillReleasesStaleDiversion() async throws {
+        let fake = FakeDevice.mxMaster3S
+        fake.setReporting(0x56, diverted: true)
+        let h = try await SessionHarness(fake, inheriting: .init(fresh: true))
+        fake.failures[.init(0x1B04, 2)] = .timeout
+        await #expect(throws: HIDPPError.timeout) { try await h.session.apply() }
+        let inherited = h.session.inheritance
+        #expect(inherited.fresh)
+        h.session.close()
+        fake.failures.removeAll()
+        let controls = try await ReprogControls.controls(h.device)
+        let replacement = Session(device: h.device, name: fake.name, id: "replacement", controls: controls,
+                                  config: .empty, inheriting: inherited, environment: .init(canPostEvents: true))
+        defer { replacement.close(); h.device.close() }
+        try await replacement.apply()
+        #expect(fake.control(0x56)?.diverted == false)
+        #expect(!replacement.inheritance.fresh)
     }
 
-    private func isWrite(_ report: Report, to cid: UInt16, on fake: FakeDevice) -> Bool {
-        fake.feature(of: report) == 0x1B04 && report.function == 3 && report.params.count >= 2
-            && UInt16(report.params[0]) << 8 | UInt16(report.params[1]) == cid
+    @Test func deviceErrorOnOneControlSkipsItWithoutBlockingApply() async throws {
+        let fake = FakeDevice.mxMaster3S
+        fake.setReporting(0x56, diverted: true)
+        let h = try await SessionHarness(fake, inheriting: .init(fresh: true))
+        defer { h.close() }
+        fake.failures[.init(0x1B04, 2)] = .error(2)
+        try await h.session.apply()
+        #expect(h.session.status.online)
+        // Every control answered (with an error), so the scan is done and not repeated.
+        let reads = reportingReads(fake).count
+        #expect(reads == 6)
+        try await h.session.apply()
+        #expect(reportingReads(fake).count == reads)
+        #expect(fake.control(0x56)?.diverted == true)
+    }
+
+    private func reportingReads(_ fake: FakeDevice) -> [Report] {
+        fake.requests(feature: 0x1B04, function: 2)
     }
 }

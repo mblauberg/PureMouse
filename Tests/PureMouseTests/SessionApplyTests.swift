@@ -23,6 +23,16 @@ struct SessionApplyTests {
         #expect(h.session.restoreSteps == h.session.divertedControls.count)
     }
 
+    @Test func restoreStepsCountWheelsOfUnknownPresence() async throws {
+        let h = try await SessionHarness(.m750, config: SessionHarness.config(#"{"smoothScroll":{}}"#))
+        defer { h.close() }
+        // Nothing looked up yet: `restore` may resolve and write both wheels.
+        #expect(h.device.knownPresence(of: 0x2121) == nil && h.device.knownPresence(of: 0x2150) == nil)
+        #expect(h.session.restoreSteps == 2 + h.session.divertedControls.count)
+        try await h.session.apply()
+        #expect(h.session.restoreSteps == h.session.divertedControls.count)
+    }
+
     @Test func enhancedTimeoutReachesConfigureRetry() async throws {
         let fake = FakeDevice.mxMaster3S
         fake.features[5] = 0x2111
@@ -32,33 +42,31 @@ struct SessionApplyTests {
         let log = CapturedLog()
         try await Log.$capture.withValue({ log.append($0) }) {
             h.session.configure()
-            try await SessionHarness.eventually { !h.session.status.online }
+            try await eventually { !h.session.status.online }
         }
         #expect(log.lines.filter { $0.message.contains("configure attempt") }.count == 3)
-        #expect(fake.transport.sent.filter { fake.feature(of: $0) == 0x2111 && $0.function == 1 }.count == 3)
+        #expect(fake.requests(feature: 0x2111, function: 1).count == 3)
     }
 
     @Test func exampleAppliesAndRestoresWheelsBeforeControls() async throws {
-        let config = try SessionHarness.example()
+        var config = try SessionHarness.example()
+        // Off the fixture's 200-8000 step 50 grid, so the write proves the snap.
+        config.dpi = 1630
         let h = try await SessionHarness(config: config)
         defer { h.close() }
         try await h.session.apply()
         #expect(Set(h.fake.controls.filter(\.diverted).map(\.cid)) == config.boundControls)
-        #expect(h.fake.controls.first { $0.cid == 0xC3 }?.rawXY == true)
+        #expect(h.fake.control(0xC3)?.rawXY == true)
         #expect(h.fake.mainWheelDiverted && h.fake.mainWheelHighResolution)
         #expect(h.fake.thumbWheelDiverted)
-        let resolutions = try await AdjustableDPI.resolutions(h.device)
-        #expect(h.fake.dpi == resolutions.nearest(to: config.dpi!))
+        #expect(h.fake.dpi == 1650)
         h.fake.transport.sent.removeAll()
         await h.session.restore()
         #expect(h.fake.controls.allSatisfy { !$0.diverted && !$0.rawXY })
         #expect(!h.fake.mainWheelDiverted && !h.fake.mainWheelHighResolution)
         #expect(!h.fake.thumbWheelDiverted)
-        let writes = h.fake.transport.sent.filter {
-            (h.fake.feature(of: $0) == 0x2121 && $0.function == 2)
-                || (h.fake.feature(of: $0) == 0x2150 && $0.function == 2)
-                || (h.fake.feature(of: $0) == 0x1B04 && $0.function == 3)
-        }
+        let restoring: Set<FakeDevice.Call> = [.init(0x2121, 2), .init(0x2150, 2), .init(0x1B04, 3)]
+        let writes = h.fake.transport.sent.filter { restoring.contains(.init(h.fake.feature(of: $0) ?? 0xFFFF, $0.function)) }
         #expect(writes.prefix(2).compactMap { h.fake.feature(of: $0) } == [0x2121, 0x2150])
         #expect(writes.dropFirst(2).allSatisfy { h.fake.feature(of: $0) == 0x1B04 })
     }

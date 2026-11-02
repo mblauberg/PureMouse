@@ -36,12 +36,6 @@ struct SessionHarness {
         session.close()
         device.close()
     }
-
-    static func eventually(_ condition: () -> Bool) async throws {
-        let deadline = ContinuousClock.now + .seconds(2)
-        while !condition(), ContinuousClock.now < deadline { await Task.yield() }
-        try #require(condition())
-    }
 }
 
 /// Captures run on whichever task logs; the lock also permits simultaneous test captures.
