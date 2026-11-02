@@ -125,6 +125,13 @@ struct ShortcutSheet: View {
         .onAppear {
             if Shortcut.isValid(request.initial) { recorder.spec = request.initial }
             recorder.start()
+            // A popover (an app's sheet) gives its first text field focus as it opens, which
+            // stopped the recording and showed a focus ring. Recording comes first; a click on the
+            // field still switches to typing.
+            DispatchQueue.main.async {
+                typing = false
+                recorder.start()
+            }
         }
         .onDisappear { recorder.stop() }
     }
