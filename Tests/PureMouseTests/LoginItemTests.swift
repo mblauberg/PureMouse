@@ -73,6 +73,11 @@ private final class Rig: @unchecked Sendable {
     var opened: [(app: URL, attempts: Int)] = []
     /// Whether `open` succeeds.
     var opens = true
+    /// Which `open` calls (from 0) reach a live helper that reads the request; the others get a
+    /// helper that is exiting, which leaves it in the file.
+    var helperReads: Set<Int> = [0]
+    private var pending = false
+    var pauses: [TimeInterval] = []
     private let menuApp: URL?
     private let settingsApp: URL?
     private let executable: () throws -> URL
@@ -91,8 +96,11 @@ private final class Rig: @unchecked Sendable {
         lockFile: directory.appending(path: "lifecycle.lock"), lockTimeout: lockTimeout,
         calledFromMenu: { [unowned self] _ in menuIsCaller }, seedConfig: { [unowned self] in seeded += 1 },
         settingsApp: settingsApp,
-        requestSettings: { [unowned self] in requests += 1; service.calls.append("request settings") },
+        requestSettings: { [unowned self] in requests += 1; pending = true; service.calls.append("request settings") },
+        requestPending: { [unowned self] in pending },
+        pause: { [unowned self] in pauses.append($0) },
         open: { [unowned self] app, attempts in
+            if helperReads.contains(opened.count) { pending = false }
             opened.append((app, attempts))
             service.calls.append("open \(app.lastPathComponent)")
             return opens
@@ -225,6 +233,24 @@ private final class Rig: @unchecked Sendable {
         #expect(try rig.item.finderLaunch().settingsOpened == false)
         #expect(rig.service.registered == [.daemon, .menu])
         #expect(rig.requests == 1)
+    }
+
+    /// `open` exits 0 with the instance that is quitting, which never reads the request.
+    @Test func aHelperThatDoesNotReadTheRequestIsOpenedAgainWithAFreshOne() throws {
+        let rig = Rig()
+        rig.helperReads = [1]
+        #expect(rig.item.openSettings())
+        #expect(rig.opened.map(\.app) == [helperURL, helperURL])
+        #expect(rig.requests == 2)
+        #expect(rig.pauses.reduce(0, +) >= LoginItem.settingsWait.total)
+    }
+
+    @Test func aHelperThatReadsTheRequestIsOpenedOnce() {
+        let rig = Rig()
+        rig.helperReads = [0]
+        #expect(rig.item.openSettings())
+        #expect(rig.opened.count == 1)
+        #expect(rig.pauses.isEmpty)
     }
 
     @Test func nothingOpensWhenRegisteringFails() {

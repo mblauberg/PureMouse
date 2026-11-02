@@ -197,7 +197,10 @@ Opening PureMouse.app from the Finder runs `register`, then `openSettings`: it w
 and opens the Settings helper (`Contents/Helpers/PureMouse Settings.app`) itself, which reads the
 stamp at launch. The menu app is not opened: `register` already starts its agent unless the icon is
 hidden, and with the icon hidden Settings still opens and the icon stays hidden. `open` is tried
-twice, a second apart. If the build has no helper, or it will not open, the old alert is shown
+twice, a second apart. `open` exiting 0 does not prove Settings opened (LaunchServices can answer with
+a helper that is quitting), so `openSettings` also rings the doorbell, so a running helper reads
+the request, and waits up to 2 s for the helper to remove the file (`ShowRequest` does when it reads
+it). If it is still there, the request is written again and `open` is tried once more. If the build has no helper, or it will not open, the old alert is shown
 instead; registration has already happened by then. The menu app itself opens Settings when it was
 opened by hand rather than by launchd, when it finds a fresh stamp at launch, when its icon is
 hidden (it then quits once Settings is open), and when it is reopened
