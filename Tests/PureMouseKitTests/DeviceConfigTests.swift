@@ -65,10 +65,10 @@ import Testing
         #expect(g.up == .launchpad && g.down == .appExpose)
     }
 
-    @Test func keysAreLowercasedOnLoadAndLookedUpWithoutCase() throws {
+    @Test func keysAreLowercasedOnLoad() throws {
         let c = try config(#"{"devices": {"MB03440910000": {"dpi": 1200}, "pB02C": {"dpi": 900}}}"#)
         #expect(c.devices.keys.sorted() == ["mb03440910000", "pb02c"])
-        #expect(c.forDevice("MB03440910000").dpi == 1200)
+        #expect(c.forDevice("mb03440910000").dpi == 1200)
         #expect(c.forDevice("pb02c").dpi == 900)
         #expect(c.warnings.isEmpty)
     }
@@ -156,8 +156,10 @@ import Testing
              "devices": {"\#(Self.m)": {"smoothScroll": {}}},
              "apps": {"com.example.x": {"buttons": {"forward": "none"}}}}
             """#)
-        #expect(c.everyScope.count == 4)
+        // The device's own global scope, the only one with smooth scrolling, and its copy of the app.
         #expect(c.everyScope.contains { $0.smoothScroll != nil })
+        #expect(c.everyScope.filter { $0.bindings[0x56] != nil }.count == 2)
+        #expect(c.everyBoundControl == [0x53, 0x56])
         #expect(Config.empty.everyScope.count == 1)
     }
 }

@@ -40,31 +40,19 @@ public struct Config: Decodable, Sendable {
     /// for the log. The daemon logs them once, at load.
     public internal(set) var warnings: [String] = []
 
-    private init() {}
+    init() {}
 
     public init(from decoder: Decoder) throws {
-        try self.init(decoder.container(keyedBy: AnyKey.self), base: nil)
+        try self.init(decoder.container(keyedBy: AnyKey.self))
     }
 
-    /// The top-level sections `c` names, each decoded on top of the same section of `base` (or of
-    /// the defaults), so a caller can layer one set of settings over another. A section `c` leaves
-    /// out is `base`'s; `dpiPresets` replaces `base`'s whole and a binding replaces `base`'s for
-    /// that control.
-    ///
-    /// `apps`, `devices`, `warnings` and `unknownButtons` are never taken from `base`: they start
-    /// empty, and `apps` in `c` is decoded against the layered result. Per-app settings snapshot
-    /// the globals they inherit, so each device entry layers its sections first and decodes the
-    /// top-level `apps` against that result (`Config+Devices.swift`).
-    init(_ c: KeyedDecodingContainer<AnyKey>, base: Config?) throws {
-        let base = base ?? Config()
-        self = base
-        apps = [:]
-        devices = [:]
-        warnings = []
-        unknownButtons = []
+    /// The top level, then `apps` decoded against it, then each `devices` entry. `decodeSections`
+    /// is the one layering point: a device entry decodes its sections on top of the top level's
+    /// (`Config+Devices.swift`).
+    init(_ c: KeyedDecodingContainer<AnyKey>) throws {
         try decodeSections(c)
         if let section = try c.nestedContainerIfPresent(forKey: AnyKey("universalControl")) {
-            universalControl = try UniversalControl(section, base: base.universalControl)
+            universalControl = try UniversalControl(section, base: universalControl)
         }
         let appsSection = c.contains(AnyKey("apps"))
             ? try c.nestedContainer(keyedBy: AnyKey.self, forKey: AnyKey("apps")) : nil
@@ -75,7 +63,8 @@ public struct Config: Decodable, Sendable {
     }
 
     /// The sections a device entry may set too (`deviceSections`), each on top of the same
-    /// section of `self`.
+    /// section of `self`: a section `c` leaves out stays as it is, `dpiPresets` replaces the whole
+    /// list and a binding replaces the one for its control.
     mutating func decodeSections(_ c: KeyedDecodingContainer<AnyKey>) throws {
         dpi = try c.decodeIfPresent(Int.self, forKey: AnyKey("dpi"), in: Self.dpiRange) ?? dpi
         if c.contains(AnyKey("dpiPresets")) {
