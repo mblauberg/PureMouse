@@ -1,11 +1,12 @@
 import AppKit
 import PureMouseAppSupport
 import PureMouseKit
+import PureMouseSettingsUI
 import notify
 
 /// The app delegate: owns the model, the status item and (only while open) the Settings window.
 @MainActor
-final class AppController: NSObject, NSApplicationDelegate {
+final class AppController: NSObject, NSApplicationDelegate, SettingsHost {
     static var shared: AppController? { NSApp.delegate as? AppController }
 
     let model = AppModel(alert: Alerts.show, announce: Notifier.post)
@@ -49,7 +50,7 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     func showSettings(pane: SettingsPane? = nil) {
         if settings == nil {
-            settings = SettingsWindowController(model: model, app: self)
+            settings = SettingsWindowController(model: model, host: self)
         }
         settings?.show(pane: pane)
     }
@@ -94,15 +95,6 @@ final class AppController: NSObject, NSApplicationDelegate {
         malloc_zone_pressure_relief(nil, 0) // a development copy, or the agent is gone
     }
 
-    var settingsWindow: NSWindow? { settings?.window }
-
-    /// Fits Settings to its pane once a change in the pane's height has laid out (`SettingsTabs.refit`).
-    func refitSettings() {
-        DispatchQueue.main.async { [weak self] in
-            (self?.settingsWindow?.contentViewController as? SettingsTabs)?.refit()
-        }
-    }
-
     // MARK: Lifecycle
 
     /// Quit PureMouse: stops the daemon (which restores the mouse) and this app. Both start again
@@ -142,6 +134,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     #if DEBUG || DEVHOOKS
     func openMenuForTesting(appearance: NSAppearance?) { statusMenu?.open(appearance: appearance) }
     func closeMenuForTesting() { statusMenu?.close() }
+    var settingsWindow: NSWindow? { settings?.window }
     #endif
 
     private var pendingMenuOff = false
@@ -166,6 +159,10 @@ final class AppController: NSObject, NSApplicationDelegate {
     func openPrivacy(_ pane: PrivacyPane) {
         NSWorkspace.shared.open(pane.url)
     }
+
+    func requestNotifications() async { await Notifier.requestIfNeeded() }
+
+    func notificationsAllowed() async -> Bool? { await Notifier.isAllowed() }
 
     func openReleases() {
         NSWorkspace.shared.open(Links.releases)

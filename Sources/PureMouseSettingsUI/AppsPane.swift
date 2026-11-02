@@ -9,7 +9,7 @@ import UniformTypeIdentifiers
 /// as Everywhere" removes its key, and an app with nothing left is removed (`ConfigTree.set`).
 struct AppsPane: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.app) private var app
+    @Environment(\.settings) private var settings
     /// The app whose settings show, by its key under `apps` (or the bundle ID just added).
     @State private var selected: String?
     /// Apps added here that have no setting yet: nothing is written until one is set.
@@ -26,7 +26,7 @@ struct AppsPane: View {
                 list
             }
         }
-        .onChange(of: selected) { app?.refitSettings() }
+        .onChange(of: selected) { settings?.refit() }
         .confirmationDialog("Remove \(removing.map { identities.identity($0).name } ?? "this app")'s settings?",
                             isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })) {
             Button("Remove", role: .destructive) {
@@ -134,7 +134,7 @@ struct AppsPane: View {
             }
             add(id)
         }
-        if let window = app?.settingsWindow {
+        if let window = settings?.window {
             panel.beginSheetModal(for: window, completionHandler: finish)
         } else {
             finish(panel.runModal())
@@ -279,7 +279,7 @@ private struct AppRow: View {
 /// One app's settings.
 private struct AppDetail: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.app) private var app
+    @Environment(\.settings) private var settings
     /// The app's key under `apps`.
     let key: String
     let identity: AppIdentities.Identity
@@ -519,7 +519,7 @@ private struct AppDetail: View {
             }
             .accessibilityLabel("Own scrolling speed\(spoken)")
             // The rows appear only while on, so nothing is written until the app has its own values.
-            .onChange(of: overrides) { app?.refitSettings() }
+            .onChange(of: overrides) { settings?.refit() }
             if overrides {
                 ValueSlider(title: "Speed", spokenTitle: "Scrolling speed\(spoken)",
                             value: model.number(speedPath, default: globalSpeed, step: 0.05),

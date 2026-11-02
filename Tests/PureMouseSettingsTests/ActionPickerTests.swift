@@ -1,7 +1,7 @@
 import PureMouseAppSupport
 import PureMouseKit
 import Testing
-@testable import PureMouseMenu
+@testable import PureMouseSettingsUI
 
 // The action picker's entries (`PickerEntry`, in the Settings view code).
 

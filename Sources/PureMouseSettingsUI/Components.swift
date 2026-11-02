@@ -137,7 +137,6 @@ struct Banner<Actions: View>: View {
 /// whose settings need it) a missing Accessibility grant.
 struct PaneBanners: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.app) private var app
     var needsAccessibility = false
 
     var body: some View {
@@ -196,7 +195,7 @@ struct PaneBanners: View {
             Section {
                 Banner(title: "Accessibility is not allowed",
                        message: "Wheels and buttons stay native until it is. PureMouse restarts itself once it is allowed.") {
-                    Button("Open Settings…") { app?.openPrivacy(.accessibility) }
+                    Button("Open Settings…") { NSWorkspace.shared.open(PrivacyPane.accessibility.url) }
                 }
             }
         }

@@ -22,10 +22,22 @@ let package = Package(
             dependencies: ["HIDPP", "PureMouseKit"],
             swiftSettings: [.unsafeFlags(["-Osize"], .when(configuration: .release))]
         ),
+        // The Settings window and its SwiftUI panes, over `AppModel`.
+        .target(
+            name: "PureMouseSettingsUI",
+            dependencies: ["PureMouseKit", "PureMouseAppSupport"],
+            swiftSettings: [.unsafeFlags(["-Osize"], .when(configuration: .release))]
+        ),
         // The menu bar app: status menu and Settings window. Edits the config; never touches HID.
         .executableTarget(
             name: "PureMouseMenu",
-            dependencies: ["PureMouseKit", "PureMouseAppSupport"],
+            dependencies: ["PureMouseKit", "PureMouseAppSupport", "PureMouseSettingsUI"],
+            swiftSettings: [.unsafeFlags(["-Osize"], .when(configuration: .release))]
+        ),
+        // The Settings helper app (`PureMouse Settings.app`), started on demand by the menu bar app.
+        .executableTarget(
+            name: "PureMouseSettings",
+            dependencies: ["PureMouseKit", "PureMouseAppSupport", "PureMouseSettingsUI"],
             swiftSettings: [.unsafeFlags(["-Osize"], .when(configuration: .release))]
         ),
         .target(name: "HIDPPTesting", dependencies: ["HIDPP"]),
@@ -33,6 +45,10 @@ let package = Package(
         .testTarget(name: "PureMouseTests", dependencies: ["puremouse", "HIDPPTesting"]),
         .testTarget(name: "PureMouseKitTests", dependencies: ["PureMouseKit"]),
         .testTarget(name: "PureMouseMenuTests", dependencies: ["PureMouseMenu"]),
+        .testTarget(
+            name: "PureMouseSettingsTests",
+            dependencies: ["PureMouseSettingsUI", "PureMouseAppSupport"]
+        ),
         .testTarget(
             name: "PureMouseAppSupportTests",
             dependencies: ["PureMouseAppSupport", "ConfigWriterProbe"],

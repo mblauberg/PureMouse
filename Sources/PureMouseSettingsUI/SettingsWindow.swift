@@ -5,20 +5,22 @@ import SwiftUI
 /// The Settings window: native toolbar tabs (`NSTabViewController`, `.toolbar` style) over
 /// SwiftUI grouped forms. Created when first shown and released when closed.
 @MainActor
-final class SettingsWindowController: NSWindowController, NSWindowDelegate {
+public final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     static let width: CGFloat = 600
     private static let paneKey = "SettingsPane"
 
-    private let app: AppController
+    private let context: SettingsContext
     private let tabs = SettingsTabs()
 
-    init(model: AppModel, app: AppController) {
-        self.app = app
+    public init(model: AppModel, host: SettingsHost) {
+        let context = SettingsContext(host: host)
+        context.tabs = tabs
+        self.context = context
         tabs.tabStyle = .toolbar
         tabs.transitionOptions = [.crossfade, .allowUserInteraction]
         for pane in SettingsPane.allCases {
             let lazy = LazyPane {
-                let host = NSHostingController(rootView: PaneHost(pane: pane, app: app).environment(model))
+                let host = NSHostingController(rootView: PaneHost(pane: pane, context: context).environment(model))
                 host.sizingOptions = .preferredContentSize
                 return host
             }
@@ -47,7 +49,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    func show(pane: SettingsPane?) {
+    public func show(pane: SettingsPane?) {
         if let pane { select(pane) }
         guard let window else { return }
         if !window.isVisible { window.center() }
@@ -62,9 +64,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         }
     }
 
-    func windowWillClose(_ notification: Notification) {
+    public func windowWillClose(_ notification: Notification) {
         // Let AppKit finish closing before the controller and its views go.
-        DispatchQueue.main.async { [app] in app.settingsDidClose() }
+        DispatchQueue.main.async { [host = context.host] in host.settingsDidClose() }
     }
 }
 

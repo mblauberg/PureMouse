@@ -4,7 +4,7 @@ import SwiftUI
 
 struct GeneralPane: View {
     @Environment(AppModel.self) private var model
-    let app: AppController
+    let host: SettingsHost
     @State private var startsAtLogin = false  // read on appear
     @State private var showsInMenuBar = true
     @State private var confirmingReset = false
@@ -46,11 +46,11 @@ struct GeneralPane: View {
             Section("Permissions") {
                 PermissionRow(title: "Accessibility", help: "Lets PureMouse scroll, press shortcuts and swipe for you.",
                               granted: model.daemonRunning ? model.status?.permissions.accessibility : nil) {
-                    app.openPrivacy(.accessibility)
+                    NSWorkspace.shared.open(PrivacyPane.accessibility.url)
                 }
                 PermissionRow(title: "Input Monitoring", help: "Needed for Bluetooth. The USB receiver works without it.",
                               granted: model.daemonRunning ? model.status?.permissions.inputMonitoring : nil) {
-                    app.openPrivacy(.inputMonitoring)
+                    NSWorkspace.shared.open(PrivacyPane.inputMonitoring.url)
                 }
                 if model.logiOptionsRunning {
                     LabeledContent {
@@ -91,8 +91,8 @@ struct GeneralPane: View {
         }
         .onAppear {
             refreshStartsAtLogin()
-            showsInMenuBar = app.showsStatusItem
-            Task { notificationsDenied = await Notifier.isAllowed() == false }
+            showsInMenuBar = host.showsStatusItem
+            Task { notificationsDenied = await host.notificationsAllowed() == false }
         }
         .confirmationDialog("Reset all settings?", isPresented: $confirmingReset) {
             Button("Reset All Settings", role: .destructive) { model.resetAll() }
@@ -122,14 +122,14 @@ struct GeneralPane: View {
         model.set(on ? nil : false, at: ["notifications", "lowBattery"])
         guard on else { return }
         Task {
-            await Notifier.requestIfNeeded()
-            notificationsDenied = await Notifier.isAllowed() == false
+            await host.requestNotifications()
+            notificationsDenied = await host.notificationsAllowed() == false
         }
     }
 
     private func setShowsInMenuBar(_ on: Bool) {
         showsInMenuBar = on
-        app.setMenuBarPreference(on)
+        host.setMenuBarPreference(on)
     }
 
     private func openConfig() {

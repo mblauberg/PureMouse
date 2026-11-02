@@ -6,10 +6,8 @@ import notify
 
 /// Development only: `PUREMOUSE_DEV_PANE=<pane>` opens Settings on a pane and
 /// `PUREMOUSE_DEV_MENU=1` opens the menu, so screenshots can be taken without clicking.
-/// `PUREMOUSE_DEV_APPEARANCE=light|dark` overrides the system appearance.
-/// On the Buttons pane, `PUREMOUSE_DEV_PICKER=<button>` opens a button's action picker and
-/// `PUREMOUSE_DEV_SHORTCUT=<button>` its shortcut sheet. On the Apps pane,
-/// `PUREMOUSE_DEV_APP=<bundle id>` opens (or adds) that app's settings.
+/// `PUREMOUSE_DEV_APPEARANCE=light|dark` overrides the system appearance. The pane hooks are
+/// Settings' own (`PureMouseSettingsUI.DevHooks`).
 ///
 /// A release build has none of this unless it is built with `-DDEVHOOKS` (`scripts/measure-menu.sh`),
 /// which compiles in only `Rig`, below.
