@@ -18,7 +18,9 @@ one. This file covers how to work on it safely.
   The daemon owns that file: `run` attaches stderr to it unless stderr is a terminal (`LogFile`),
   and rotates it to `PureMouse.log.1` past `Log.rotateAt` (1 MiB). The agent plists set no
   `StandardErrorPath`, and the menu bar app keeps no log. Any non-terminal stderr counts, so a dev
-  run piped or redirected also writes to that file.
+  run piped or redirected also writes to that file. Only the daemon's own lines are counted, so
+  `run` commands get /dev/null for stdout and stderr (`SystemActions.shell`); a failure is logged
+  once.
   (`puremouse permissions` answers for whoever launches it, so from a terminal it reports the
   terminal's permissions, not the app's.)
 - Menu bar app (`Sources/PureMouseMenu`): run `.build/debug/PureMouseMenu` alongside the installed
@@ -45,8 +47,8 @@ one. This file covers how to work on it safely.
   Gatekeeper dialog or grant permissions, so leave those to whoever is at the Mac. Machine-specific
   notes belong in the uncommitted `CLAUDE.local.md`.
 - Releases: tag `vX.Y.Z` on a clean `main` (the bundle version is the tag without the `v`), run
-  `PUREMOUSE_SIGN_IDENTITY=PureMouse ./scripts/package.sh` on a Mac holding that identity (else a
-  Developer ID identity, if present, wins), and attach
+  `PUREMOUSE_SIGN_IDENTITY=PureMouse ./scripts/package.sh` on a Mac holding that identity (the
+  identity order is in `docs/development.md`, Signing), and attach
   `.build/dist/PureMouse-X.Y.Z.zip` to a GitHub release with its SHA-256. A release signed by any
   other identity makes every user grant permissions again. CI (`.github/workflows/ci.yml`) builds,
   tests and bundles ad hoc, verifies the signatures, checks the size budget
@@ -257,12 +259,11 @@ one. This file covers how to work on it safely.
   menu agent out last (after removing its plist), and `register`/`menu on` leave an already
   loaded menu agent running when the menu app itself is the caller.
 - Builds are signed by `scripts/sign-bundle.sh`: inside out from `scripts/lib.zsh`'s `components`
-  (a new nested bundle is one more entry), no `--deep`, always the hardened runtime, with
-  `PUREMOUSE_SIGN_IDENTITY`, else a Developer ID Application identity, else the self-signed
-  `PureMouse` (`scripts/make-cert.sh`), else ad hoc. The permission grants are keyed to identifier
-  plus certificate, which also holds on Macs that do not trust the certificate; an ad-hoc signature
-  makes macOS drop them on every install. `scripts/verify-bundle.sh` checks every component.
-  install.sh stops the agent before replacing the binary.
+  (a new nested bundle is one more entry), no `--deep`, always the hardened runtime, with the
+  identity `signing_identity` picks (the order is in `docs/development.md`, Signing). The
+  permission grants are keyed to identifier plus certificate, which also holds on Macs that do not
+  trust the certificate; an ad-hoc signature makes macOS drop them on every install.
+  `scripts/verify-bundle.sh` checks every component and every architecture of it. install.sh stops the agent before replacing the binary.
 - Gatekeeper: launching a quarantined copy parks it at `_dyld_start` behind an on-screen dialog.
   On a test Mac, later launches at that path stayed parked even after clearing the flag and putting
   a fresh copy there (presumably until the dialog is answered). Clear the flag before the first

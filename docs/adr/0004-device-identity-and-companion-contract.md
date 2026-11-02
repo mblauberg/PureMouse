@@ -1,14 +1,15 @@
-# 4. Device identity and an additive companion contract
+# 4. Device identity (`m<model>` / `p<pid>`); the status contract is versioned with the bundle
 
 ## Status
 
-Accepted
+Accepted, not built
 
 ## Context
 
 Per-device settings need a key that survives reconnects, a switch between receiver and Bluetooth,
-and daemon restarts. `Status.Device.id` (interface and index) does not. The menu bar app decodes
-all of `status.json` or nothing, with strict enums, so a careless change breaks older menus.
+and daemon restarts. `Status.Device.id` (interface and index) does not. The menu bar app and the
+daemon ship in one bundle and are never run apart, and before 1.0 the owner engineers nothing for
+backward compatibility (decision of 2026-11-02).
 
 ## Decision
 
@@ -20,15 +21,16 @@ all of `status.json` or nothing, with strict enums, so a careless change breaks 
 - The status gains the key, the device kind and a capability map. Capability values are tri-state
   on the wire: `true` or `false` only when definitive, the key omitted when unknown (including a
   transient lookup failure).
-- Every addition is optional and `schema` stays 1. The additive rule (new fields optional, nothing
-  removed or retyped, no new cases in existing enums) is written into `docs/companion.md` and
-  tested against a frozen copy of the 0.3.0 status types.
+- The status format is versioned with the bundle: it changes freely before 1.0, `schema` is bumped
+  when its shape changes, and the release notes say so. `docs/companion.md` describes the current
+  shape.
 
 ## Alternatives rejected
 
 - The device name as key: readable, but not guaranteed unique or stable across firmware. It stays
   as the informational `name`.
-- Bumping `schema`: every 0.3.x menu would ask for an update over purely additive data.
+- An additive-only contract tested against a frozen 0.3.0 reader: compatibility work for a pre-1.0
+  app whose menu and daemon never run apart.
 
 ## Consequences
 

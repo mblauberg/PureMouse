@@ -1,14 +1,14 @@
-# 5. Config v2 is additive per-device overrides, with no migration
+# 5. Config v2 is per-device overrides on top-level defaults, with no migration
 
 ## Status
 
-Accepted
+Accepted, not built
 
 ## Context
 
-An in-place migration to a `defaults` wrapper plus `devices.<model>` was proposed. The config file
-is edited by hand, the menu keeps keys it does not know, and older and newer daemon and menu
-pairings must keep working.
+Per-device settings need a place in the config file. An in-place migration to a `defaults`
+wrapper plus `devices.<model>` was proposed. The config file is edited by hand, and the menu keeps
+keys it does not know.
 
 ## Decision
 
@@ -17,17 +17,15 @@ The top-level keys are the defaults. `devices.<key>` (the key from
 shapes. Precedence is top level, then `devices.<key>`, then `apps.<bundleId>`, each merged per
 leaf as `apps` already is. The Kit decoder resolves each device entry at load, and
 `ConfigCheck.validate` stays the only decoder. The menu's scopes follow the same paths
-([ADR 12](0012-multi-device-settings-scopes.md)).
+([ADR 12](0012-multi-device-settings-scopes.md)). There is no `defaults` wrapper and no migration.
 
 ## Alternatives rejected
 
 - A `defaults` wrapper with a migration: it rewrites users' files (losing their order and layout),
-  needs a backup and rollback story, older daemons cannot read the result, and it is a one-way door
-  with no gain in what can be expressed.
+  needs a backup and rollback story, and adds nothing that can be expressed.
 
 ## Consequences
 
-- No migration code and no backup files; a version 1 file is a valid version 2 file.
-- Downgrading keeps working: an older daemon ignores `devices` and applies the defaults, and an
-  older menu keeps the unknown key and edits the defaults.
+- It is the simplest design: no migration code and no backup files, and a file without `devices`
+  is already valid.
 - `devices.<key>.apps` nesting is left out until someone asks for it.

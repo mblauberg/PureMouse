@@ -11,11 +11,10 @@ nothing rotated it.
 
 ## Decision
 
-The daemon rotates its own log, which it owns ([ADR 16](0016-daemon-owns-its-log.md)). It counts
-the bytes written, starting from the file's size at launch. Once a write takes the count past
-1 MiB, and only while stderr is that file, it renames the file to `PureMouse.log.1` (replacing an
-older one), opens a new `PureMouse.log` and moves stderr onto it. A lock covers the check, and a
-run from a terminal never rotates. The check runs at start and after writes, never on a timer.
+The daemon rotates its own log, which it owns ([ADR 16](0016-daemon-owns-its-log.md)). Once the
+log passes 1 MiB, it renames it to `PureMouse.log.1` (replacing an older one) and starts a new
+`PureMouse.log`. The check runs at start and on writes, never on a timer. A run from a terminal
+writes no log, so it never rotates.
 
 ## Alternatives rejected
 
@@ -27,4 +26,5 @@ run from a terminal never rotates. The check runs at start and after writes, nev
 
 - At most about 2 MiB of log on disk.
 - A rotation happens between whole lines, so no line is split or lost.
-- Output of child processes that inherit stderr is not counted; it is small and short-lived.
+- Only the daemon's own lines are counted, so `run` commands get /dev/null for their output, and
+  a failed one is logged once.

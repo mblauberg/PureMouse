@@ -36,22 +36,16 @@ Bugs in macOS, Logitech firmware or Logi Options+ belong with their vendors.
 
 ## Verifying a download
 
-Each release lists the SHA-256 of its download. Compare it with:
+A release is a zip of the app, attached to its GitHub release with its SHA-256. Compare that with:
 
 ```sh
 shasum -a 256 PureMouse-<version>.zip
 ```
 
-Releases built by the release workflow also carry `SHA256SUMS` and a build attestation. In the
-folder holding the download:
+If you build PureMouse yourself, `scripts/verify-bundle.sh .build/app/PureMouse.app` checks that
+every component is signed, intact, carries the hardened runtime in every architecture and has the
+expected identifier and version.
 
-```sh
-shasum -a 256 -c SHA256SUMS --ignore-missing
-gh attestation verify PureMouse-<version>.dmg --repo mblauberg/PureMouse
-```
-
-Once releases are notarised, macOS can check the signature as well:
-
-```sh
-spctl --assess --type execute --verbose /Applications/PureMouse.app
-```
+Build attestations and notarisation come with the release workflow
+([#46](https://github.com/mblauberg/PureMouse/issues/46)); this page will give their commands
+once it exists.

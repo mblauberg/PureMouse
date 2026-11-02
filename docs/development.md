@@ -62,7 +62,8 @@ signature, so an ad-hoc build needs them granted again after every install, and 
 be signed with the same identity. Keep a backup of it.
 
 `scripts/verify-bundle.sh <app>` checks each component: Info.plist present and valid, identifier
-and version as expected, `codesign --verify --strict` passing and the runtime flag set.
+and version as expected, `codesign --verify --strict` passing, and every architecture of its
+executable signed with that identifier and the runtime flag.
 `--release` also requires a release version (`X.Y.Z` or `X.Y.Z-rc.N`) and, when
 `PUREMOUSE_TEAM_ID` is set (or `scripts/release.env` sets it), a Developer ID Application
 signature from that team.
@@ -73,6 +74,7 @@ signature from that team.
 2. Run `PUREMOUSE_SIGN_IDENTITY=PureMouse ./scripts/package.sh` on a Mac that holds the
    `PureMouse` identity. Naming it matters: on a Mac that also holds a Developer ID, the build would
    otherwise sign with that, and every user would have to grant permissions again.
+   `package.sh` runs `verify-bundle.sh --release` and makes the zip only if it passes.
 3. Attach `.build/dist/PureMouse-X.Y.Z.zip` to a GitHub release with its SHA-256.
 
 Release notes come from GitHub Releases ([ADR 17](adr/0017-github-releases-is-the-changelog.md)):

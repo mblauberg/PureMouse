@@ -13,12 +13,13 @@ choice and must never block other work.
 
 ## Decision
 
-- The signing identity is an input: locally the first of `PUREMOUSE_SIGN_IDENTITY`, a Developer ID
-  Application identity, the self-signed `PureMouse`, then ad hoc (`scripts/lib.zsh`); in the release
-  workflow a p12 secret plus its name. Today that is the self-signed identity; later a Developer ID
+- The signing identity is an input: locally chosen by `scripts/lib.zsh`'s `signing_identity`
+  (the order is in [Development](../development.md#signing)); in the release workflow a p12
+  secret plus its name. Today that is the self-signed identity; later a Developer ID
   certificate in the same secrets, with no code change.
 - Every build is signed inside out, without `--deep`, with the hardened runtime, whatever the
-  identity (`scripts/sign-bundle.sh`), and checked by `scripts/verify-bundle.sh`. No entitlements
+  identity (`scripts/sign-bundle.sh`), and checked by `scripts/verify-bundle.sh` in every
+  architecture. No entitlements
   unless the hardened-runtime spike shows one is needed.
 - Notarisation and stapling run only when all notary secrets exist. Some but not all present fails,
   naming the missing ones; none present skips with a log line.
@@ -34,6 +35,6 @@ choice and must never block other work.
 ## Consequences
 
 - Grants carry across releases signed by the same identity; changing identity is a one-time
-  re-grant ([ADR 19](0019-developer-id-and-migration-in-one-release.md)).
+  re-grant ([ADR 19](0019-developer-id-in-one-release.md)).
 - Dev builds sign with `--timestamp=none`; releases ask for a secure timestamp.
 - Each new nested bundle is one more entry in `scripts/lib.zsh`'s component list.

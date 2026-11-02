@@ -14,7 +14,7 @@ without them. Source:
 | Permission | What PureMouse does with it | What it never does |
 |---|---|---|
 | **Accessibility** (posting events, `CGRequestPostEventAccess`) | Posts the scrolls, keystrokes, swipes and clicks your buttons and wheels are set to | Read the screen or other apps' contents, or control their windows |
-| **Input Monitoring** (`IOHIDRequestAccess`, listen) | Reads HID++ reports from a Logitech mouse over Bluetooth, and lets macOS open a receiver if it refuses otherwise. A receiver normally works without it | Record what you type or click, or open devices from other makers |
+| **Input Monitoring** (`IOHIDRequestAccess`, listen) | Reads HID++ reports from a Logitech mouse over Bluetooth, and lets macOS open a receiver if it refuses otherwise. A receiver normally works without it | Record what you type, or open devices from other makers. Mouse buttons reach the log only as [the log row below](#files-it-writes) says |
 
 PureMouse opens Logitech receivers and Logitech Bluetooth devices only, and uses only their HID++
 reports ([`Sources/HIDPP/HIDInterface.swift`](../Sources/HIDPP/HIDInterface.swift),
@@ -35,7 +35,7 @@ low-battery warning to show, or when you turn the warning on
 
 - **Which app is in front, or under the pointer**, by bundle ID, at the moment a button or wheel
   you set per app is used ([`Sources/puremouse/ForegroundApp.swift`](../Sources/puremouse/ForegroundApp.swift)).
-  Nothing is recorded.
+  It is kept only in memory, except that with `--verbose` the log names it (see the log below).
 - **The names of your running processes**, at start, to warn when Logi Options+ is running ([`Sources/puremouse/LogiOptions.swift`](../Sources/puremouse/LogiOptions.swift)).
 - **Your natural-scrolling setting** and **your Spaces shortcuts**, so synthetic scrolls and the
   `spaceLeft`/`spaceRight` actions match them
@@ -46,12 +46,16 @@ low-battery warning to show, or when you turn the warning on
 
 ## Files it writes
 
-All of them are in your home folder. Nothing is written to the mouse or the receiver.
+All of them are in your home folder.
+
+While it runs, the background process changes settings on the mouse that it forgets when it
+reconnects: which buttons it sends to PureMouse, how the wheels report, DPI and SmartShift. It puts
+them back when it quits or pauses, and stores nothing on the mouse or the receiver.
 
 | File | Written by | What it holds |
 |---|---|---|
 | `~/.config/puremouse/config.json` | Settings, when you change something ([`Sources/PureMouseMenu/Logic/ConfigFile.swift`](../Sources/PureMouseMenu/Logic/ConfigFile.swift)); a copy of the example config on first open if there is none ([`Sources/puremouse/LoginItem.swift`](../Sources/puremouse/LoginItem.swift)) | Your settings. A symlinked config has its target replaced, not the link |
-| `~/Library/Logs/PureMouse.log`, and `PureMouse.log.1` once it passes 1 MiB | The background process ([`Sources/puremouse/Log.swift`](../Sources/puremouse/Log.swift)) | Starts with the macOS version, mice by name and product ID with their features, permission state, config errors, failed `run` commands and anything a `run` command writes to its error output. With `--verbose`, also button presses and the bundle ID of the app whose settings apply |
+| `~/Library/Logs/PureMouse.log`, and `PureMouse.log.1` once it passes 1 MiB | The background process ([`Sources/puremouse/Log.swift`](../Sources/puremouse/Log.swift)) | Always: a start line with the PureMouse and macOS versions; each mouse and receiver by the name macOS reports (for Bluetooth, the name in Bluetooth settings) and product ID, with its features; permission state; config errors; Logi Options+ running; Universal Control, pause and wake events; and a failed `run` command's first 80 characters with its exit status. While you use **Select by Pressing**: the control ID of the button you press. With `--verbose` only: the control ID of every press, gesture directions, and the bundle ID of the app whose settings apply. Never what you type, and never a `run` command's output |
 | `~/Library/LaunchAgents/io.github.mblauberg.puremouse.plist` and `….menu.plist` | `puremouse register`, which opening the app runs ([`Sources/puremouse/LoginItem.swift`](../Sources/puremouse/LoginItem.swift)) | Start-at-login entries naming the app's two programs. `puremouse unregister` removes them |
 | `~/Library/Application Support/PureMouse/status.json` | The background process ([`Sources/puremouse/Channel.swift`](../Sources/puremouse/Channel.swift)) | What the menu shows: connected mice, battery, DPI, permission and config state |
 | `~/Library/Application Support/PureMouse/control.json` | The menu bar app ([`Sources/PureMouseMenu/Model/AppModel.swift`](../Sources/PureMouseMenu/Model/AppModel.swift)) | Requests to the background process: pause, select by pressing, use the configured DPI. Removed when the background process starts ([`Sources/puremouse/Channel.swift`](../Sources/puremouse/Channel.swift)) |
@@ -79,6 +83,7 @@ Buttons such as **View Release** and **How to Remove** open a GitHub page in you
 
 A `run` action executes the command you wrote in your config with `/bin/sh`, as you
 ([`Sources/puremouse/Action.swift`](../Sources/puremouse/Action.swift)). PureMouse adds none of its own.
+Its output is discarded; if it fails, the log keeps its first 80 characters and its exit status.
 
 ## What `puremouse probe` prints
 

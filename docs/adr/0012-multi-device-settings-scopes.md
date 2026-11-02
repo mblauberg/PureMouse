@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted, not built
 
 ## Context
 
@@ -26,5 +26,4 @@ known mouse), shown when two or more mice are known or a `devices` entry exists.
 ## Consequences
 
 - Single-mouse users see no change and no new keys.
-- Older menus keep working: they keep the unknown `devices` key and edit the defaults.
 - Buttons, Scrolling and Pointer rows gain per-row inheritance logic.
