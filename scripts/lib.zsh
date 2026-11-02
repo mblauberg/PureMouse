@@ -39,6 +39,34 @@ menu_component() {
     print -r -- ${(M)components:#$menu_label:*}
 }
 
+# app_component: the `components` entry of PureMouse.app itself (the daemon).
+app_component() {
+    print -r -- ${(M)components:#*:.}
+}
+
+# Where install.sh puts PureMouse.app and uninstall.sh takes it from. PUREMOUSE_INSTALL_DIR exists
+# for the script tests, which must never touch /Applications.
+install_dir=${PUREMOUSE_INSTALL_DIR:-/Applications}
+
+# stop_agents <consequence>: boots out the menu bar app's and the daemon's login agents and waits
+# until neither is running, so their files can be replaced or removed. bootout returns before the
+# old instance has finished restoring the mouse, and replacing a running binary can get it killed
+# for an invalid signature first. Otherwise it dies with "PureMouse is still running, so
+# <consequence>".
+stop_agents() {
+    local menu_id=$(component_id "$(menu_component)") daemon_id=$(component_id "$(app_component)")
+    # The menu bar app may have been started by the Finder rather than launchd.
+    launchctl bootout gui/$UID/$menu_id 2>/dev/null || true
+    pkill -x PureMouseMenu 2>/dev/null || true
+    launchctl bootout gui/$UID/$daemon_id 2>/dev/null || true
+    local _
+    for _ in {1..50}; do
+        launchctl print gui/$UID/$daemon_id >/dev/null 2>&1 || pgrep -x PureMouseMenu >/dev/null || return 0
+        sleep 0.1
+    done
+    die "PureMouse is still running, so $1; try: launchctl bootout gui/$UID/$daemon_id"
+}
+
 # plist_value <plist> <key>: a top-level value, or a non-zero status when the key is missing.
 plist_value() {
     /usr/libexec/PlistBuddy -c "Print :$2" $1 2>/dev/null
