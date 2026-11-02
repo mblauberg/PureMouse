@@ -214,7 +214,7 @@ import Testing
             _ = try decode(#"{"apps": {"com.apple.Safari": {"buttons": {"back": "explode"}}}}"#)
             Issue.record("accepted")
         } catch {
-            #expect(ConfigCheck.message(for: error).hasPrefix("apps.com.apple.Safari.buttons.back: unknown action 'explode'"))
+            #expect(ConfigCheck.message(for: error) == "apps.com.apple.Safari.buttons.back: unknown action “explode”")
         }
     }
 }

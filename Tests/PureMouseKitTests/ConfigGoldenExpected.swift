@@ -63,8 +63,8 @@ config: Config
   warnings: [0]
 
 ### err-apps-button-unknown-action
-error: apps.com.apple.Safari.buttons.back: unknown action 'explode'; known: appExpose, brightnessDown, brightnessUp, cycleDPI, launchpad, missionControl, mute, navigateBack, navigateForward, nextTab, none, previousTab, showDesktop, spaceLeft, spaceRight, toggleScrollMode, volumeDown, volumeUp, zoomIn, zoomOut
-validate: apps.com.apple.Safari.buttons.back: unknown action 'explode'; known: appExpose, brightnessDown, brightnessUp, cycleDPI, launchpad, missionControl, mute, navigateBack, navigateForward, nextTab, none, previousTab, showDesktop, spaceLeft, spaceRight, toggleScrollMode, volumeDown, volumeUp, zoomIn, zoomOut
+error: apps.com.apple.Safari.buttons.back: unknown action “explode”
+validate: apps.com.apple.Safari.buttons.back: unknown action “explode”
 
 ### err-apps-buttons-type
 error: apps.a.buttons: expected Dictionary<String, Any>
@@ -87,8 +87,8 @@ error: apps.a.thumbWheel.step must be 1–36, not 99
 validate: apps.a.thumbWheel.step must be 1–36, not 99
 
 ### err-buttons-gesture-bad
-error: buttons.gesture.up: unknown action 'explode'; known: appExpose, brightnessDown, brightnessUp, cycleDPI, launchpad, missionControl, mute, navigateBack, navigateForward, nextTab, none, previousTab, showDesktop, spaceLeft, spaceRight, toggleScrollMode, volumeDown, volumeUp, zoomIn, zoomOut
-validate: buttons.gesture.up: unknown action 'explode'; known: appExpose, brightnessDown, brightnessUp, cycleDPI, launchpad, missionControl, mute, navigateBack, navigateForward, nextTab, none, previousTab, showDesktop, spaceLeft, spaceRight, toggleScrollMode, volumeDown, volumeUp, zoomIn, zoomOut
+error: buttons.gesture.up: unknown action “explode”
+validate: buttons.gesture.up: unknown action “explode”
 
 ### err-buttons-haptic-number
 error: buttons.top.haptic: expected text
@@ -107,8 +107,8 @@ error: buttons: expected Dictionary<String, Any>
 validate: buttons: expected Dictionary<String, Any>
 
 ### err-buttons-unknown-action
-error: buttons.top: unknown action 'explode'; known: appExpose, brightnessDown, brightnessUp, cycleDPI, launchpad, missionControl, mute, navigateBack, navigateForward, nextTab, none, previousTab, showDesktop, spaceLeft, spaceRight, toggleScrollMode, volumeDown, volumeUp, zoomIn, zoomOut
-validate: buttons.top: unknown action 'explode'; known: appExpose, brightnessDown, brightnessUp, cycleDPI, launchpad, missionControl, mute, navigateBack, navigateForward, nextTab, none, previousTab, showDesktop, spaceLeft, spaceRight, toggleScrollMode, volumeDown, volumeUp, zoomIn, zoomOut
+error: buttons.top: unknown action “explode”
+validate: buttons.top: unknown action “explode”
 
 ### err-dpi-float
 error: The given data was not valid JSON. Number 1600.5 is not representable in Swift.
@@ -249,8 +249,8 @@ error: thumbWheel.inverted: expected true or false
 validate: thumbWheel.inverted: expected true or false
 
 ### err-thumb-left-unknown
-error: thumbWheel.left: unknown action 'explode'; known: appExpose, brightnessDown, brightnessUp, cycleDPI, launchpad, missionControl, mute, navigateBack, navigateForward, nextTab, none, previousTab, showDesktop, spaceLeft, spaceRight, toggleScrollMode, volumeDown, volumeUp, zoomIn, zoomOut
-validate: thumbWheel.left: unknown action 'explode'; known: appExpose, brightnessDown, brightnessUp, cycleDPI, launchpad, missionControl, mute, navigateBack, navigateForward, nextTab, none, previousTab, showDesktop, spaceLeft, spaceRight, toggleScrollMode, volumeDown, volumeUp, zoomIn, zoomOut
+error: thumbWheel.left: unknown action “explode”
+validate: thumbWheel.left: unknown action “explode”
 
 ### err-thumb-reversed-type
 error: thumbWheel.reversed: expected true or false
