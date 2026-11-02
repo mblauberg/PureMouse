@@ -29,6 +29,8 @@ struct AppsPane: View {
                     } actions: {
                         addMenu
                     }
+                    // A form row sizes to its content and sits leading; the empty state centres in the row.
+                    .frame(maxWidth: .infinity)
                 } else {
                     ForEach(apps, id: \.self) { id in
                         AppRow(identity: identities.identity(id), summary: list.summary(id, in: model.config)) {
