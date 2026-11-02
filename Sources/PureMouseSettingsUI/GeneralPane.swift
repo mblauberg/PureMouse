@@ -5,6 +5,7 @@ import SwiftUI
 
 struct GeneralPane: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.settings) private var settings
     @State private var login: LoginStatus?  // read on appear; nil until `login-status` answers
     @State private var changingRunning = false
     @State private var showsInMenuBar = true
@@ -115,6 +116,8 @@ struct GeneralPane: View {
             deniedWatch = NotificationPermission.Watch(NotificationPermission.menuDefaults) { notificationsDenied = $0 }
         }
         .onDisappear { deniedWatch = nil }
+        // The approval row comes and goes with the answer, after the window was sized.
+        .onChange(of: openAtLogin.needsApproval) { settings?.refit() }
         .confirmationDialog("Reset all settings?", isPresented: $confirmingReset) {
             Button("Reset All Settings", role: .destructive) { model.resetAll() }
         } message: {
