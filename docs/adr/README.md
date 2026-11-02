@@ -20,7 +20,7 @@ Consequences. Keep each to about 40 lines.
 | [7](0007-log-rotation.md) | Accepted | Size-capped log rotation in the daemon |
 | [8](0008-primary-buttons-reserved.md) | Accepted | The primary buttons are never bound or diverted |
 | [9](0009-settings-helper-app.md) | Accepted | Settings is an on-demand helper app |
-| [10](0010-menu-memory-budgets.md) | Proposed | Menu memory policy: measured budgets |
+| [10](0010-menu-memory-budgets.md) | Accepted | Menu memory policy: measured budgets |
 | [11](0011-shared-logic-library.md) | Accepted, not built | A shared logic library and an `AppModel` split |
 | [12](0012-multi-device-settings-scopes.md) | Accepted, not built | Multi-device Settings: path-prefix scopes with per-leaf fallback |
 | [13](0013-silhouettes.md) | Accepted, not built | Silhouettes as bundled vector PDFs plus a Swift callout table |
