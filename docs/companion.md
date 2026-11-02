@@ -184,7 +184,7 @@ Settings opens the same way from everywhere (`SettingsLauncher`): `show-settings
 which starts it or brings the running one forward (one instance per bundle ID). A running helper
 reads the file on the doorbell; a starting one reads it at launch. Only a stamp from the last 5 s
 counts, and the reader removes it (`ShowRequest`). Every writer (the menu app, and the daemon's
-`openMenu`) and every reader goes through Kit's `SettingsRequest`, which holds `show-settings.lock`
+`openSettings`) and every reader goes through Kit's `SettingsRequest`, which holds `show-settings.lock`
 and replaces the file atomically, so a reader never sees a half-written pane or removes a request
 written after it read. The menu app no longer listens on the doorbell. A helper that LaunchServices
 still lists but whose process has exited is opened again 0.3 s later, unless a newer open has
@@ -193,20 +193,35 @@ waits up to 3 s for an open under way and quits the helper it starts. A helper t
 still, within 60 s of the stamp and with no request written since, exits at launch; any new
 request clears the stamp.
 
-Opening PureMouse.app from the Finder runs `register`, touches `show-settings` and opens the menu
-app. The menu app opens Settings when it was opened by hand rather than by launchd, when it finds a
-fresh stamp at launch (so a request made while `register` restarts the agent is not lost), when its
-icon is hidden (it then quits once Settings is open), and when it is reopened
-(`applicationShouldHandleReopen`). `open` is tried twice, since it can reach the instance
-`register` is booting out and fail (`_LSOpenURLsWithCompletionHandler` error -600); if both fail, the Settings helper is opened
-directly and reads the same stamp. The old alert is kept only when neither app can be opened. The menu app keeps a single
-instance: a second launch opens Settings and exits, and the running one keeps the icon. If the user
-has blocked the item under System Settings › Menu Bar, opening the app still reaches Settings.
+Opening PureMouse.app from the Finder runs `register`, then `openSettings`: it writes `show-settings`
+and opens the Settings helper (`Contents/Helpers/PureMouse Settings.app`) itself, which reads the
+stamp at launch. The menu app is not opened: `register` already starts its agent unless the icon is
+hidden, and with the icon hidden Settings still opens and the icon stays hidden. `open` is tried
+twice, a second apart. If the build has no helper, or it will not open, the old alert is shown
+instead; registration has already happened by then. The menu app itself opens Settings when it was
+opened by hand rather than by launchd, when it finds a fresh stamp at launch, when its icon is
+hidden (it then quits once Settings is open), and when it is reopened
+(`applicationShouldHandleReopen`). It keeps a single instance: a second launch opens Settings and
+exits, and the running one keeps the icon. If the user has blocked the item under System Settings ›
+Menu Bar, opening the app still reaches Settings.
+
+General's Startup section keeps the two axes apart, each control running one command
+(`LoginAction`, `PureMouseAppSupport`):
+
+| Control | Reads | Runs |
+|---|---|---|
+| **Open at login** switch | `login-status` (`OpenAtLogin`: on when the daemon is `enabled` or `requiresApproval`) | `login on` / `login off`, with no confirmation; it never stops anything |
+| **PureMouse is running** Start / Stop | the status file's liveness (`AppModel.daemonRunning`) | `start` / `stop`; neither changes the login setting |
+| **Show in menu bar** | the `menu-hidden` marker | `menu on` / `menu off` |
+
+The switch reads `login-status` again after each command, so it shows what is so even if the
+command failed. When `login-status` reports `requiresApproval`, an extra row says to allow
+PureMouse under System Settings › General › Login Items, with a button that opens that pane.
+`unregister` stays a CLI-only full removal.
 
 The helper runs `menu on` and `menu off` itself. It is not in the menu agent's process group, so
-hiding the icon from Settings leaves Settings open. Turning on Start at login there runs `register`,
-which restarts the menu app's agent (the icon goes and comes back), since the caller is not the menu
-app. Quit PureMouse quits the helper first, which saves its edits and cancels a select by pressing
+hiding the icon from Settings leaves Settings open. Turning on Open at login there runs `login on`,
+which restarts nothing. Quit PureMouse quits the helper first, which saves its edits and cancels a select by pressing
 still listening, then runs `stop`. Quit in the helper's own menu (⌘Q) quits only Settings.
 
 ## Footprint
