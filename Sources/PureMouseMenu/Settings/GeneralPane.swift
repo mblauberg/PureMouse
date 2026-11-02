@@ -90,7 +90,7 @@ struct GeneralPane: View {
             }
         }
         .onAppear {
-            startsAtLogin = model.locations.startsAtLogin
+            refreshStartsAtLogin()
             showsInMenuBar = app.showsStatusItem
             Task { notificationsDenied = await Notifier.isAllowed() == false }
         }
@@ -101,14 +101,19 @@ struct GeneralPane: View {
         }
     }
 
+    /// Reads the answer from `puremouse login-status`; until it arrives, or if it cannot be had, off.
+    private func refreshStartsAtLogin() {
+        Lifecycle.readLoginStatus(daemon: model.locations.daemon) { startsAtLogin = $0?.startsAtLogin ?? false }
+    }
+
     private func setStartsAtLogin(_ on: Bool) {
         if on {
-            Lifecycle.perform(.register) { startsAtLogin = model.locations.startsAtLogin }
+            Lifecycle.perform(.register) { refreshStartsAtLogin() }
         } else if Alerts.confirm("Stop PureMouse?",
                                  "The mouse returns to normal, the menu bar icon goes, and PureMouse no longer starts at login. Open PureMouse from Applications to start it again.",
                                  action: "Stop PureMouse") {
             model.flush()
-            Lifecycle.perform(.unregister) { startsAtLogin = model.locations.startsAtLogin }
+            Lifecycle.perform(.unregister) { refreshStartsAtLogin() }
         }
     }
 

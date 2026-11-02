@@ -62,9 +62,6 @@ public struct Locations: Sendable {
 
     func launchAgent(_ label: String) -> URL { launchAgents.appending(path: "\(label).plist") }
 
-    /// Start at login: the daemon's agent exists.
-    public var startsAtLogin: Bool { FileManager.default.fileExists(atPath: launchAgent(Companion.daemonLabel).path) }
-
     /// Show in menu bar: the daemon's `menu off` leaves a `menu-hidden` marker beside the status
     /// file, and `menu on` removes it (docs/companion.md, "Daemon decisions"). A development build
     /// always shows its icon.

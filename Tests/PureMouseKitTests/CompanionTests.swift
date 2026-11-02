@@ -135,4 +135,30 @@ private let bells = [
     #expect(Companion.fnv1a("") == "811c9dc5")
     #expect(Companion.fnv1a("a") == "e40c292c")
     #expect(Companion.fnv1a("foobar") == "bf9cf968")
+
+// MARK: - Login status
+
+@Test func loginStatusDecodesWhatTheCLIPrints() throws {
+    let printed = #"{"service":"launchd","daemon":"enabled","menu":"notRegistered","hidden":false}"#
+    let status = try #require(LoginStatus.parse(printed))
+    #expect(status == LoginStatus(service: "launchd", daemon: .enabled, menu: .notRegistered, hidden: false))
+    #expect(status.startsAtLogin)
+    // One line, keys sorted, and it reads back as the same value.
+    let json = try status.json()
+    #expect(json == #"{"daemon":"enabled","hidden":false,"menu":"notRegistered","service":"launchd"}"#)
+    #expect(LoginStatus.parse(json) == status)
+}
+
+@Test func loginStatusKnowsEveryJobState() throws {
+    for state in ["notRegistered", "enabled", "requiresApproval", "notFound"] {
+        let status = try #require(LoginStatus.parse(#"{"service":"x","daemon":"\#(state)","menu":"\#(state)","hidden":true}"#))
+        #expect(status.daemon.rawValue == state)
+        #expect(status.startsAtLogin == (state == "enabled"))
+    }
+}
+
+@Test func loginStatusRejectsAnythingElse() {
+    #expect(LoginStatus.parse("") == nil)
+    #expect(LoginStatus.parse("cannot register: no") == nil)
+    #expect(LoginStatus.parse(#"{"service":"launchd","daemon":"maybe","menu":"enabled","hidden":false}"#) == nil)
 }

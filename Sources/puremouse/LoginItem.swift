@@ -15,13 +15,37 @@ import PureMouseKit
 /// The menu bar app runs these commands as a child process, and launchd kills a job's process
 /// group when booting it out, so `main` moves the CLI into its own session first, and each
 /// command boots the menu agent out last.
-enum LoginItem {
+///
+/// This type is the policy (daemon before menu, the menu last, `menu off` remembered, the caller's
+/// own agent left running); the mechanism is a `LoginService`, so the policy is tested against a
+/// fake. "Starts at login" and "is running now" are separate: `login on|off` change the first,
+/// `start` and `stop` the second (docs/companion.md, "Login and lifecycle").
+struct LoginItem {
+    /// What the policy asks of the machine it runs on, replaceable in tests.
+    struct Host {
+        /// This build's executable, or why it cannot be registered.
+        var executable: () throws -> URL
+        /// The bundled menu bar app, absent from builds that do not include it.
+        var menuApp: URL?
+        /// Present after `menu off`: the menu agent stays unregistered until `menu on`.
+        var hiddenMarker: URL
+        /// Whether this process was started by the menu bar app whose executable is given.
+        var calledFromMenu: (URL) -> Bool
+        /// Copies the bundled example config unless one is there.
+        var seedConfig: () -> Void
+
+        static var live: Host {
+            Host(executable: LoginItem.liveExecutable, menuApp: LoginItem.menuApp,
+                 hiddenMarker: LoginItem.hiddenMarker,
+                 calledFromMenu: LoginItem.parentIsMenu, seedConfig: LoginItem.seedConfig)
+        }
+    }
+
+    var service: LoginService = LaunchdAgentService()
+    var host: Host = .live
+
     /// Whether this process is the binary of an installed app bundle (not a `swift build` product).
     static var inBundle: Bool { Bundle.main.bundleIdentifier != nil }
-
-    private static func plistURL(_ label: String) -> URL {
-        FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/LaunchAgents/\(label).plist")
-    }
 
     /// The bundled menu bar app, absent from builds that do not include it.
     static var menuApp: URL? {
@@ -33,19 +57,17 @@ enum LoginItem {
         app.appending(path: "Contents/MacOS/PureMouseMenu")
     }
 
-    /// Present after `menu off`: the menu agent stays unregistered until `menu on`.
     private static var hiddenMarker: URL { Companion.directory.appending(path: "menu-hidden") }
     static var menuHidden: Bool { FileManager.default.fileExists(atPath: hiddenMarker.path) }
+    private var menuHidden: Bool { FileManager.default.fileExists(atPath: host.hiddenMarker.path) }
+    /// The menu bar app, unless this build has none or `menu off` hid it.
+    private var shownMenuApp: URL? { menuHidden ? nil : host.menuApp }
 
-    /// Installs and starts the agents for this copy of the app (the menu's unless hidden), first
-    /// giving the user a config to edit if they have none. Agents already running (an older or
-    /// moved copy) are stopped first. Returns a sentence describing the outcome.
-    static func register() throws -> String {
-        let (label, executable) = try identity()
-        seedConfig()
-        let restarting = try stop(label)
-        try install(label, [
-            "Label": label,
+    // MARK: Job definitions
+
+    static func daemonDefinition(executable: URL) -> [String: Any] {
+        [
+            "Label": Job.daemon.label,
             "ProgramArguments": [executable.path, "run"],
             "RunAtLoad": true,
             // Restarted within seconds if it exits, including when it quits to pick up a new
@@ -53,14 +75,39 @@ enum LoginItem {
             "KeepAlive": true,
             "ThrottleInterval": 3,
             "ProcessType": "Interactive",
-        ])
+        ]
+    }
+
+    static func menuDefinition(app: URL) -> [String: Any] {
+        [
+            "Label": Job.menu.label,
+            "ProgramArguments": [menuExecutable(app).path],
+            "RunAtLoad": true,
+            // Relaunched after a crash, not after Quit.
+            "KeepAlive": ["SuccessfulExit": false],
+            "ProcessType": "Interactive",
+        ]
+    }
+
+    // MARK: Commands
+
+    /// Installs and starts the agents for this copy of the app (the menu's unless hidden), first
+    /// giving the user a config to edit if they have none. Agents already running (an older or
+    /// moved copy) are stopped first. Returns a sentence describing the outcome.
+    func register() throws -> String {
+        let executable = try host.executable()
+        host.seedConfig()
+        let definition = Self.daemonDefinition(executable: executable)
+        let restarting = try service.stop(.daemon)
+        try service.register(.daemon, definition)
+        try service.load(.daemon, definition)
         var outcome = restarting ? "PureMouse restarted." : "PureMouse is running and will start at login."
-        if menuApp != nil {
+        if let app = host.menuApp {
             if menuHidden {
-                try removeAgent(Companion.menuLabel)
+                try remove(.menu)
                 outcome += " The menu bar icon is hidden (`puremouse menu on` shows it)."
             } else {
-                try installMenu()
+                try installMenu(app)
             }
         }
         return outcome
@@ -68,36 +115,82 @@ enum LoginItem {
 
     /// Stops both agents (launchd sends the daemon SIGTERM, so it restores the mouse) and removes
     /// them from login items.
-    static func unregister() throws {
-        let (label, _) = try identity()
-        try removeAgent(label)
-        try removeAgent(Companion.menuLabel)
+    func unregister() throws {
+        _ = try host.executable()
+        try remove(.daemon)
+        try remove(.menu)
     }
 
     /// Quit PureMouse: stops both agents but keeps them registered, so both start again at login.
-    static func stopAll() throws -> String {
-        let (label, _) = try identity()
-        let wasRunning = try stop(label)
-        try stop(Companion.menuLabel)
+    func stopAll() throws -> String {
+        _ = try host.executable()
+        let wasRunning = try service.stop(.daemon)
+        try service.stop(.menu)
         return wasRunning ? "PureMouse stopped; it starts again at login." : "PureMouse was not running."
+    }
+
+    /// Makes both agents (the menu's unless hidden) start at login, without starting or
+    /// restarting anything now.
+    func loginOn() throws -> String {
+        let executable = try host.executable()
+        host.seedConfig()
+        try service.register(.daemon, Self.daemonDefinition(executable: executable))
+        if let app = shownMenuApp {
+            try service.register(.menu, Self.menuDefinition(app: app))
+        }
+        return "PureMouse will start at login."
+    }
+
+    /// Stops both agents starting at login, without stopping what is running: a running agent
+    /// stays loaded until logout or `stop`.
+    func loginOff() throws -> String {
+        _ = try host.executable()
+        let running = service.isLoaded(.daemon)
+        try service.unregister(.daemon)
+        try service.unregister(.menu)
+        return running
+            ? "PureMouse will not start at login; it keeps running until you quit it (`puremouse stop`)."
+            : "PureMouse will not start at login."
+    }
+
+    /// Starts the agents that are not running (the menu's unless hidden), without changing whether
+    /// they start at login. Running ones are left alone.
+    func start() throws -> String {
+        let executable = try host.executable()
+        var started = false
+        if !service.isLoaded(.daemon) {
+            try service.load(.daemon, Self.daemonDefinition(executable: executable))
+            started = true
+        }
+        if let app = shownMenuApp, !service.isLoaded(.menu) {
+            try service.load(.menu, Self.menuDefinition(app: app))
+            started = true
+        }
+        return started ? "PureMouse started." : "PureMouse is already running."
+    }
+
+    /// What `puremouse login-status` prints.
+    func loginStatus() -> LoginStatus {
+        LoginStatus(service: service.name, daemon: service.status(.daemon),
+                    menu: host.menuApp == nil ? .notFound : service.status(.menu), hidden: menuHidden)
     }
 
     /// Shows or hides the menu bar icon by registering or removing the menu agent only. Hiding is
     /// remembered (`hiddenMarker`) so a later `register` keeps it hidden.
-    static func showMenu(_ show: Bool) throws -> String {
-        _ = try identity()
+    func showMenu(_ show: Bool) throws -> String {
+        _ = try host.executable()
         let files = FileManager.default
         if show {
-            guard menuApp != nil else { throw Failure.noMenuApp }
+            guard let app = host.menuApp else { throw Failure.noMenuApp }
             do {
-                try files.removeItem(at: hiddenMarker)
+                try files.removeItem(at: host.hiddenMarker)
             } catch CocoaError.fileNoSuchFile {}
-            try installMenu()
+            try installMenu(app)
             return "The menu bar icon is shown."
         }
-        try files.createDirectory(at: hiddenMarker.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try Data().write(to: hiddenMarker)
-        try removeAgent(Companion.menuLabel)
+        try files.createDirectory(at: host.hiddenMarker.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data().write(to: host.hiddenMarker)
+        try remove(.menu)
         return "The menu bar icon is hidden; `puremouse menu on` shows it again."
     }
 
@@ -126,97 +219,43 @@ enum LoginItem {
         return !menuHidden
     }
 
-    private static func identity() throws -> (label: String, executable: URL) {
-        guard let label = Bundle.main.bundleIdentifier, let executable = Bundle.main.executableURL else {
+    /// Registers and starts the menu agent. When the menu bar app itself asked (its process is our
+    /// parent) and its agent is already loaded, the agent is left running: restarting it would
+    /// quit the app that is waiting for this command.
+    private func installMenu(_ app: URL) throws {
+        let definition = Self.menuDefinition(app: app)
+        if host.calledFromMenu(app), service.isLoaded(.menu) {
+            try service.register(.menu, definition)
+            return
+        }
+        try service.stop(.menu)
+        try service.register(.menu, definition)
+        try service.load(.menu, definition)
+    }
+
+    /// Removes the job from login, then stops it: the menu bar app may be the caller, and stopping
+    /// it last means nothing is left undone if launchd takes this process with it.
+    private func remove(_ job: Job) throws {
+        try service.unregister(job)
+        try service.stop(job)
+    }
+
+    private static func liveExecutable() throws -> URL {
+        guard Bundle.main.bundleIdentifier != nil, let executable = Bundle.main.executableURL else {
             throw Failure.notInBundle
         }
         // Quarantined apps opened where they were unzipped run from a randomised read-only copy;
         // an agent pointing there would vanish.
         guard !executable.path.contains("/AppTranslocation/") else { throw Failure.translocated }
-        return (label, executable)
+        return executable
     }
 
-    /// Writes and boots the menu agent. When the menu bar app itself asked (its process is our
-    /// parent) and its agent is already loaded, the agent is left running: restarting it would
-    /// quit the app that is waiting for this command.
-    private static func installMenu() throws {
-        guard let app = menuApp else { return }
-        let label = Companion.menuLabel
-        let agent: [String: Any] = [
-            "Label": label,
-            "ProgramArguments": [menuExecutable(app).path],
-            "RunAtLoad": true,
-            // Relaunched after a crash, not after Quit.
-            "KeepAlive": ["SuccessfulExit": false],
-            "ProcessType": "Interactive",
-        ]
-        if calledFromMenu(app), launchctl("print", target(label)).status == 0 {
-            try write(label, agent)
-            return
-        }
-        try stop(label)
-        try install(label, agent)
-    }
-
-    private static func calledFromMenu(_ app: URL) -> Bool {
+    private static func parentIsMenu(_ app: URL) -> Bool {
         var buffer = [UInt8](repeating: 0, count: 4 * Int(MAXPATHLEN))
         let length = Int(proc_pidpath(getppid(), &buffer, UInt32(buffer.count)))
         guard length > 0 else { return false }
         let parent = URL(fileURLWithPath: String(decoding: buffer.prefix(length), as: UTF8.self)).resolvingSymlinksInPath()
         return parent == menuExecutable(app).resolvingSymlinksInPath()
-    }
-
-    private static func write(_ label: String, _ agent: [String: Any]) throws {
-        let plist = plistURL(label)
-        let files = FileManager.default
-        try files.createDirectory(at: plist.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try PropertyListSerialization.data(fromPropertyList: agent, format: .xml, options: 0).write(to: plist)
-    }
-
-    private static func install(_ label: String, _ agent: [String: Any]) throws {
-        try write(label, agent)
-        let (status, output) = launchctl("bootstrap", "gui/\(getuid())", plistURL(label).path)
-        guard status == 0 else { throw Failure.bootstrap(output) }
-    }
-
-    /// Removes the agent's plist, then stops it: the menu bar app may be the caller, and stopping
-    /// it last means nothing is left undone if launchd takes this process with it.
-    private static func removeAgent(_ label: String) throws {
-        do {
-            try FileManager.default.removeItem(at: plistURL(label))
-        } catch CocoaError.fileNoSuchFile {
-            // Never registered, or already removed.
-        }
-        try stop(label)
-    }
-
-    private static func target(_ label: String) -> String { "gui/\(getuid())/\(label)" }
-
-    /// Unloads the agent if it is loaded, waiting up to five seconds for the old instance to finish
-    /// restoring the mouse. Returns whether it was loaded.
-    @discardableResult
-    private static func stop(_ label: String) throws -> Bool {
-        let job = target(label)
-        guard launchctl("print", job).status == 0 else { return false }
-        let (_, output) = launchctl("bootout", job)
-        for _ in 0..<50 {
-            if launchctl("print", job).status != 0 { return true }
-            usleep(100_000)
-        }
-        throw Failure.stillRunning(target: job, output: output)
-    }
-
-    private static func launchctl(_ arguments: String...) -> (status: Int32, output: String) {
-        let process = Process()
-        let pipe = Pipe()
-        process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
-        process.arguments = arguments
-        process.standardOutput = pipe
-        process.standardError = pipe
-        guard (try? process.run()) != nil else { return (-1, "cannot run launchctl") }
-        let output = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-        process.waitUntilExit()
-        return (process.terminationStatus, output.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
     /// Copies the bundled example to `Config.defaultURL` unless a config is already there.
@@ -238,17 +277,13 @@ enum LoginItem {
     }
 
     enum Failure: Error, CustomStringConvertible {
-        case notInBundle, translocated, noMenuApp, bootstrap(String), stillRunning(target: String, output: String)
+        case notInBundle, translocated, noMenuApp
 
         var description: String {
             switch self {
             case .notInBundle: "only an installed PureMouse.app can register itself to start at login"
             case .translocated: "move PureMouse to the Applications folder, then open it again"
             case .noMenuApp: "this build of PureMouse has no menu bar app"
-            case .stillRunning(let target, let output):
-                "the running PureMouse did not stop (\(output)); try `launchctl bootout \(target)`"
-            case .bootstrap(let output):
-                "launchd would not start PureMouse (\(output)); check it is allowed under System Settings › General › Login Items"
             }
         }
     }

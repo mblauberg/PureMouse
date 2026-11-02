@@ -22,7 +22,10 @@ configured. They talk through two small JSON files and a Darwin notification aft
 neither polls. [companion.md](companion.md) is the contract.
 
 launchd runs both from login agents the daemon writes itself, so a replaced app keeps working
-without a Developer ID.
+without a Developer ID. `LoginItem` decides what to start, stop or register and in what order; a
+`LoginService` (launch agents today) does it, which keeps the policy testable and lets another
+mechanism replace launchd ([ADR 0018](adr/0018-login-service-seam.md)). Starting at login and
+running now are separate: `login on|off` change the first, `start` and `stop` the second.
 
 ## Keeping the mouse in step
 

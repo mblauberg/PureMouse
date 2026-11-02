@@ -285,6 +285,15 @@ one. This file covers how to work on it safely.
   out its agent kills its process group: `main` calls `setsid()` first, every command boots the
   menu agent out last (after removing its plist), and `register`/`menu on` leave an already
   loaded menu agent running when the menu app itself is the caller.
+- `LoginItem` is the policy (order above, `menu-hidden`, the caller's own agent) and talks to a
+  `LoginService` (`LoginService.swift`; `LaunchdAgentService` is the launch agents, and its `stop`
+  holds the wait for the old instance to finish restoring the mouse). `LoginItemTests` drives the
+  policy against a fake. "Starts at login" and "running now" are separate axes:
+  `login on|off` register or unregister without loading or booting out, `start` loads what is not
+  running without registering it (an unregistered job runs from a plist under the companion
+  directory that launchd does not load at login), `stop` boots out and keeps the registration
+  (table in `docs/companion.md`). `puremouse login-status` prints `LoginStatus` (Kit) as JSON, and
+  the menu reads "starts at login" from it, not from a plist file.
 - Builds are signed by `scripts/sign-bundle.sh`: inside out from `scripts/lib.zsh`'s `components`
   (a new nested bundle is one more entry), no `--deep`, always the hardened runtime, with the
   identity `signing_identity` picks (the order is in `docs/development.md`, Signing). The

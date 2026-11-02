@@ -130,15 +130,38 @@ All optional; nil members are left out of the JSON.
 
 ## Login and lifecycle
 
-The daemon CLI owns every launchd change (`LoginItem.swift`). The menu app runs these commands
-through the daemon binary at `Bundle.main.bundleURL/../../../MacOS/puremouse`:
+The daemon CLI owns every launchd change (`LoginItem.swift` holds the policy; a `LoginService`,
+`LaunchdAgentService` today, holds the mechanism, so the policy is tested against a fake). The menu
+app runs these commands through the daemon binary at `Bundle.main.bundleURL/../../../MacOS/puremouse`.
+
+"Starts at login" and "is running now" are separate, and each command changes only the axis the
+table gives:
+
+| Command | Starts at login | Running now |
+|---|---|---|
+| `puremouse login on` | on | unchanged |
+| `puremouse login off` | off | unchanged (a running job stays loaded until logout or `stop`) |
+| `puremouse start` | unchanged | on (daemon, and menu unless hidden) |
+| `puremouse stop` | unchanged | off |
+| `puremouse register` / `unregister` | on / off | restarted / off (as today) |
 
 | Command | Effect |
 |---|---|
 | `puremouse register` | writes and boots both agents (daemon `KeepAlive`; menu `RunAtLoad`, `KeepAlive: {SuccessfulExit: false}`), unless the menu is hidden. Prints the outcome |
 | `puremouse unregister` | boots out both agents and removes both plists |
-| `puremouse stop` | boots out both agents but keeps their plists: **Quit PureMouse**. Both start again at login |
+| `puremouse login on` / `off` | writes both plists (the menu's unless hidden) without booting anything, or removes both without booting anything out. A running agent is left as it is |
+| `puremouse start` | boots the agents that are not running (the menu's unless hidden) and leaves the rest alone. An agent that is not registered runs from a plist in `launchd/` under `Companion.directory`, which launchd does not load at the next login |
+| `puremouse stop` | boots out both agents but keeps their plists: **Quit PureMouse**. Both start again at login if registered |
 | `puremouse menu on` / `off` | writes and boots, or boots out and removes, the menu agent only: **Show in menu bar** / **Hide Menu Bar Icon** |
+| `puremouse login-status` | prints one JSON object and changes nothing: `{"daemon":"enabled","hidden":false,"menu":"notRegistered","service":"launchd"}` |
+
+`login-status` fields: `service` names the mechanism (`launchd`); `daemon` and `menu` are the job's
+state: `notRegistered` (does not start at login), `enabled` (does), `requiresApproval` (registered,
+but the user must approve it in System Settings › Login Items; no mechanism reports it yet) or
+`notFound` (the build has no such job, e.g. no menu bar app); `hidden` is whether `menu off` is in
+force. The decoder is `LoginStatus` in `PureMouseKit`. It says nothing about what is running: a
+job started with `start` while unregistered reads `notRegistered`. The menu app reads its "starts
+at login" answer from it rather than looking for a plist file.
 
 Opening PureMouse.app from the Finder runs `register`, touches `show-settings` in
 `Companion.directory` and opens the menu app, which shows Settings; with the icon hidden it quits
