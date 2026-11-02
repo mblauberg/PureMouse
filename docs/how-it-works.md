@@ -71,12 +71,14 @@ Sources/PureMouseKit/   shared by both apps: config model and decoder, status/co
 Sources/puremouse/      the daemon: applying config, actions, gestures, smooth scrolling, one
                         session per mouse, discovery, reconnects, wake, reload, permissions
 Sources/PureMouseAppSupport/
-                        the menu side's logic, without AppKit or SwiftUI: config editing and
-                        saving, where files live, status words, update check, battery alerts
-Sources/PureMouseMenu/  the menu bar app (AppKit status item and menu, SwiftUI Settings panes)
+                        the menu side's logic, without AppKit or SwiftUI: the daemon link,
+                        config editing and saving, select by pressing, where files live, status
+                        words, update check, battery alerts
+Sources/PureMouseMenu/  the menu bar app (AppKit status item and menu, SwiftUI Settings panes);
+                        the menu's rows come from `MenuPlan`, which `StatusMenu` renders
 Sources/HIDPPTesting/   test support only: in-memory transport and stateful HID++ mouse from probe dumps
 Tests/                  request handling and device behaviour against fakes, framing and event parsing,
-                        config, gestures, scroll maths, config editing
+                        config, gestures, scroll maths, config editing, the menu's rows
 scripts/                build, install, uninstall, package, signing identity, icon
 assets/                 app icon (Icon Composer source, compiled icon, README images), menu bar glyph
 ```
