@@ -1,5 +1,6 @@
 import AppKit
 import PureMouseAppSupport
+import PureMouseKit
 import SwiftUI
 
 /// One choice in the action picker.
@@ -390,9 +391,13 @@ struct ActionButton: View {
     private var label: String { inherited?.effective ?? action.label }
 
     /// The haptic waveforms, unless the mouse is known to have no motor; a bound one still shows.
-    private var offersHaptics: Bool {
+    private var offersHaptics: Bool { Self.offersHaptics(for: action, devices: model.capabilityDevices) }
+
+    /// Whether the picker lists the haptic waveforms for `devices` (`AppModel.capabilityDevices`):
+    /// unless one is known to lack the motor, or when `action` is a waveform already bound.
+    static func offersHaptics(for action: ButtonAction, devices: [Status.Device]) -> Bool {
         let bound = if case .haptic = action { true } else { false }
-        return ControlAvailability.of([\.haptics], devices: model.capabilityDevices, configured: bound).isShown
+        return ControlAvailability.of([\.haptics], devices: devices, configured: bound).isShown
     }
 
     var body: some View {

@@ -24,3 +24,21 @@ import Testing
     #expect(ButtonAction.haptic("happyAlert").label == "Haptic: Happy Alert")
     #expect(ActionCatalog.hapticGroup.contains("MX Master 4"))
 }
+
+// MARK: Haptic gating
+
+private func mouse(haptics: Bool?) -> Status.Device {
+    Status.Device(id: "r1:1", name: "MX", connection: .receiver, online: true, battery: nil, dpi: nil, dpiSteps: [],
+                  wheelMode: nil, controls: [], capabilities: .init(haptics: haptics))
+}
+
+@Test func theHapticWaveformsShowUnlessTheMouseIsKnownToLackAMotor() {
+    let unbound = ButtonAction.named("mute")
+    // Known to lack it: hidden. Known to have it, or unknown, or no mouse: shown.
+    #expect(!ActionButton.offersHaptics(for: unbound, devices: [mouse(haptics: false)]))
+    #expect(ActionButton.offersHaptics(for: unbound, devices: [mouse(haptics: true)]))
+    #expect(ActionButton.offersHaptics(for: unbound, devices: [mouse(haptics: nil)]))
+    #expect(ActionButton.offersHaptics(for: unbound, devices: []))
+    // A waveform already bound keeps them listed, so the choice can be seen and changed.
+    #expect(ActionButton.offersHaptics(for: .haptic("happyAlert"), devices: [mouse(haptics: false)]))
+}
