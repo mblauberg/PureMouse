@@ -1,0 +1,50 @@
+name: Device support
+description: Ask for a Logitech mouse that PureMouse does not fully support yet.
+type: Feature
+body:
+  - type: markdown
+    attributes:
+      value: |
+        PureMouse supports a mouse by what it reports over HID++, so the `puremouse probe` output below is what makes support possible. [Privacy](https://github.com/mblauberg/PureMouse/blob/main/docs/privacy.md) says what it contains.
+  - type: input
+    id: model
+    attributes:
+      label: Mouse model
+      placeholder: "Signature Plus M750"
+  - type: dropdown
+    id: connection
+    attributes:
+      label: Connection
+      multiple: true
+      options:
+        - Bluetooth
+        - Logi Bolt receiver
+        - Unifying receiver
+  - type: input
+    id: versions
+    attributes:
+      label: PureMouse and macOS versions
+      placeholder: "PureMouse 0.3.0, macOS 26.1"
+    validations:
+      required: true
+  - type: textarea
+    id: probe
+    attributes:
+      label: "`puremouse probe` output"
+      description: |
+        Move the mouse so it is awake, then run this and paste everything it prints:
+        `/Applications/PureMouse.app/Contents/MacOS/puremouse probe`
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expect
+      description: Which buttons, wheels or settings should work, and what happens now.
+  - type: checkboxes
+    id: options-plus
+    attributes:
+      label: Logi Options+
+      options:
+        - label: Logi Options+ was quit while I ran the probe.

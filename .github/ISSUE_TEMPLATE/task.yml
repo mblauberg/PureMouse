@@ -1,0 +1,43 @@
+name: Task
+description: "For maintainers: one change with its own acceptance criteria."
+type: Task
+body:
+  - type: markdown
+    attributes:
+      value: For maintainers. To report a problem or ask for a mouse, use the Bug or Device support form.
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance
+  - type: textarea
+    id: must-not-change
+    attributes:
+      label: Must not change
+  - type: textarea
+    id: verify
+    attributes:
+      label: Verify
+  - type: textarea
+    id: design-notes
+    attributes:
+      label: Design notes
+  - type: textarea
+    id: durable-home
+    attributes:
+      label: Durable home
+  - type: textarea
+    id: risk
+    attributes:
+      label: Risk

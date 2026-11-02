@@ -1,0 +1,10 @@
+changelog:
+  categories:
+    - title: Fixes
+      labels: [bug]
+    - title: Mice
+      labels: [device]
+    - title: Documentation
+      labels: [documentation]
+    - title: Other changes
+      labels: ["*"]
