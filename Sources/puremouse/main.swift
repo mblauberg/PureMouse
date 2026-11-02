@@ -48,8 +48,8 @@ case nil, "run":
 case "permissions":
     // The exit status is the allowed set's raw value; the daemon polls it (Daemon.pollPermissions).
     let allowed = Permissions.current
-    print("Accessibility: \(allowed.contains(.accessibility) ? "allowed" : "not allowed")")
-    print("Input Monitoring: \(allowed.contains(.inputMonitoring) ? "allowed" : "not allowed")")
+    print("Accessibility: \(allowed.contains(.accessibility) ? "Allowed" : "Not allowed")")
+    print("Input Monitoring: \(allowed.contains(.inputMonitoring) ? "Allowed" : "Not allowed")")
     exit(allowed.rawValue)
 case "action" where arguments.count == 2:
     // Fires one action as a button would, to check it still works (e.g. after a macOS upgrade).
