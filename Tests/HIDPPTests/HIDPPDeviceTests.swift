@@ -137,4 +137,36 @@ struct HIDPPDeviceTests {
             device.close()
         }
     }
+
+    @Test func deviceInfoGivesTheUnitAndModelIDs() async throws {
+        let reply: [UInt8] = [4, 0x0A, 0x1B, 0x2C, 0x3D, 0, 6, 0xB0, 0x34, 0x40, 0x91, 0, 0, 0, 0, 0]
+        #expect(DeviceIdentity.parseInfo(reply)
+                    == .init(unitID: [0x0A, 0x1B, 0x2C, 0x3D], modelID: [0xB0, 0x34, 0x40, 0x91, 0, 0]))
+        #expect(DeviceIdentity.parseInfo(Array(reply.prefix(12))) == nil)
+        let fake = FakeDevice.mxMaster3S
+        let device = fake.endpoint()
+        defer { device.close() }
+        #expect(try await DeviceIdentity.info(device).modelID == [0xB0, 0x34, 0x40, 0x91, 0, 0])
+    }
+
+    @Test func deviceTypeNamesTheKind() async throws {
+        let fake = FakeDevice(features: [1: 0x0005])
+        let device = fake.endpoint()
+        defer { device.close() }
+        #expect(try await DeviceName.kind(device) == .mouse)
+        #expect(DeviceName.Kind.mouse.name == "mouse" && DeviceName.Kind.trackball.rawValue == 5)
+        fake.kind = 5
+        #expect(try await DeviceName.kind(device) == .trackball)
+        fake.kind = 0x40
+        #expect(try await DeviceName.kind(device) == nil)
+        #expect(fake.requests(feature: 0x0005, function: 2).count == 3)
+    }
+
+    @Test func aProbeHeaderSetsTheProductIDAndTheM750StartsNative() {
+        let m750 = FakeDevice.m750
+        #expect(m750.transport.productID == 0xB02C)
+        #expect(m750.controls.allSatisfy { !$0.diverted && !$0.rawXY })
+        #expect(m750.control(0x00FD) != nil)
+        #expect(FakeDevice.mxMaster3S.transport.productID == 0xB034)
+    }
 }

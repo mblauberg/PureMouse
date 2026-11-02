@@ -35,6 +35,8 @@ public final class FakeDevice {
     /// A failure remains until removed; useful for retry and offline tests.
     public var failures: [Call: Failure] = [:]
     public var playedWaveforms: [UInt8] = []
+    /// getDeviceType's answer (0x0005 function 2): 3 is a mouse.
+    public var kind: UInt8 = 3
 
     public init(name: String = "Fake mouse", features: [UInt8: UInt16] = [:]) {
         self.name = name
@@ -77,6 +79,12 @@ public final class FakeDevice {
 
     public func control(_ cid: UInt16) -> Control? { controls.first { $0.cid == cid } }
 
+    /// Every control back to native reporting, as a mouse comes up: for a dump taken while
+    /// another program had diverted some.
+    public func resetReporting() {
+        for i in controls.indices { controls[i].reporting[2] = 0 }
+    }
+
     /// Sets the reporting flags `cid` reads back with, as left by another program or process.
     public func setReporting(_ cid: UInt16, diverted: Bool = false, persistent: Bool = false, rawXY: Bool = false) {
         guard let i = controls.firstIndex(where: { $0.cid == cid }) else { preconditionFailure("no control \(cid)") }
@@ -113,6 +121,7 @@ public final class FakeDevice {
             return reply([UInt8(id >> 8), UInt8(id & 0xFF)])
         case (0x0005, 0): return reply([UInt8(name.utf8.count)])
         case (0x0005, 1): return reply(Array(name.utf8.dropFirst(Int(p.first ?? 0)).prefix(16)))
+        case (0x0005, 2): return reply([kind])
         case (0x1B04, 0): return reply([UInt8(controls.count)])
         case (0x1B04, 1):
             guard let i = p.first, Int(i) < controls.count else { return FakeTransport.error(to: r, code: 2) }
@@ -149,6 +158,10 @@ public final class FakeDevice {
     public static func probe(_ text: String) -> FakeDevice {
         let fake = FakeDevice()
         for line in text.components(separatedBy: .newlines).map({ $0.trimmingCharacters(in: .whitespaces) }) {
+            if line.hasPrefix("== "), let pid = line.split(separator: " ").first(where: { $0.hasPrefix("pid=0x") }),
+               let id = Int(pid.dropFirst(6), radix: 16) {
+                fake.transport.productID = id
+            }
             if line.hasPrefix("name: ") { fake.name = String(line.dropFirst(6)) }
             if line.hasPrefix("device product IDs: ") {
                 let pairs = line.dropFirst(20).split(separator: " ").map { $0.split(separator: "=") }
