@@ -16,7 +16,7 @@ extension Notice {
         switch self {
         case .configError: "The config file isn't valid."
         case .writeError: "That change wasn't saved."
-        case .statusTooNew: "Update PureMouse"
+        case .statusTooNew: "PureMouse needs an update."
         case .off: "PureMouse is off."
         case .paused: "PureMouse is paused."
         case .logiOptions: "Logi Options+ is running."
@@ -146,7 +146,7 @@ struct NoticeActions: View {
         case .paused:
             Button("Resume") { model.setPaused(false) }
         case .logiOptions:
-            Button("How to Remove") { NSWorkspace.shared.open(Links.logiOptions) }
+            Button("Learn More") { NSWorkspace.shared.open(Links.logiOptions) }
         case .accessibility:
             Button("Open System Settings") { NSWorkspace.shared.open(PrivacyPane.accessibility.url) }
                 .accessibilityLabel("Allow Accessibility in System Settings")

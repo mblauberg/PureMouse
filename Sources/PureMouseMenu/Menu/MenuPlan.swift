@@ -150,7 +150,7 @@ enum MenuPlan {
     /// The warning rows; with PureMouse off, only a status too new to read.
     static func attentionRows(_ state: MenuState) -> [MenuRow] {
         var rows: [MenuRow] = []
-        if state.statusTooNew { rows.append(attention("Update PureMouse", .openReleases)) }
+        if state.statusTooNew { rows.append(attention("View Latest Release", .openReleases)) }
         guard state.daemonRunning else { return rows }
         if state.accessibilityMissing {
             rows.append(attention("Allow Accessibility Access", .openPrivacy(.accessibility)))

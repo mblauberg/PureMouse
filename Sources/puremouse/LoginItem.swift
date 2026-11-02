@@ -337,7 +337,7 @@ struct LoginItem {
         title: "PureMouse is running.",
         body: """
             It will open at login. macOS will ask you to allow Accessibility and Input Monitoring. \
-            Choose Allow for each, or turn them on in System Settings > Privacy & Security.
+            Choose Allow for each, or turn them on in System Settings › Privacy & Security.
             """)
 
     /// What a Finder launch that threw says: a `Failure` has its own words; anything else (launchd's

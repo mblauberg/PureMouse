@@ -92,9 +92,10 @@ Each level has one mechanism, and each label says what it reveals.
 - **Symbols.** None by default. macOS 27 shows menu icons only for key items: the device header is
   the one key item, set with `preferredImageVisibility = .visible` on macOS 27. Within a group, all
   items have a symbol or none do; the menu reads correctly on macOS 14–27 with or without them.
-- **⌥ alternates** use one modifier and are never the only way to do something: the detail line is
-  in General › Status, Show Log in Finder in General › Advanced…, and Hide Menu Bar Icon is
-  General › Show in menu bar. The menu has no Reload Config: the config applies on save.
+- **⌥ alternates** use one modifier and are never the only way to do something: the detail line's
+  facts are in Settings (pointer speed on Pointer, wheel mode on Scrolling, version in About), Show
+  Log in Finder is in General › Advanced…, and Hide Menu Bar Icon is General › Show in menu bar.
+  The menu has no Reload Config: the config applies on save.
 
 ## Permissions and first run
 
