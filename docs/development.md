@@ -45,6 +45,61 @@ cover pure logic. Anything that touches the mouse needs a live check:
 Two daemons fight over the mouse, so stop the installed one before running a dev build. A build run
 from a terminal uses the terminal's permissions, not the app's.
 
+## Footprint rig
+
+`scripts/measure-menu.sh` reproduces the menu bar app's memory footprint and says pass or fail
+against `scripts/measure-menu.budgets`. Run it on a spare Mac that is logged in to a desktop and
+that nobody is using, not on the Mac whose PureMouse you rely on: it opens menus and windows.
+
+```sh
+./scripts/measure-menu.sh                 # builds, runs 5 times, prints a table, writes a TSV
+./scripts/measure-menu.sh --runs 3 --no-build
+./scripts/measure-menu.sh --blocks        # also: 30 menu opens under MallocStackLogging, heap and malloc_history
+./scripts/measure-menu.sh --env MallocSpaceEfficient=1   # the same, with a variable in the menu's environment
+./scripts/measure-menu.sh --write-budgets # replace the budgets with the medians plus 2 MB, rounded up
+```
+
+A Mac with only the command line tools cannot build the menu: the macOS 27 SDK expands SwiftUI's
+`@State` with a plugin that ships with Xcode only. Copy Xcode's `libSwiftUIMacros.dylib`
+(`Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib/swift/host/plugins/`,
+the same Swift release as the Mac's own) into a directory of its own there and pass it with
+`--plugin-path DIR` (or `PUREMOUSE_RIG_PLUGIN_PATH`).
+
+It exits 0 when every budget holds, 1 when a median exceeds its budget (the line names the
+scenario and both numbers) and 2 when the rig itself fails. Samples are in
+`.build/rig/results/measure-menu-<time>.tsv` (`--tsv` picks another path).
+
+The rig is isolated from the installed app. It builds the release menu with `-DDEVHOOKS` into
+`.build/rig`, wraps it in a bundle of its own (`io.github.mblauberg.puremouse.menu.rig`) and starts
+it against a throwaway companion directory (`PUREMOUSE_COMPANION_DIR`, `PUREMOUSE_CONFIG` and
+`PUREMOUSE_DAEMON` set), with a sleeping process standing in for the daemon and a one-mouse
+`status.json`. A companion directory also renames the doorbells (a short hash of it is appended,
+see `docs/companion.md`), so nothing the rig rings reaches the installed app. It only reads the
+installed agents' pids with `launchctl print`, before and after, and stops with status 2 if either
+changed.
+
+`DevHooks.swift` compiles into a release build only with `-DDEVHOOKS`
+(`nm .build/release/PureMouseMenu | grep -c DevHooks` prints 0 without it; with it, check
+`strings` for `puremouse.rig`). The rig's part, `Rig`, acts only when `PUREMOUSE_COMPANION_DIR` is
+set. The script writes `rig-command` ("number verb") in that directory and rings the rig doorbell;
+the menu answers with the number in `rig-ack` once done. Verbs: `menu` (open the menu, close it
+again), `settings` and `settings-close` (the Settings window), `relief` (`malloc_zone_pressure_relief`).
+
+Scenarios, each a median of the runs, in MB of physical footprint (`footprint`):
+
+| Scenario | What it measures |
+|---|---|
+| `fresh` | a new menu app, three seconds after launch |
+| `open-1`, `open-3`, `open-10` | after that many opens of the menu |
+| `doorbells-200` | a new menu app after 200 status doorbells, each with a changed `status.json` |
+| `settings-open`, `settings-closed` | Settings in the menu app's own process, and after it closes (a reading after `malloc_zone_pressure_relief`); informational, no budget |
+| `helper-open`, `helper-closed`, `helper-cold-start` | the Settings helper: the menu app's footprint while it is open and after, and the time (ms) from the open request to the helper's first visible window. They read "helper not built" until `PureMouseSettings` is in `Package.swift`. The helper writes a `settings-visible` file in the companion directory when its first window is visible; the cold start is that file's modification time minus the request. |
+
+`scripts/measure-menu.budgets` holds `scenario<TAB>MB` limits; a scenario with no line has none.
+Set them from a run of the build you accept (median plus 2 MB, rounded up) and lower them when a
+change earns it. Only a Mac with a desktop session can run the rig, so CI does not; repeat it on the
+spare Mac after each macOS release (and see `docs/companion.md`, "Footprint", for the figures).
+
 ## Signing
 
 `scripts/sign-bundle.sh` signs every build, the menu app first and then PureMouse.app, each with

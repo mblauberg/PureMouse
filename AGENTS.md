@@ -37,7 +37,10 @@ one. This file covers how to work on it safely.
   since its glass shows whatever is behind it. A window capture (`screencapture -l`) leaves out
   that blur, so the README's menu shots take the shape and shadow from one and the body from a
   screen capture of the same rect. Check its footprint with `footprint <pid>` before and after
-  opening Settings.
+  opening Settings, or reproduce the published figures with `scripts/measure-menu.sh` on a spare
+  Mac (never the one whose PureMouse you use; `docs/development.md`, "Footprint rig"). Its release
+  build carries `DevHooks` only with `-DDEVHOOKS`, and acts only when `PUREMOUSE_COMPANION_DIR` is
+  set, which also gives the doorbells names of their own (`Companion.doorbell`).
 - The user's live config is `~/.config/puremouse/config.json`; keep `config.example.json` in step
   with it (its test checks shape, not values). Config changes apply on save (`ConfigWatcher`
   watches the file and its directory, reloading when the bytes change) or with

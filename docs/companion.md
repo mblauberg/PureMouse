@@ -26,6 +26,12 @@ atomically (`Companion.write`, mode 0600) and are followed by a Darwin notificat
 
 The Swift types in `Sources/PureMouseKit/Companion.swift` are the schema.
 
+The table gives the doorbell names as shipped. When `PUREMOUSE_COMPANION_DIR` is set (tests,
+development, the footprint rig), both sides append `.` and an 8-digit hex FNV-1a hash of that
+string to all three doorbell names (`Companion.doorbell`), so a copy running on a fixture
+directory neither rings nor answers an installed app. Unset leaves the names above, so builds with
+and without the change still pair.
+
 ### Status (daemon → menu)
 
 The daemon rewrites `status.json` when anything in it changes:
