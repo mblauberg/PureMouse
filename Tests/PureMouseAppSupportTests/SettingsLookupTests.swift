@@ -3,13 +3,15 @@ import Testing
 @testable import PureMouseAppSupport
 
 @Suite struct SettingsLookupTests {
-    let menuApp = URL(fileURLWithPath: "/Applications/PureMouse.app/Contents/Library/LoginItems/PureMouse Menu.app")
-    let menuBinary = URL(fileURLWithPath: "/Applications/PureMouse.app/Contents/Library/LoginItems/PureMouse Menu.app/Contents/MacOS/PureMouseMenu")
-    let nested = URL(fileURLWithPath: "/Applications/PureMouse.app/Contents/Helpers/PureMouse Settings.app")
+    // `URL(filePath:)` infers a directory from the path alone; `fileURLWithPath:` asks the disk, so on a Mac
+    // with PureMouse installed the expected bundles gained a trailing slash the lookup's do not.
+    let menuApp = URL(filePath: "/Applications/PureMouse.app/Contents/Library/LoginItems/PureMouse Menu.app")
+    let menuBinary = URL(filePath: "/Applications/PureMouse.app/Contents/Library/LoginItems/PureMouse Menu.app/Contents/MacOS/PureMouseMenu")
+    let nested = URL(filePath: "/Applications/PureMouse.app/Contents/Helpers/PureMouse Settings.app")
     // `swift build`: no bundle, so the "bundle" is the binary's directory.
-    let buildDirectory = URL(fileURLWithPath: "/src/PureMouse/.build/debug")
-    let devMenu = URL(fileURLWithPath: "/src/PureMouse/.build/debug/PureMouseMenu")
-    let devHelper = URL(fileURLWithPath: "/src/PureMouse/.build/debug/PureMouseSettings")
+    let buildDirectory = URL(filePath: "/src/PureMouse/.build/debug")
+    let devMenu = URL(filePath: "/src/PureMouse/.build/debug/PureMouseMenu")
+    let devHelper = URL(filePath: "/src/PureMouse/.build/debug/PureMouseSettings")
 
     func find(_ environment: [String: String] = [:], bundle: URL, executable: URL,
               existing: [URL]) -> Result<SettingsLookup.Helper, SettingsLookup.Failure> {
@@ -22,7 +24,7 @@ import Testing
     }
 
     @Test func theNestedAppWinsOverASiblingBinary() {
-        let sibling = URL(fileURLWithPath: "/Applications/PureMouse.app/Contents/Library/LoginItems/PureMouse Menu.app/Contents/MacOS/PureMouseSettings")
+        let sibling = URL(filePath: "/Applications/PureMouse.app/Contents/Library/LoginItems/PureMouse Menu.app/Contents/MacOS/PureMouseSettings")
         #expect(find(bundle: menuApp, executable: menuBinary, existing: [nested, sibling]) == .success(.app(nested)))
     }
 
@@ -31,8 +33,8 @@ import Testing
     }
 
     @Test func theOverrideWinsAndMayNameAnAppOrABinary() {
-        let app = URL(fileURLWithPath: "/tmp/build/PureMouse Settings.app")
-        let binary = URL(fileURLWithPath: "/tmp/build/PureMouseSettings")
+        let app = URL(filePath: "/tmp/build/PureMouse Settings.app")
+        let binary = URL(filePath: "/tmp/build/PureMouseSettings")
         #expect(find(["PUREMOUSE_SETTINGS": app.path], bundle: menuApp, executable: menuBinary, existing: [nested, app])
             == .success(.app(app)))
         #expect(find(["PUREMOUSE_SETTINGS": binary.path], bundle: buildDirectory, executable: devMenu,

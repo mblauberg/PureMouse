@@ -33,8 +33,10 @@ struct MenuRenderer {
         } else {
             item = NSMenuItem(title: plan.title, action: nil, keyEquivalent: plan.key)
         }
-        if plan.withOption { item.keyEquivalentModifierMask = [.command, .option] }
-        if plan.alternate { item.isAlternate = true }
+        if plan.alternate {
+            item.keyEquivalentModifierMask = plan.key.isEmpty ? .option : [.command, .option]
+            item.isAlternate = true
+        }
         if plan.checked { item.state = .on }
         if plan.attention {
             // Shown in the checkmark column, like the mockup's "!".
@@ -66,7 +68,12 @@ struct MenuRenderer {
         }
         header.attributedTitle = text
         header.image = StatusIcon.headerImage()
-        header.setAccessibilityLabel(([title] + lines).joined(separator: ", "))
+        // macOS 27 hides menu item images unless asked; the header is the menu's one key item
+        // and the only one with an image (docs/ui-design.md, Symbols).
+        #if compiler(>=6.4)  // preferredImageVisibility exists only in the macOS 27 SDK (Xcode 27)
+        if #available(macOS 27, *) { header.preferredImageVisibility = .visible }
+        #endif
+        header.setAccessibilityLabel(MenuPlan.spokenHeader(title: title, lines: lines))
         return header
     }
 }

@@ -78,14 +78,14 @@ enum MenuRow {
 
 struct MenuItem {
     var title: String
-    /// A key equivalent with ⌘ (and ⌥ when `withOption`).
+    /// A key equivalent with ⌘.
     var key = ""
-    var withOption = false
     var checked = false
     /// Shown with a warning triangle in the checkmark column.
     var attention = false
     var enabled = true
-    /// Replaces the item before it while ⌥ is held.
+    /// Replaces the item before it while ⌥ is held (the renderer adds ⌥ to its modifiers). AppKit
+    /// folds an alternate into the item before it only when both share the key equivalent.
     var alternate = false
     var action: MenuAction?
     var submenu: [MenuRow]?
@@ -96,6 +96,7 @@ enum MenuPlan {
 
     /// The rows in order. `option`: ⌥ was held as the menu opened, which adds Reload Config and
     /// Show Log in Finder (the headers' and Hide Menu Bar Icon's alternates are always there).
+    /// The config applies on save; Reload Config is the recovery for what saving cannot redo.
     static func rows(for state: MenuState, option: Bool) -> [MenuRow] {
         var rows: [MenuRow] = []
         let running = state.daemonRunning
@@ -137,24 +138,30 @@ enum MenuPlan {
         rows.append(.separator)
         rows.append(.item(MenuItem(title: "Settings…", key: ",", action: .openSettings(nil))))
         rows.append(.item(MenuItem(title: "Quit PureMouse", key: "q", action: .quit)))
-        rows.append(.item(MenuItem(title: "Hide Menu Bar Icon", key: "q", withOption: true, alternate: true,
-                                   action: .hideMenuBarIcon)))
+        // ⌥⌘Q: AppKit pairs an alternate with Quit only when both share "q" (docs/ui-language.md).
+        rows.append(.item(MenuItem(title: "Hide Menu Bar Icon", key: "q", alternate: true, action: .hideMenuBarIcon)))
         return rows
+    }
+
+    /// What VoiceOver reads for a header: its title and lines, with the " · " that separates the
+    /// parts of a line spoken as commas.
+    static func spokenHeader(title: String, lines: [String]) -> String {
+        ([title] + lines).joined(separator: ", ").replacing(" · ", with: ", ")
     }
 
     /// The warning rows; with PureMouse off, only a status too new to read.
     static func attentionRows(_ state: MenuState) -> [MenuRow] {
         var rows: [MenuRow] = []
-        if state.statusTooNew { rows.append(attention("Update the Menu Bar App…", .openReleases)) }
+        if state.statusTooNew { rows.append(attention("Update PureMouse", .openReleases)) }
         guard state.daemonRunning else { return rows }
         if state.accessibilityMissing {
-            rows.append(attention("Allow Accessibility Access…", .openPrivacy(.accessibility)))
+            rows.append(attention("Allow Accessibility Access", .openPrivacy(.accessibility)))
         }
         if state.inputMonitoringMissing, state.hasBluetoothDevice {
-            rows.append(attention("Allow Input Monitoring…", .openPrivacy(.inputMonitoring)))
+            rows.append(attention("Allow Input Monitoring", .openPrivacy(.inputMonitoring)))
         }
-        if state.configError { rows.append(attention("Fix Config Error…", .openSettings(.general))) }
-        if state.logiOptionsRunning { rows.append(attention("Quit Logi Options+…", .openSettings(.general))) }
+        if state.configError { rows.append(attention("Fix Config File…", .openSettings(.tab(.general)))) }
+        if state.logiOptionsRunning { rows.append(attention("Logi Options+ Is Running…", .openSettings(.tab(.general)))) }
         return rows
     }
 
@@ -183,7 +190,7 @@ enum MenuPlan {
                                        checked: true, enabled: false)))
         }
         if !rows.isEmpty { rows.append(.separator) }
-        rows.append(.item(MenuItem(title: presets.isEmpty ? "Add Presets…" : "Edit Presets…", action: .openSettings(.pointer))))
+        rows.append(.item(MenuItem(title: presets.isEmpty ? "Add Presets…" : "Edit Presets…", action: .openSettings(.mouse(.pointer)))))
         return rows
     }
 }

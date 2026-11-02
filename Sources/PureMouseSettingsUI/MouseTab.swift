@@ -1,0 +1,151 @@
+import AppKit
+import PureMouseAppSupport
+import SwiftUI
+
+/// The Mouse tab's selected segment, which its header strip shows and changes.
+@MainActor @Observable
+final class MouseSelection {
+    fileprivate(set) var segment: MouseSegment
+    /// Asks the tab to show a segment.
+    @ObservationIgnored fileprivate var choose: (MouseSegment) -> Void = { _ in }
+
+    fileprivate init(_ segment: MouseSegment) { self.segment = segment }
+
+    func select(_ segment: MouseSegment) { choose(segment) }
+}
+
+/// The Mouse tab: a fixed header strip over the selected segment's pane. Each segment's pane is
+/// built the first time it shows and kept, as `LazyPane` does for tabs, so segments never visited
+/// cost nothing. Its preferred size is the strip's height plus the pane's, which `fit()` brings up
+/// to date; the tabs call it when they refit.
+@MainActor
+final class MouseTab: NSViewController {
+    let selection: MouseSelection
+    /// Called when the segment changes, after its pane shows, so the window can refit to it.
+    var didSelect: (MouseSegment) -> Void = { _ in }
+    /// Called as the segment changes away from Buttons, whichever way the change came (the strip
+    /// or a request), so Find by Pressing, which belongs to Buttons, ends with it.
+    var willLeaveButtons: () -> Void = {}
+
+    private let makeHeader: (MouseSelection) -> NSView
+    private let make: (MouseSegment) -> NSViewController
+    private var built: [MouseSegment: NSViewController] = [:]
+    private var header: NSView?
+    private var shown: NSViewController?
+    private var shownConstraints: [NSLayoutConstraint] = []
+
+    init(segment: MouseSegment, header: @escaping (MouseSelection) -> NSView,
+         make: @escaping (MouseSegment) -> NSViewController) {
+        selection = MouseSelection(segment)
+        makeHeader = header
+        self.make = make
+        super.init(nibName: nil, bundle: nil)
+        selection.choose = { [weak self] in self?.select($0) }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func loadView() {
+        let root = NSView()
+        let header = makeHeader(selection)
+        header.translatesAutoresizingMaskIntoConstraints = false
+        // When the window is capped below strip plus pane, the pane scrolls; the strip never shrinks.
+        header.setContentCompressionResistancePriority(.required, for: .vertical)
+        root.addSubview(header)
+        NSLayoutConstraint.activate([
+            header.topAnchor.constraint(equalTo: root.topAnchor),
+            header.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            header.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+        ])
+        self.header = header
+        view = root
+        show(selection.segment)
+    }
+
+    /// Shows a segment, building its pane on its first visit.
+    func select(_ segment: MouseSegment) {
+        guard segment != selection.segment else { return }
+        if selection.segment == .buttons { willLeaveButtons() }
+        selection.segment = segment
+        if isViewLoaded { show(segment) }
+        didSelect(segment)
+    }
+
+    private func show(_ segment: MouseSegment) {
+        let pane = built[segment] ?? {
+            let pane = make(segment)
+            built[segment] = pane
+            addChild(pane)
+            return pane
+        }()
+        guard pane !== shown, let header else { return }
+        shown?.view.removeFromSuperview()
+        NSLayoutConstraint.deactivate(shownConstraints)
+        shown = pane
+        pane.view.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(pane.view)
+        shownConstraints = [
+            pane.view.topAnchor.constraint(equalTo: header.bottomAnchor),
+            pane.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            pane.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            pane.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ]
+        NSLayoutConstraint.activate(shownConstraints)
+        fit()
+    }
+
+    /// The segments built so far, for tests.
+    var builtSegments: Set<MouseSegment> { Set(built.keys) }
+
+    /// Brings the preferred size up to date: the strip, then the pane at its own height.
+    func fit() {
+        guard let shown, let header else { return }
+        let pane = shown.preferredContentSize
+        let strip = header.fittingSize
+        preferredContentSize = NSSize(width: max(pane.width, strip.width), height: strip.height + pane.height)
+    }
+
+    override func preferredContentSizeDidChange(for viewController: NSViewController) {
+        super.preferredContentSizeDidChange(for: viewController)
+        if viewController === shown { fit() }
+    }
+}
+
+/// The strip above the Mouse tab's groups: the segments, centred, and Find by Pressing… on Buttons.
+/// It stays put between segments: same controls, same height.
+struct MouseHeader: View {
+    @Environment(AppModel.self) private var model
+    let selection: MouseSelection
+
+    var body: some View {
+        ZStack {
+            HStack {
+                // The leading slot is the mouse pop-up's, with two or more mice (docs/ui-design.md).
+                Spacer()
+                if selection.segment == .buttons { findByPressing }
+            }
+            Picker("Mouse settings", selection: Binding(get: { selection.segment }, set: { selection.select($0) })) {
+                ForEach(MouseSegment.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+        }
+        // In line with the grouped boxes below, whose form insets them by the same margin.
+        .padding(.horizontal, 20)
+        .padding(.top)
+    }
+
+    @ViewBuilder private var findByPressing: some View {
+        if model.captureListening {
+            Button("Cancel") { model.cancelCapture() }
+                .keyboardShortcut(.cancelAction)
+                .accessibilityLabel("Cancel Find by Pressing")
+        } else {
+            Button("Find by Pressing…") { model.startCapture() }
+                .disabled(!model.daemonRunning || model.paused || model.readOnly)
+                .help(model.daemonRunning ? "Press a mouse button to find its row" : "PureMouse is off")
+        }
+    }
+}

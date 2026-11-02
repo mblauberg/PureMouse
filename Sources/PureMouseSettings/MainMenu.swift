@@ -1,12 +1,35 @@
 import AppKit
 
-/// The helper's menu bar: Quit and Hide, editing keys for text fields, and ⌘W.
+/// The helper's menu bar: About and Quit, editing keys for text fields, ⌘W, and Help.
 @MainActor
 enum MainMenu {
-    static func make() -> NSMenu {
+    /// "PureMouse Help": the troubleshooting page.
+    static let helpURL = URL(string: "https://github.com/mblauberg/PureMouse/blob/main/docs/troubleshooting.md")!
+
+    /// What the About and Help items do, held for the menu items' target (`NSMenuItem` takes a
+    /// target and a selector, not a closure).
+    @MainActor
+    final class Actions: NSObject {
+        let showAbout: @MainActor () -> Void
+        let open: @MainActor (URL) -> Void
+
+        init(showAbout: @escaping @MainActor () -> Void, open: @escaping @MainActor (URL) -> Void) {
+            self.showAbout = showAbout
+            self.open = open
+        }
+
+        @objc func about(_ sender: Any?) { showAbout() }
+        @objc func help(_ sender: Any?) { open(MainMenu.helpURL) }
+    }
+
+    /// `actions` is retained by the menu items' targets only weakly, so the caller keeps it.
+    static func make(actions: Actions) -> NSMenu {
         let main = NSMenu()
 
         let appMenu = NSMenu(title: "PureMouse Settings")
+        let about = appMenu.addItem(withTitle: "About PureMouse", action: #selector(Actions.about(_:)), keyEquivalent: "")
+        about.target = actions
+        appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Hide PureMouse Settings", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Quit PureMouse Settings", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
@@ -27,6 +50,12 @@ enum MainMenu {
         window.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
         main.addItem(submenu: window)
         NSApp.windowsMenu = window
+
+        let help = NSMenu(title: "Help")
+        let helpItem = help.addItem(withTitle: "PureMouse Help", action: #selector(Actions.help(_:)), keyEquivalent: "?")
+        helpItem.target = actions
+        main.addItem(submenu: help)
+        NSApp.helpMenu = help
         return main
     }
 }

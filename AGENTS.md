@@ -34,10 +34,13 @@ one. This file covers how to work on it safely.
   the sibling `PureMouseSettings` binary) and passes it the `PUREMOUSE_*` variables. Debug builds
   of the menu take `PUREMOUSE_DEV_MENU=1` and `PUREMOUSE_DEV_APPEARANCE=light|dark`
   (`Sources/PureMouseMenu/DevHooks.swift`); `--login` launches it as launchd does (no Settings).
-  Debug builds of the helper take `PUREMOUSE_DEV_PANE=<pane>`, `PUREMOUSE_DEV_APPEARANCE`,
-  `PUREMOUSE_DEV_PICKER=<button>`, `PUREMOUSE_DEV_SHORTCUT=<button>` (Buttons pane) and
-  `PUREMOUSE_DEV_APP=<bundle id>` (Apps pane; adds the app without writing) for screenshots
-  (`Sources/PureMouseSettingsUI/DevHooks.swift`). `PUREMOUSE_DEV_MENU=1` puts a plain backdrop
+  Debug builds of the helper take `PUREMOUSE_DEV_PANE=<pane>` (a tab, `general`, `mouse`, `apps`,
+  `about`, or a Mouse segment, `buttons`, `scrolling`, `pointer`), `PUREMOUSE_DEV_APPEARANCE`,
+  `PUREMOUSE_DEV_PICKER=<button>`, `PUREMOUSE_DEV_SHORTCUT=<button>` (Mouse › Buttons) and
+  `PUREMOUSE_DEV_APP=<bundle id>` (Apps tab; adds the app without writing) for screenshots
+  (`Sources/PureMouseSettingsUI/DevHooks.swift`), and `PUREMOUSE_DEV_CAPTURE=<file.png>` saves its
+  own windows to that file and quits, which needs no Screen Recording permission, so it works over
+  SSH (`DevCapture`). `PUREMOUSE_DEV_MENU=1` puts a plain backdrop
   under the menu, since its glass shows whatever is behind it. A window capture
   (`screencapture -l`) leaves out that blur, so the README's menu shots take the shape and shadow
   from one and the body from a screen capture of the same rect. Check the menu's footprint with
@@ -66,6 +69,11 @@ one. This file covers how to work on it safely.
   `release.sh --dry-run` (universal bundle signed ad hoc, signatures verified, both size budgets in
   `scripts/size-budget.env` checked, dmg and checksum made) and `scripts/tests/run.sh` on each push
   to `main` and each pull request, and uploads the dmg; its actions are pinned to full SHAs.
+  App builds use SwiftPM's native build system with the active SDK (26 or later) and a macOS 14.0
+  triple, because the default build system records the deployment target as the SDK, and an app
+  linked against SDK 14 gets the pre-macOS 26 appearance (ADR 20). `verify-bundle.sh` checks
+  `minos` and the SDK of every architecture of every binary; CI also builds on the oldest hosted
+  macOS and launches the CLI there.
 - The icon is an Icon Composer document, `assets/AppIcon.icon`: a top-down mouse in three
   monochrome glass layers (buttons with the centre seam, palm, floating wheel), grey fills with
   light and dark specializations, on the system's light/dark background, so macOS 26+ renders
@@ -193,7 +201,7 @@ one. This file covers how to work on it safely.
   observing) while that pane shows;
   `UNUserNotificationCenter` needs a bundle, so a bare dev run posts nothing. "Check for Updates" (About pane, `UpdateCheck`) makes
   one GET of the latest GitHub release per press: no background checks.
-- The DPI the menu and the Pointer pane show is the mouse's live value (a `cycleDPI` press
+- The DPI the menu and Mouse › Pointer show is the mouse's live value (a `cycleDPI` press
   changes it without touching the config), then the configured one; a change made in the pane
   shows until the mouse reports it (`DPIReading`).
 - The menu bar app writes only the keys a control owns (`ConfigTree`) and keeps every other key,
@@ -210,7 +218,7 @@ one. This file covers how to work on it safely.
   `config.json.lock` beside the resolved config, and `control.json` writes under
   `control.json.lock`, changing only the fields that request sets; the daemon's startup delete of
   it takes the same lock (`docs/companion.md`).
-- The Buttons and Apps panes list a named button when a connected mouse reports it or the config
+- Mouse › Buttons and the Apps tab list a named button when a connected mouse reports it or the config
   binds it; with no report, those `NamedButton.listedByDefault` (not the MX Master 4's thumb panel)
   (`ButtonRows.named`). Haptic picker entries come from Kit's `HapticWaveform.allCases`; the menu
   only words them (`ActionCatalog.hapticLabel`).
@@ -220,10 +228,28 @@ one. This file covers how to work on it safely.
   (`AppIdentities`); an icon loads when its frame meets the scroll view's visible bounds (`AppIcon`;
   a grouped form builds every row, so `onAppear` is not enough, and macOS 14 lacks
   `onScrollVisibilityChange`), and Applications is never listed (adding goes through an
-  open panel or the running apps). A pane is no taller than the screen (`LazyPane.fitted`). A pane
-  whose height changes while shown calls `SettingsContext.refit()`: a nested
-  `NSHostingController` updates its `preferredContentSize` without telling the tab controller, so
-  `SettingsTabs.refit()` copies it across.
+  open panel or the running apps).
+- Settings has four tabs, General, Mouse, Apps and About (`SettingsTab.shown`, so a new tab is one
+  entry). Mouse is a fixed header strip (segments, Find by Pressing… on Buttons, a leading slot for
+  the mouse pop-up) over its Buttons, Scrolling and Pointer segments (`MouseTab`); it holds only
+  per-mouse settings. A request for `buttons`, `scrolling` or `pointer` opens Mouse on that segment
+  (`SettingsPane`, `SettingsSelection`); a first run, or a stored tab not understood, opens Mouse
+  (on Buttons the first time). Tabs and segments are built the first time they show (`LazyPane`,
+  `MouseTab`). A pane is no taller than the screen (`LazyPane.fitted`). A pane whose height changes
+  while shown calls `SettingsContext.refit()`: a nested `NSHostingController` updates its
+  `preferredContentSize` without telling the tab controller, so `SettingsTabs.refit()` copies it
+  across (through `MouseTab.fit()`, which adds the strip). Advanced settings sit behind a pane's
+  footer (`PaneFooter`: Restore Defaults, Advanced…) in an `AdvancedSheet`, which never opens
+  another sheet.
+- Settings notices (config error, unsaved change, status too new, PureMouse off, paused, Logi
+  Options+, Accessibility on the panes that need it) come from `BannerPlan.items`, in that order.
+  A pane shows only the first as its banner, with "N more notices" opening General, whose Status
+  section lists them all as rows (off is its PureMouse row). Use Last Working Config… asks before
+  it replaces the file.
+- User-facing text (menu, Settings, alerts, notifications, accessibility labels, CLI output)
+  follows `docs/ui-language.md`: its casing rules and glossary. Layout, controls and what shows by
+  default versus behind Advanced… follow `docs/ui-design.md`. Change either page in the same PR as
+  the UI it governs.
 - Settings shows no focus ring until the keyboard is used: windows, panes, the action picker and
   the shortcut sheet open with nothing focused (the picker's search takes the first keystroke).
   Check with keyboard navigation (`AppleKeyboardUIMode`) both on and off.
@@ -352,8 +378,10 @@ one. This file covers how to work on it safely.
   companion directory that launchd does not load at login), `stop` boots out and keeps the registration
   (table in `docs/companion.md`). `puremouse login-status` prints `LoginStatus` (Kit) as JSON, and
   Settings reads "starts at login" from it, not from a plist file. General's Open at login switch
-  runs `login on|off` and never stops anything; its PureMouse is running row runs `start` / `stop`
-  (the control-to-command mapping is `LoginAction`, tested in `LoginActionTests`). Opening the
+  runs `login on|off` and never stops anything; its Status row's Start / Stop, the "PureMouse is
+  off" banner and the menu's Start PureMouse run `start` / `stop`, never `register` (the
+  control-to-command mapping is `LoginAction`, tested in `LoginActionTests`, `BannerPlanTests`
+  and `MenuPlanTests`). Opening the
   app from the Finder runs `register`, then `LoginItem.openSettings` opens the Settings helper
   directly (the alert is kept for a build without one).
 - Builds are signed by `scripts/sign-bundle.sh`: inside out from `scripts/lib.zsh`'s `components`

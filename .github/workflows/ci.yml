@@ -22,6 +22,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Check build SDK
+        run: |
+          xcodebuild -version
+          sdk=$(xcrun --sdk macosx --show-sdk-version)
+          test "${sdk%%.*}" -ge 26
       - name: Build
         run: swift build
       - name: Test
@@ -38,3 +43,41 @@ jobs:
           path: .build/dist/
           retention-days: 7
           if-no-files-found: error
+
+  # macOS 14 runners are retired; 15 is the oldest available hosted image. Launch the
+  # bundled daemon as a CLI only: --help exits without opening HID or registering agents.
+  compatibility:
+    runs-on: macos-15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The image's default Xcode is 16 (macOS 15 SDK); build with its newest Xcode 26 instead.
+      - name: Select Xcode 26
+        run: |
+          xcode=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -n 1)
+          test -n "$xcode"
+          echo "DEVELOPER_DIR=$xcode/Contents/Developer" >> "$GITHUB_ENV"
+      - name: Check build SDK
+        run: |
+          xcodebuild -version
+          sdk=$(xcrun --sdk macosx --show-sdk-version)
+          test "${sdk%%.*}" -ge 26
+      - name: Build and verify universal app
+        env:
+          PUREMOUSE_SIGN_IDENTITY: '-'
+        run: |
+          scripts/build-app.sh --universal
+          scripts/verify-bundle.sh .build/app/PureMouse.app
+          scripts/check-size.sh .build/app/PureMouse.app
+      - name: Launch on the oldest hosted macOS
+        run: |
+          # The CLI prints usage and exits EX_USAGE (64) for --help.
+          if .build/app/PureMouse.app/Contents/MacOS/puremouse --help > "$RUNNER_TEMP/usage.txt"; then
+            exit 1
+          else
+            test "$?" -eq 64
+          fi
+          grep -q '^usage: puremouse' "$RUNNER_TEMP/usage.txt"

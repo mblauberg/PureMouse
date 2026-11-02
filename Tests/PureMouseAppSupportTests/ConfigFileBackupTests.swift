@@ -87,7 +87,7 @@ struct ConfigFileBackupTests {
         store.resetAll()
         #expect(try sandbox.read() == previous)
         #expect(store.config.int(["dpi"]) == 800)
-        #expect(store.writeError?.contains("not saved") == true)
+        #expect(store.writeError?.contains("wasn't saved") == true)
     }
 
     @Test func openConfigCreatesAMissingFileWithoutTouchingEdits() throws {

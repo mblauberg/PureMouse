@@ -24,7 +24,7 @@ public enum SettingsLookup {
 
         public var description: String {
             switch self {
-            case .overrideMissing(let path): "PUREMOUSE_SETTINGS names \(path), which does not exist."
+            case .overrideMissing(let path): "PUREMOUSE_SETTINGS names \(path), which doesn't exist."
             case .notFound(let app, let binary): "Neither \(app) nor \(binary) exists."
             }
         }

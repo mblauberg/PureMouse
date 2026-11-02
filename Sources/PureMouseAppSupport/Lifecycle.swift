@@ -47,6 +47,10 @@ public enum Lifecycle {
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             let output = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
             let status = process.terminationStatus
+            if status != 0 {
+                // The command's own words are for the log, not the alert.
+                NSLog("PureMouse: puremouse %@ exited %d: %@", command.arguments.joined(separator: " "), status, output)
+            }
             DispatchQueue.main.async {
                 completion(status == 0 ? .success(output) : .failure(.failed(output)))
             }
@@ -54,17 +58,20 @@ public enum Lifecycle {
         do {
             try process.run()
         } catch {
+            NSLog("PureMouse: puremouse %@ did not start: %@", command.arguments.joined(separator: " "), error.localizedDescription)
             completion(.failure(.failed(error.localizedDescription)))
         }
     }
 }
 
+/// Why a lifecycle command failed. The text is the alert's body: what to do, never the command's
+/// raw output, which `run` has already logged.
 public enum LifecycleError: Error, CustomStringConvertible {
     case noDaemon, failed(String)
     public var description: String {
         switch self {
-        case .noDaemon: "This copy of the menu bar app is not inside PureMouse.app."
-        case .failed(let output): output.isEmpty ? "The command failed." : output
+        case .noDaemon: "Install PureMouse from the disk image, then open it again."
+        case .failed: "Try again. If it keeps happening, restart your Mac."
         }
     }
 }

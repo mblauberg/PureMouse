@@ -1,28 +1,6 @@
 import PureMouseAppSupport
 import SwiftUI
 
-/// One Settings pane: a grouped form at the window's fixed width, sized to its content so the
-/// window fits it.
-struct PaneHost: View {
-    let pane: SettingsPane
-    let context: SettingsContext
-
-    var body: some View {
-        Group {
-            switch pane {
-            case .general: GeneralPane()
-            case .buttons: ButtonsPane()
-            case .scrolling: ScrollingPane()
-            case .pointer: PointerPane()
-            case .apps: AppsPane()
-            case .about: AboutPane()
-            }
-        }
-        .frame(width: SettingsWindowController.width)
-        .environment(\.settings, context)
-    }
-}
-
 private struct SettingsKey: EnvironmentKey {
     static let defaultValue: SettingsContext? = nil
 }

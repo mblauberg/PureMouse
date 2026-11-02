@@ -86,7 +86,7 @@ final class AppController: NSObject, NSApplicationDelegate {
             guard Locations.live.daemon != nil else { NSApp.terminate(nil); return }
             Lifecycle.run(.stop) { result in
                 if case .failure(let error) = result {
-                    Alerts.show("PureMouse could not stop", error.description)
+                    Alerts.show("PureMouse couldn't stop.", error.description)
                 }
                 NSApp.terminate(nil)
             }

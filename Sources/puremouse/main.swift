@@ -25,17 +25,12 @@ case nil where LoginItem.inBundle:
     do {
         let launch = try login.finderLaunch()
         if launch.settingsOpened { exit(0) }
-        LoginItem.alert("PureMouse", launch.outcome + """
-
-
-            macOS will ask for Accessibility and Input Monitoring; allow both in System Settings › \
-            Privacy & Security.
-
-            Settings: ~/.config/puremouse/config.json
-            Log: ~/Library/Logs/PureMouse.log
-            """)
+        let alert = LoginItem.runningAlert
+        LoginItem.alert(alert.title, alert.body)
     } catch {
-        LoginItem.alert("PureMouse could not start", "\(error)")
+        Log.error("Finder launch failed: \(error)")
+        let alert = LoginItem.startFailureAlert(error)
+        LoginItem.alert(alert.title, alert.body)
         exit(1)
     }
 case nil, "run":
@@ -51,19 +46,18 @@ case nil, "run":
     daemon.start()
     withExtendedLifetime(daemon) { runMainLoop() }
 case "permissions":
-    // The exit status is the granted set's raw value; the daemon polls it (Daemon.pollPermissions).
-    let granted = Permissions.current
-    print("Accessibility: \(granted.contains(.accessibility) ? "granted" : "missing")")
-    print("Input Monitoring: \(granted.contains(.inputMonitoring) ? "granted" : "missing")")
-    exit(granted.rawValue)
+    // The exit status is the allowed set's raw value; the daemon polls it (Daemon.pollPermissions).
+    let allowed = Permissions.current
+    print("Accessibility: \(allowed.contains(.accessibility) ? "Allowed" : "Not allowed")")
+    print("Input Monitoring: \(allowed.contains(.inputMonitoring) ? "Allowed" : "Not allowed")")
+    exit(allowed.rawValue)
 case "action" where arguments.count == 2:
     // Fires one action as a button would, to check it still works (e.g. after a macOS upgrade).
     let spec = arguments[1]
     let json = spec.hasPrefix("{") ? spec : "\"\(spec)\""
     guard let action = try? JSONDecoder().decode(Action.self, from: Data(json.utf8)),
           !action.actsOnDevice else {
-        print("unknown or device-only action: \(spec)")
-        exit(64)
+        CLIError.fail("unknown or device-only action", spec, status: 64)
     }
     Task { @MainActor in
         SystemActions.perform(action)
@@ -86,8 +80,7 @@ case "login-status":
     do {
         print(try login.loginStatus().json())
     } catch {
-        print("cannot read the login state: \(error)")
-        exit(1)
+        CLIError.fail("can't read the login state", error)
     }
 case "register", "unregister", "stop", "start", "login", "menu":
     // launchd kills a job's process group when booting it out, and the menu bar app (one of the
@@ -98,43 +91,37 @@ case "register", "unregister", "stop", "start", "login", "menu":
         do {
             print(try login.register())
         } catch {
-            print("cannot register: \(error)")
-            exit(1)
+            CLIError.fail("can't register", error)
         }
     case ("unregister", _):
         do {
             try login.unregister()
         } catch {
-            print("cannot unregister: \(error)")
-            exit(1)
+            CLIError.fail("can't unregister", error)
         }
     case ("stop", _):
         do {
             print(try login.stopAll())
         } catch {
-            print("cannot stop: \(error)")
-            exit(1)
+            CLIError.fail("can't stop", error)
         }
     case ("start", _):
         do {
             print(try login.start())
         } catch {
-            print("cannot start: \(error)")
-            exit(1)
+            CLIError.fail("can't start", error)
         }
     case ("login", let setting?) where setting == "on" || setting == "off":
         do {
             print(try setting == "on" ? login.loginOn() : login.loginOff())
         } catch {
-            print("cannot change login: \(error)")
-            exit(1)
+            CLIError.fail("can't change login", error)
         }
     case ("menu", let setting?) where setting == "on" || setting == "off":
         do {
             print(try login.showMenu(setting == "on"))
         } catch {
-            print("cannot change the menu bar icon: \(error)")
-            exit(1)
+            CLIError.fail("can't change the menu bar icon", error)
         }
     default:
         usage()

@@ -10,6 +10,7 @@ label=io.github.mblauberg.puremouse
 menu_label=$label.menu
 settings_label=$label.settings
 minimum=14.0
+minimum_sdk=26
 copyright="Copyright © 2026 Michael Blauberg. MIT licence."
 category=public.app-category.utilities
 

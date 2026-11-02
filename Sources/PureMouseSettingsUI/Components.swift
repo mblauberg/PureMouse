@@ -105,119 +105,70 @@ extension AppModel {
     }
 }
 
-/// The yellow-triangle notice at the top of a pane.
-struct Banner<Actions: View>: View {
-    let title: String
-    let message: String
-    var symbol = "exclamationmark.triangle.fill"
-    var tint: Color = .yellow
-    @ViewBuilder var actions: Actions
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: symbol)
-                .symbolRenderingMode(.multicolor)
-                .foregroundStyle(tint)
-                .font(.title3)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).fontWeight(.semibold)
-                Text(message).foregroundStyle(.secondary).font(.callout)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .textSelection(.enabled)
-            }
-            Spacer(minLength: 8)
-            HStack { actions }
-        }
-        .accessibilityElement(children: .contain)
-    }
-}
-
-/// The notices every pane shows: PureMouse off, a config error, Logi Options+, and (for panes
-/// whose settings need it) a missing Accessibility grant.
-struct PaneBanners: View {
-    @Environment(AppModel.self) private var model
-    var needsAccessibility = false
-
-    var body: some View {
-        if model.statusTooNew {
-            Section {
-                Banner(title: "Update PureMouse", message: "This menu bar app is older than the PureMouse running now. Install the latest release.") {
-                    Button("Releases") { NSWorkspace.shared.open(Links.releases) }
-                }
-            }
-        }
-        if !model.daemonRunning {
-            Section {
-                Banner(title: "PureMouse is off", message: "The mouse works as it does without PureMouse. Changes here apply when it starts.",
-                       symbol: "pause.circle.fill", tint: .secondary) {
-                    Button("Start PureMouse") { model.perform(.register) }
-                }
-            }
-        }
-        if model.paused {
-            Section {
-                Banner(title: "PureMouse is paused", message: "The mouse works as it does without PureMouse. Changes here apply when it resumes.",
-                       symbol: "pause.circle.fill", tint: .secondary) {
-                    Button("Resume") { model.setPaused(false) }
-                }
-            }
-        }
-        if let error = model.configError {
-            Section {
-                Banner(title: "The config file has an error",
-                       message: error + "\nPureMouse keeps using the last config that worked. Fix the file to edit settings here.",
-                       symbol: "xmark.octagon.fill", tint: .red) {
-                    VStack(alignment: .trailing) {
-                        Button("Open Config") { NSWorkspace.shared.open(model.locations.config) }
-                        if model.canRestoreLastWorking {
-                            Button("Restore Last Working") { model.restoreLastWorking() }
-                        }
-                    }
-                }
-            }
-        }
-        if let error = model.writeError {
-            Section {
-                Banner(title: "That change was not saved", message: error, symbol: "exclamationmark.triangle.fill", tint: .yellow) {
-                    EmptyView()
-                }
-            }
-        }
-        if model.logiOptionsRunning {
-            Section {
-                Banner(title: "Logi Options+ is running", message: "Only one app can control the buttons. Quit Logi Options+ or remove it.") {
-                    Button("How to Remove") { NSWorkspace.shared.open(Links.logiOptions) }
-                }
-            }
-        }
-        if needsAccessibility, model.accessibilityMissing {
-            Section {
-                Banner(title: "Accessibility is not allowed",
-                       message: "Wheels and buttons stay native until it is. PureMouse restarts itself once it is allowed.") {
-                    Button("Open Settings…") { NSWorkspace.shared.open(PrivacyPane.accessibility.url) }
-                }
-            }
-        }
-    }
-}
-
-/// A right-aligned button under the last group, like System Settings' "Restore Defaults".
-struct FooterButton: View {
-    let title: String
-    let action: () -> Void
-
-    init(_ title: String, action: @escaping () -> Void) {
-        self.title = title
-        self.action = action
-    }
+/// The row under a pane's last group (docs/ui-design.md): Restore Defaults at the leading edge,
+/// Advanced… at the trailing edge, either optional. Advanced… opens the pane's `AdvancedSheet`.
+/// Goes in the last section's footer, so it scrolls with the form.
+///
+/// With a `restoreMessage`, Restore Defaults asks first: a confirmation whose button is a plain
+/// "Restore Defaults" (chosen on purpose, so not the destructive style) and whose message says
+/// what returns to its default.
+struct PaneFooter: View {
+    var restoreDefaults: (() -> Void)?
+    var restoreMessage: String?
+    var advanced: (() -> Void)?
+    @State private var confirmingRestore = false
 
     var body: some View {
         HStack {
+            if let restoreDefaults {
+                Button(restoreMessage == nil ? "Restore Defaults" : "Restore Defaults…") {
+                    if restoreMessage == nil { restoreDefaults() } else { confirmingRestore = true }
+                }
+                .confirmationDialog("Restore defaults?", isPresented: $confirmingRestore) {
+                    Button("Restore Defaults", action: restoreDefaults)
+                } message: {
+                    Text(restoreMessage ?? "")
+                }
+            }
             Spacer()
-            Button(title, action: action)
+            if let advanced { Button("Advanced…", action: advanced) }
         }
         .padding(.top, 4)
+    }
+}
+
+/// A pane's Advanced… sheet: a title, a grouped form, and Done as the default button, with an
+/// optional button at the bottom-leading edge (General's Reset All Settings…). A sheet never opens
+/// another sheet: anything that needs more room inside it is a disclosure (docs/ui-design.md).
+struct AdvancedSheet<Content: View, Leading: View>: View {
+    let title: String
+    @ViewBuilder var content: Content
+    @ViewBuilder var leading: Leading
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text(title)
+                .font(.headline)
+                .padding(.top)
+            Form { content }
+                .formStyle(.grouped)
+                .scrollBounceBehavior(.basedOnSize)
+            HStack {
+                leading
+                Spacer()
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+            .padding([.horizontal, .bottom])
+        }
+        .frame(width: SettingsWindowController.sheetWidth)
+    }
+}
+
+extension AdvancedSheet where Leading == EmptyView {
+    init(title: String, @ViewBuilder content: () -> Content) {
+        self.init(title: title, content: content, leading: { EmptyView() })
     }
 }
 

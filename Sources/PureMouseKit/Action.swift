@@ -65,7 +65,7 @@ public enum Action: Equatable, Decodable, Sendable {
         if let spec = try c.decodeIfPresent(String.self, forKey: AnyKey("keys")) {
             guard let keystroke = Keystroke(spec) else {
                 throw DecodingError.dataCorruptedError(forKey: AnyKey("keys"), in: c,
-                                                       debugDescription: "cannot parse keystroke '\(spec)'")
+                                                       debugDescription: "can't parse keystroke '\(spec)'")
             }
             self = .keys(keystroke)
         } else if let command = try c.decodeIfPresent(String.self, forKey: AnyKey("run")) {

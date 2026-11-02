@@ -77,14 +77,14 @@ struct PointerPane: View {
                     .disabled(presets.contains(current) || presets.count >= DPIPresets.limit)
                 }
             } footer: {
-                FooterButton("Restore Defaults") {
+                PaneFooter(restoreDefaults: {
                     typed = nil
                     reading.clear()
                     model.update {
                         $0.set(nil, at: ["dpi"])
                         $0.set(nil, at: ["dpiPresets"])
                     }
-                }
+                })
             }
             .disabled(model.readOnly)
         }

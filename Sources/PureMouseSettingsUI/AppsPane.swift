@@ -29,7 +29,7 @@ struct AppsPane: View {
         .onChange(of: selected) { settings?.refit() }
         .confirmationDialog("Remove \(removing.map { identities.identity($0).name } ?? "this app")'s settings?",
                             isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })) {
-            Button("Remove", role: .destructive) {
+            Button("Remove") {
                 if let id = removing { remove(id) }
             }
         } message: {
@@ -85,18 +85,15 @@ struct AppsPane: View {
                         }
                     }
                 }
-            } header: {
-                HStack {
-                    Text("Apps")
-                    Spacer()
+            } footer: {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Buttons follow the frontmost app.\nScrolling and the thumb wheel follow the app under the pointer.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     addMenu
                 }
-            } footer: {
-                Text("Buttons follow the frontmost app.\nScrolling and the thumb wheel follow the app under the pointer.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             .disabled(model.readOnly)
         }
@@ -114,6 +111,8 @@ struct AppsPane: View {
                 }
             }
         }
+        // A bordered pull-down, not a borderless one that reads as a link.
+        .menuStyle(.button)
         .fixedSize()
         .accessibilityHint("Choose an app to give its own settings")
     }
@@ -129,7 +128,7 @@ struct AppsPane: View {
         let finish: (NSApplication.ModalResponse) -> Void = { response in
             guard response == .OK, let url = panel.url else { return }
             guard let id = Bundle(url: url)?.bundleIdentifier else {
-                Alerts.show("That app cannot be added", "\(url.lastPathComponent) has no bundle identifier.")
+                Alerts.show("That app can't be added.", "\(url.lastPathComponent) has no bundle identifier.")
                 return
             }
             add(id)
@@ -328,7 +327,7 @@ private struct AppDetail: View {
             if let suggestion = suggestion(config) {
                 Section {
                     Banner(title: "Suggested for \(identity.name)", message: "The thumb wheel \(describe(suggestion)).",
-                           symbol: "lightbulb.fill", tint: .yellow) {
+                           symbol: "lightbulb.fill") {
                         Button("Use Suggested Settings") {
                             model.update { $0.chooseThumbWheel(suggestion.choice, at: scope + ["thumbWheel"], base: globalThumbWheel(config)) }
                         }
@@ -351,7 +350,7 @@ private struct AppDetail: View {
             .disabled(model.readOnly)
 
             if model.primaryDevice?.offers(\.thumbWheel) != false || config.contains(scope + ["thumbWheel"]) {
-                Section("Thumb wheel") {
+                Section("Thumb Wheel") {
                     ThumbWheelRows(path: scope + ["thumbWheel"], base: globalThumbWheel(config),
                                    inherited: config.thumbWheelChoice(at: ["thumbWheel"]).label, spokenSuffix: spoken)
                 }

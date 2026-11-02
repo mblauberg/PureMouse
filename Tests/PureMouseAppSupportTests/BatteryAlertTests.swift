@@ -27,6 +27,19 @@ private func scratchStore() -> (BatteryAlertStore, URL) {
 
 /// Low-battery warnings: when to post, and which delivered ones to take down.
 struct BatteryAlertTests {
+    @Test func theNotificationNamesTheMouseAndHowMuchIsLeft() {
+        let low = BatteryAlert.message(for: .low, device: "MX Master 3S", battery: battery(20))
+        #expect(low.title == "MX Master 3S battery low")
+        #expect(low.body == "20% left. Charge it soon.")
+        let critical = BatteryAlert.message(for: .critical, device: "MX Master 3S", battery: battery(5))
+        #expect(critical.title == "MX Master 3S battery critical")
+        #expect(critical.body == "5% left. Charge it now.")
+        // A mouse that reports only a level has no percentage to give.
+        let level = BatteryAlert.message(for: .low, device: "MX Anywhere 3", battery: battery(nil, level: .low))
+        #expect(level.title == "MX Anywhere 3 battery low")
+        #expect(level.body == "Charge it soon.")
+    }
+
     @Test func firstReadingNeverNotifies() {
         #expect(BatteryAlert.evaluate(previous: nil, battery: battery(3)) == (nil, .critical))
         #expect(BatteryAlert.evaluate(previous: nil, battery: battery(18)).alert == nil)

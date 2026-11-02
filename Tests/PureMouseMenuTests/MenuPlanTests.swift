@@ -17,7 +17,7 @@ struct MenuPlanTests {
                 return indent + (alternate ? "⌥header " : "header ") + ([title] + lines).joined(separator: ", ")
             case let .item(item):
                 var tags: [String] = []
-                if !item.key.isEmpty { tags.append((item.withOption ? "⌥⌘" : "⌘") + item.key) }
+                if !item.key.isEmpty { tags.append("⌘" + item.key) }
                 if item.checked { tags.append("on") }
                 if item.attention { tags.append("attention") }
                 if !item.enabled { tags.append("disabled") }
@@ -38,7 +38,7 @@ struct MenuPlanTests {
         ---
         Settings… [⌘,, -> openSettings(nil)]
         Quit PureMouse [⌘q, -> quit]
-        Hide Menu Bar Icon [⌥⌘q, alternate, -> hideMenuBarIcon]
+        Hide Menu Bar Icon [⌘q, alternate, -> hideMenuBarIcon]
         """
 
     static func mouse(_ id: String, name: String = "MX Master 3S", connection: Status.Device.Connection = .receiver,
@@ -64,7 +64,7 @@ struct MenuPlanTests {
               400 DPI [-> setDPI(400)]
               800 DPI [on, -> setDPI(800)]
               ---
-              Edit Presets… [-> openSettings(Optional(PureMouseAppSupport.SettingsPane.pointer))]
+              Edit Presets… [-> openSettings(Optional(PureMouseAppSupport.SettingsPane.mouse(PureMouseAppSupport.MouseSegment.pointer)))]
             ---
             Start PureMouse [-> start]
             \(Self.footer)
@@ -78,7 +78,7 @@ struct MenuPlanTests {
         state.statusTooNew = true
         #expect(lines(state).hasPrefix("""
             header PureMouse Is Off, The mouse works as it does without PureMouse
-            Update the Menu Bar App… [attention, -> openReleases]
+            Update PureMouse [attention, -> openReleases]
             ---
             """))
     }
@@ -93,7 +93,7 @@ struct MenuPlanTests {
               400 DPI [-> setDPI(400)]
               800 DPI [on, -> setDPI(800)]
               ---
-              Edit Presets… [-> openSettings(Optional(PureMouseAppSupport.SettingsPane.pointer))]
+              Edit Presets… [-> openSettings(Optional(PureMouseAppSupport.SettingsPane.mouse(PureMouseAppSupport.MouseSegment.pointer)))]
             ---
             Pause PureMouse [-> setPaused(true)]
             \(Self.footer)
@@ -142,7 +142,7 @@ struct MenuPlanTests {
               400 DPI [-> setDPI(400)]
               800 DPI [-> setDPI(800)]
               ---
-              Edit Presets… [-> openSettings(Optional(PureMouseAppSupport.SettingsPane.pointer))]
+              Edit Presets… [-> openSettings(Optional(PureMouseAppSupport.SettingsPane.mouse(PureMouseAppSupport.MouseSegment.pointer)))]
             ---
             Pause PureMouse [-> setPaused(true)]
             \(Self.footer)
@@ -201,13 +201,33 @@ struct MenuPlanTests {
         state.logiOptionsRunning = true
         #expect(lines(state).contains("""
             v0.3.0
-            Update the Menu Bar App… [attention, -> openReleases]
-            Allow Accessibility Access… [attention, -> openPrivacy(PureMouseAppSupport.PrivacyPane.accessibility)]
-            Allow Input Monitoring… [attention, -> openPrivacy(PureMouseAppSupport.PrivacyPane.inputMonitoring)]
-            Fix Config Error… [attention, -> openSettings(Optional(PureMouseAppSupport.SettingsPane.general))]
-            Quit Logi Options+… [attention, -> openSettings(Optional(PureMouseAppSupport.SettingsPane.general))]
+            Update PureMouse [attention, -> openReleases]
+            Allow Accessibility Access [attention, -> openPrivacy(PureMouseAppSupport.PrivacyPane.accessibility)]
+            Allow Input Monitoring [attention, -> openPrivacy(PureMouseAppSupport.PrivacyPane.inputMonitoring)]
+            Fix Config File… [attention, -> openSettings(Optional(PureMouseAppSupport.SettingsPane.tab(PureMouseAppSupport.SettingsTab.general)))]
+            Logi Options+ Is Running… [attention, -> openSettings(Optional(PureMouseAppSupport.SettingsPane.tab(PureMouseAppSupport.SettingsTab.general)))]
             ---
             """))
+    }
+
+    /// AppKit folds an alternate into the item before it only when the key equivalents match, so
+    /// Hide Menu Bar Icon shares Quit's Q (shown as ⌥⌘Q while ⌥ is held).
+    @Test func hideMenuBarIconSharesQuitsKeyEquivalent() throws {
+        let rows = MenuPlan.rows(for: Self.running(), option: false)
+        let hide = try #require(rows.compactMap { row -> MenuItem? in
+            if case let .item(item) = row, item.title == "Hide Menu Bar Icon" { return item }
+            return nil
+        }.first)
+        #expect(hide.alternate)
+        #expect(hide.key == "q")
+    }
+
+    @Test func theSpokenHeaderReadsNoSeparatorDot() {
+        let spoken = MenuPlan.spokenHeader(title: "MX Master 3S", lines: ["USB receiver · Battery 45%", "800 DPI · v0.3.0"])
+        #expect(spoken == "MX Master 3S, USB receiver, Battery 45%, 800 DPI, v0.3.0")
+        #expect(!spoken.contains("·"))
+        let paused = MenuPlan.spokenHeader(title: "MX Master 3S", lines: ["Paused · USB receiver · Battery 45%"])
+        #expect(paused == "MX Master 3S, Paused, USB receiver, Battery 45%")
     }
 
     @Test func inputMonitoringMattersOnlyWithABluetoothMouse() {
@@ -242,7 +262,7 @@ struct MenuPlanTests {
             Pointer Speed
               \(Format.dpi(1600)) [on, disabled]
               ---
-              Add Presets… [-> openSettings(Optional(PureMouseAppSupport.SettingsPane.pointer))]
+              Add Presets… [-> openSettings(Optional(PureMouseAppSupport.SettingsPane.mouse(PureMouseAppSupport.MouseSegment.pointer)))]
             """))
         state.currentDPI = nil
         #expect(lines(state).contains("""
@@ -255,5 +275,15 @@ struct MenuPlanTests {
         var state = Self.running([Self.mouse("a", dpi: 800, steps: [400, 800, 1600])])
         state.dpiPresets = [750]
         #expect(lines(state).contains("  750 DPI [on, -> setDPI(750)]"))
+    }
+
+    /// Start PureMouse starts it now and leaves Open at login as it is: `start`, never `register`.
+    @Test func startPureMouseRunsStartNotRegister() throws {
+        let start = try #require(MenuPlan.rows(for: MenuState(), option: false).compactMap { row -> MenuAction? in
+            if case let .item(item) = row, item.title == "Start PureMouse" { return item.action }
+            return nil
+        }.first)
+        #expect(start.command == .start)
+        #expect(MenuAction.setPaused(true).command == nil)
     }
 }

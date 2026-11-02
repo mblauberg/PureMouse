@@ -1,5 +1,67 @@
 # Bundle layout, Info.plists, signing and verify-bundle.sh.
 
+# Mutate one real Mach-O slice, then sign normally so only the build-version check can fail.
+# These fixtures need only plists and executables, independent of icon assembly and hard links.
+build_version_app() {
+    local app=$tmp/PureMouse.app component bundle executable role
+    for component in $components; do
+        bundle=$(component_path $app $component)
+        executable=$(component_executable $component)
+        case $executable in
+            puremouse) role=daemon ;;
+            PureMouseMenu) role=menu ;;
+            PureMouseSettings) role=settings ;;
+        esac
+        mkdir -p $bundle/Contents/MacOS
+        xcrun vtool -set-build-version macos $minimum $minimum_sdk.0 -replace \
+            -output $bundle/Contents/MacOS/$executable /usr/bin/true
+        write_info_plist $bundle/Contents/Info.plist $(component_id $component) $executable 1.2.3 42 $role
+    done
+    print -r -- $app
+}
+
+verify_rejects_build_version() {
+    local target=$1 arch=$2 minos=$3 sdk=$4 expected=$5
+    local app output
+    app=$(build_version_app)
+    local executable=$app/$target
+    xcrun vtool -arch $arch -set-build-version macos $minos $sdk -replace \
+        -output $tmp/changed $executable
+    cp $tmp/changed $executable
+    scripts/sign-bundle.sh $app --identity - 2>/dev/null
+    expect "the signature still verifies" codesign --verify --strict $app
+    if output=$(scripts/verify-bundle.sh $app 2>&1); then
+        print -u2 -- "verifier accepted $executable ($arch): minos $minos SDK $sdk"
+        return 1
+    fi
+    [[ $output == *"$executable ($arch): $expected"* ]] || { print -u2 -- $output; return 1; }
+    [[ $(print -r -- $output | grep -c '^FAIL ') == 1 ]]
+}
+
+test_sdk_verifier_rejects_an_old_sdk_in_the_intel_settings_slice() {
+    verify_rejects_build_version 'Contents/Helpers/PureMouse Settings.app/Contents/MacOS/PureMouseSettings' \
+        x86_64 14.0 14.0 "SDK is '14.0', needs macOS 26 or later"
+}
+
+test_sdk_verifier_rejects_a_different_minimum_in_the_intel_menu_slice() {
+    verify_rejects_build_version 'Contents/Library/LoginItems/PureMouse Menu.app/Contents/MacOS/PureMouseMenu' \
+        x86_64 15.0 26.0 "minos is '15.0', not 14.0"
+}
+
+test_sdk_verifier_rejects_a_lower_minimum_in_the_daemon() {
+    verify_rejects_build_version Contents/MacOS/puremouse x86_64 13.0 26.0 "minos is '13.0', not 14.0"
+}
+
+test_sdk_verifier_accepts_a_newer_sdk() {
+    local app
+    app=$(build_version_app)
+    xcrun vtool -set-build-version macos 14.0 27.2 -replace \
+        -output $tmp/changed $app/Contents/MacOS/puremouse
+    cp $tmp/changed $app/Contents/MacOS/puremouse
+    scripts/sign-bundle.sh $app --identity - 2>/dev/null
+    scripts/verify-bundle.sh $app
+}
+
 test_verify_passes_on_the_built_bundle() {
     local app
     app=$(real_app)

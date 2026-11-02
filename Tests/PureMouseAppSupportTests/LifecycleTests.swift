@@ -36,6 +36,19 @@ import Testing
         #expect(output == expected)
     }
 
+    /// The alert body says what to do; the command's raw output stays out of it.
+    @Test func aFailedCommandShowsAnInstructionNotItsOutput() async throws {
+        let daemon = try stubDaemon(printing: "launchd said no: Bootstrap failed: 5", exiting: 1)
+        let result = await withCheckedContinuation { continuation in
+            Lifecycle.run(.loginStatus, daemon: daemon) { continuation.resume(returning: $0) }
+        }
+        let error = try #require({ if case .failure(let error) = result { error } else { nil } }())
+        #expect(error.description == "Try again. If it keeps happening, restart your Mac.")
+        #expect(!error.description.contains("launchd"))
+        #expect(LifecycleError.failed("").description == error.description)
+        #expect(LifecycleError.noDaemon.description == "Install PureMouse from the disk image, then open it again.")
+    }
+
     private func read(from daemon: URL?) async -> LoginStatus? {
         await withCheckedContinuation { continuation in
             Lifecycle.readLoginStatus(daemon: daemon) { continuation.resume(returning: $0) }
@@ -72,7 +85,7 @@ import Testing
             let events = try await perform(exiting: status) { model, record in
                 model.perform(.menuOff) { record("success") }
             }
-            #expect(events == (status == 0 ? ["success"] : ["alert: PureMouse could not do that"]))
+            #expect(events == (status == 0 ? ["success"] : ["alert: PureMouse couldn't do that."]))
         }
     }
 
@@ -82,7 +95,7 @@ import Testing
             let events = try await perform(exiting: status) { model, record in
                 model.perform(.menuOff, then: { record("success") }, otherwise: { record("failure") })
             }
-            #expect(events == (status == 0 ? ["success"] : ["failure", "alert: PureMouse could not do that"]))
+            #expect(events == (status == 0 ? ["success"] : ["failure", "alert: PureMouse couldn't do that."]))
         }
     }
 

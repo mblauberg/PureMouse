@@ -109,7 +109,7 @@ Thumb-wheel actions need the Accessibility permission, as smooth scrolling does.
 the thumb wheel over even without `smoothScroll`; where it still scrolls, it scrolls without
 smoothing.
 
-Settings › Scrolling › Thumb wheel sets `action`, or **Custom** for `left` and `right` (also shown
+Settings › Mouse › Scrolling › Thumb Wheel sets `action`, or **Custom** for `left` and `right` (also shown
 for a pair written by hand), and `step`. **Reverse direction** sets `reversed` while the wheel has
 actions and `inverted` while it scrolls (shown as **Reverse scrolling** when it scrolls only in some
 app); the speed is its own row. Custom's rows name the way the wheel turns, so with `reversed` the
@@ -198,7 +198,7 @@ the last one applies. A cycled DPI (`cycleDPI`) is kept on reload unless that mo
 
 **Buttons:** `gesture` (thumb), `back`, `forward`, `top` (behind the wheel), `middle` (wheel
 press), `thumbPanel` (MX Master 4 haptic/Actions Ring panel, 0x01A0), or any hex control ID such
-as `"0x00c4"`. Names apply only when the mouse has that control. **Select by Pressing** in Settings › Buttons, or
+as `"0x00c4"`. Names apply only when the mouse has that control. **Find by Pressing…** in Settings › Mouse › Buttons, or
 `puremouse probe`, finds a control's ID. The shared library also holds a table of display names for
 common mouse controls, apart from these config names (for example 0x00fd is the "DPI button");
 the log and the menu adopt it in later changes. Any control works by its hex ID whether or not it
@@ -207,7 +207,7 @@ has a name. A binding the mouse lacks, or cannot hand to PureMouse, is skipped f
 `devices` entry binds a control for one model only.
 
 The left and right buttons (0x0050 and 0x0051) cannot be bound, globally or per app. Their
-bindings are ignored with a warning; **Select by Pressing** always leaves them clicking normally.
+bindings are ignored with a warning; **Find by Pressing…** always leaves them clicking normally.
 
 **Actions:** `missionControl`, `appExpose`, `showDesktop`, `launchpad`, `spaceLeft`, `spaceRight`,
 `navigateBack`, `navigateForward`, `toggleScrollMode`, `cycleDPI`, `volumeUp`, `volumeDown`, `mute`,
