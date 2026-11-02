@@ -9,7 +9,7 @@
 
 <p align="center">
   A lightweight, native alternative to Logi Options+ for Logitech MX mice on macOS.<br>
-  Buttons, gestures, smooth scrolling, DPI and per-app settings, in about 5 MB of memory (about 25 MB with the menu bar app).
+  Buttons, gestures, smooth scrolling, DPI and per-app settings, in about 5 MB of memory (about 20 MB with the menu bar app).
 </p>
 
 <p align="center">
@@ -36,7 +36,7 @@ the mouse is idle, so is PureMouse.
 | | PureMouse 0.3.0, as measured |
 |---|---|
 | Download | 5.6 MB zip, 8.4 MB installed; universal (Apple silicon and Intel) |
-| Memory | Background process: 4-6 MB. Menu bar app: about 14 MB fresh, about 20 MB once its menu has been opened (medians of 5 on macOS 27.0.1) |
+| Memory | Background process: 4-6 MB. Menu bar app: about 10 MB fresh, about 14 MB once its menu has been opened (medians of 5 on macOS 27.0.1) |
 | Idle CPU | Zero in normal use: no polling, no timers, no wake-ups* |
 | Processes | Two: the background process and an optional menu bar app |
 | Network | None, unless you press **Check for Updates** |

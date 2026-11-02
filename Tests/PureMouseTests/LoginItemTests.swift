@@ -329,4 +329,16 @@ private final class Rig {
         #expect(NSDictionary(dictionary: try #require(rig.service.definitions[.menu]))
             == NSDictionary(dictionary: LoginItem.menuDefinition(app: appURL)))
     }
+
+    /// `scripts/lib.zsh` writes the same variable into the menu app's Info.plist (`LSEnvironment`), for
+    /// launches by the Finder; the two must not drift apart.
+    @Test func theInfoPlistSetsTheSameVariablesAsTheAgent() throws {
+        let environment = try #require(LoginItem.menuDefinition(app: appURL)["EnvironmentVariables"] as? [String: String])
+        #expect(!environment.isEmpty)
+        let lib = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "../../scripts/lib.zsh")
+        let script = try String(contentsOf: lib.standardizedFileURL, encoding: .utf8)
+        let written = script.components(separatedBy: "<key>LSEnvironment</key><dict>").dropFirst().first?
+            .components(separatedBy: "</dict>").first
+        #expect(written == environment.sorted { $0.key < $1.key }.map { "<key>\($0.key)</key><string>\($0.value)</string>" }.joined())
+    }
 }

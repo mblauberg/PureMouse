@@ -183,20 +183,25 @@ the figures below are medians of 5 runs of `scripts/measure-menu.sh` (`docs/deve
 read them as "about" and repeat the rig after each macOS release. The bare AppKit column is
 `scripts/measure-bare-appkit.sh` (5 runs, the same Mac and day).
 
-| Menu app, release build | MB | Bare AppKit status item and menu, same Mac |
-|---|---|---|
-| fresh, about 4.5 s after launch | 13.8 | 10.8 |
-| after 1 menu open | 19.8 | 15.2 |
-| after 3 menu opens | 19.8 | 15.4 |
-| after 10 menu opens | 20.2 | 15.6 |
-| after 200 status doorbells, 10 ms apart, menu never opened | 13.8 | |
-| Settings open, in this process | 42.9 | |
-| Settings closed again, in this process | 38.7 | |
+| Menu app, release build | Without the variable, MB | Shipped (`MallocSpaceEfficient=1`), MB | Bare AppKit status item and menu, same Mac |
+|---|---|---|---|
+| fresh, about 4.5 s after launch | 13.8 | 10.1 | 10.8 |
+| after 1 menu open | 19.8 | 14.1 | 15.2 |
+| after 3 menu opens | 19.9 | 14.1 | 15.4 |
+| after 10 menu opens | 19.9 | 14.2 | 15.6 |
+| after 200 status doorbells, 10 ms apart, menu never opened | 13.8 | 10.0 | |
+| Settings open, in this process | 43.1 | 33.9 | |
+| Settings closed again, in this process | 38.9 | 24.9 | |
+
+The shipped column is the rig, which passes on the Info.plist's `LSEnvironment` (the agent's plist
+sets the same variable); the other column is main's build without it (same Mac, same day).
+After 3 opens that is 0.71 times the baseline, and fresh is lower, which passes the adoption rule
+(at most 0.75 times, fresh no worse).
 
 What the numbers say:
 
-- **The first menu open costs about 6 MB, once.** Later opens add almost nothing (19.8 to 20.2 MB
-  over ten). A bare `NSStatusItem` with an `NSMenu` and nothing else grows by about 4 MB on its first
+- **The first menu open costs about 4 to 6 MB, once.** Later opens add almost nothing (14.1 to 14.2 MB
+  over ten, shipped; 19.8 to 19.9 without the variable). A bare `NSStatusItem` with an `NSMenu` and nothing else grows by about 4 MB on its first
   open (10.8 to 15.2 MB), so most of the cost is AppKit's, not the menu's; the rest is ours.
 - **Status updates did not grow it.** 200 doorbells posted 10 ms apart, `status.json` changed
   before each, left the fresh figure where it was (13.8 against 13.8 MB).
@@ -209,13 +214,13 @@ What the numbers say:
   about 4 MB, even after `malloc_zone_pressure_relief`: AppKit and SwiftUI keep the pages. Hence
   `Relaunch`: once Settings has closed, the app starts over as a fresh copy (the "closed" row above
   is the process without that restart; the rig does not restart it).
-- **Allocator.** The growth looks like freed small-malloc pages that stay resident and that
-  `malloc_zone_pressure_relief` does not return. Running the same rig with
-  `MallocSpaceEfficient=1` (a preference for reusing freed space over speed) gave: fresh 10.1,
-  after 1 open 14.3, after 3 opens 14.2, after 10 opens 14.2, 200 doorbells 10.1, Settings open
-  32.3 and closed 23.9 MB. That is 0.71 times the baseline at 3 opens (20.1 MB in the run beside it, before the rig took
-  the shipped bundle's Info.plist; the table above is from after), and fresh was lower, not
-  higher. This is a measurement only: whether to adopt it is a separate decision.
+- **Allocator.** The growth was freed small-malloc pages that stay resident and that
+  `malloc_zone_pressure_relief` does not return. The menu app now runs with
+  `MallocSpaceEfficient=1` (a preference for reusing freed space over speed), in its launchd
+  environment and, for a launch by the Finder, `LSEnvironment` in its Info.plist. The gate ran on the
+  branch build against main's, five runs each, side by side: 14.1 against 19.9 MB after 3 opens
+  (0.71 times) and 10.1 against 13.8 fresh. The variable is undocumented, so a macOS release may
+  ignore it; the rig is repeated after each one.
 - **The prefs-domain caveat.** For a while the rig's numbers were bimodal: some launches started
   about 4 MB higher, even for the fresh and doorbell scenarios, and a fresh bundle id or
   `defaults delete` of the rig's domain brought them back. The cause is a transient state of the
