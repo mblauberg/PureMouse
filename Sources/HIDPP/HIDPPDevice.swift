@@ -17,6 +17,7 @@ public final class HIDPPDevice {
     public var timeout: Duration = .milliseconds(1500)
 
     private var featureIndices: [UInt16: UInt8] = [0x0000: 0]
+    private var absentFeatures: Set<UInt16> = []
     private var pending: Pending?
     private var nextSoftwareID: UInt8
     private var closed = false
@@ -116,12 +117,22 @@ public final class HIDPPDevice {
 
     public func featureIndex(of feature: UInt16) async throws -> UInt8 {
         if let cached = featureIndices[feature] { return cached }
+        if absentFeatures.contains(feature) { throw HIDPPError.featureNotSupported(feature) }
         let response = try await request(featureIndex: 0, function: 0, params: feature.bigEndianBytes)
-        guard let featureIndex = response.first, featureIndex != 0 else {
+        guard let featureIndex = response.first else { throw HIDPPError.malformedResponse }
+        guard featureIndex != 0 else {
+            absentFeatures.insert(feature)
             throw HIDPPError.featureNotSupported(feature)
         }
         featureIndices[feature] = featureIndex
         return featureIndex
+    }
+
+    /// Knowledge from this endpoint's root replies; nil until looked up. Only a definite
+    /// index-zero answer caches absence, never a timeout, malformed reply or transport failure.
+    public func knownPresence(of feature: UInt16) -> Bool? {
+        if featureIndices[feature] != nil { return true }
+        return absentFeatures.contains(feature) ? false : nil
     }
 
     /// The cached feature ID at `featureIndex`, for routing events. Only features already

@@ -4,6 +4,37 @@ import Testing
 
 @MainActor
 struct HIDPPDeviceTests {
+    @Test func absentFeatureIsLookedUpOnlyOnce() async throws {
+        let fake = FakeDevice()
+        let device = fake.endpoint()
+        defer { device.close() }
+        #expect(device.knownPresence(of: 0x2121) == nil)
+        #expect(try await !device.hasFeature(0x2121))
+        #expect(device.knownPresence(of: 0x2121) == false)
+        #expect(try await !device.hasFeature(0x2121))
+        #expect(fake.transport.sent.count == 1)
+        #expect(device.feature(at: 0) == 0)
+    }
+
+    @Test func timeoutAndErrorsNeverCacheAbsence() async throws {
+        let fake = FakeDevice(features: [1: 0x2121])
+        let device = fake.endpoint()
+        defer { device.close() }
+        device.timeout = .milliseconds(10)
+        fake.failures[.init(0, 0)] = .timeout
+        await #expect(throws: HIDPPError.timeout) { try await device.hasFeature(0x2121) }
+        #expect(device.knownPresence(of: 0x2121) == nil)
+        fake.failures[.init(0, 0)] = .error(2)
+        await #expect(throws: HIDPPError.protocol20(code: 2)) { try await device.hasFeature(0x2121) }
+        #expect(device.knownPresence(of: 0x2121) == nil)
+        fake.failures.removeAll()
+        #expect(try await device.hasFeature(0x2121))
+        #expect(device.knownPresence(of: 0x2121) == true)
+        #expect(fake.transport.sent.count == 3)
+        #expect(try await device.hasFeature(0x2121))
+        #expect(fake.transport.sent.count == 3)
+    }
+
     private func waitForSends(_ count: Int, on transport: FakeTransport) async throws {
         let deadline = ContinuousClock.now + .seconds(2)
         while transport.sent.count < count, ContinuousClock.now < deadline { await Task.yield() }

@@ -317,16 +317,6 @@ final class Session {
         changed()
     }
 
-    /// Unsupported or malformed optional-feature replies can be skipped. Transport failures
-    /// and cancellation must reach the configure retry/lifecycle handling.
-    static func isOptionalFeatureReplyError(_ error: any Error) -> Bool {
-        guard let error = error as? HIDPPError else { return false }
-        switch error {
-        case .malformedResponse, .featureNotSupported, .protocol10, .protocol20: return true
-        case .timeout, .closed, .sendFailed: return false
-        }
-    }
-
     /// Battery state is informational, read from the source `apply` selected: 0x1004, or legacy
     /// 0x1000 only in its absence.
     private func readBattery() async {
@@ -364,7 +354,7 @@ final class Session {
         if try await device.hasFeature(SmartShift.id) { return .smartShift }
         do {
             return try await device.hasFeature(SmartShiftEnhanced.id) ? .enhanced : nil
-        } catch where Self.isOptionalFeatureReplyError(error) {
+        } catch where (error as? HIDPPError)?.isDeviceAnswer == true {
             SessionLog.error("\(name): SmartShift Enhanced failed (untested mouse): \(error)")
             return nil
         }
@@ -404,7 +394,7 @@ final class Session {
                 try await setScrollMode(clutch, mode ?? current, autoDisengage: threshold)
             }
             state.wheelMode = mode ?? current
-        } catch where enhanced && Self.isOptionalFeatureReplyError(error) {
+        } catch where enhanced && (error as? HIDPPError)?.isDeviceAnswer == true {
             SessionLog.error("\(name): SmartShift Enhanced failed (untested mouse): \(error)")
         }
     }
@@ -423,11 +413,7 @@ final class Session {
         guard state.resolutions == nil else { return }
         do {
             state.resolutions = try await AdjustableDPI.resolutions(device)
-        } catch let error as CancellationError {
-            throw error
-        } catch HIDPPError.closed {
-            throw HIDPPError.closed
-        } catch {
+        } catch where (error as? HIDPPError)?.isDeviceAnswer == true {
             SessionLog.error("\(name): reading supported DPI failed: \(error); DPI is set as configured")
         }
     }
@@ -446,7 +432,11 @@ final class Session {
     static let restoreTimeout: Duration = .milliseconds(400)
 
     /// The hand-backs `restore` makes, each one request when feature indices are cached.
-    var restoreSteps: Int { (wheelsMayBeDiverted ? 2 : 0) + divertedControls.count }
+    var restoreSteps: Int {
+        let wheels = wheelsMayBeDiverted
+            ? [HiResWheel.id, ThumbWheel.id].filter { device.knownPresence(of: $0) == true }.count : 0
+        return wheels + divertedControls.count
+    }
 
     /// Hands the mouse back in its native state: buttons undiverted and wheels reporting as
     /// ordinary HID scrolling, so it works without PureMouse. Used when PureMouse quits or pauses.
