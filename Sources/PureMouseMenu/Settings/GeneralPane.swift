@@ -97,7 +97,7 @@ struct GeneralPane: View {
         .confirmationDialog("Reset all settings?", isPresented: $confirmingReset) {
             Button("Reset All Settings", role: .destructive) { model.resetAll() }
         } message: {
-            Text("Every button, scrolling and pointer setting goes back to how the mouse works without PureMouse. The current config file is kept as \(model.backupName), replacing an earlier backup.")
+            Text("Every button, scrolling and pointer setting goes back to how the mouse works without PureMouse. Unless it is empty, the current config file is kept as \(model.backupName), replacing an earlier backup.")
         }
     }
 

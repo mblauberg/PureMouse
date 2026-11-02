@@ -73,9 +73,10 @@ beside the resolved config (`ConfigFile`, `FileLock`), so two writer processes n
 other's keys; a writer waits while another holds it. The lock is a separate file because the
 config is replaced atomically. Hand edits take no lock: saves replay their keys onto the file as
 it is. `control.json` writes likewise lock `control.json.lock` in the companion directory, read
-the file and change only the fields the writer owns (`DaemonLink.ControlFields`: the status menu
-owns `paused`, Settings owns `capture`, both may send `useConfiguredDPI`), keeping the others as
-written. `paused` is written only with a pending request and `useConfiguredDPI` only when new;
+the file and change only the fields the writer owns (`DaemonLink.ControlFields`: today's menu app
+owns all three; split into processes, the status menu owns `paused`, Settings owns `capture` and
+both may send `useConfiguredDPI`), keeping the others as written. `paused` is written only with a pending request, `capture` only when that writer changed it and
+`useConfiguredDPI` only when new;
 with no file, `paused` starts from the status.
 
 The daemon watches the config's directory with a `DispatchSource` (the file is replaced atomically,

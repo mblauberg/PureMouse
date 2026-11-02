@@ -10,7 +10,7 @@ let package = Package(
         // Shared by the daemon and the menu bar app: config model and the status/control channel.
         .target(name: "PureMouseKit"),
         // The menu side's logic, shared by the menu bar app and the Settings helper: config editing,
-        // the config and daemon files, select by pressing. Foundation and Observation only.
+        // the config and daemon files, select by pressing. No AppKit or SwiftUI.
         .target(
             name: "PureMouseAppSupport",
             dependencies: ["PureMouseKit"],
