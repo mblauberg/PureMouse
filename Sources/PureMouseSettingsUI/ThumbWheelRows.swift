@@ -48,7 +48,7 @@ struct ThumbWheelRows: View {
         if isMouse {
             model.update(debounce: debounce, in: model.scopeTarget, change)
         } else {
-            model.update(debounce: debounce, change)
+            model.update(debounce: debounce, change)  // All Mice and apps
         }
     }
 
@@ -104,6 +104,12 @@ struct ThumbWheelRows: View {
         }
     }
 
+    /// What a mouse's thumb wheel keys apply on top of: All Mice's wheel. None at the top level, whose
+    /// own keys are the base; an app passes the global one itself.
+    static func base(_ config: ConfigTree, _ scope: ConfigScope) -> ThumbWheelState {
+        scope.deviceKey == nil ? .initial : config.thumbWheel(at: ["thumbWheel"])
+    }
+
     /// The rows that apply to what the wheel does at `path`.
     static func advancedRows(_ config: ConfigTree, path: [String], base: ThumbWheelState) -> [ThumbWheelAdvancedRow] {
         let inApp = path.first == "apps"
@@ -142,10 +148,10 @@ struct ThumbWheelRows: View {
             InheritedChoiceRow(title: "Reverse direction", help: help, spokenTitle: "Reverse thumb wheel direction",
                                value: value, options: [false, true], text: { $0 ? "Reversed" : "Normal" },
                                availability: advancedAvailability) { new in
-                edit { $0.set(new, at: path + ["inverted"]) }
+                edit { $0.setThumbWheelKey(new, "inverted", at: path) }
             }
         } else {
-            Toggle(isOn: model.toggle(path + ["inverted"], default: false)) {
+            Toggle(isOn: model.toggle(path + ["inverted"], default: false)) {  // All Mice and apps
                 RowLabel("Reverse direction", help: help, mouseDefault: inverted == nil, availability: advancedAvailability)
             }
             .accessibilityLabel("Reverse thumb wheel direction")
@@ -161,7 +167,7 @@ struct ThumbWheelRows: View {
                     .accessibilityHidden(true)
                 Stepper("Turn distance\(spokenSuffix)",
                         value: Binding(get: { state.step },
-                                       set: { new in edit(debounce: true) { $0.set(new, at: path + ["step"]) } }),
+                                       set: { new in edit(debounce: true) { $0.setThumbWheelKey(new, "step", at: path) } }),
                         in: 1...36)
                     .labelsHidden()
                     .accessibilityValue("\(state.step)")

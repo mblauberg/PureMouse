@@ -58,17 +58,19 @@ struct PopUpLabel: View {
 struct PopUpMenu<Content: View>: View {
     let text: String
     var style: HierarchicalShapeStyle = .primary
+    /// Takes the width it is given and cuts its text with an ellipsis, rather than its own width.
+    var flexible = false
     @ViewBuilder var content: Content
 
     var body: some View {
-        Menu {
+        let menu = Menu {
             content
         } label: {
             PopUpLabel(text: text, style: style)
         }
         .menuStyle(.button)
         .menuIndicator(.hidden)
-        .fixedSize()
+        if flexible { menu } else { menu.fixedSize() }
     }
 }
 

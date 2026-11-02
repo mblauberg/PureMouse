@@ -351,3 +351,48 @@ private func makeModel(config: String = "{}", devices: [Status.Device], defaults
     link.requestConfiguredDPI(device: m750Key.uppercased())
     #expect(sandbox.control()?.device == m750Key)
 }
+
+// MARK: The thumb wheel on a mouse, and what keeps a row
+
+private let swappedVolume = #"{"thumbWheel":{"action":"volume","reversed":true},"devices":{"\#(mx)":{"name":"MX","dpi":800}}}"#
+
+private func kitWheel(_ config: ConfigTree, _ key: String) throws -> Config.ThumbWheel.Mode? {
+    try JSONDecoder().decode(Config.self, from: config.data()).forDevice(key).thumbWheel?.mode
+}
+
+@Test func customOnAMouseThatInheritsAnActionKeepsWhatKitResolvedForItsDirections() throws {
+    var config = try tree(swappedVolume)
+    let before = try kitWheel(config, mx)
+    #expect(before == .actions(left: .volumeDown, right: .volumeUp))
+    let path = config.prefix(of: scope(mx)) + ["thumbWheel"]
+    let base = config.thumbWheel(at: ["thumbWheel"])
+    config.chooseThumbWheel(.custom, at: path, base: base)
+    // Custom writes the pair the mouse already had, so nothing changes until a direction is picked.
+    #expect(try kitWheel(config, mx) == before)
+}
+
+@Test func theThumbWheelGivesBackWithoutLettingAMixedCaseTwinApply() throws {
+    var config = try tree(#"{"devices":{"\#(mx.uppercased())":{"thumbWheel":{"action":"zoom"}},"\#(mx)":{"thumbWheel":{"action":"volume"}}}}"#)
+    let path = config.prefix(of: scope(mx)) + ["thumbWheel"]
+    config.chooseThumbWheel(.inherit, at: path)
+    config.setThumbWheelKey(nil, "inverted", at: path)
+    // Kit keeps the last spelling whole: with its wheel given back, the zoom of the other must not apply.
+    #expect(try kitWheel(config, mx).map { $0 == .scroll } ?? true)
+    #expect(config.resolved(["thumbWheel"], in: scope(mx)) == nil)
+    var step = try tree(#"{"devices":{"\#(mx.uppercased())":{"thumbWheel":{"step":9}},"\#(mx)":{"thumbWheel":{"step":5}}}}"#)
+    step.setThumbWheelKey(nil, "step", at: step.prefix(of: scope(mx)) + ["thumbWheel"])
+    #expect(step.resolvedInt(["thumbWheel", "step"], in: scope(mx)) == nil)
+}
+
+@Test func aRowStaysForAValueOnlyTheMouseItselfHolds() throws {
+    // Nothing at the top level; the M750, which has no SmartShift, holds the threshold.
+    let config = try tree(#"{"devices":{"\#(m750Key)":{"name":"M750","scrollWheel":{"smartShiftThreshold":20}}}}"#)
+    let layout = ScrollingLayout(config: config, devices: [m750], scope: scope(m750Key))
+    #expect(layout.availability(.smartShift) == .unsupportedButConfigured)
+    #expect(layout.shows(.smartShift))
+    // Without it the row is hidden, and the MX (which has it) is no different for another mouse's value.
+    let bare = ScrollingLayout(config: ConfigTree(), devices: [m750], scope: scope(m750Key))
+    #expect(bare.availability(.smartShift) == .hidden)
+    let other = try tree(#"{"devices":{"\#(mx)":{"name":"MX","scrollWheel":{"smartShiftThreshold":20}}}}"#)
+    #expect(ScrollingLayout(config: other, devices: [m750], scope: scope(m750Key)).availability(.smartShift) == .hidden)
+}

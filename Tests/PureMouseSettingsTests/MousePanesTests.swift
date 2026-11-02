@@ -193,3 +193,72 @@ private func styleName(_ style: HierarchicalShapeStyle) -> String { String(descr
     #expect(source.contains("model.showsMouseMenu"))
     #expect(source.contains(".help(Self.appsNote)") && source.contains(".accessibilityHint(Self.appsNote)"))
 }
+
+// MARK: Writes land in the scope the pane edits (#54)
+
+private let writeCall = #"(model\.(update|set|setDPI|toggle)(\(|\s*\{)|\$0\.(set|bind)\()"#
+
+/// The write calls in the four panes that edit a mouse, as `(file, line, text)`, that name no scope: a
+/// `model.update`, `model.set`, `model.setDPI` or `model.toggle` without `in:`, and a `$0.set` or
+/// `$0.bind` without `in:`. A line that is meant for All Mice alone says so with a `// All Mice` comment.
+private func unscopedWrites() throws -> [String] {
+    let sources = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appending(path: "Sources/PureMouseSettingsUI")
+    let call = try Regex(writeCall)
+    var found: [String] = []
+    for file in ["PointerPane", "ButtonsPane", "ScrollingPane", "ThumbWheelRows"] {
+        let lines = try String(contentsOf: sources.appending(path: "\(file).swift"), encoding: .utf8)
+            .split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        for (number, line) in lines.enumerated() where !line.trimmingCharacters(in: .whitespaces).hasPrefix("//") {
+            guard line.contains(call) else { continue }
+            // The call's own arguments: its line and the next, which a long one wraps onto.
+            let statement = line + (number + 1 < lines.count ? lines[number + 1] : "")
+            if !statement.contains("in:") && !line.contains("// All Mice") { found.append("\(file):\(number + 1) \(line.trimmingCharacters(in: .whitespaces))") }
+        }
+    }
+    return found
+}
+
+@Test func everyWriteInTheMousePanesNamesTheScopeItEditsOrSaysItIsForAllMiceOnly() throws {
+    let offenders = try unscopedWrites()
+    #expect(offenders.isEmpty, "\(offenders)")
+}
+
+@Test func theScopeScanSeesAWriteThatLostItsScope() {
+    // Guards the scan itself: the three mutants it exists for would each be reported.
+    let mutants = ["model.setDPI(dpi, debounce: debounce)", "model.update { $0.apply(feel) }", "model.update(debounce: debounce, change)"]
+    let call = try! Regex(writeCall)
+    for mutant in mutants { #expect(mutant.contains(call) && !mutant.contains("in:")) }
+}
+
+// MARK: A mouse's thumb wheel builds on All Mice's (#54)
+
+private let wheelMouse = "mb03400000000"
+private let swappedVolume = #"{"thumbWheel":{"action":"volume","reversed":true},"devices":{"mb03400000000":{"name":"MX","dpi":800}}}"#
+
+@MainActor @Test func aMouseThatInheritsANonScrollActionShowsTheAdvancedRowsTheLayoutSays() throws {
+    let config = try ConfigTree(data: Data(swappedVolume.utf8))
+    let scope = try #require(ConfigScope.device(wheelMouse))
+    let path = config.prefix(of: scope) + ["thumbWheel"]
+    let layout = ScrollingLayout(config: config, devices: [], scope: scope)
+    let rows = ThumbWheelRows.advancedRows(config, path: path, base: ThumbWheelRows.base(config, scope)).map(ScrollingLayout.Row.thumbWheel)
+    #expect(rows == layout.advancedThumbWheelRows)
+    #expect(!rows.isEmpty)
+    // Built on nothing, the wheel would scroll and offer other rows: the mutant this guards.
+    let onNothing = ThumbWheelRows.advancedRows(config, path: path, base: .initial).map(ScrollingLayout.Row.thumbWheel)
+    #expect(onNothing != layout.advancedThumbWheelRows)
+    // Swap directions reads All Mice's swap, which the mouse inherits.
+    #expect(config.thumbWheel(at: path, base: ThumbWheelRows.base(config, scope)).reversed)
+    // At the top level the wheel's own keys are the base: nothing under it.
+    #expect(ThumbWheelRows.base(config, .global).reversed == false)
+}
+
+@Test func bothThumbWheelSectionsOfScrollingBuildOnAllMicesWheel() throws {
+    let source = try String(contentsOf: URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appending(path: "Sources/PureMouseSettingsUI/ScrollingPane.swift"), encoding: .utf8)
+    let calls = source.components(separatedBy: "ThumbWheelRows(").dropFirst()
+    #expect(calls.count == 2)
+    for call in calls { #expect(call.prefix(400).contains("base: ThumbWheelRows.base(config, scope)")) }
+}

@@ -151,6 +151,21 @@ extension ConfigTree {
         ThumbWheelChoice.read(self[path] as? [String: Any], inApp: Self.leavesToWiderScope(path))
     }
 
+    /// Writes (or, for nil, removes) one thumb-wheel key at `path + [key]`. In a mouse's entry a
+    /// removal keeps the shadow another spelling of its key needs (`removeKeepingShadow`).
+    public mutating func setThumbWheelKey(_ value: Any?, _ key: String, at path: [String]) {
+        put(value, at: path + [key])
+    }
+
+    private mutating func put(_ value: Any?, at path: [String]) {
+        if value == nil, path.count > 2, path[0] == "devices" {
+            guard contains(path) else { return }
+            removeKeepingShadow(at: path, entry: Array(path.prefix(2)))
+        } else {
+            set(value, at: path)
+        }
+    }
+
     /// Writes a choice from the pop-up. A preset sets `action` and drops the step, so it brings
     /// its own; Custom writes the current pair as `left` and `right`, so the wheel does the same
     /// until one is changed, and keeps the step it had.
@@ -158,23 +173,23 @@ extension ConfigTree {
         let inApp = Self.leavesToWiderScope(path)
         switch choice {
         case .inherit:
-            for key in ThumbWheelChoice.keys { set(nil, at: path + [key]) }
+            for key in ThumbWheelChoice.keys { put(nil, at: path + [key]) }
         case .scroll:
-            set(inApp ? "scroll" : nil, at: path + ["action"])
-            for key in ["left", "right", "step"] { set(nil, at: path + [key]) }
+            put(inApp ? "scroll" : nil, at: path + ["action"])
+            for key in ["left", "right", "step"] { put(nil, at: path + [key]) }
         case .preset(let name):
-            set(name, at: path + ["action"])
-            for key in ["left", "right", "step"] { set(nil, at: path + [key]) }
+            put(name, at: path + ["action"])
+            for key in ["left", "right", "step"] { put(nil, at: path + [key]) }
         case .custom:
             guard thumbWheelChoice(at: path) != .custom else { return }
             let current = thumbWheel(at: path, base: base)
             let pair = current.pair ?? .init(left: .named("none"), right: .named("none"))
-            set(nil, at: path + ["action"])
-            set(nil, at: path + ["step"])
-            set(pair.left.json, at: path + ["left"])
-            set(pair.right.json, at: path + ["right"])
+            put(nil, at: path + ["action"])
+            put(nil, at: path + ["step"])
+            put(pair.left.json, at: path + ["left"])
+            put(pair.right.json, at: path + ["right"])
             if thumbWheel(at: path, base: base).step != current.step {
-                set(current.step, at: path + ["step"])
+                put(current.step, at: path + ["step"])
             }
         }
     }
@@ -188,7 +203,7 @@ extension ConfigTree {
     /// removes it (Same as Everywhere) and false is kept, overriding a reversed global.
     public mutating func setThumbWheelReversed(_ reversed: Bool?, at path: [String]) {
         let inApp = Self.leavesToWiderScope(path)
-        set(inApp ? reversed : (reversed == true ? true : nil), at: path + ["reversed"])
+        put(inApp ? reversed : (reversed == true ? true : nil), at: path + ["reversed"])
     }
 
     /// The config key that holds what turning the wheel one way ("left" or "right") does.
@@ -198,6 +213,6 @@ extension ConfigTree {
 
     /// Sets what turning one way does ("left" or "right").
     public mutating func setThumbWheel(_ direction: String, to action: ButtonAction, at path: [String]) {
-        set(action.json, at: path + [direction])
+        put(action.json, at: path + [direction])
     }
 }

@@ -58,6 +58,7 @@ struct ScrollingPane: View {
             if layout.showsThumbWheel {
                 Section("Thumb Wheel") {
                     ThumbWheelRows(path: config.prefix(of: scope) + ["thumbWheel"], rows: .standard,
+                                   base: ThumbWheelRows.base(config, scope),
                                    inherited: scope.deviceKey == nil ? nil : config.thumbWheelChoice(at: ["thumbWheel"]),
                                    source: InheritedScope.allMice, scope: scope,
                                    availability: layout.availability(.thumbWheelAction))
@@ -95,7 +96,7 @@ struct ScrollingPane: View {
                     model.update(in: target) { $0.setSmoothScroll(new, in: scope) }
                 }
             } else {
-                Toggle(isOn: Binding(get: { model.config.smoothScrollEnabled }, set: { on in model.update { $0.smoothScrollEnabled = on } })) {
+                Toggle(isOn: Binding(get: { model.config.smoothScrollEnabled }, set: { on in model.update { $0.smoothScrollEnabled = on } })) {  // All Mice only
                     RowLabel("Smooth scrolling", help: help, availability: availability)
                 }
                 .accessibilityLabel("Smooth scrolling")
@@ -123,7 +124,7 @@ struct ScrollingPane: View {
             } else {
                 LabeledContent {
                     Picker("Feel", selection: Binding(get: { selection }, set: { feel in
-                        if let feel { model.update { $0.apply(feel) } }
+                        if let feel { model.update { $0.apply(feel) } }  // All Mice only
                     })) {
                         ForEach(Feel.presets) { Text($0.label).tag($0 as Feel?) }
                     }
@@ -149,7 +150,7 @@ struct ScrollingPane: View {
                     model.update(in: target) { $0.set(new, at: path, in: target.scope) }
                 }
             } else {
-                Toggle(isOn: model.toggle(path, default: false)) {
+                Toggle(isOn: model.toggle(path, default: false)) {  // All Mice only
                     RowLabel("Reverse direction", help: "Reverses this wheel.",
                              mouseDefault: model.config.bool(path) == nil, availability: availability)
                 }
@@ -166,13 +167,13 @@ struct ScrollingPane: View {
                 InheritedChoiceRow(title: "Wheel mode", help: "Mode when the mouse connects.",
                                    value: model.inheritedString(["scrollWheel", "mode"], in: target, default: ""),
                                    options: ["ratchet", "freespin"],
-                                   text: { $0 == "ratchet" ? "Ratchet" : $0 == "freespin" ? "Free Spin" : "Mouse's own" },
+                                   text: { $0 == "ratchet" ? "Ratchet" : $0 == "freespin" ? "Free Spin" : "Mouse Default" },
                                    availability: availability) { new in
                     model.update(in: target) { $0.set(new, at: ["scrollWheel", "mode"], in: target.scope) }
                 }
             } else {
                 LabeledContent {
-                    Picker("Wheel mode", selection: Binding<String?>(get: { mode }, set: { model.set($0, at: ["scrollWheel", "mode"]) })) {
+                    Picker("Wheel mode", selection: Binding<String?>(get: { mode }, set: { model.set($0, at: ["scrollWheel", "mode"]) })) {  // All Mice only
                         Text("Ratchet").tag("ratchet" as String?)
                         Text("Free Spin").tag("freespin" as String?)
                     }
@@ -204,7 +205,7 @@ struct ScrollingPane: View {
                 }
             } else {
                 let on = threshold.map { $0 < 255 } ?? true
-                Toggle(isOn: Binding(get: { on }, set: { model.set($0 ? 12 : 255, at: path) })) {
+                Toggle(isOn: Binding(get: { on }, set: { model.set($0 ? 12 : 255, at: path) })) {  // All Mice only
                     RowLabel("SmartShift", help: help, mouseDefault: threshold == nil, availability: availability)
                 }
                 .accessibilityLabel("SmartShift")
@@ -253,6 +254,7 @@ private struct ScrollingAdvancedSheet: View {
                 if !layout.advancedThumbWheelRows.isEmpty {
                     Section("Thumb Wheel") {
                         ThumbWheelRows(path: config.prefix(of: scope) + ["thumbWheel"], rows: .advanced,
+                                       base: ThumbWheelRows.base(config, scope),
                                        inherited: scope.deviceKey == nil ? nil : config.thumbWheelChoice(at: ["thumbWheel"]),
                                        source: InheritedScope.allMice, scope: scope,
                                        availability: layout.availability(.thumbWheelAction))
@@ -273,7 +275,7 @@ private struct ScrollingAdvancedSheet: View {
                     model.update(in: model.scopeTarget) { $0.set(new, at: path, in: model.scope) }
                 }
             } else {
-                Toggle(isOn: model.toggle(path, default: true)) {
+                Toggle(isOn: model.toggle(path, default: true)) {  // All Mice only
                     RowLabel("Hold Shift to scroll sideways", availability: availability)
                 }
                 .accessibilityLabel("Hold Shift to scroll sideways")

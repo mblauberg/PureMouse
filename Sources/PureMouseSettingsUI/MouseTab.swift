@@ -120,19 +120,24 @@ struct MouseHeader: View {
     let selection: MouseSelection
 
     var body: some View {
-        ZStack {
-            HStack {
+        // The segments sit in the middle; the two sides share what is left equally, so the pop-up
+        // gets the room beside them and cuts a long name with an ellipsis instead of overlapping.
+        HStack {
+            Group {
                 // The leading slot is the mouse pop-up's, with two or more mice (docs/ui-design.md).
                 if model.showsMouseMenu { MousePopUp() }
-                Spacer()
-                if selection.segment == .buttons { findByPressing }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             Picker("Mouse settings", selection: Binding(get: { selection.segment }, set: { model.clearCaptureOutcome(); selection.select($0) })) {
                 ForEach(MouseSegment.allCases, id: \.self) { Text($0.title).tag($0) }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
             .fixedSize()
+            Group {
+                if selection.segment == .buttons { findByPressing }
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
         // In line with the grouped boxes below, whose form insets them by the same margin.
         .padding(.horizontal, 20)
@@ -164,18 +169,14 @@ struct MouseHeader: View {
 struct MousePopUp: View {
     @Environment(AppModel.self) private var model
 
-    /// The longest name the closed pop-up shows whole; the menu lists the full one.
-    private static let shownCharacters = 18
-
     static let appsNote = "Apps are the same for every mouse."
 
     private var closedText: String {
-        guard let name = model.selectedMouse?.name else { return InheritedScope.allMice }
-        return name.count > Self.shownCharacters ? String(name.prefix(Self.shownCharacters - 1)) + "…" : name
+        model.selectedMouse?.name ?? InheritedScope.allMice
     }
 
     var body: some View {
-        PopUpMenu(text: closedText) {
+        PopUpMenu(text: closedText, flexible: true) {
             Picker("Mouse", selection: Binding<String?>(get: { model.selectedMouse?.key }, set: { model.selectMouse($0) })) {
                 Text(InheritedScope.allMice).tag(nil as String?)
                 Divider()

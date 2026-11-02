@@ -34,7 +34,8 @@ answering a question people have, and a good default means most people never tou
 - It reopens on the last tab and segment (`SettingsSelection`) and remembers its position.
 - Mouse's header strip has a leading slot for the mouse pop-up (`MousePopUp`: All Mice, then each
   known mouse), shown with two or more mice known or any `devices` entry. Its closed text is the
-  mouse's name, cut at 18 characters. The Apps note ("Apps are the same for every mouse.") is the
+  mouse's name, truncated at the tail by the width the strip leaves it (one line, never over the
+  centred segments). The Apps note ("Apps are the same for every mouse.") is the
   pop-up's last menu item, a tooltip and its accessibility hint rather than a line under it: a line
   costs 15 pt in a strip every segment shares, and Scrolling has 6 pt to spare. A pane under a
   chosen mouse shows an inherited row as `InheritedValue` does for an app: the value in effect,
