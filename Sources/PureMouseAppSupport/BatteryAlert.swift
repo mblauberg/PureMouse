@@ -13,15 +13,15 @@ public enum BatteryAlert {
         public static func < (a: Band, b: Band) -> Bool { a.rank < b.rank }
     }
 
-    public static let lowPercent = 20
-    public static let criticalPercent = 5
+    static let lowPercent = 20
+    static let criticalPercent = 5
     /// A band is left again only this far above its edge, so a reading hovering at 20% does not
     /// notify on every dip.
-    public static let hysteresis = 5
+    static let hysteresis = 5
 
     /// The notification to post, if any, and the state to keep. `previous` is nil the first time
     /// this mouse is seen: that reading sets the state and never notifies.
-    public static func evaluate(previous: Band?, battery: Status.Device.Battery) -> (alert: Band?, state: Band) {
+    static func evaluate(previous: Band?, battery: Status.Device.Battery) -> (alert: Band?, state: Band) {
         if battery.charging { return (nil, .none) }
         let percent = effectivePercent(battery)
         guard let previous else { return (nil, band(at: percent)) }
@@ -39,7 +39,7 @@ public enum BatteryAlert {
     }
 
     /// Level-only mice report no percentage: their low and critical levels stand at the edges.
-    public static func effectivePercent(_ battery: Status.Device.Battery) -> Int {
+    static func effectivePercent(_ battery: Status.Device.Battery) -> Int {
         if let percent = battery.percent { return percent }
         switch battery.level {
         case .critical: return criticalPercent
@@ -48,7 +48,7 @@ public enum BatteryAlert {
         }
     }
 
-    public static func band(at percent: Int) -> Band {
+    static func band(at percent: Int) -> Band {
         percent <= criticalPercent ? .critical : percent <= lowPercent ? .low : .none
     }
 
@@ -84,8 +84,8 @@ public struct BatteryAlertStore {
         public var battery: Status.Device.Battery
     }
 
-    public var url: URL
-    public private(set) var bands: [String: BatteryAlert.Band]
+    var url: URL
+    private(set) var bands: [String: BatteryAlert.Band]
     /// Mice seen live in the previous status. One not in it has just connected (or this process
     /// just started): its first reading only records, however far it moved while away.
     private var live: Set<String> = []

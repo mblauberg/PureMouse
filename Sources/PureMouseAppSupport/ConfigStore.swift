@@ -9,7 +9,7 @@ import PureMouseKit
 public final class ConfigStore {
     public private(set) var config = ConfigTree()
     /// Why the file on disk cannot be used (unreadable, not JSON, or rejected by the decoder).
-    public private(set) var configProblem: String?
+    private(set) var configProblem: String?
     /// Why the last change could not be saved.
     public private(set) var writeError: String?
 
@@ -32,7 +32,7 @@ public final class ConfigStore {
     @ObservationIgnored private var fileWatch: DispatchSourceFileSystemObject?
 
     /// Slider writes wait this long after the last change.
-    public static let debounce: TimeInterval = 0.3
+    static let debounce: TimeInterval = 0.3
 
     public init(locations: Locations, clock: Clock = .main) {
         self.locations = locations

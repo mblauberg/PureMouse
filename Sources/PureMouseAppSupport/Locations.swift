@@ -14,9 +14,9 @@ public struct Locations: Sendable {
     /// The status/control channel's directory.
     public var companion: URL
     /// `~/Library/LaunchAgents`.
-    public var launchAgents: URL
+    var launchAgents: URL
     /// `PUREMOUSE_DAEMON` is set: a development run against a stub daemon.
-    public var daemonOverridden: Bool
+    var daemonOverridden: Bool
 
     public init(config: URL, log: URL, daemon: URL?, companion: URL, launchAgents: URL, daemonOverridden: Bool = false) {
         self.config = config
@@ -30,7 +30,7 @@ public struct Locations: Sendable {
     /// Resolves every location as an installed app (or a development run with overrides) would.
     /// `bundle` is the menu app's bundle: the daemon is looked for in the app it is nested in,
     /// `PureMouse.app/Contents/Library/LoginItems/PureMouse Menu.app` → `PureMouse.app/Contents/MacOS/puremouse`.
-    public init(environment: [String: String], home: URL, bundle: URL,
+    init(environment: [String: String], home: URL, bundle: URL,
                 isExecutable: (URL) -> Bool = { FileManager.default.isExecutableFile(atPath: $0.path) }) {
         config = environment["PUREMOUSE_CONFIG"].map { URL(fileURLWithPath: $0) }
             ?? home.appending(path: ".config/puremouse/config.json")
@@ -58,9 +58,9 @@ public struct Locations: Sendable {
     /// The low-battery bands already announced (`BatteryAlertStore`).
     public var batteryAlerts: URL { companion.appending(path: "battery-alerts.json") }
     /// Left by the daemon's `menu off`, removed by `menu on`.
-    public var menuHidden: URL { companion.appending(path: "menu-hidden") }
+    var menuHidden: URL { companion.appending(path: "menu-hidden") }
 
-    public func launchAgent(_ label: String) -> URL { launchAgents.appending(path: "\(label).plist") }
+    func launchAgent(_ label: String) -> URL { launchAgents.appending(path: "\(label).plist") }
 
     /// Start at login: the daemon's agent exists.
     public var startsAtLogin: Bool { FileManager.default.fileExists(atPath: launchAgent(Companion.daemonLabel).path) }

@@ -44,7 +44,7 @@ extension ConfigTree {
     /// for the same control ("back", "0x0053", "53"), so a hand-written hex key is read and edited
     /// in place rather than shadowed by a second key. Without one, `button` itself. `scope` is
     /// where `buttons` lives: the top level, or an app (`["apps", id]`).
-    public func buttonKey(_ button: String, in scope: [String] = []) -> String {
+    func buttonKey(_ button: String, in scope: [String] = []) -> String {
         guard let buttons = self[scope + ["buttons"]] as? [String: Any], buttons[button] == nil,
               let cid = NamedButton.cid(forKey: button) else { return button }
         return buttons.keys.sorted().first { NamedButton.cid(forKey: $0) == cid } ?? button

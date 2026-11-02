@@ -144,7 +144,7 @@ public enum ActionCatalog {
     }
 
     /// Launchpad became "Apps" in macOS 26.
-    public static var launchpadLabel: String {
+    static var launchpadLabel: String {
         ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26 ? "Apps" : "Launchpad"
     }
 }
@@ -177,13 +177,13 @@ public enum NamedButton: String, CaseIterable, Sendable {
 
     /// Listed when no mouse has reported its controls. The thumb panel is on the MX Master 4
     /// only, so it shows when a mouse has it or the config binds it.
-    public var listedByDefault: Bool { self != .thumbPanel }
+    var listedByDefault: Bool { self != .thumbPanel }
 
     public static func config(cid: UInt16) -> String {
         allCases.first { $0.cid == cid }?.rawValue ?? hex(cid)
     }
 
-    public static func hex(_ cid: UInt16) -> String { String(format: "0x%04x", cid) }
+    static func hex(_ cid: UInt16) -> String { String(format: "0x%04x", cid) }
 
     /// The control ID a config key names: a button name or a hex ID.
     public static func cid(forKey key: String) -> UInt16? {

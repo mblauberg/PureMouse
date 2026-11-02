@@ -16,7 +16,7 @@ public enum ThumbWheelChoice: Hashable, Identifiable, Sendable {
     public var id: Self { self }
 
     /// Kit's preset names in the order the pop-up lists them.
-    public static let presetOrder = ["zoom", "volume", "tabs", "spaces"]
+    static let presetOrder = ["zoom", "volume", "tabs", "spaces"]
 
     /// The pop-up's choices after "Same as Everywhere".
     public static let menu: [ThumbWheelChoice] = [.scroll] + presetOrder.map(ThumbWheelChoice.preset) + [.custom]
@@ -72,7 +72,7 @@ public struct ThumbWheelState: Equatable, Sendable {
     public var scrolls: Bool { pair == nil }
 
     /// The state after the keys in `object`, on top of this one.
-    public func applying(_ object: [String: Any]?) -> ThumbWheelState {
+    func applying(_ object: [String: Any]?) -> ThumbWheelState {
         guard let object else { return self }
         var state = self
         switch object["action"] {
@@ -103,14 +103,14 @@ public struct ThumbWheelState: Equatable, Sendable {
     }
 
     /// A preset's pair, as named actions, and its default step.
-    public static func preset(_ name: String) -> (pair: Pair, step: Int)? {
+    static func preset(_ name: String) -> (pair: Pair, step: Int)? {
         guard let preset = Config.ThumbWheel.presets[name],
               let left = actionName(preset.left), let right = actionName(preset.right) else { return nil }
         return (Pair(left: .named(left), right: .named(right)), preset.step)
     }
 
     /// The config name of a named action.
-    public static func actionName(_ action: Action) -> String? {
+    static func actionName(_ action: Action) -> String? {
         Action.named.first { $0.value == action }?.key
     }
 }

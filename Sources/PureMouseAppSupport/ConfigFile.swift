@@ -9,7 +9,7 @@ public struct ConfigFile {
 
     public init(url: URL) { self.url = url }
 
-    public enum SaveError: Error {
+    enum SaveError: Error {
         /// The file on disk does not load now; nothing is built on it.
         case fileHasError
         /// The edited config would not load (the daemon's own check).
@@ -20,7 +20,7 @@ public struct ConfigFile {
     }
 
     /// The file itself: a symlinked config (dotfiles) resolves to its target.
-    public var target: URL { url.resolvingSymlinksInPath() }
+    var target: URL { url.resolvingSymlinksInPath() }
 
     /// Where `replace(with:keepingBackup:)` keeps the previous file: beside the target, one
     /// generation (`config.json.bak`).
@@ -29,7 +29,7 @@ public struct ConfigFile {
     /// Every write (save, replace, create) is one read-merge-replace under an exclusive `flock` on
     /// `config.json.lock` beside the target, so writers in other processes never drop each
     /// other's keys. Hand edits do not take it; replaying edits onto the file as it is keeps them.
-    public var lockURL: URL { FileLock.url(for: target) }
+    var lockURL: URL { FileLock.url(for: target) }
 
     private func locked<T>(_ body: () throws -> T) throws -> T {
         do {

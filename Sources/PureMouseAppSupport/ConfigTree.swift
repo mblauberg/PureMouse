@@ -3,7 +3,7 @@ import Foundation
 /// The config as a JSON tree. The app edits only the keys a control owns and keeps every other
 /// key, including ones it does not know, so hand edits and the UI coexist (docs/companion.md).
 public struct ConfigTree {
-    public var root: [String: Any]
+    var root: [String: Any]
 
     public init(_ root: [String: Any] = [:]) { self.root = root }
 
@@ -20,7 +20,7 @@ public struct ConfigTree {
     }
 
     /// Objects that mean something even when empty: `smoothScroll: {}` turns smooth scrolling on.
-    public static let keptWhenEmpty: Set<String> = ["smoothScroll"]
+    static let keptWhenEmpty: Set<String> = ["smoothScroll"]
 
     public subscript(path: [String]) -> Any? {
         var node: Any = root
@@ -106,13 +106,13 @@ public struct ConfigTree {
     /// one is set whole). An object that disappeared is removed key by key (it may only have been
     /// pruned as empty), except one that means something when empty (`keptWhenEmpty`) or that was
     /// empty, which is removed whole.
-    public func changes(to after: ConfigTree) -> [Change] {
+    func changes(to after: ConfigTree) -> [Change] {
         var out: [Change] = []
         Self.diff(root, after.root, path: [], into: &out)
         return out
     }
 
-    public mutating func apply(_ changes: [Change]) {
+    mutating func apply(_ changes: [Change]) {
         for change in changes { set(change.value, at: change.path) }
     }
 
@@ -137,33 +137,33 @@ public struct ConfigTree {
     }
 }
 
-public enum ConfigTreeError: Error, CustomStringConvertible {
+enum ConfigTreeError: Error, CustomStringConvertible {
     case notAnObject
-    public var description: String { "The config must be a JSON object: { … }" }
+    var description: String { "The config must be a JSON object: { … }" }
 }
 
 /// A small JSON writer: two-space indents, sorted keys, `"key": value`, and the shortest decimal
 /// that round-trips each number (`0.7`, not `0.69999999999999996` as JSONSerialization writes).
-public enum JSON {
-    public static func encode(_ value: Any) -> Data {
+enum JSON {
+    static func encode(_ value: Any) -> Data {
         var out = ""
         write(value, indent: 0, to: &out)
         out += "\n"
         return Data(out.utf8)
     }
 
-    public static func isBool(_ number: NSNumber) -> Bool {
+    static func isBool(_ number: NSNumber) -> Bool {
         CFGetTypeID(number as CFTypeRef) == CFBooleanGetTypeID()
     }
 
     /// A binary floating-point number (not a whole number, and not an exact NSDecimalNumber).
-    public static func isFloatingPoint(_ number: NSNumber) -> Bool {
+    static func isFloatingPoint(_ number: NSNumber) -> Bool {
         guard !(number is NSDecimalNumber) else { return false }
         let type = String(cString: number.objCType)
         return type == "d" || type == "f"
     }
 
-    public static func number(_ value: Double) -> String {
+    static func number(_ value: Double) -> String {
         guard value.isFinite else { return "0" }
         if value.rounded() == value, abs(value) < 1e15 { return String(Int64(value)) }
         return String(value)
@@ -219,7 +219,7 @@ public enum JSON {
         }
     }
 
-    public static func quoted(_ string: String) -> String {
+    static func quoted(_ string: String) -> String {
         var out = "\""
         for scalar in string.unicodeScalars {
             switch scalar {

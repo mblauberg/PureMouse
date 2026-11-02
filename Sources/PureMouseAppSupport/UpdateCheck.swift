@@ -3,7 +3,7 @@ import Foundation
 /// "Check for Updates", on demand only: one GET of the latest GitHub release, compared with this
 /// app's version. The logic is pure (`Version`, `parse`); `fetch` is the only network code.
 public enum UpdateCheck {
-    public static let endpoint = URL(string: "https://api.github.com/repos/mblauberg/PureMouse/releases/latest")!
+    static let endpoint = URL(string: "https://api.github.com/repos/mblauberg/PureMouse/releases/latest")!
 
     public struct Release: Equatable, Sendable {
         public var version: Version
@@ -43,7 +43,7 @@ public enum UpdateCheck {
 
     /// The release in a `releases/latest` response; nil when it is not one (drafts and
     /// pre-releases are never "latest", but a malformed body must not read as an update).
-    public static func parse(_ data: Data) -> Release? {
+    static func parse(_ data: Data) -> Release? {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let tag = object["tag_name"] as? String, let version = Version(tag),
               let page = (object["html_url"] as? String).flatMap(URL.init(string:)),
@@ -51,7 +51,7 @@ public enum UpdateCheck {
         return Release(version: version, page: page)
     }
 
-    public static func outcome(current: String, data: Data) -> Outcome {
+    static func outcome(current: String, data: Data) -> Outcome {
         guard let release = parse(data) else { return .failed }
         guard let current = Version(current) else { return .available(release) }
         return release.version > current ? .available(release) : .upToDate

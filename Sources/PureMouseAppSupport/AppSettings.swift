@@ -8,7 +8,7 @@ public struct AppSuggestion: Equatable, Sendable {
     public let thumbWheel: String
 
     /// Bundle IDs (lowercased, as they match) to suggestions.
-    public static let table: [String: AppSuggestion] = [
+    static let table: [String: AppSuggestion] = [
         "com.google.chrome": AppSuggestion(name: "Google Chrome", thumbWheel: "tabs"),
         "com.apple.safari": AppSuggestion(name: "Safari", thumbWheel: "tabs"),
         "com.microsoft.edgemac": AppSuggestion(name: "Microsoft Edge", thumbWheel: "tabs"),
@@ -102,7 +102,7 @@ extension ConfigTree {
 
     // MARK: Scrolling
 
-    public static let scrollOverrideKeys = ["speed", "smoothingMs"]
+    static let scrollOverrideKeys = ["speed", "smoothingMs"]
 
     /// The app sets its own scrolling speed or glide.
     public func overridesScrolling(_ app: String) -> Bool {

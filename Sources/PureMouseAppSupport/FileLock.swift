@@ -5,17 +5,17 @@ import Foundation
 /// the data, never the data itself: atomic writes give the data a new inode each time, so a lock
 /// on it would guard nothing. `flock` belongs to the open file description, so two opens in one
 /// process exclude each other too.
-public enum FileLock {
+enum FileLock {
     /// The lock file for `file`: `<name>.lock` in the same directory.
-    public static func url(for file: URL) -> URL {
+    static func url(for file: URL) -> URL {
         file.deletingLastPathComponent().appending(path: file.lastPathComponent + ".lock")
     }
 
     /// The lock could not be opened or taken; `body` did not run.
-    public struct Failed: LocalizedError {
-        public let path: String
-        public let reason: String
-        public var errorDescription: String? { "PureMouse could not lock \(Format.tildePath(path)): \(reason)" }
+    struct Failed: LocalizedError {
+        let path: String
+        let reason: String
+        var errorDescription: String? { "PureMouse could not lock \(Format.tildePath(path)): \(reason)" }
 
         init(_ lock: URL, errno code: Int32) { self.init(path: lock.path, reason: String(cString: strerror(code))) }
         init(path: String, reason: String) {
@@ -27,7 +27,7 @@ public enum FileLock {
     /// Runs `body` holding an exclusive lock on `lock` (created if needed), waiting while another
     /// writer holds it. Writers hold it for one read and one atomic write, so the wait is short
     /// and needs no timer. Closing the descriptor releases it, also when `body` throws.
-    public static func withLock<T>(_ lock: URL, _ body: () throws -> T) throws -> T {
+    static func withLock<T>(_ lock: URL, _ body: () throws -> T) throws -> T {
         do {
             try FileManager.default.createDirectory(at: lock.deletingLastPathComponent(), withIntermediateDirectories: true)
         } catch {

@@ -29,7 +29,7 @@ public enum Shortcut {
 
     /// Splits a spec into modifiers and its key's canonical name, with the daemon's own parser;
     /// nil if the daemon would reject it. `fn` is accepted but not shown.
-    public static func parse(_ spec: String) -> (Modifiers, String)? {
+    static func parse(_ spec: String) -> (Modifiers, String)? {
         guard let keystroke = Keystroke(spec), let key = Keystroke.keyNames[keystroke.key] else { return nil }
         let flags: [(CGEventFlags, Modifiers)] = [
             (.maskControl, .control), (.maskAlternate, .option), (.maskShift, .shift), (.maskCommand, .command),

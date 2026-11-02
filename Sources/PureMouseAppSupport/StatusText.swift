@@ -3,7 +3,7 @@ import PureMouseKit
 
 /// Words for the daemon's status, shared by the menu and Settings.
 public enum StatusText {
-    public static func connection(_ device: Status.Device) -> String {
+    static func connection(_ device: Status.Device) -> String {
         device.connection == .bluetooth ? "Bluetooth" : "USB receiver"
     }
 

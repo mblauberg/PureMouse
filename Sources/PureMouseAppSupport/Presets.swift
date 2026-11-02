@@ -62,7 +62,7 @@ public struct DPIReading: Equatable {
     public init() {}
 
     /// How long a request may wait for the mouse to report it before a different report wins.
-    public static let settle: TimeInterval = 1.5
+    static let settle: TimeInterval = 1.5
 
     public mutating func request(_ dpi: Int, at now: Date = .now) {
         requested = dpi

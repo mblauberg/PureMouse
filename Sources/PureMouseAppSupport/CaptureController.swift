@@ -12,7 +12,7 @@ public final class CaptureController {
     public var capturedButton: String?
 
     /// How long to wait for the daemon's answer before cancelling.
-    public static let timeout: TimeInterval = 11
+    static let timeout: TimeInterval = 11
 
     @ObservationIgnored private let link: DaemonLink
     @ObservationIgnored private let clock: Clock
