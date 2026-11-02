@@ -38,6 +38,9 @@ case nil where LoginItem.inBundle:
         exit(1)
     }
 case nil, "run":
+    // First, so every line of this run lands in ~/Library/Logs/PureMouse.log when launchd starts
+    // it (a terminal run keeps printing to the terminal).
+    Log.file = LogFile.attachStderr()
     let url = arguments.count > 1 ? URL(fileURLWithPath: arguments[1]) : Config.defaultURL
     // Private interfaces (Dock notifications, swipe event fields) can change between releases,
     // so record which macOS each log belongs to.

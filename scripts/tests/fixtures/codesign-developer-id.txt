@@ -1,0 +1,14 @@
+Executable=/Volumes/PureMouse/PureMouse.app/Contents/MacOS/puremouse
+Identifier=io.github.mblauberg.puremouse
+Format=app bundle with Mach-O universal (x86_64 arm64)
+CodeDirectory v=20500 size=3486 flags=0x10000(runtime) hashes=102+7 location=embedded
+Signature size=9045
+Authority=Developer ID Application: Example Person (ABCDE12345)
+Authority=Developer ID Certification Authority
+Authority=Apple Root CA
+Timestamp=2 Nov 2026 at 10:00:00 AM
+Info.plist entries=14
+TeamIdentifier=ABCDE12345
+Runtime Version=26.0.0
+Sealed Resources version=2 rules=13 files=4
+Internal requirements count=1 size=220

@@ -6,7 +6,9 @@ the examples below call it `puremouse`.
 ## First checks
 
 - **Logs** are in `~/Library/Logs/PureMouse.log`. The first line of each start shows the macOS
-  version.
+  version. Past 1 MiB the log moves to `PureMouse.log.1`, replacing the previous one, and a new
+  log starts, so older lines may be there. Run from a terminal, PureMouse prints there instead.
+  The menu bar app keeps no log; an old `PureMouse Menu.log` can be deleted.
 - **Wheels stay native and buttons do nothing:** a permission is missing. Settings › General and
   the log say which. PureMouse restarts itself once it is granted;
   `launchctl kickstart -k gui/$UID/io.github.mblauberg.puremouse` forces a restart.
@@ -21,6 +23,9 @@ the examples below call it `puremouse`.
   macOS upgrade the notification it relies on may have changed: see
   [After a macOS upgrade](#after-a-macos-upgrade). Actions bound to buttons (back and forward in
   Safari, for example) do not apply on the other Mac; it gets the buttons' native behaviour.
+- **A `run` action does nothing:** its output is discarded, and the log only says it failed and
+  with which exit status. Redirect its output to a file to see why, for example
+  `{"run": "my-script >> /tmp/my-script.log 2>&1"}`.
 - **A setting has no effect:** check the menu for a config error. A file that does not load leaves
   the previous settings in effect, and the error names the field.
 
@@ -32,10 +37,7 @@ or remove it with Logitech's uninstaller.
 
 ## Permissions
 
-| Permission | Why |
-|---|---|
-| **Accessibility** | To post scrolls, keystrokes and swipes. Until granted, wheels stay native and actions that post events do nothing |
-| **Input Monitoring** | To read the mouse over Bluetooth. A receiver works without it |
+What Accessibility and Input Monitoring are used for is in [Privacy](privacy.md#permissions).
 
 macOS applies a grant only to processes started after it, so PureMouse checks in the background
 and restarts itself once a grant arrives. It checks only for a permission it needs now (Input

@@ -4,6 +4,9 @@ PureMouse finds Logitech receivers and Bluetooth mice through IOKit and speaks H
 It diverts the buttons and wheels you configure, so their events come to PureMouse instead of
 macOS, and posts the matching system events in their place.
 
+The decisions behind this design, and the alternatives rejected, are recorded in
+[`docs/adr/`](adr/README.md).
+
 ## Two processes
 
 `PureMouse.app` holds two programs:

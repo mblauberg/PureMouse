@@ -1,0 +1,43 @@
+name: Bug
+description: Something PureMouse does wrong or stopped doing.
+type: Bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. [Troubleshooting](https://github.com/mblauberg/PureMouse/blob/main/docs/troubleshooting.md) covers permissions, Logi Options+ and macOS upgrades, which explain most problems.
+  - type: input
+    id: puremouse-version
+    attributes:
+      label: PureMouse version
+      description: Settings › About, or the first line of `~/Library/Logs/PureMouse.log`.
+      placeholder: "0.3.0"
+    validations:
+      required: true
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS version
+      placeholder: "macOS 26.1"
+    validations:
+      required: true
+  - type: input
+    id: mouse
+    attributes:
+      label: Mouse and connection
+      placeholder: "MX Master 3S over Bolt"
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened
+      description: What you did and what PureMouse did.
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+  - type: textarea
+    id: log
+    attributes:
+      label: Log excerpt
+      description: Lines from `~/Library/Logs/PureMouse.log` around the problem (older lines are in `PureMouse.log.1`).
+      render: shell

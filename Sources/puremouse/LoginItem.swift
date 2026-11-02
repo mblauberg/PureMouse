@@ -19,11 +19,6 @@ enum LoginItem {
     /// Whether this process is the binary of an installed app bundle (not a `swift build` product).
     static var inBundle: Bool { Bundle.main.bundleIdentifier != nil }
 
-    private static let logURL = FileManager.default.homeDirectoryForCurrentUser
-        .appending(path: "Library/Logs/PureMouse.log")
-    private static let menuLogURL = FileManager.default.homeDirectoryForCurrentUser
-        .appending(path: "Library/Logs/PureMouse Menu.log")
-
     private static func plistURL(_ label: String) -> URL {
         FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/LaunchAgents/\(label).plist")
     }
@@ -58,7 +53,6 @@ enum LoginItem {
             "KeepAlive": true,
             "ThrottleInterval": 3,
             "ProcessType": "Interactive",
-            "StandardErrorPath": logURL.path,
         ])
         var outcome = restarting ? "PureMouse restarted." : "PureMouse is running and will start at login."
         if menuApp != nil {
@@ -155,7 +149,6 @@ enum LoginItem {
             // Relaunched after a crash, not after Quit.
             "KeepAlive": ["SuccessfulExit": false],
             "ProcessType": "Interactive",
-            "StandardErrorPath": menuLogURL.path,
         ]
         if calledFromMenu(app), launchctl("print", target(label)).status == 0 {
             try write(label, agent)
@@ -177,7 +170,6 @@ enum LoginItem {
         let plist = plistURL(label)
         let files = FileManager.default
         try files.createDirectory(at: plist.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try files.createDirectory(at: logURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try PropertyListSerialization.data(fromPropertyList: agent, format: .xml, options: 0).write(to: plist)
     }
 
