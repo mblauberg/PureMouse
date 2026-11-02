@@ -12,11 +12,14 @@ lands with the text it changes.
   captions, toggles, section headers, banner titles and alert titles that are statements.
 - **Ellipsis.** Only when the action needs more input before it happens ("Keyboard Shortcut…",
   "Reset All Settings…"). Never on an action that just opens something ("Open System Settings").
+- **Captions stay true.** A caption describes the visible outcome and holds whatever the user's
+  other settings are (natural scrolling on or off, other apps' settings). Say "Reverses this wheel"
+  not "Classic direction while the trackpad stays natural".
 - **Verbs mean what happens.** A menu item or button names its effect. If it opens Settings to
   explain something, it names the thing, not an action it does not take.
 - **Contractions.** Spell them out: "is not", "cannot", "could not".
 - **No jargon.** No "daemon", "agent", "HID++", "status item" or file-system paths in UI text,
-  except where the user asked for a path (General › Files, the CLI). "DPI" appears only beside a
+  except where the user asked for a path (General › Advanced…, the CLI). "DPI" appears only beside a
   number.
 - **No exclamation marks, no "please", no blame.** Say what happened and what to do next.
 - **Errors.** Title: what failed, as a statement. Body: one sentence on what to do. Raw command
@@ -40,7 +43,10 @@ One term per concept. "Retire" lists words that must not appear in UI text for t
 | Mouse resolution | Pointer Speed (row, menu, action); "DPI" beside a number | Resolution, Tracking (except as System Settings' own name) |
 | Saved pointer speeds | presets | chips, steps |
 | A value left unset | "Using the mouse's own setting." (caption); "Mouse Default" (picker entry) | "Mouse default." fragment, "Works as Normal", bare "Default" |
-| A per-tab reset | Restore Defaults | Reset |
+| A per-tab reset | Restore Defaults (pane footer; resets everything on that tab, advanced rows included) | Reset |
+| Settings moved off the default view | Advanced… (pane footer button, opens a sheet) | More, Fine-tuning, Expert |
+| Running now vs at login | Start / Stop change only whether PureMouse runs now; "Open at login" is the separate switch | Start that also turns on login |
+| Identify a button by pressing it | Find by Pressing… | Select by Pressing |
 | The whole reset | Reset All Settings… | — |
 | The last good config | Use Last Working Config | Restore Last Working |
 | App scope | Same as Everywhere (entry), everywhere (prose) | global |
@@ -48,4 +54,5 @@ One term per concept. "Retire" lists words that must not appear in UI text for t
 | Wheel modes | Ratchet, Free Spin | free-spin, ratchet (lower case in a label) |
 | Permission state | Allowed, Not allowed | granted, missing |
 | Battery | battery low, battery critical; "20% left" | — |
-| Thumb wheel steps per action | Turn distance | Turn per action |
+| Thumb wheel steps per action | Turn distance; caption says what it does ("How far to turn before the action repeats.") | Turn per action, "wheel steps" |
+| Scroll acceleration | a strength, shown without a unit (Off … Strong) | "1.0×" |
