@@ -84,8 +84,9 @@ Each level has one mechanism, and each label says what it reveals.
 - Clicking the icon shows an `NSMenu`, never a popover.
 - The icon is a template image (black and clear, 18 pt), never coloured or badged. A changed state
   (paused, off) is a different shape, not a colour.
-- People choose whether the icon shows (General › Show in menu bar). Nothing depends on it: with
-  the icon hidden, opening PureMouse from the Finder opens Settings.
+- People choose whether the icon shows (General › Show in menu bar). Nothing depends on it
+  except low-battery notifications, which live in the menu app and stop while the icon is hidden.
+  With the icon hidden, opening PureMouse from the Finder opens Settings.
 - Order: device header, attention rows (only while active), then the most used items, Settings…,
   Quit PureMouse. Separators between groups; submenus only for presets, one level deep.
 - Unavailable **commands** are disabled, not hidden; **status** rows that do not apply are hidden.
@@ -106,8 +107,10 @@ Each level has one mechanism, and each label says what it reveals.
 - First run opens Settings on Mouse. Missing permissions show as General's Permissions rows and as
   a notice on the panes that need them: state (Allowed, Not allowed), one sentence on what it is
   for, and one button that opens the exact pane of System Settings.
-- The grant is detected without the person doing anything (the daemon polls and restarts itself);
-  the row turns to Allowed in place. No "quit and reopen".
+- A grant made soon after is detected without the person doing anything (the daemon polls and
+  restarts itself); the row turns to Allowed in place. No "quit and reopen". The daemon checks for
+  10 minutes after start, wake, reload, a control change or a Bluetooth attach
+  (`Daemon.pollPermissions`), so a later grant needs Reload Config or a restart.
 - A grant that stops working after an update shows as **Not allowed** with the same button, never
   as a switch that looks on.
 - No alert at launch, no mock of the system dialog, no Cancel on the step.
