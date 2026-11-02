@@ -10,12 +10,16 @@ public enum Companion {
     public static let daemonLabel = "io.github.mblauberg.puremouse"
     public static let menuLabel = "io.github.mblauberg.puremouse.menu"
 
-    /// `~/Library/Application Support/PureMouse`, or `PUREMOUSE_COMPANION_DIR` when set (tests and
+    /// `PUREMOUSE_COMPANION_DIR`, the one place it is read; empty counts as unset.
+    public static let overrideDirectory: String? = {
+        guard let dir = ProcessInfo.processInfo.environment["PUREMOUSE_COMPANION_DIR"], !dir.isEmpty else { return nil }
+        return dir
+    }()
+
+    /// `~/Library/Application Support/PureMouse`, or `overrideDirectory` when set (tests and
     /// development, so a fixture never collides with an installed daemon).
     public static var directory: URL {
-        if let dir = ProcessInfo.processInfo.environment["PUREMOUSE_COMPANION_DIR"] {
-            return URL(fileURLWithPath: dir, isDirectory: true)
-        }
+        if let dir = overrideDirectory { return URL(fileURLWithPath: dir, isDirectory: true) }
         return FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Application Support/PureMouse")
     }
     /// Written by the daemon: `Status`.
@@ -34,16 +38,21 @@ public enum Companion {
     /// one shows Settings before the second exits.
     public static let showSettingsNotification = doorbell("io.github.mblauberg.puremouse.menu.show")
 
-    /// A doorbell's name: `base`, with a short hash of `PUREMOUSE_COMPANION_DIR` appended when that
-    /// is set, so a development copy on a fixture directory never rings an installed app's bell.
-    /// Unset leaves `base`, so builds with and without this still pair. The hash is FNV-1a, which
-    /// (unlike `hashValue`) is the same in every process.
-    public static func doorbell(_ base: String, directory: String? = ProcessInfo.processInfo.environment["PUREMOUSE_COMPANION_DIR"]) -> String {
+    /// A doorbell's name: `base`, with a short hash of the fixture directory appended when there is
+    /// one, so a development copy never rings an installed app's bell. The hash is of the resolved
+    /// path (symlinks followed, no trailing slash), so every spelling of a directory rings the same
+    /// bell. Without a directory the name is `base`. The hash is FNV-1a, which (unlike `hashValue`)
+    /// is the same in every process.
+    public static func doorbell(_ base: String, directory: String? = overrideDirectory) -> String {
         guard let directory else { return base }
+        let resolved = URL(fileURLWithPath: directory).resolvingSymlinksInPath().standardizedFileURL.path
+        return base + "." + fnv1a(resolved)
+    }
+
+    static func fnv1a(_ text: String) -> String {
         var hash: UInt32 = 2_166_136_261
-        for byte in directory.utf8 { hash = (hash ^ UInt32(byte)) &* 16_777_619 }
-        let digits = String(hash, radix: 16)
-        return base + "." + String(repeating: "0", count: 8 - digits.count) + digits
+        for byte in text.utf8 { hash = (hash ^ UInt32(byte)) &* 16_777_619 }
+        return String(format: "%08x", hash)
     }
 
     public static let encoder: JSONEncoder = {

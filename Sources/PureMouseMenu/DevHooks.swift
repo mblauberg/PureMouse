@@ -73,7 +73,7 @@ private enum Rig {
     private static var token: Int32 = -1
 
     static func start(app: AppController) {
-        guard let directory = ProcessInfo.processInfo.environment["PUREMOUSE_COMPANION_DIR"], !directory.isEmpty else { return }
+        guard Companion.overrideDirectory != nil else { return }
         let bell = Companion.doorbell("io.github.mblauberg.puremouse.rig")
         notify_register_dispatch(bell, &token, .main) { _ in
             MainActor.assumeIsolated { handle(app: app) }
@@ -88,10 +88,8 @@ private enum Rig {
         let words = text.split(whereSeparator: \.isWhitespace).map(String.init)
         guard words.count == 2 else { return }
         let (number, verb) = (words[0], words[1])
-        func done(after delay: TimeInterval = 0) {
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                try? Data(number.utf8).write(to: Companion.directory.appending(path: "rig-ack"), options: .atomic)
-            }
+        func done() {
+            try? Data(number.utf8).write(to: Companion.directory.appending(path: "rig-ack"), options: .atomic)
         }
         switch verb {
         case "menu":
@@ -104,10 +102,10 @@ private enum Rig {
             done()
         case "settings":
             app.showSettings()
-            done(after: 0.5)
+            done()
         case "settings-close":
             app.settingsWindow?.close()
-            done(after: 0.5)
+            done()
         case "relief":
             malloc_zone_pressure_relief(nil, 0)
             done()
