@@ -73,13 +73,13 @@ private enum Rig {
     private static var token: Int32 = -1
 
     static func start(app: AppController) {
-        guard ProcessInfo.processInfo.environment["PUREMOUSE_COMPANION_DIR"] != nil else { return }
+        guard let directory = ProcessInfo.processInfo.environment["PUREMOUSE_COMPANION_DIR"], !directory.isEmpty else { return }
         let bell = Companion.doorbell("io.github.mblauberg.puremouse.rig")
         notify_register_dispatch(bell, &token, .main) { _ in
             MainActor.assumeIsolated { handle(app: app) }
         }
         let ready = "status \(Companion.statusNotification)\nrig \(bell)\npid \(getpid())\n"
-        try? Data(ready.utf8).write(to: Companion.directory.appending(path: "rig-ready"))
+        try? Data(ready.utf8).write(to: Companion.directory.appending(path: "rig-ready"), options: .atomic)
     }
 
     private static func handle(app: AppController) {
@@ -90,7 +90,7 @@ private enum Rig {
         let (number, verb) = (words[0], words[1])
         func done(after delay: TimeInterval = 0) {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                try? Data(number.utf8).write(to: Companion.directory.appending(path: "rig-ack"))
+                try? Data(number.utf8).write(to: Companion.directory.appending(path: "rig-ack"), options: .atomic)
             }
         }
         switch verb {

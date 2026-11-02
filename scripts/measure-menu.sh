@@ -24,6 +24,8 @@
 # only reads the installed agents' pids (launchctl print) before and after, and fails if either changed.
 set -euo pipefail
 zmodload zsh/datetime
+# An unexpected command failure is a harness error (2), not a budget failure (1).
+TRAPZERR() { exit 2 }
 cd "${0:A:h}/.."
 
 runs=5
@@ -37,6 +39,9 @@ budgets=scripts/measure-menu.budgets
 tsv=
 while (( $# )); do
     case $1 in
+        --runs|--budgets|--tsv|--plugin-path|--env) (( $# >= 2 )) || { print -u2 "$1 needs a value"; exit 2 } ;;
+    esac
+    case $1 in
         --runs) runs=$2; shift ;;
         --blocks) blocks=1 ;;
         --no-build) build=0 ;;
@@ -46,7 +51,7 @@ while (( $# )); do
         --keep) keep=1 ;;
         --plugin-path) plugin_path=$2; shift ;;
         --env) rig_env+=($2); shift ;;
-        -h|--help) sed -n '2,26p' $0 | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,24p' $0 | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) print -u2 "unknown option $1"; exit 2 ;;
     esac
     shift
@@ -70,7 +75,7 @@ done
 
 # --- The installed agents: only ever read -------------------------------------------------------
 installed_pid() {
-    launchctl print gui/$UID/$1 2>/dev/null | awk '$1 == "pid" && $2 == "=" { print $3; found = 1 } END { if (!found) print "none" }'
+    { launchctl print gui/$UID/$1 2>/dev/null || true; } | awk '$1 == "pid" && $2 == "=" { print $3; found = 1 } END { if (!found) print "none" }'
 }
 installed_before="$(installed_pid $menu_label) $(installed_pid $daemon_label)"
 
@@ -131,14 +136,20 @@ menu_pid=
 stub_pid=
 cleanup() {
     stop_menu
-    (( keep )) || { (( ${#fixtures} )) && rm -rf $fixtures }
+    if (( ! keep && ${#fixtures} )); then rm -rf $fixtures; fi
+    return 0
 }
 trap cleanup EXIT
 trap 'exit 130' HUP INT TERM
 
 stop_menu() {
-    [[ -n $menu_pid ]] && kill $menu_pid 2>/dev/null && wait $menu_pid 2>/dev/null || true
-    [[ -n $stub_pid ]] && kill $stub_pid 2>/dev/null && wait $stub_pid 2>/dev/null || true
+    local pid i
+    for pid in $menu_pid $stub_pid; do
+        kill $pid 2>/dev/null || continue
+        for i in {1..50}; do kill -0 $pid 2>/dev/null || break; sleep 0.1; done
+        kill -9 $pid 2>/dev/null || true
+        wait $pid 2>/dev/null || true
+    done
     menu_pid=; stub_pid=
 }
 
@@ -175,7 +186,10 @@ start_menu() {
     sleep 86400 &
     stub_pid=$!
     write_status 80
-    env -u XPC_SERVICE_NAME $rig_env "$@" PUREMOUSE_COMPANION_DIR=$fx PUREMOUSE_CONFIG=$fx/config.json PUREMOUSE_DAEMON=$fx/daemon \
+    # Malloc*, DYLD_* and the like in the caller's shell would change what is measured.
+    local scrub=() v
+    for v in ${(k)parameters[(R)*export*]}; do if [[ $v == (Malloc*|DYLD_*|NSZombie*|OS_ACTIVITY_*|CFNETWORK_*) ]]; then scrub+=(-u $v); fi; done
+    env -u XPC_SERVICE_NAME $scrub $rig_env "$@" PUREMOUSE_COMPANION_DIR=$fx PUREMOUSE_CONFIG=$fx/config.json PUREMOUSE_DAEMON=$fx/daemon \
         $exe --login >$fx/menu.log 2>&1 &
     menu_pid=$!
     started=$EPOCHREALTIME
@@ -188,7 +202,8 @@ start_menu() {
     [[ -s $fx/rig-ready ]] || fail "the rig menu never reported ready (no window server session? log: $fx/menu.log)"
     rig_bell=$(awk '$1 == "rig" { print $2 }' $fx/rig-ready)
     status_bell=$(awk '$1 == "status" { print $2 }' $fx/rig-ready)
-    [[ -n $rig_bell && -n $status_bell && $rig_bell != io.github.mblauberg.puremouse.rig ]] \
+    [[ -n $rig_bell && -n $status_bell && $rig_bell == io.github.mblauberg.puremouse.rig.* \
+        && $status_bell == io.github.mblauberg.puremouse.status.* ]] \
         || fail "the rig menu did not use hashed doorbells ($fx/rig-ready)"
     serial=0
     sleep 3
@@ -247,6 +262,7 @@ run_settings() {  # Settings in the menu's own process (until the helper replace
     rig settings-close
     # The close is followed by malloc_zone_pressure_relief, which waits until the process is 11 s old.
     while (( EPOCHREALTIME - started < 13 )); do sleep 0.5; done
+    rig relief
     sleep $settle; sample settings-closed $1
     stop_menu
 }
@@ -317,7 +333,7 @@ summary=$(awk -F'\t' '
             for (a = 1; a <= m; a++) x[a] = v[s, a] + 0
             for (a = 2; a <= m; a++) { t = x[a]; b = a - 1; while (b >= 1 && x[b] > t) { x[b + 1] = x[b]; b-- } x[b + 1] = t }
             med = (m % 2) ? x[(m + 1) / 2] : (x[m / 2] + x[m / 2 + 1]) / 2
-            printf "%s\t%.1f\t%.1f\t%.1f\t%d\n", s, med, x[1], x[m], m
+            printf "%s\t%.2f\t%.2f\t%.2f\t%d\n", s, med, x[1], x[m], m
         }
     }' $tsv)
 
@@ -330,6 +346,10 @@ if (( write_budgets )); then
     print "wrote $budgets"
 fi
 [[ -f $budgets ]] || fail "no budgets file at $budgets"
+for name in ${(f)"$(awk -F'\t' '/^#/ || NF < 2 { next } { print $1 }' $budgets)"}; do
+    print -r -- $summary | awk -F'\t' -v s=$name '$1 == s { found = 1 } END { exit !found }' \
+        || fail "$budgets has a budget for '$name', which this run did not measure"
+done
 
 print
 printf '%-22s %8s %8s %8s %8s   %s\n' scenario median min max budget result

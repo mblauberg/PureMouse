@@ -87,8 +87,10 @@ private func fullStatus() -> Status {
         #expect(Status.currentSchema == 1)
         #expect(fullStatus().schema == 1)
     }
+}
 
-@Test func doorbellsKeepTheirNamesWithoutACompanionDirectory() {
+@Test(.enabled(if: ProcessInfo.processInfo.environment["PUREMOUSE_COMPANION_DIR"] == nil))
+func doorbellsKeepTheirNamesWithoutACompanionDirectory() {
     // So an old build and a new one still pair.
     #expect(Companion.doorbell("io.github.mblauberg.puremouse.status", directory: nil) == "io.github.mblauberg.puremouse.status")
     // This test run has no fixture directory, so the shipped names are the plain ones.
@@ -106,4 +108,6 @@ private func fullStatus() -> Status {
     #expect(a.hasPrefix(status + "."))
     // A fixed value pins the function: it must not change between builds or processes.
     #expect(Companion.doorbell("x", directory: "") == "x.811c9dc5")
+    #expect(Companion.doorbell("x", directory: "a") == "x.e40c292c")
+    #expect(Companion.doorbell("x", directory: "foobar") == "x.bf9cf968")
 }

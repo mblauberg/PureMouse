@@ -89,10 +89,10 @@ Scenarios, each a median of the runs, in MB of physical footprint (`footprint`):
 
 | Scenario | What it measures |
 |---|---|
-| `fresh` | a new menu app, three seconds after launch |
+| `fresh` | a new menu app, about four seconds after it reports ready |
 | `open-1`, `open-3`, `open-10` | after that many opens of the menu |
 | `doorbells-200` | a new menu app after 200 status doorbells, each with a changed `status.json` |
-| `settings-open`, `settings-closed` | Settings in the menu app's own process, and after it closes (a reading after `malloc_zone_pressure_relief`); informational, no budget |
+| `settings-open`, `settings-closed` | Settings in the menu app's own process, and after it closes (read after the rig runs `malloc_zone_pressure_relief`, and without the `Relaunch` the installed app does); informational, no budget |
 | `helper-open`, `helper-closed`, `helper-cold-start` | the Settings helper: the menu app's footprint while it is open and after, and the time (ms) from the open request to the helper's first visible window. They read "helper not built" until `PureMouseSettings` is in `Package.swift`. The helper writes a `settings-visible` file in the companion directory when its first window is visible; the cold start is that file's modification time minus the request. |
 
 `scripts/measure-menu.budgets` holds `scenario<TAB>MB` limits; a scenario with no line has none.
