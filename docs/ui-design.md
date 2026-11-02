@@ -47,8 +47,9 @@ answering a question people have, and a good default means most people never tou
 - **One pop-up look.** Every pop-up (an action row on Buttons, the thumb wheel's Action, an app's
   "Same as Everywhere" rows) is drawn the same way (`PopUpLabel`): the value, then the up/down
   chevrons. A value left to the mouse (Mouse Default) is an ordinary enabled choice in primary
-  text; only a value an app inherits from Everywhere is dimmed. A button that offers a menu on an
-  empty state (Add App) is a bordered button, as in System Settings.
+  text; only a value an app inherits from Everywhere is dimmed. An empty state's next step is a
+  bordered push button (Add App…), as in System Settings: a grouped form draws a pull-down in a
+  row borderless.
 - **Let the system draw.** No explicit font sizes, control widths or heights, literal corner radii,
   materials, `glassEffect`, `.buttonStyle(.glass)`, backgrounds or colour literals. No
   `.controlSize` overrides except `.mini` on a switch, if a grouped form's default ever renders
@@ -196,7 +197,7 @@ display-density DPI hints and live gesture highlighting (more text and motion th
 | Mouse › Buttons | One row per button with its action | Gesture directions (disclosure, collapsed, caption summarises them; choosing Hold and Move expands it); Other controls (disclosure); Advanced… sheet, only while some button anywhere is Hold and Move: gesture Distance and Repeat |
 | Mouse › Scrolling | Smooth scrolling, Feel, Speed; Main Wheel: Reverse direction, Wheel mode, SmartShift; Thumb Wheel: Action (Turn left/right when Custom); each when the mouse has it | Advanced… sheet, each row only when it applies: Acceleration, Glide, Hold Shift to scroll sideways (dimmed while smooth scrolling is off); Switches at (while SmartShift is on); thumb wheel Reverse direction (when it scrolls here or in some app), Swap directions and Turn distance (when it has actions), Speed (when it scrolls) |
 | Mouse › Pointer | Pointer Speed slider with its value; Presets summary row; both only when the mouse can adjust its speed (else one "Not supported by this mouse." row, unless a value is set) | Exact value (disclosure); Edit Presets… sheet (also opened from the menu) |
-| Apps | App list with summaries, Add App (bordered pull-down) in the footer, routing note; empty state with the same Add App | Each app opens in a sheet; inside it, gesture directions, other controls and more thumb wheel options are disclosures |
+| Apps | App list with summaries, Add App (bordered pull-down) in the footer, routing note; empty state with an Add App… button that opens the Applications panel | Each app opens in a sheet; inside it, gesture directions, other controls and more thumb wheel options are disclosures |
 | About | Icon, name, version, Check for Updates, links, Support PureMouse | — |
 | Status menu | Device header, attention rows when active, Smooth Scrolling, Pointer Speed, Start/Pause/Resume, Settings…, Quit PureMouse | ⌥: detail line, Show Log in Finder, Hide Menu Bar Icon |
 

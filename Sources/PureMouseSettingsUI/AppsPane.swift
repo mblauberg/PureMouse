@@ -27,7 +27,10 @@ struct AppsPane: View {
                     } description: {
                         Text("Add an app to give it its own buttons, thumb wheel or scrolling.")
                     } actions: {
-                        addMenu
+                        // A button, not the footer's pull-down: a grouped form draws a menu in a row
+                        // borderless, with a circled chevron, whatever its style.
+                        Button("Add App…") { chooseApp() }
+                            .accessibilityHint("Choose an app to give its own settings")
                     }
                     // A form row sizes to its content and sits leading; the empty state centres in the row.
                     .frame(maxWidth: .infinity)
@@ -93,8 +96,7 @@ struct AppsPane: View {
                 }
             }
         }
-        // A bordered pull-down, as System Settings draws an empty state's button, not a borderless
-        // one that reads as a link; the same in the empty state and the footer.
+        // A bordered pull-down, not a borderless one that reads as a link.
         .menuStyle(.button)
         .buttonStyle(.bordered)
         .fixedSize()
