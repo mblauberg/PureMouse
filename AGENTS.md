@@ -44,7 +44,9 @@ one. This file covers how to work on it safely.
   `./scripts/package.sh` on a Mac holding the `PureMouse` signing identity, and attach
   `.build/dist/PureMouse-X.Y.Z.zip` to a GitHub release with its SHA-256. A release signed by any
   other identity makes every user grant permissions again. CI (`.github/workflows/ci.yml`) builds,
-  tests and bundles ad hoc on each push to `main` and each pull request.
+  tests and bundles ad hoc, verifies the signatures, checks the size budget
+  (`scripts/size-budget.env`) and runs `scripts/tests/run.sh` on each push to `main` and each pull
+  request; its actions are pinned to full SHAs.
 - The icon is an Icon Composer document, `assets/AppIcon.icon`: a top-down mouse in three
   monochrome glass layers (buttons with the centre seam, palm, floating wheel), grey fills with
   light and dark specializations, on the system's light/dark background, so macOS 26+ renders
@@ -249,10 +251,13 @@ one. This file covers how to work on it safely.
   out its agent kills its process group: `main` calls `setsid()` first, every command boots the
   menu agent out last (after removing its plist), and `register`/`menu on` leave an already
   loaded menu agent running when the menu app itself is the caller.
-- Builds are signed with the `PureMouse` code-signing identity (self-signed,
-  `scripts/make-cert.sh`). The permission grants are keyed to identifier plus certificate, which
-  also holds on Macs that do not trust the certificate; an ad-hoc signature makes macOS drop them on
-  every install. install.sh stops the agent before replacing the binary.
+- Builds are signed by `scripts/sign-bundle.sh`: inside out from `scripts/lib.zsh`'s `components`
+  (a new nested bundle is one more entry), no `--deep`, always the hardened runtime, with
+  `PUREMOUSE_SIGN_IDENTITY`, else a Developer ID Application identity, else the self-signed
+  `PureMouse` (`scripts/make-cert.sh`), else ad hoc. The permission grants are keyed to identifier
+  plus certificate, which also holds on Macs that do not trust the certificate; an ad-hoc signature
+  makes macOS drop them on every install. `scripts/verify-bundle.sh` checks every component.
+  install.sh stops the agent before replacing the binary.
 - Gatekeeper: launching a quarantined copy parks it at `_dyld_start` behind an on-screen dialog.
   On a test Mac, later launches at that path stayed parked even after clearing the flag and putting
   a fresh copy there (presumably until the dialog is answered). Clear the flag before the first
