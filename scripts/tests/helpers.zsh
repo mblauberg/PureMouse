@@ -25,7 +25,7 @@ stand_in_app() {
         # System tools carry the host's minimum. Give this non-running fixture our bundle's
         # contract before signing it; production binaries get these values from the linker.
         /usr/bin/xcrun vtool -set-build-version macos $minimum $minimum_sdk.0 -replace \
-            -output $dir/bin/$(component_executable $component) /usr/bin/true
+            -output $dir/bin/$(component_executable $component) /usr/bin/true 2>/dev/null
     done
     assemble_bundle $dir/bin $dir/PureMouse.app $version 42 >/dev/null
     print -r -- $dir/PureMouse.app
@@ -78,7 +78,7 @@ done
 mkdir -p .build/stub
 for component in \$components; do
     /usr/bin/xcrun vtool -set-build-version macos \$minimum \$minimum_sdk.0 -replace \\
-        -output .build/stub/\$(component_executable \$component) /usr/bin/true
+        -output .build/stub/\$(component_executable \$component) /usr/bin/true 2>/dev/null
 done
 assemble_bundle .build/stub .build/app/PureMouse.app \$version 1
 touch .build/app/PureMouse.app/Contents/Resources/NEW
