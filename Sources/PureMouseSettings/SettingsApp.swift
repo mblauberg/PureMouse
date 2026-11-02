@@ -20,6 +20,10 @@ final class SettingsApp: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.mainMenu = MainMenu.make(actions: menuActions)
         terminateSignal = Self.terminateOnSIGTERM()
+        // The menu bar app's Quit PureMouse (`NSRunningApplication.terminate()`) sends a quit event.
+        NSAppleEventManager.shared().setEventHandler(
+            self, andSelector: #selector(quit(_:reply:)),
+            forEventClass: AEEventClass(kCoreEventClass), andEventID: AEEventID(kAEQuitApplication))
         model.startWatching()
         // Asked again while open (the menu bar app posts, then opens this app): the pane is in
         // the file.
@@ -72,12 +76,16 @@ final class SettingsApp: NSObject, NSApplicationDelegate {
         settings?.show(request)
     }
 
+    @objc private func quit(_ event: NSAppleEventDescriptor, reply: NSAppleEventDescriptor) {
+        NSApp.terminateClosingSheets()
+    }
+
     /// `kill`, `pkill` and a development menu app's `Process.terminate()` send SIGTERM, which
     /// would end the process without `applicationWillTerminate`.
     private static func terminateOnSIGTERM() -> DispatchSourceSignal {
         signal(SIGTERM, SIG_IGN)
         let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
-        source.setEventHandler { MainActor.assumeIsolated { NSApp.terminate(nil) } }
+        source.setEventHandler { MainActor.assumeIsolated { NSApp.terminateClosingSheets() } }
         source.resume()
         return source
     }

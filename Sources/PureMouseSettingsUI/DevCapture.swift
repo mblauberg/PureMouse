@@ -13,7 +13,7 @@ enum DevCapture {
         let delay = environment["PUREMOUSE_DEV_CAPTURE_DELAY"].flatMap(Double.init) ?? 2.5
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             if !write(to: URL(filePath: path)) { FileHandle.standardError.write(Data("capture failed\n".utf8)) }
-            NSApp.terminate(nil)
+            NSApp.terminateClosingSheets()
         }
     }
 

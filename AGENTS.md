@@ -178,7 +178,9 @@ one. This file covers how to work on it safely.
   (`PureMouse Settings.app`, docs/adr/0009-settings-helper-app.md): the menu writes the pane to
   `show-settings`, rings the doorbell and opens the helper (`SettingsLauncher`), and the helper
   quits when its window closes, saving its edits and cancelling a select by pressing as it goes
-  (`applicationWillTerminate`, also on SIGTERM). So the resident menu process never holds a
+  (`applicationWillTerminate`, also on SIGTERM). Every quit from outside (SIGTERM, the quit
+  event, a capture) ends any open sheet first, since AppKit ignores `terminate` while one is
+  attached (`terminateClosingSheets`). So the resident menu process never holds a
   window or SwiftUI, and never restarts itself. Quit PureMouse quits the helper first. The
   menu is rebuilt on open. Settings controls carry their own accessibility label where a `RowLabel`
   (title plus caption) leaves them unnamed. Shortcut specs are parsed and named by Kit's `Keystroke` only; the menu adds

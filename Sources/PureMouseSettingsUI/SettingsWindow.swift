@@ -220,3 +220,16 @@ final class LazyPane: NSViewController {
         return NSSize(width: size.width, height: min(size.height, maxHeight))
     }
 }
+
+extension NSApplication {
+    /// Quits even with a sheet open. AppKit ignores `terminate(_:)` while a window has a sheet
+    /// attached, so a quit from outside (the menu bar app's Quit PureMouse, SIGTERM, a capture)
+    /// would leave the helper running. Edits are already saved as they are made, and
+    /// `applicationWillTerminate` flushes the rest.
+    public func terminateClosingSheets() {
+        for window in windows {
+            for sheet in window.sheets.reversed() { window.endSheet(sheet) }
+        }
+        terminate(nil)
+    }
+}
