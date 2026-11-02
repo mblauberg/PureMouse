@@ -129,9 +129,11 @@ final class SettingsTabs: NSTabViewController {
 
     /// Shows Mouse on this segment, now if Mouse is built, else when it is.
     func selectSegment(_ segment: MouseSegment) {
-        self.segment = segment
+        if segment != self.segment {
+            self.segment = segment
+            didSelectSegment(segment)
+        }
         mouse?.select(segment)
-        didSelectSegment(segment)
     }
 
     /// Shows a tab, or Mouse on a segment.
