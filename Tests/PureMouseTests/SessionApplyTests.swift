@@ -86,6 +86,7 @@ struct SessionApplyTests {
         #expect(parsed.features == fake.features)
         #expect(parsed.controls == fake.controls)
         #expect(parsed.responses == fake.responses)
+        #expect((try? await DeviceIdentity.transportIDs(device)) == [.bluetoothLE: 0xB034, .wireless: 0x4091])
         #expect(fake.transport.sent.allSatisfy { (0x2...0x7).contains($0.softwareID) })
     }
 }

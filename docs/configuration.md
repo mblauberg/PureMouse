@@ -157,6 +157,9 @@ common mouse controls, apart from these config names (for example 0x00fd is the 
 the log and the menu adopt it in later changes. Any control works by its hex ID whether or not it
 has a name.
 
+The left and right buttons (0x0050 and 0x0051) cannot be bound, globally or per app. Their
+bindings are ignored with a warning; **Select by Pressing** always leaves them clicking normally.
+
 **Actions:** `missionControl`, `appExpose`, `showDesktop`, `launchpad`, `spaceLeft`, `spaceRight`,
 `navigateBack`, `navigateForward`, `toggleScrollMode`, `cycleDPI`, `volumeUp`, `volumeDown`, `mute`,
 `brightnessUp`, `brightnessDown`, `nextTab`, `previousTab`, `zoomIn`, `zoomOut`, `none`,

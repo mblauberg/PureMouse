@@ -1,5 +1,6 @@
 import HIDPPTesting
 import Testing
+@testable import PureMouseKit
 @testable import puremouse
 
 @MainActor
@@ -10,7 +11,9 @@ struct SessionCaptureTests {
             let index = try #require(fake.controls.firstIndex { $0.cid == cid })
             fake.controls[index].info[4] = 0x20
         }
-        let config = try SessionHarness.config(#"{"buttons":{"0x0050":"none"},"apps":{"com.example":{"buttons":{"0x51":"none"}}}}"#)
+        var config = try SessionHarness.config(#"{"buttons":{"0x0050":"none"},"apps":{"com.example":{"buttons":{"0x51":"none"}}}}"#)
+        // Bypass the decoder to prove the daemon's independent exclusion of bound controls.
+        config.apps["com.example"]?.bindings[0x50] = .action(.none)
         let h = try await SessionHarness(fake, config: config, inheriting: .init(fresh: true))
         defer { h.close() }
         try await h.session.apply()
@@ -20,6 +23,10 @@ struct SessionCaptureTests {
             #expect(fake.controls.first { $0.cid == cid }?.diverted == false)
             #expect(!h.session.status.controls.contains { $0.cid == cid })
             #expect(h.session.bound[cid] == nil)
+            #expect(!fake.transport.sent.contains {
+                fake.feature(of: $0) == 0x1B04 && [2, 3].contains($0.function)
+                    && $0.params.prefix(2) == [0, UInt8(cid)]
+            })
         }
         #expect(fake.controls.first { $0.cid == 0x53 }?.diverted == true)
         h.session.endCapture()

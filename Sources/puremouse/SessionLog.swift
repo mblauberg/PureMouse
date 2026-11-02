@@ -8,8 +8,8 @@ extension Log {
     @TaskLocal static var capture: (@Sendable (Line) -> Void)?
 }
 
-/// Session logging forwards to the existing stderr logger. The capture seam lives separately
-/// because Log.swift is shared with the logging lane.
+/// Capture session messages without replacing stderr or sharing mutable flags between tasks;
+/// production output still goes through the existing logger.
 enum SessionLog {
     static func info(_ message: @autoclosure () -> String) {
         let message = message()

@@ -5,6 +5,25 @@ import Testing
 
 @MainActor
 struct SessionDiversionTests {
+    @Test func exampleScansOnlyTheUnboundVirtualControl() async throws {
+        let h = try await SessionHarness(config: SessionHarness.example(), inheriting: .init(fresh: true))
+        defer { h.close() }
+        try await h.session.apply()
+        #expect(reportingReads(h.fake).count == 1)
+    }
+
+    @Test func captureBeforeApplyAlsoPreservesPersistentDiversion() async throws {
+        let fake = FakeDevice.mxMaster3S
+        let index = try #require(fake.controls.firstIndex { $0.cid == 0x56 })
+        fake.controls[index].reporting[2] = 5
+        let h = try await SessionHarness(fake, inheriting: .init(fresh: true))
+        defer { h.close() }
+        h.session.beginCapture()
+        await h.session.diversion.drain()
+        await h.session.restore()
+        #expect(!fake.transport.sent.contains { isWrite($0, to: 0x56, on: fake) })
+    }
+
     @Test func freshAdoptionReleasesStaleTemporaryDiversion() async throws {
         let fake = FakeDevice.mxMaster3S
         let index = try #require(fake.controls.firstIndex { $0.cid == 0x56 })

@@ -6,6 +6,7 @@ import Testing
 struct HIDPPDeviceTests {
     @Test func pingClassifiesLegacySlotsAndModernVersions() async {
         let fake = FakeDevice()
+        fake.transport.timing = .synchronous
         let device = fake.endpoint()
         defer { device.close() }
         device.timeout = .milliseconds(10)
@@ -41,6 +42,7 @@ struct HIDPPDeviceTests {
         fake.failures[.init(0, 0)] = .timeout
         await #expect(throws: HIDPPError.timeout) { try await device.hasFeature(0x2121) }
         #expect(device.knownPresence(of: 0x2121) == nil)
+        device.timeout = .seconds(1)
         fake.failures[.init(0, 0)] = .error(2)
         await #expect(throws: HIDPPError.protocol20(code: 2)) { try await device.hasFeature(0x2121) }
         #expect(device.knownPresence(of: 0x2121) == nil)

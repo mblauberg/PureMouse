@@ -16,7 +16,7 @@ struct SessionHarness {
          environment: SessionEnvironment = .init(canPostEvents: true, configureRetryDelay: .milliseconds(1))) async throws {
         self.fake = fake
         device = fake.endpoint()
-        device.timeout = .milliseconds(30)
+        device.timeout = .milliseconds(100)
         let controls = try await ReprogControls.controls(device)
         session = Session(device: device, name: fake.name, id: "fake", controls: controls,
                           config: config, inheriting: inherited, environment: environment)

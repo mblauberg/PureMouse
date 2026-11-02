@@ -130,6 +130,21 @@ public final class FakeDevice {
         let fake = FakeDevice()
         for line in text.components(separatedBy: .newlines).map({ $0.trimmingCharacters(in: .whitespaces) }) {
             if line.hasPrefix("name: ") { fake.name = String(line.dropFirst(6)) }
+            if line.hasPrefix("device product IDs: ") {
+                let pairs = line.dropFirst(20).split(separator: " ").map { $0.split(separator: "=") }
+                var reply = Array(repeating: UInt8(0), count: 16)
+                var offset = 7
+                for transport in DeviceIdentity.Transport.allCases {
+                    guard offset + 1 < 13,
+                          let pair = pairs.first(where: { $0.count == 2 && $0[0] == String(describing: transport) }),
+                          let id = UInt16(pair[1].dropFirst(2), radix: 16) else { continue }
+                    reply[6] |= transport.rawValue
+                    reply[offset] = UInt8(id >> 8)
+                    reply[offset + 1] = UInt8(id & 0xFF)
+                    offset += 2
+                }
+                fake.responses[Call(0x0003, 0)] = reply
+            }
             if line.hasPrefix("features: ") {
                 for word in line.dropFirst(10).split(separator: " ") {
                     let pair = word.split(separator: ":")
