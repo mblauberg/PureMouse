@@ -68,7 +68,8 @@ final class StatusMenu: NSObject, NSMenuDelegate {
 
     private func perform(_ action: MenuAction) {
         switch action {
-        case .openSettings(let pane): app.showSettings(pane: pane)
+        case .openSettings(let pane): app.showSettings(ShowRequest(pane: pane))
+        case .editPresets: app.showSettings(ShowRequest(sheet: .presets))
         case .openReleases: app.openReleases()
         case .openPrivacy(let pane): app.openPrivacy(pane)
         case .toggleSmoothScrolling: model.update { $0.smoothScrollEnabled.toggle() }

@@ -38,7 +38,8 @@ and a change to this page lands with the text it changes.
   verb so it can't read as a state ("Pause PureMouse" / "Resume PureMouse").
 - **Segments** are nouns, all text or all symbols.
 - **Errors.** Shown next to the problem: what failed, then one sentence on what to do. Raw command
-  output and paths go to the log, not the alert.
+  output and paths go to the log, not the alert. A config error names the bad value and where it
+  is ("buttons.back: unknown action “explode”") and never lists the choices.
 - **Empty states.** What's missing, then what to do: "No mouse found. Turn on Bluetooth or plug in
   the receiver."
 - **Permissions.** Active voice, one specific sentence on what it's for and what stops working
@@ -68,7 +69,7 @@ One term per concept. "Retire" lists words that must not appear in UI text for t
 | The background process | PureMouse: Running, Paused, Off | daemon, agent, "the running PureMouse" |
 | The JSON file | config file; button "Open Config File" | "Config" alone, "Settings" for the file |
 | Mouse resolution | Pointer Speed (row, menu, action); "DPI" beside a number; caption says it's this mouse's own speed, separate from System Settings › Mouse | Resolution, Tracking (except as System Settings' own name) |
-| Saved pointer speeds | presets | chips, steps |
+| Saved pointer speeds | presets; "Edit Presets…" (Pointer row, menu; "Add Presets…" in the menu when none), "Add Preset" (sheet "+") | chips, steps, Add Current |
 | A value left unset | "Using the mouse's own setting." (caption); "Mouse Default" (picker entry) | "Mouse default." fragment, "Works as Normal", bare "Default" |
 | A per-tab reset | Restore Defaults (pane footer; resets everything on that tab, advanced rows included); "Restore Defaults…" when it asks first | Reset |
 | Settings moved off the default view | Advanced… (pane footer button, opens a sheet) | More, Fine-tuning, Expert |
@@ -77,11 +78,19 @@ One term per concept. "Retire" lists words that must not appear in UI text for t
 | The whole reset | Reset All Settings… | — |
 | The last good config | Use Last Working Config… | Restore Last Working |
 | App scope | Same as Everywhere (entry), everywhere (prose) | global |
-| Adding an app | Add App (a pull-down menu, so no ellipsis; its "Choose from Applications…" entry opens the panel) | Add Application, "+" alone |
+| A value left to a wider scope (an app to everywhere, a mouse to all mice) | the value in effect, dimmed, with the caption "Same as Everywhere" ("Same as All Mice"); the picker's entry "Same as Everywhere (Mission Control)" removes the own value | "Everywhere: …" caption, "Same as Everywhere" as the shown value |
+| An app's own speed and glide | Custom scrolling (switch and row summary) | Own scrolling speed, Scrolling speed (summary) |
+| An app with nothing set yet | No custom settings (row summary) | "No settings yet, so not saved" |
+| Adding an app | Add App (a pull-down menu, so no ellipsis; its "Choose from Applications…" entry opens the panel); the empty state's button, which opens the panel, is Add App… | Add Application, "+" alone |
 | Scroll animation | glide (slider), Smooth Scrolling (feature) | smoothing |
 | Wheel modes | Ratchet, Free Spin | free-spin, ratchet (lower case in a label) |
 | Permission state | Allowed, Not allowed | granted, missing, "Stopped working" |
 | Battery | battery low, battery critical; "20% left" | — |
 | Thumb wheel steps per action | Turn distance; caption says what it does ("How far to turn before the action repeats.") | Turn per action, "wheel steps" |
 | Scroll acceleration | a strength, shown without a unit (Off … Strong) | "1.0×" |
+| A shell command bound to a control | Run Command (action and sheet title; "Run Command…" in the picker) | Run Shell Command |
+| Capturing a shortcut | Record Shortcut, then "Recording…" while it listens; "Or enter it" for typing | "Click to record" |
+| Thumb wheel actions the other way round | Swap directions ("Swaps what turning left and right does."); an app row summary says "directions swapped" or "directions not swapped" | Reverse direction (for actions), Reversed, Normal direction |
+| SmartShift threshold | Switches at (Slower … Faster) | Threshold, Sooner/Later |
+| A control this mouse lacks, kept because it is set | "Not supported by this mouse." (caption) | — |
 | Support | Support PureMouse (About link); GitHub Sponsors (the destination) | Donate, Buy Me a Coffee, Pro, Free version |

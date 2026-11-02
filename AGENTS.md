@@ -36,8 +36,10 @@ one. This file covers how to work on it safely.
   (`Sources/PureMouseMenu/DevHooks.swift`); `--login` launches it as launchd does (no Settings).
   Debug builds of the helper take `PUREMOUSE_DEV_PANE=<pane>` (a tab, `general`, `mouse`, `apps`,
   `about`, or a Mouse segment, `buttons`, `scrolling`, `pointer`), `PUREMOUSE_DEV_APPEARANCE`,
-  `PUREMOUSE_DEV_PICKER=<button>`, `PUREMOUSE_DEV_SHORTCUT=<button>` (Mouse › Buttons) and
-  `PUREMOUSE_DEV_APP=<bundle id>` (Apps tab; adds the app without writing) for screenshots
+  `PUREMOUSE_DEV_PICKER=<button>`, `PUREMOUSE_DEV_SHORTCUT=<button>` (Mouse › Buttons, or with
+  `PUREMOUSE_DEV_APP` the app sheet's editor popover), `PUREMOUSE_DEV_APP=<bundle id>` (Apps
+  tab; adds the app without writing and opens its sheet) and `PUREMOUSE_DEV_SHEET=<name>` (a
+  sheet: `presets` on Mouse › Pointer, or `advanced` on the pane shown, `DevSheet`) for screenshots
   (`Sources/PureMouseSettingsUI/DevHooks.swift`), and `PUREMOUSE_DEV_CAPTURE=<file.png>` saves its
   own windows to that file and quits, which needs no Screen Recording permission, so it works over
   SSH (`DevCapture`). `PUREMOUSE_DEV_MENU=1` puts a plain backdrop
@@ -50,6 +52,10 @@ one. This file covers how to work on it safely.
   `-DDEVHOOKS`, and acts only when `PUREMOUSE_COMPANION_DIR` is set, which also gives the
   doorbells names of their own (`Companion.doorbell`), so a debug build with
   `PUREMOUSE_COMPANION_DIR` set no longer hears the installed daemon's bell.
+- CI builds with Xcode 26 (Swift 6.3); a local Xcode 27 can pass what CI cannot. A macOS 27-only
+  API goes inside `#if compiler(>=6.4)`. Never pass a method as a SwiftUI closure argument
+  (`Binding(get:set: select)`): Swift 6.3 crashes in IRGen on its `@isolated(any)` thunk, so write
+  `set: { select($0) }`.
 - The user's live config is `~/.config/puremouse/config.json`; keep `config.example.json` in step
   with it (its test checks shape, not values). Config changes apply on save (`ConfigWatcher`
   watches the file and its directory, reloading when the bytes change) or with
@@ -176,7 +182,9 @@ one. This file covers how to work on it safely.
   (`PureMouse Settings.app`, docs/adr/0009-settings-helper-app.md): the menu writes the pane to
   `show-settings`, rings the doorbell and opens the helper (`SettingsLauncher`), and the helper
   quits when its window closes, saving its edits and cancelling a select by pressing as it goes
-  (`applicationWillTerminate`, also on SIGTERM). So the resident menu process never holds a
+  (`applicationWillTerminate`, also on SIGTERM). Every quit from outside (SIGTERM, the quit
+  event, a capture) ends any open sheet first, since AppKit ignores `terminate` while one is
+  attached (`terminateClosingSheets`). So the resident menu process never holds a
   window or SwiftUI, and never restarts itself. Quit PureMouse quits the helper first. The
   menu is rebuilt on open. Settings controls carry their own accessibility label where a `RowLabel`
   (title plus caption) leaves them unnamed. Shortcut specs are parsed and named by Kit's `Keystroke` only; the menu adds
@@ -224,7 +232,11 @@ one. This file covers how to work on it safely.
   only words them (`ActionCatalog.hapticLabel`).
 - The Apps pane writes only `apps.<id>` keys (`AppSettings.swift`): each control's own key, removed
   for "Same as Everywhere" (an emptied app entry is pruned); an added app is not written until a
-  setting is chosen (its row says so until Settings closes). Names are looked up without icons
+  setting is chosen (its row says so until Settings closes). Each app opens in a sheet (`AppSheet`)
+  over the list; a value it leaves unset shows what applies everywhere, dimmed, with "Same as
+  Everywhere" (`InheritedValue`, the one presentation for any inherited value), and inside it the
+  shortcut and command editors are popovers (`EditorPresentation`, read by `ThumbWheelRows` and the
+  button rows), since no sheet opens from a sheet. Names are looked up without icons
   (`AppIdentities`); an icon loads when its frame meets the scroll view's visible bounds (`AppIcon`;
   a grouped form builds every row, so `onAppear` is not enough, and macOS 14 lacks
   `onScrollVisibilityChange`), and Applications is never listed (adding goes through an
@@ -240,7 +252,9 @@ one. This file covers how to work on it safely.
   `preferredContentSize` without telling the tab controller, so `SettingsTabs.refit()` copies it
   across (through `MouseTab.fit()`, which adds the strip). Advanced settings sit behind a pane's
   footer (`PaneFooter`: Restore Defaults, Advanced…) in an `AdvancedSheet`, which never opens
-  another sheet.
+  another sheet. A control the mouse lacks is hidden per control from the primary mouse's
+  reported capabilities (`ControlAvailability`; unknown or no mouse shows it, a value already set
+  keeps it with a caption), and Scrolling's rows from `ScrollingLayout`.
 - Settings notices (config error, unsaved change, status too new, PureMouse off, paused, Logi
   Options+, Accessibility on the panes that need it) come from `BannerPlan.items`, in that order.
   A pane shows only the first as its banner, with "N more notices" opening General, whose Status

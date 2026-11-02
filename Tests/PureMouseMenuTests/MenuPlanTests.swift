@@ -64,7 +64,7 @@ struct MenuPlanTests {
               400 DPI [-> setDPI(400)]
               800 DPI [on, -> setDPI(800)]
               ---
-              Edit Presets… [-> openSettings(Optional(PureMouseAppSupport.SettingsPane.mouse(PureMouseAppSupport.MouseSegment.pointer)))]
+              Edit Presets… [-> editPresets]
             ---
             Start PureMouse [-> start]
             \(Self.footer)
@@ -93,7 +93,7 @@ struct MenuPlanTests {
               400 DPI [-> setDPI(400)]
               800 DPI [on, -> setDPI(800)]
               ---
-              Edit Presets… [-> openSettings(Optional(PureMouseAppSupport.SettingsPane.mouse(PureMouseAppSupport.MouseSegment.pointer)))]
+              Edit Presets… [-> editPresets]
             ---
             Pause PureMouse [-> setPaused(true)]
             \(Self.footer)
@@ -142,7 +142,7 @@ struct MenuPlanTests {
               400 DPI [-> setDPI(400)]
               800 DPI [-> setDPI(800)]
               ---
-              Edit Presets… [-> openSettings(Optional(PureMouseAppSupport.SettingsPane.mouse(PureMouseAppSupport.MouseSegment.pointer)))]
+              Edit Presets… [-> editPresets]
             ---
             Pause PureMouse [-> setPaused(true)]
             \(Self.footer)
@@ -243,7 +243,7 @@ struct MenuPlanTests {
         let text = lines(state)
         #expect(text.contains("Smooth Scrolling [on, disabled, -> toggleSmoothScrolling]"))
         #expect(text.contains("  400 DPI [disabled, -> setDPI(400)]"))
-        #expect(text.contains("  Edit Presets… [-> openSettings"))
+        #expect(text.contains("  Edit Presets… [-> editPresets"))
     }
 
     @Test func pointerSpeedOffThePresets() {
@@ -262,12 +262,12 @@ struct MenuPlanTests {
             Pointer Speed
               \(Format.dpi(1600)) [on, disabled]
               ---
-              Add Presets… [-> openSettings(Optional(PureMouseAppSupport.SettingsPane.mouse(PureMouseAppSupport.MouseSegment.pointer)))]
+              Add Presets… [-> editPresets]
             """))
         state.currentDPI = nil
         #expect(lines(state).contains("""
             Pointer Speed
-              Add Presets… [-> openSettings
+              Add Presets… [-> editPresets]
             """))
     }
 

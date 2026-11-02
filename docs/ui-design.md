@@ -44,6 +44,12 @@ answering a question people have, and a good default means most people never tou
 - Controls, in order of preference: switch, pop-up menu, segmented control (four segments or
   fewer, a fixed count, all text or all symbols), slider (minimum leading, end labels, live value),
   stepper, `ContentUnavailableView`. A pop-up's **Custom** entry may reveal the rows it needs.
+- **One pop-up look.** Every pop-up (an action row on Buttons, the thumb wheel's Action, an app's
+  "Same as Everywhere" rows) is drawn the same way (`PopUpLabel`): the value, then the up/down
+  chevrons. A value left to the mouse (Mouse Default) is an ordinary enabled choice in primary
+  text; only a value an app inherits from Everywhere is dimmed. An empty state's next step is a
+  bordered push button (Add App…), as in System Settings: a grouped form draws a pull-down in a
+  row borderless.
 - **Let the system draw.** No explicit font sizes, control widths or heights, literal corner radii,
   materials, `glassEffect`, `.buttonStyle(.glass)`, backgrounds or colour literals. No
   `.controlSize` overrides except `.mini` on a switch, if a grouped form's default ever renders
@@ -74,10 +80,18 @@ Each level has one mechanism, and each label says what it reveals.
 - **Disclosure triangle** only for a control's own children (gesture directions, Exact value);
   at most one per row.
 - **⌥ alternates** only in the status menu, and each also has a home in Settings (see Status menu).
-- No sheet opens from a sheet; inside a sheet, use disclosures.
+- No sheet opens from a sheet; inside a sheet, use disclosures, and an editor that is a sheet
+  elsewhere (keyboard shortcut, shell command) opens as a popover anchored to its row.
 - Every advanced control has a safe default that the pane's Restore Defaults covers.
 - **Hide or dim.** Dim a row when a switch above turns its feature off. Hide rows that do not apply
-  to the current mode or mouse.
+  to the current mode or mouse. A control is hidden for the mouse only when the primary mouse,
+  online with PureMouse running, reports every capability it needs as false; unknown counts as
+  available, and with no mouse known every control shows. A control the config already sets stays,
+  captioned "Not supported by this mouse." (`ControlAvailability`: Scrolling's rows from
+  `ScrollingLayout`, Pointer's from `PointerLayout`, an app's thumb wheel and the picker's
+  haptics the same way). A section whose rows are all hidden goes too. An Advanced… sheet that
+  shows only while something applies (Buttons, while a button is Hold and Move) closes by itself
+  when that stops.
 
 ## Status menu and menu bar icon
 
@@ -152,16 +166,38 @@ Each level has one mechanism, and each label says what it reveals.
 - The app icon is the Icon Composer document (`assets/AppIcon.icon`, AGENTS.md). Check it at 16
   to 1024 px in default, dark, clear and tinted, in the Dock, Finder, About and alerts.
 
+## Where PureMouse goes further
+
+System Settings › Mouse adjusts blind: a slider with no sample, no undo, nothing tied to the app in
+use. PureMouse goes further only where the HIG's own principles (feedback, forgiveness, direct
+manipulation) lead and the system still draws everything: standard controls, no new chrome, no idle
+cost. Planned (epic #114):
+
+- **Try it.** A collapsed "Try it" disclosure under Feel and Speed on Scrolling reveals a short
+  plain-text scroll area, so smoothing is felt where it is set. Trackpad shows its gestures; Mouse
+  shows nothing.
+- **Undo.** ⌘Z and ⇧⌘Z undo and redo each settings change, named in the Edit menu ("Undo Pointer
+  Speed"). One slider drag is one step.
+- **Settings for the app in use.** The status menu offers "Settings for <app>…" for the frontmost
+  app (not Finder or PureMouse), opening its sheet in Apps. It is read once as the menu opens.
+- **Feel a haptic.** Choosing a haptic action in the picker plays it once on a mouse with haptics,
+  as Trackpad's Click slider does.
+
+Not adopted: a 3D or photographic mouse map with glowing callouts (the device card stays original
+line art with plain markers, #56); an acceleration curve editor (macOS owns acceleration, so it
+would duplicate System Settings); a floating per-app indicator (it polls and covers content);
+display-density DPI hints and live gesture highlighting (more text and motion than they earn).
+
 ## Layout
 
 | Place | Shown by default | Advanced |
 |---|---|---|
 | General | Status (PureMouse running/paused/off, Start or Stop, active notices), Open at login, Show in menu bar, Low battery notification, Permissions | Advanced… sheet: Work with Universal Control, Config file, Log, Reset All Settings… |
 | Mouse header | Buttons, Scrolling, Pointer segments; mouse pop-up with two or more mice; Find by Pressing… and the device card on Buttons | — |
-| Mouse › Buttons | One row per button with its action | Gesture directions (disclosure, collapsed, caption summarises them); Other controls (disclosure); Advanced… sheet: gesture distance and repeat |
-| Mouse › Scrolling | Smooth scrolling, Feel, Speed; Reverse direction, Wheel mode, SmartShift (when the mouse has them); thumb wheel Action (Turn left/right when Custom) | Advanced… sheet: acceleration, glide, Shift for sideways; SmartShift threshold; thumb wheel reverse, turn distance, speed |
-| Mouse › Pointer | Pointer Speed slider with its value; Presets summary row | Exact value (disclosure); Edit Presets… sheet (also opened from the menu) |
-| Apps | App list with summaries, Add App in the footer, routing note; empty state with Add App | Each app opens in a sheet; inside it, gesture directions, other controls and more thumb wheel options are disclosures |
+| Mouse › Buttons | One row per button with its action | Gesture directions (disclosure, collapsed, caption summarises them; choosing Hold and Move expands it); Other controls (disclosure); Advanced… sheet, only while some button anywhere is Hold and Move: gesture Distance and Repeat |
+| Mouse › Scrolling | Smooth scrolling, Feel, Speed; Main Wheel: Reverse direction, Wheel mode, SmartShift; Thumb Wheel: Action (Turn left/right when Custom); each when the mouse has it | Advanced… sheet, each row only when it applies: Acceleration, Glide, Hold Shift to scroll sideways (dimmed while smooth scrolling is off); Switches at (while SmartShift is on); thumb wheel Reverse direction (when it scrolls here or in some app), Swap directions and Turn distance (when it has actions), Speed (when it scrolls) |
+| Mouse › Pointer | Pointer Speed slider with its value; Presets summary row; both only when the mouse can adjust its speed (else one "Not supported by this mouse." row, unless a value is set) | Exact value (disclosure); Edit Presets… sheet (also opened from the menu) |
+| Apps | App list with summaries, Add App (bordered pull-down) in the footer, routing note; empty state with an Add App… button that opens the Applications panel | Each app opens in a sheet; inside it, gesture directions, other controls and more thumb wheel options are disclosures |
 | About | Icon, name, version, Check for Updates, links, Support PureMouse | — |
 | Status menu | Device header, attention rows when active, Smooth Scrolling, Pointer Speed, Start/Pause/Resume, Settings…, Quit PureMouse | ⌥: detail line, Show Log in Finder, Hide Menu Bar Icon |
 

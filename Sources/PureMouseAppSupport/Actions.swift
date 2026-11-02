@@ -34,10 +34,10 @@ public enum ButtonAction: Equatable, Sendable {
     /// The label on a button's pop-up.
     public var label: String {
         switch self {
-        case .standard: "Default"
+        case .standard: "Mouse Default"
         case .named(let name): ActionCatalog.label(for: name)
         case .keys(let spec): Shortcut.display(spec) ?? spec
-        case .run(let command): command.isEmpty ? "Run Shell Command" : command
+        case .run(let command): command.isEmpty ? "Run Command" : command
         case .haptic(let name): "Haptic: \(ActionCatalog.hapticLabel(for: name))"
         case .gesture: "Hold and Move"
         }

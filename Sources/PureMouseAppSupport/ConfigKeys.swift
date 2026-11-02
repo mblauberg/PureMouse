@@ -33,6 +33,25 @@ extension ConfigTree {
                       smoothingMs: double(["smoothScroll", "smoothingMs"]))
     }
 
+    /// The Feel segment selected: none while the values match no preset.
+    public var feelSelection: Feel? { feel == .custom ? nil : feel }
+
+    /// Restore Defaults on Mouse › Buttons: every button, its directions, and the gesture distance
+    /// and repeat. App settings stay.
+    public mutating func restoreButtonDefaults() {
+        set(nil, at: ["buttons"])
+        set(nil, at: ["gesture"])
+    }
+
+    /// Restore Defaults on Mouse › Scrolling, Advanced… included: smooth scrolling and its tuning,
+    /// the main wheel, and the thumb wheel's keys that Scrolling shows. Any other key under
+    /// `thumbWheel`, and app settings, stay.
+    public mutating func restoreScrollingDefaults() {
+        set(nil, at: ["smoothScroll"])
+        set(nil, at: ["scrollWheel"])
+        for key in ["inverted", "reversed"] + ThumbWheelChoice.keys { set(nil, at: ["thumbWheel", key]) }
+    }
+
     public mutating func apply(_ feel: Feel) {
         guard let values = feel.values else { return }
         if !contains(["smoothScroll"]) { set([String: Any](), at: ["smoothScroll"]) }

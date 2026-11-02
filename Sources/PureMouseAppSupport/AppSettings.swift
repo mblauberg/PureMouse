@@ -104,7 +104,7 @@ extension ConfigTree {
 
     static let scrollOverrideKeys = ["speed", "smoothingMs"]
 
-    /// The app sets its own scrolling speed or glide.
+    /// The app sets its own scrolling speed or glide ("Custom scrolling").
     public func overridesScrolling(_ app: String) -> Bool {
         Self.scrollOverrideKeys.contains { contains(Self.appScope(app) + ["smoothScroll", $0]) }
     }
@@ -131,14 +131,43 @@ extension ConfigTree {
         return contains(own)
     }
 
+    /// The caption under "Custom scrolling": what the app's scrolling does. Off, it follows
+    /// Scrolling; on, it says whether the glide applies, since an app's `smoothScroll` turns smooth
+    /// scrolling on where there is none globally (`scrollsSmoothly`).
+    public func customScrollingCaption(_ app: String) -> String {
+        if !overridesScrolling(app) { return "Uses Scrolling's speed and glide." }
+        if !scrollsSmoothly(app) { return "Smooth scrolling is off, so this app scrolls at this speed without the glide." }
+        if !smoothScrollEnabled { return "Smooth scrolling is on in this app only." }
+        return "Smooth scrolling is on, as set in Scrolling."
+    }
+
+    // MARK: Sheet
+
+    /// A button as an app's sheet shows it. Reading it writes nothing.
+    public func appButton(_ app: String, button: String) -> AppButton {
+        let scope = Self.appScope(app)
+        let own = binding(button, in: scope)
+        let everywhere = binding(button)
+        // A plain action of the app's own replaces a global gesture, so it has no directions.
+        guard own == .gesture || (own == .standard && everywhere == .gesture) else {
+            return AppButton(own: own, everywhere: everywhere, directions: [])
+        }
+        let directions = Gesture.directions.map { direction in
+            AppButton.Direction(name: direction, own: gestureBinding(button, direction, in: scope),
+                                everywhere: everywhere == .gesture ? gestureBinding(button, direction) : nil)
+        }
+        return AppButton(own: own, everywhere: everywhere, directions: directions)
+    }
+
     // MARK: Summary
 
-    /// What an app changes, in a few words for its row: "Thumb wheel: Switch Tabs, 2 buttons".
+    /// What an app changes, in a few words for its row, joined with commas: "Thumb wheel: Switch
+    /// Tabs, 2 buttons changed, Custom scrolling".
     public func appSummary(_ app: String) -> String {
         let scope = Self.appScope(app)
         var parts: [String] = []
         let choice = thumbWheelChoice(at: scope + ["thumbWheel"])
-        let direction = bool(scope + ["thumbWheel", "reversed"]).map { $0 ? "reversed" : "normal direction" }
+        let direction = bool(scope + ["thumbWheel", "reversed"]).map { $0 ? "directions swapped" : "directions not swapped" }
         switch (choice != .inherit, direction) {
         case (true, let direction?): parts.append("Thumb wheel: \(choice.label), \(direction)")
         case (true, nil): parts.append("Thumb wheel: \(choice.label)")
@@ -146,8 +175,78 @@ extension ConfigTree {
         case (false, nil): break
         }
         let buttons = (self[scope + ["buttons"]] as? [String: Any])?.count ?? 0
-        if buttons > 0 { parts.append(buttons == 1 ? "1 button" : "\(buttons) buttons") }
-        if overridesScrolling(app) { parts.append("Scrolling speed") }
-        return parts.isEmpty ? "Same as Everywhere" : parts.joined(separator: ", ")
+        if buttons > 0 { parts.append(buttons == 1 ? "1 button changed" : "\(buttons) buttons changed") }
+        if overridesScrolling(app) { parts.append("Custom scrolling") }
+        return parts.isEmpty ? AppList.noCustomSettings : parts.joined(separator: ", ")
+    }
+}
+
+/// A button in an app's sheet: the app's own binding and the one everywhere, which applies while
+/// the app leaves the button alone (`own` is `.standard`).
+public struct AppButton: Equatable, Sendable {
+    /// One gesture direction: the app's own (`.standard` when it leaves it out) and, when the
+    /// button is a gesture everywhere, the global direction, which applies while the app's is unset.
+    public struct Direction: Equatable, Sendable {
+        public let name: String
+        public let own: ButtonAction
+        public let everywhere: ButtonAction?
+    }
+
+    public let own: ButtonAction
+    public let everywhere: ButtonAction
+    /// The gesture's directions, when the button is a gesture in this app: its own, or the global
+    /// one it inherits (Hold and Move everywhere, nothing set here). Empty otherwise.
+    public let directions: [Direction]
+
+    /// The app leaves the button to a gesture set everywhere: its directions show, collapsed and
+    /// dimmed, and editing one writes only that direction under the app
+    /// (`ConfigTree.bindInApp(_:button:direction:to:)`).
+    public var inheritsGesture: Bool { own == .standard && everywhere == .gesture }
+}
+
+/// The Apps list: the apps the config names, plus those added in this session, which are saved
+/// only once one has a setting; and the app whose sheet is open.
+public struct AppList: Equatable, Sendable {
+    /// The row summary of an app with nothing of its own (added, not yet saved).
+    public static let noCustomSettings = "No custom settings"
+
+    /// Apps added here that have no setting yet: nothing is written until one is set.
+    public private(set) var added: [String] = []
+    /// The app whose sheet is open, by its key under `apps`.
+    public var open: String?
+
+    public init() {}
+
+    /// The configured apps and those added here, unsorted.
+    public func ids(in config: ConfigTree) -> [String] {
+        config.appIDs + added.filter { !config.hasApp($0) }
+    }
+
+    /// An app added here stays listed until Settings closes, but is saved only with a setting.
+    public func summary(_ id: String, in config: ConfigTree) -> String {
+        config.hasApp(id) ? config.appSummary(id) : Self.noCustomSettings
+    }
+
+    /// Adds an app (unless listed) and opens its sheet.
+    public mutating func add(_ bundleID: String, in config: ConfigTree) {
+        let key = config.appKey(bundleID)
+        if !config.hasApp(key), !added.contains(where: { $0.caseInsensitiveCompare(key) == .orderedSame }) {
+            added.append(key)
+        }
+        open = key
+    }
+
+    /// Removes an app's entry and its row, and closes its sheet if open.
+    public mutating func remove(_ id: String, from config: inout ConfigTree) {
+        config.removeApp(id)
+        added.removeAll { $0.caseInsensitiveCompare(id) == .orderedSame }
+        if open?.caseInsensitiveCompare(id) == .orderedSame { open = nil }
+    }
+
+    /// The alert for an app PureMouse can't add: one without a bundle identifier. `url` is the app
+    /// chosen; it is named without ".app".
+    public static func cannotAdd(_ url: URL) -> (title: String, message: String) {
+        ("\(url.deletingPathExtension().lastPathComponent) can't be added.",
+         "PureMouse can't identify it. Choose a different app.")
     }
 }

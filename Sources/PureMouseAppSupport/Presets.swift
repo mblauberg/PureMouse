@@ -16,6 +16,12 @@ public enum Feel: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    /// Feel's caption: what it changes, or, with values no preset matches (no segment selected),
+    /// where to change them.
+    public static func caption(for selection: Feel?) -> String {
+        selection == nil ? "Custom. Adjust in Advanced." : "How long a scroll glides, and how far fast flicks go."
+    }
+
     var values: (acceleration: Double, smoothingMs: Double)? {
         switch self {
         case .precise: (0.5, 60)
@@ -45,6 +51,28 @@ public enum DPIPresets {
     }
 
     public static func removing(_ dpi: Int, from presets: [Int]) -> [Int] { presets.filter { $0 != dpi } }
+
+    /// Whether "Add Preset" has anything to add: the speed is not saved yet and there is room.
+    public static func canAdd(_ dpi: Int, to presets: [Int]) -> Bool {
+        !presets.contains(dpi) && presets.count < limit
+    }
+
+    /// The preset the pointer speed is set to (its nearest step), the one the sheet checks and "−" removes.
+    public static func selected(in presets: [Int], current: Int, steps: [Int]) -> Int? {
+        presets.first { snap($0, to: steps) == current }
+    }
+
+    /// The Presets row's caption: "1,000, 1,650 and 3,200 DPI", or "None saved".
+    public static func summary(_ presets: [Int]) -> String {
+        guard let last = presets.last else { return "None saved" }
+        guard presets.count > 1 else { return Format.dpi(last) }
+        return presets.dropLast().map(Format.number).joined(separator: ", ") + " and " + Format.dpi(last)
+    }
+
+    /// Accessibility labels of the Presets sheet's controls.
+    public static let addLabel = "Add Preset"
+    public static func useLabel(_ dpi: Int) -> String { "Use \(Format.dpi(dpi))" }
+    public static func removeLabel(_ dpi: Int) -> String { "Remove the \(Format.dpi(dpi)) preset" }
 
     /// The step of `steps` nearest to `dpi` (the sensor's own list; the daemon snaps the same way).
     public static func snap(_ dpi: Int, to steps: [Int]) -> Int {
@@ -83,6 +111,16 @@ public struct DPIReading: Equatable {
     /// A pending change, else the live value, else the configured one, else the sensor's default.
     public func current(live: Int?, configured: Int?) -> Int { requested ?? live ?? configured ?? 1000 }
 
+    /// True when nothing has said what the speed is, so `current` is the sensor's usual default,
+    /// not a reading: no pending change, no live value and no configured `dpi`.
+    public func isEstimate(live: Int?, configured: Int?) -> Bool { requested == nil && live == nil && configured == nil }
+
+    /// The value the Pointer pane shows: "1,650 DPI", or "About 1,000 DPI" for an estimate.
+    public func readout(live: Int?, configured: Int?) -> String {
+        (isEstimate(live: live, configured: configured) ? "About " : "")
+            + Format.dpi(current(live: live, configured: configured))
+    }
+
     /// The slider position of `dpi`: its nearest step, always a valid index (0 for an empty list).
     public static func index(of dpi: Int, in steps: [Int]) -> Int {
         steps.indices.min { abs(steps[$0] - dpi) < abs(steps[$1] - dpi) } ?? 0
@@ -104,6 +142,12 @@ public enum Format {
 
     public static func multiplier(_ value: Double) -> String {
         value.formatted(.number.precision(.fractionLength(value * 10 == (value * 10).rounded() ? 1 : 2))) + "×"
+    }
+
+    /// Scroll acceleration: a strength without a unit, since the distance it adds varies with
+    /// the wheel's speed. 0 reads "Off".
+    public static func strength(_ value: Double) -> String {
+        value == 0 ? "Off" : value.formatted(.number.precision(.fractionLength(1)))
     }
 
     public static func millimetres(_ value: Double) -> String {

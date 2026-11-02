@@ -56,7 +56,7 @@ public enum Action: Equatable, Decodable, Sendable {
         if let name = try? decoder.singleValueContainer().decode(String.self) {
             guard let action = Self.named[name] else {
                 throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath,
-                    debugDescription: "unknown action '\(name)'; known: \(Self.named.keys.sorted().joined(separator: ", "))"))
+                    debugDescription: "unknown action “\(name)”"))
             }
             self = action
             return

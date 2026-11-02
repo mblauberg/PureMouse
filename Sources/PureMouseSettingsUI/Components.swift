@@ -10,18 +10,65 @@ struct RowLabel: View {
     var help: String?
     /// Shown after the help when the key is absent and the mouse keeps its own setting.
     var mouseDefault = false
+    /// A control the mouse lacks, kept because its value is set: says so after the help.
+    var availability = ControlAvailability.available
 
-    init(_ title: String, help: String? = nil, mouseDefault: Bool = false) {
+    init(_ title: String, help: String? = nil, mouseDefault: Bool = false,
+         availability: ControlAvailability = .available) {
         self.title = title
         self.help = help
         self.mouseDefault = mouseDefault
+        self.availability = availability
     }
+
+    static let mouseDefaultCaption = "Using the mouse's own setting."
 
     var body: some View {
         Text(title)
-        if let caption = [help, mouseDefault ? "Mouse default." : nil].compactMap({ $0 }).joined(separator: " ").nilIfEmpty {
+        let parts = [help, mouseDefault ? Self.mouseDefaultCaption : nil, availability.caption]
+        if let caption = parts.compactMap({ $0 }).joined(separator: " ").nilIfEmpty {
             Text(caption)
         }
+    }
+}
+
+/// A pop-up's closed face as the form's own pop-up menus draw it: the value, then the up/down
+/// chevrons. One drawing for every pop-up in Settings (`PopUpMenu`, `ActionButton`), so the
+/// action rows on Buttons, Scrolling and an app's sheet read alike.
+struct PopUpLabel: View {
+    let text: String
+    var style: HierarchicalShapeStyle = .primary
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(text)
+                .lineLimit(1)
+                .foregroundStyle(style)
+            Image(systemName: "chevron.up.chevron.down")
+                .imageScale(.small)
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+        }
+    }
+}
+
+/// A standard pop-up for a short list of choices: a `Menu` drawn as a push button around
+/// `PopUpLabel`, the same bezel as `ActionButton`. A bare `Picker`
+/// in a grouped form can draw as a borderless pull-down with a circled chevron instead.
+struct PopUpMenu<Content: View>: View {
+    let text: String
+    var style: HierarchicalShapeStyle = .primary
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        Menu {
+            content
+        } label: {
+            PopUpLabel(text: text, style: style)
+        }
+        .menuStyle(.button)
+        .menuIndicator(.hidden)
+        .fixedSize()
     }
 }
 
@@ -42,6 +89,9 @@ struct ValueSlider: View {
     let high: String
     let format: (Double) -> String
     var width: CGFloat = 200
+    var availability = ControlAvailability.available
+    /// The key is absent and the mouse keeps its own setting (`RowLabel.mouseDefault`).
+    var mouseDefault = false
 
     var body: some View {
         LabeledContent {
@@ -56,7 +106,7 @@ struct ValueSlider: View {
                     .accessibilityHidden(true)
             }
         } label: {
-            RowLabel(title, help: help)
+            RowLabel(title, help: help, mouseDefault: mouseDefault, availability: availability)
         }
     }
 }
@@ -74,14 +124,18 @@ struct EndLabeledSlider: View {
         VStack(spacing: 0) {
             Slider(value: $value, in: range) { Text(title) }
                 .labelsHidden()
-            HStack {
-                Text(low)
-                Spacer(minLength: 8)
-                Text(high)
+            // No words under the ends when there are none to say (Pointer Speed before the mouse
+            // has reported its range).
+            if !low.isEmpty || !high.isEmpty {
+                HStack {
+                    Text(low)
+                    Spacer(minLength: 8)
+                    Text(high)
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
             }
-            .font(.system(size: 10))
-            .foregroundStyle(.secondary)
-            .accessibilityHidden(true)
         }
     }
 }
@@ -137,6 +191,10 @@ struct PaneFooter: View {
     }
 }
 
+/// What an `AdvancedSheet` spends on its title, its buttons row and their padding, so the form
+/// and this chrome together fit the height `LazyPane.fitted` allows.
+private let sheetChromeHeight: CGFloat = 160
+
 /// A pane's Advanced… sheet: a title, a grouped form, and Done as the default button, with an
 /// optional button at the bottom-leading edge (General's Reset All Settings…). A sheet never opens
 /// another sheet: anything that needs more room inside it is a disclosure (docs/ui-design.md).
@@ -151,9 +209,17 @@ struct AdvancedSheet<Content: View, Leading: View>: View {
             Text(title)
                 .font(.headline)
                 .padding(.top)
-            Form { content }
+            Form {
+                SheetBanners()
+                content
+            }
                 .formStyle(.grouped)
                 .scrollBounceBehavior(.basedOnSize)
+                // As tall as its rows, up to what the screen leaves, then it scrolls. Proposed the
+                // parent window's height instead, a long sheet over a short pane (one app in Apps)
+                // squeezed its form to nothing.
+                .frame(maxHeight: Self.maxFormHeight)
+                .fixedSize(horizontal: false, vertical: true)
             HStack {
                 leading
                 Spacer()
@@ -163,6 +229,11 @@ struct AdvancedSheet<Content: View, Leading: View>: View {
             .padding([.horizontal, .bottom])
         }
         .frame(width: SettingsWindowController.sheetWidth)
+    }
+
+    /// The screen's height less the window's toolbar and the sheet's title and buttons.
+    private static var maxFormHeight: CGFloat {
+        LazyPane.fitted(NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)).height - sheetChromeHeight
     }
 }
 

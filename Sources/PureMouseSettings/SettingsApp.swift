@@ -5,7 +5,7 @@ import PureMouseSettingsUI
 import notify
 
 /// The helper's delegate: shows the Settings window at launch, on the pane a `ShowRequest` names
-/// (else the last one shown), and quits when it closes. Config edits are saved, and a select by
+/// (else the last one shown), with its sheet open, and quits when it closes. Config edits are saved, and a select by
 /// pressing still listening is cancelled, however the app ends.
 @MainActor
 final class SettingsApp: NSObject, NSApplicationDelegate {
@@ -13,25 +13,29 @@ final class SettingsApp: NSObject, NSApplicationDelegate {
     private var settings: SettingsWindowController?
     private var showToken: Int32 = -1
     private lazy var menuActions = MainMenu.Actions(
-        showAbout: { [weak self] in self?.show(.tab(.about)) },
+        showAbout: { [weak self] in self?.show(ShowRequest(pane: .tab(.about))) },
         open: { NSWorkspace.shared.open($0) })
     private var terminateSignal: DispatchSourceSignal?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.mainMenu = MainMenu.make(actions: menuActions)
         terminateSignal = Self.terminateOnSIGTERM()
+        // The menu bar app's Quit PureMouse (`NSRunningApplication.terminate()`) sends a quit event.
+        NSAppleEventManager.shared().setEventHandler(
+            self, andSelector: #selector(quit(_:reply:)),
+            forEventClass: AEEventClass(kCoreEventClass), andEventID: AEEventID(kAEQuitApplication))
         model.startWatching()
         // Asked again while open (the menu bar app posts, then opens this app): the pane is in
         // the file.
         notify_register_dispatch(Companion.showSettingsNotification, &showToken, .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.show(ShowRequest.consume()?.pane) }
+            MainActor.assumeIsolated { self?.show(ShowRequest.consume()) }
         }
         settings = SettingsWindowController(model: model)
         settings?.didClose = { NSApp.terminate(nil) }
         #if DEBUG || DEVHOOKS
         stampWhenVisible()
         #endif
-        show(ShowRequest.consume()?.pane)
+        show(ShowRequest.consume())
         #if DEBUG
         DevHooks.run { [weak self] in self?.show($0) }
         #endif
@@ -68,8 +72,12 @@ final class SettingsApp: NSObject, NSApplicationDelegate {
         model.flush()
     }
 
-    private func show(_ pane: SettingsPane?) {
-        settings?.show(pane: pane)
+    private func show(_ request: ShowRequest?) {
+        settings?.show(request)
+    }
+
+    @objc private func quit(_ event: NSAppleEventDescriptor, reply: NSAppleEventDescriptor) {
+        NSApp.terminateClosingSheets()
     }
 
     /// `kill`, `pkill` and a development menu app's `Process.terminate()` send SIGTERM, which
@@ -77,7 +85,7 @@ final class SettingsApp: NSObject, NSApplicationDelegate {
     private static func terminateOnSIGTERM() -> DispatchSourceSignal {
         signal(SIGTERM, SIG_IGN)
         let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
-        source.setEventHandler { MainActor.assumeIsolated { NSApp.terminate(nil) } }
+        source.setEventHandler { MainActor.assumeIsolated { NSApp.terminateClosingSheets() } }
         source.resume()
         return source
     }

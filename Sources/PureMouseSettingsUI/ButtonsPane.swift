@@ -9,10 +9,15 @@ struct ButtonsPane: View {
     @State private var presented: String?
     @State private var highlighted: String?
     @State private var sheet: SheetRequest?
-    @State private var expanded: Set<String> = ["gesture"]
+    /// Gesture buttons whose directions show; collapsed until opened or chosen.
+    @State private var expanded: Set<String> = []
     @State private var showOthers = false
+    @State private var showingAdvanced = false
+
+    static let restoreMessage = "Buttons and gestures return to the mouse's defaults. App settings don't change."
 
     var body: some View {
+        let usesGestures = model.config.usesGestures
         PaneForm {
             PaneBanners(needsAccessibility: true)
             Section {
@@ -24,32 +29,27 @@ struct ButtonsPane: View {
                     }
                 }
             } header: {
-                // Find by Pressing… and its Cancel are in the Mouse tab's header strip.
+                // Find by Pressing… and its Cancel are in the Mouse tab's header strip, which
+                // announces the outcome; the strip has no room beside its segments for the words.
                 if model.captureListening {
                     Text("Press a button on your mouse")
+                } else if let outcome = model.captureOutcome {
+                    Text(outcome.message)
                 }
-            }
-            .disabled(model.readOnly)
-
-            Section {
-                ValueSlider(title: "Distance", help: "How far to move while holding before a direction fires.",
-                            value: model.number(["gesture", "distanceMm"], default: 4, step: 0.5),
-                            range: 2...12, low: "Short", high: "Long", format: Format.millimetres)
-                ValueSlider(title: "Repeat", help: "Keep moving to repeat, such as across several Spaces.",
-                            value: model.number(["gesture", "repeatIntervalMs"], default: 400, step: 50),
-                            range: 150...1000, low: "Fast", high: "Slow", format: Format.milliseconds)
-            } header: {
-                Text("Gesture Feel")
             } footer: {
-                PaneFooter(restoreDefaults: {
-                    model.update {
-                        $0.set(nil, at: ["buttons"])
-                        $0.set(nil, at: ["gesture"])
-                    }
-                })
+                // Advanced… holds the gesture distance and repeat, so only while some button
+                // (globally or in an app) is Hold and Move.
+                PaneFooter(restoreDefaults: { model.update { $0.restoreButtonDefaults() } },
+                           restoreMessage: Self.restoreMessage,
+                           advanced: usesGestures ? { showingAdvanced = true } : nil)
             }
             .disabled(model.readOnly)
         }
+        .sheet(isPresented: $showingAdvanced) {
+            ButtonsAdvancedSheet().environment(model)
+        }
+        // The sheet's rows are about Hold and Move: with none left, it has nothing to show.
+        .onChange(of: usesGestures) { _, uses in if !uses { showingAdvanced = false } }
         .sheet(item: $sheet) { request in
             switch request.kind {
             case .shortcut: ShortcutSheet(request: request) { apply(.keys($0), to: request.target) }
@@ -58,6 +58,7 @@ struct ButtonsPane: View {
         }
         #if DEBUG
         .onAppear {
+            if DevHooks.sheet(on: "buttons") == .advanced, usesGestures { showingAdvanced = true }
             let environment = ProcessInfo.processInfo.environment
             if let key = environment["PUREMOUSE_DEV_PICKER"] {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { presented = key }
@@ -69,6 +70,9 @@ struct ButtonsPane: View {
         #endif
         // The prompt above the rows comes and goes.
         .onChange(of: model.captureListening) { settings?.refit() }
+        .onChange(of: model.captureOutcome) { settings?.refit() }
+        .onChange(of: expanded) { settings?.refit() }
+        .onChange(of: showOthers) { settings?.refit() }
         .onChange(of: model.capturedButton) { _, key in
             guard let key else { return }
             model.capturedButton = nil
@@ -97,17 +101,13 @@ struct ButtonsPane: View {
         ButtonRows.others(deviceCIDs: model.devices.flatMap(\.controls).map(\.cid), configKeys: configKeys)
     }
 
-    private func title(_ key: String) -> String {
-        NamedButton(rawValue: key)?.label ?? "Control \(key)"
-    }
-
     /// Where an "Other controls" entry lives, for its help line.
     private func caption(_ key: String) -> String? {
         guard NamedButton(rawValue: key) == nil, let cid = NamedButton.cid(forKey: key) else { return nil }
         // No devices: none connected, or paused (the daemon then reports none).
         guard !model.devices.isEmpty else { return nil }
         let owners = model.devices.filter { $0.controls.contains { $0.cid == cid } }.map(\.name)
-        return owners.isEmpty ? "Not on the connected mouse" : owners.joined(separator: ", ")
+        return owners.isEmpty ? ControlAvailability.unsupportedCaption : owners.joined(separator: ", ")
     }
 
     @ViewBuilder
@@ -119,10 +119,14 @@ struct ButtonsPane: View {
             LabeledContent {
                 actionButton(action, target: BindingTarget(button: key))
             } label: {
-                DisclosureLabel(title: title(key), help: caption(key), isExpanded: isExpanded)
+                DisclosureLabel(title: NamedButton.title(forKey: key), help: model.config.gestureSummary(key), isExpanded: isExpanded)
             }
             .padding(.leading, indented ? 16 : 0)
+            .listRowBackground(rowFill(key))
             if isExpanded.wrappedValue {
+                Text("Hold the button and move the mouse. Release without moving to click.")
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, indented ? 38 : 22)
                 ForEach(Gesture.directions, id: \.self) { direction in
                     LabeledContent(Gesture.label(direction)) {
                         actionButton(model.config.gestureBinding(key, direction),
@@ -135,10 +139,16 @@ struct ButtonsPane: View {
             LabeledContent {
                 actionButton(action, target: BindingTarget(button: key))
             } label: {
-                RowLabel(title(key), help: caption(key))
+                RowLabel(NamedButton.title(forKey: key), help: caption(key))
             }
             .padding(.leading, indented ? 16 : 0)
+            .listRowBackground(rowFill(key))
         }
+    }
+
+    /// The row Find by Pressing found, for a few seconds: the system's selection fill.
+    private func rowFill(_ key: String) -> Color? {
+        highlighted == key ? Color(nsColor: .unemphasizedSelectedContentBackgroundColor) : nil
     }
 
     private func actionButton(_ action: ButtonAction, target: BindingTarget) -> some View {
@@ -148,7 +158,6 @@ struct ButtonsPane: View {
             action: isDirection && action == .standard ? .named("none") : action,
             allowsDefault: !isDirection,
             allowsGesture: !isDirection,
-            highlighted: highlighted == id,
             isPresented: Binding(get: { presented == id }, set: { presented = $0 ? id : nil }),
             choose: { entry in choose(entry, for: target, current: action) },
             accessibilityName: target.title)
@@ -178,6 +187,25 @@ struct ButtonsPane: View {
             } else {
                 $0.bind(target.button, to: action)
             }
+        }
+    }
+}
+
+/// Buttons' Advanced… sheet: how Hold and Move feels.
+private struct ButtonsAdvancedSheet: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        AdvancedSheet(title: "Advanced") {
+            Section("Hold and Move") {
+                ValueSlider(title: "Distance", help: "How far to move while holding before a direction fires.",
+                            value: model.number(["gesture", "distanceMm"], default: 4, step: 0.5),
+                            range: 2...12, low: "Short", high: "Long", format: Format.millimetres)
+                ValueSlider(title: "Repeat", help: "Keep moving to repeat, such as across several Spaces.",
+                            value: model.number(["gesture", "repeatIntervalMs"], default: 400, step: 50),
+                            range: 150...1000, low: "Fast", high: "Slow", format: Format.milliseconds)
+            }
+            .disabled(model.readOnly)
         }
     }
 }

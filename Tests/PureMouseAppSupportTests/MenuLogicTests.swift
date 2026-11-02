@@ -105,7 +105,8 @@ private func text(_ tree: ConfigTree) -> String { String(decoding: tree.data(), 
 }
 
 @Test func buttonActionLabels() {
-    #expect(ButtonAction.standard.label == "Default")
+    #expect(ButtonAction.standard.label == "Mouse Default")
+    #expect(ButtonAction.run("").label == "Run Command")
     #expect(ButtonAction.named("none").label == "Do Nothing")
     #expect(ButtonAction.named("cycleDPI").label == "Cycle Pointer Speed")
     #expect(ButtonAction.named("toggleScrollMode").label == "Switch Wheel Mode")

@@ -97,13 +97,16 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
         return host
     }
 
-    public func show(pane: SettingsPane?) {
-        if let pane { tabs.open(pane) }
+    public func show(_ request: ShowRequest?) {
+        if let pane = request?.pane { tabs.open(pane) }
         guard let window else { return }
         if !window.isVisible { window.center() }
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
-        DispatchQueue.main.async { window.makeFirstResponder(nil) }
+        DispatchQueue.main.async { [context] in
+            window.makeFirstResponder(nil)
+            if let sheet = request?.sheet { context.sheet = sheet }
+        }
     }
 
     public func windowWillClose(_ notification: Notification) {
@@ -175,7 +178,7 @@ final class SettingsTabs: NSTabViewController {
 
     /// Fits the window to the current pane after its content changed height. The nested hosting
     /// controller's size follows its content, but it never tells its parent, so this passes it
-    /// up (the Apps pane calls it when it opens an app or goes back; the Mouse tab when its
+    /// up (the Apps pane calls it when its list grows or shrinks; the Mouse tab when its
     /// segment changes).
     func refit() {
         guard let pane = selectedItem?.viewController,
@@ -231,5 +234,18 @@ final class LazyPane: NSViewController {
     static func fitted(_ size: NSSize) -> NSSize {
         let maxHeight = (NSScreen.main?.visibleFrame.height ?? 900) - 80
         return NSSize(width: size.width, height: min(size.height, maxHeight))
+    }
+}
+
+extension NSApplication {
+    /// Quits even with a sheet open. AppKit ignores `terminate(_:)` while a window has a sheet
+    /// attached, so a quit from outside (the menu bar app's Quit PureMouse, SIGTERM, a capture)
+    /// would leave the helper running. Edits are already saved as they are made, and
+    /// `applicationWillTerminate` flushes the rest.
+    public func terminateClosingSheets() {
+        for window in windows {
+            for sheet in window.sheets.reversed() { window.endSheet(sheet) }
+        }
+        terminate(nil)
     }
 }

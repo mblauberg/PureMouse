@@ -110,17 +110,19 @@ the thumb wheel over even without `smoothScroll`; where it still scrolls, it scr
 smoothing.
 
 Settings › Mouse › Scrolling › Thumb Wheel sets `action`, or **Custom** for `left` and `right` (also shown
-for a pair written by hand), and `step`. **Reverse direction** sets `reversed` while the wheel has
-actions and `inverted` while it scrolls (shown as **Reverse scrolling** when it scrolls only in some
-app); the speed is its own row. Custom's rows name the way the wheel turns, so with `reversed` the
-**Turn left** row sets `right`.
+for a pair written by hand). Its Advanced… sheet has **Reverse direction** (`inverted`, while it
+scrolls here or in some app), **Swap directions** (`reversed`) and **Turn distance** (`step`) while
+it has actions, and **Speed** (`smoothScroll.horizontalSpeed`) while it scrolls. Custom's rows name
+the way the wheel turns, so with `reversed` the **Turn left** row sets `right`. Scrolling's Restore
+Defaults removes `smoothScroll`, `scrollWheel` and these thumb wheel keys; Buttons' removes
+`buttons` and `gesture`. Neither touches `apps`.
 
 ## Per-app settings
 
 `apps` maps an app's bundle ID to the settings that differ in that app. Only `buttons`,
 `thumbWheel` (`action`, `left`, `right`, `step` and `reversed`; not `inverted`) and `smoothScroll`
 can differ; the rest write to the mouse and stay global. An app's `reversed` defaults to the global
-one; Settings › Apps shows it as **Same as Everywhere**, **Normal** or **Reversed**.
+one; Settings › Apps shows it as **Same as Everywhere**, **Normal** or **Swapped**.
 
 ```json
 "apps": {
@@ -143,7 +145,7 @@ that is not installed is fine. `puremouse app` prints the bundle IDs PureMouse s
 
 Settings › Apps lists the apps in `apps` and adds one from Applications or the running apps (it is
 written only once a setting is chosen). For each app it sets the buttons, the thumb wheel and an own
-scrolling `speed` and `smoothingMs` (both written when **Own scrolling speed** is turned on, both
+scrolling `speed` and `smoothingMs` (both written when **Custom scrolling** is turned on, both
 removed when it is turned off); **Same as Everywhere** removes the app's key, and removing the
 last one removes the app. Browsers, Zoom, Teams, Word, PowerPoint, Preview and Excel get a suggested
 thumb wheel action. Keys it does not show, unknown ones included, stay as written.

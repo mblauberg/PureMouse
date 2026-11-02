@@ -40,7 +40,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         // icon there is nothing left to do once it is open.
         let request = ShowRequest.consume()
         if !Locations.launchedByLaunchd || statusMenu == nil || request != nil {
-            showSettings(pane: request?.pane) { [weak self] in
+            showSettings(request) { [weak self] in
                 if self?.statusMenu == nil { NSApp.terminate(nil) }
             }
         }
@@ -59,9 +59,9 @@ final class AppController: NSObject, NSApplicationDelegate {
         model.flush()
     }
 
-    func showSettings(pane: SettingsPane? = nil, then done: @escaping @MainActor () -> Void = {}) {
+    func showSettings(_ request: ShowRequest? = nil, then done: @escaping @MainActor () -> Void = {}) {
         Task { await Notifier.refresh() }
-        SettingsLauncher.shared.open(pane: pane, then: done)
+        SettingsLauncher.shared.open(request ?? ShowRequest(), then: done)
     }
 
     func statusChanged() {

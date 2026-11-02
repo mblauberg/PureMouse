@@ -96,3 +96,55 @@ private func running(_ sandbox: Sandbox, status: Status = daemonStatus()) throws
     #expect(manual.pending.count == 1)
     #expect(sandbox.control()?.capture == Control.Capture(token: 78))
 }
+
+@MainActor @Test func aCaptureNobodyAnsweredSaysSoUntilTheNextStart() throws {
+    let sandbox = try Sandbox()
+    let daemon = try running(sandbox)
+    let manual = ManualClock()
+    var tokens = [77, 78, 79]
+    let capture = CaptureController(link: daemon, clock: manual.clock, newToken: { tokens.removeFirst() })
+    // The daemon gives up.
+    capture.start()
+    capture.handle(Status.Capture(token: 77, state: .timedOut, cid: nil, deviceID: nil))
+    #expect(capture.outcome == .noButtonDetected)
+    #expect(capture.outcome?.message == "No button detected. Try again.")
+    // The next start clears it; the 11 s fallback sets it again.
+    capture.start()
+    #expect(capture.outcome == nil)
+    manual.advance(11)
+    #expect(!capture.listening && capture.outcome == .noButtonDetected)
+    capture.clearOutcome()
+    #expect(capture.outcome == nil)
+    // A press says nothing.
+    capture.start()
+    capture.handle(Status.Capture(token: 79, state: .pressed, cid: 0x53, deviceID: "1-1"))
+    #expect(capture.outcome == nil && capture.capturedButton == "back")
+}
+
+@MainActor @Test func cancellingFindByPressingSaysNothing() throws {
+    let sandbox = try Sandbox()
+    let daemon = try running(sandbox)
+    let manual = ManualClock()
+    var tokens = [5, 6]
+    let capture = CaptureController(link: daemon, clock: manual.clock, newToken: { tokens.removeFirst() })
+    capture.start()
+    capture.cancel()
+    manual.advance(11)
+    #expect(capture.outcome == nil)
+    capture.start()
+    capture.handle(Status.Capture(token: 6, state: .cancelled, cid: nil, deviceID: nil))
+    #expect(capture.outcome == nil)
+}
+
+@MainActor @Test func cancellingAfterATimeoutForgetsTheOutcome() throws {
+    let sandbox = try Sandbox()
+    let daemon = try running(sandbox)
+    let manual = ManualClock()
+    let capture = CaptureController(link: daemon, clock: manual.clock, newToken: { 5 })
+    capture.start()
+    manual.advance(11)
+    #expect(!capture.listening && capture.outcome == .noButtonDetected)
+    // Leaving Buttons cancels, though nothing is listening any more.
+    capture.cancel()
+    #expect(capture.outcome == nil)
+}

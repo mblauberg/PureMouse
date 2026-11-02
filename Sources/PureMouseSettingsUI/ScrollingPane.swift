@@ -1,120 +1,106 @@
 import PureMouseAppSupport
 import SwiftUI
 
+/// Mouse › Scrolling: smooth scrolling, the main wheel and the thumb wheel's action, each row only
+/// when the mouse can use it (`ScrollingLayout`); the rest in the Advanced… sheet.
 struct ScrollingPane: View {
     @Environment(AppModel.self) private var model
-    @State private var fineTune = false
+    @State private var showingAdvanced = false
+
+    static let restoreMessage = "Scrolling and thumb wheel settings return to the mouse's defaults. App settings don't change."
 
     var body: some View {
         let config = model.config
+        let layout = ScrollingLayout(config: config, devices: model.capabilityDevices)
         let smooth = config.smoothScrollEnabled
-        let device = model.primaryDevice
         PaneForm {
             PaneBanners(needsAccessibility: true)
-            Section {
-                Toggle(isOn: Binding(get: { smooth }, set: { on in model.update { $0.smoothScrollEnabled = on } })) {
-                    RowLabel("Smooth scrolling", help: "PureMouse animates both wheels. Off uses standard macOS scrolling.")
-                }
-                .accessibilityLabel("Smooth scrolling")
-                Group {
-                    LabeledContent {
-                        Picker("Feel", selection: Binding(get: { config.feel }, set: { feel in model.update { $0.apply(feel) } })) {
-                            ForEach(Feel.presets) { Text($0.label).tag($0) }
-                            if config.feel == .custom { Text(Feel.custom.label).tag(Feel.custom) }
-                        }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
-                        .fixedSize()
-                    } label: {
-                        RowLabel("Feel", help: "How long a scroll glides, and how far fast flicks go.")
-                    }
-                    ValueSlider(title: "Speed", spokenTitle: "Scrolling speed", value: model.number(["smoothScroll", "speed"], default: 1, step: 0.05),
-                                range: 0.25...3, low: "Slow", high: "Fast", format: Format.multiplier)
-                    LabeledContent {
-                        if !fineTune {
-                            Text("Acceleration, glide time, Shift for sideways")
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                        }
-                    } label: {
-                        DisclosureLabel(title: "Fine-tune", isExpanded: $fineTune)
-                    }
-                    if fineTune {
-                        ValueSlider(title: "Acceleration", help: "Extra distance when you spin the wheel fast.",
-                                    value: model.number(["smoothScroll", "acceleration"], default: 1, step: 0.1),
-                                    range: 0...3, low: "Off", high: "Strong",
-                                    format: { $0 == 0 ? "Off" : Format.multiplier($0) })
-                            .disclosedRow()
-                        ValueSlider(title: "Glide", help: "0 scrolls instantly.",
-                                    value: model.number(["smoothScroll", "smoothingMs"], default: 125, step: 25),
-                                    range: 0...500, low: "Short", high: "Long", format: Format.milliseconds)
-                            .disclosedRow()
-                        Toggle("Shift + wheel scrolls sideways",
-                               isOn: model.toggle(["smoothScroll", "shiftScrollsHorizontally"], default: true))
-                            .disclosedRow()
-                    }
-                }
-                // Dimmed, not hidden: the switch above brings them back.
-                .disabled(!smooth)
-            }
-
-            if device?.offers(\.smartShift) != false || config.contains(["scrollWheel"]) {
-                Section("Main Wheel") {
-                    let inverted = config.bool(["scrollWheel", "inverted"])
-                    Toggle(isOn: model.toggle(["scrollWheel", "inverted"], default: false)) {
-                        RowLabel("Reverse direction", help: "Classic wheel direction while the trackpad stays natural.",
-                                 mouseDefault: inverted == nil)
-                    }
-                    .accessibilityLabel("Reverse main wheel direction")
-                    if device?.offers(\.smartShift) != false {
-                        wheelMode
-                        smartShift
-                    }
-                }
-            }
-
-            if device?.offers(\.thumbWheel) != false || config.contains(["thumbWheel"]) {
+            if layout.isEmpty {
                 Section {
-                    let scrolls = config.thumbWheel(at: ["thumbWheel"]).scrolls
-                    ThumbWheelRows(path: ["thumbWheel"])
-                    // `inverted` is scrolling only: shown while the wheel scrolls here or in some app.
-                    if scrolls || config.someAppScrollsThumbWheel {
-                        Toggle(isOn: model.toggle(["thumbWheel", "inverted"], default: false)) {
-                            RowLabel(scrolls ? "Reverse direction" : "Reverse scrolling",
-                                     help: scrolls ? nil : "In apps where the thumb wheel scrolls sideways.",
-                                     mouseDefault: config.bool(["thumbWheel", "inverted"]) == nil)
-                        }
-                        .accessibilityLabel("Reverse thumb wheel scrolling")
+                    LabeledContent {} label: {
+                        RowLabel("Smooth scrolling", help: ControlAvailability.unsupportedCaption)
                     }
-                    ValueSlider(title: "Speed", spokenTitle: "Thumb wheel speed", value: model.number(["smoothScroll", "horizontalSpeed"], default: 1, step: 0.05),
-                                range: 0.25...3, low: "Slow", high: "Fast", format: Format.multiplier)
-                        // Scrolling speed: nothing to tune while the wheel performs actions.
-                        .disabled(!smooth || !config.thumbWheel(at: ["thumbWheel"]).scrolls)
-                } header: {
-                    Text("Thumb Wheel")
-                } footer: {
-                    restoreDefaults
                 }
-            } else {
-                Section {} footer: { restoreDefaults }
+            }
+            if !layout.smoothScrollingRows.isEmpty {
+                Section {
+                    if layout.shows(.smoothScrolling) {
+                        Toggle(isOn: Binding(get: { smooth }, set: { on in model.update { $0.smoothScrollEnabled = on } })) {
+                            RowLabel("Smooth scrolling", help: "Adds a glide to wheel scrolling. Apps can use their own settings.",
+                                     availability: layout.availability(.smoothScrolling))
+                        }
+                        .accessibilityLabel("Smooth scrolling")
+                    }
+                    Group {
+                        if layout.shows(.feel) { feel(config, layout.availability(.feel)) }
+                        if layout.shows(.speed) {
+                            ValueSlider(title: "Speed", spokenTitle: "Scrolling speed",
+                                        value: model.number(["smoothScroll", "speed"], default: 1, step: 0.05),
+                                        range: 0.25...3, low: "Slow", high: "Fast", format: Format.multiplier,
+                                        availability: layout.availability(.speed))
+                        }
+                    }
+                    // Dimmed, not hidden: the switch above brings them back.
+                    .disabled(!smooth)
+                }
+            }
+
+            // Built from its rows: a notched wheel has Reverse direction without Wheel mode or SmartShift.
+            if !layout.mainWheelRows.isEmpty {
+                Section("Main Wheel") {
+                    if layout.shows(.reverseDirection) {
+                        Toggle(isOn: model.toggle(["scrollWheel", "inverted"], default: false)) {
+                            RowLabel("Reverse direction", help: "Reverses this wheel.",
+                                     mouseDefault: config.bool(["scrollWheel", "inverted"]) == nil,
+                                     availability: layout.availability(.reverseDirection))
+                        }
+                        .accessibilityLabel("Reverse main wheel direction")
+                    }
+                    if layout.shows(.wheelMode) { wheelMode(layout.availability(.wheelMode)) }
+                    if layout.shows(.smartShift) { smartShift(layout.availability(.smartShift)) }
+                }
+            }
+
+            if layout.showsThumbWheel {
+                Section("Thumb Wheel") {
+                    ThumbWheelRows(path: ["thumbWheel"], rows: .standard, availability: layout.availability(.thumbWheelAction))
+                }
+            }
+
+            Section {} footer: {
+                PaneFooter(restoreDefaults: { model.update { $0.restoreScrollingDefaults() } },
+                           restoreMessage: Self.restoreMessage,
+                           advanced: layout.hasAdvanced ? { showingAdvanced = true } : nil)
             }
         }
         .disabled(model.readOnly)
+        .sheet(isPresented: $showingAdvanced) {
+            ScrollingAdvancedSheet().environment(model)
+        }
+        .onChange(of: layout.hasAdvanced) { _, has in if !has { showingAdvanced = false } }
+        #if DEBUG
+        .onAppear { if DevHooks.sheet(on: "scrolling") == .advanced, layout.hasAdvanced { showingAdvanced = true } }
+        #endif
     }
 
-    private var restoreDefaults: some View {
-        PaneFooter(restoreDefaults: {
-            model.update {
-                // Smooth scrolling on, with every tuning at its default.
-                $0.set([String: Any](), at: ["smoothScroll"])
-                $0.set(nil, at: ["scrollWheel"])
-                // Only the keys this pane shows; any others under thumbWheel stay.
-                for key in ["inverted", "reversed"] + ThumbWheelChoice.keys { $0.set(nil, at: ["thumbWheel", key]) }
+    /// Three presets; values no preset matches select none, and the caption says where they are.
+    private func feel(_ config: ConfigTree, _ availability: ControlAvailability) -> some View {
+        let selection = config.feelSelection
+        return LabeledContent {
+            Picker("Feel", selection: Binding(get: { selection }, set: { feel in
+                if let feel { model.update { $0.apply(feel) } }
+            })) {
+                ForEach(Feel.presets) { Text($0.label).tag($0 as Feel?) }
             }
-        })
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+        } label: {
+            RowLabel("Feel", help: Feel.caption(for: selection), availability: availability)
+        }
     }
 
-    private var wheelMode: some View {
+    private func wheelMode(_ availability: ControlAvailability) -> some View {
         let mode = model.config.string(["scrollWheel", "mode"])
         return LabeledContent {
             Picker("Wheel mode", selection: Binding<String?>(get: { mode }, set: { model.set($0, at: ["scrollWheel", "mode"]) })) {
@@ -126,27 +112,78 @@ struct ScrollingPane: View {
             .fixedSize()
         } label: {
             RowLabel("Wheel mode", help: "Mode when the mouse connects. A button can still switch it.",
-                     mouseDefault: mode == nil)
+                     mouseDefault: mode == nil, availability: availability)
         }
     }
 
-    /// SmartShift: a switch (off writes 255) and, while on, its threshold in an indented row.
-    @ViewBuilder private var smartShift: some View {
+    /// SmartShift: a switch (off writes 255); where it switches is in Advanced….
+    private func smartShift(_ availability: ControlAvailability) -> some View {
         let threshold = model.config.int(["scrollWheel", "smartShiftThreshold"])
         let on = threshold.map { $0 < 255 } ?? true
-        Toggle(isOn: Binding(get: { on }, set: { model.set($0 ? 12 : 255, at: ["scrollWheel", "smartShiftThreshold"]) })) {
-            RowLabel("SmartShift", help: "Frees the wheel when you scroll fast.", mouseDefault: threshold == nil)
+        return Toggle(isOn: Binding(get: { on }, set: { model.set($0 ? 12 : 255, at: ["scrollWheel", "smartShiftThreshold"]) })) {
+            RowLabel("SmartShift", help: "Frees the wheel when you scroll fast.", mouseDefault: threshold == nil,
+                     availability: availability)
         }
         .accessibilityLabel("SmartShift")
-        if on {
-            LabeledContent("Threshold") {
-                EndLabeledSlider(title: "SmartShift threshold",
-                                 value: Binding(get: { Double(min(threshold ?? 12, 50)) },
-                                                set: { model.set(Int($0.rounded()), at: ["scrollWheel", "smartShiftThreshold"], debounce: true) }),
-                                 range: 1...50, low: "Sooner", high: "Later")
-                    .frame(width: 200)
+    }
+}
+
+/// Scrolling's Advanced… sheet: smooth scrolling's tuning, where SmartShift switches, and the
+/// thumb wheel's rows for what it does. Each row shows only when it applies; the smooth
+/// scrolling group dims while the switch is off.
+private struct ScrollingAdvancedSheet: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let config = model.config
+        let layout = ScrollingLayout(config: config, devices: model.capabilityDevices)
+        AdvancedSheet(title: "Advanced") {
+            Group {
+                if !layout.advancedSmoothScrollingRows.isEmpty {
+                    Section("Smooth Scrolling") {
+                        if layout.shows(.acceleration) {
+                            ValueSlider(title: "Acceleration", help: "Extra distance when you spin the wheel fast.",
+                                        value: model.number(["smoothScroll", "acceleration"], default: 1, step: 0.1),
+                                        range: 0...3, low: "Off", high: "Strong", format: Format.strength,
+                                        availability: layout.availability(.acceleration))
+                        }
+                        if layout.shows(.glide) {
+                            ValueSlider(title: "Glide", help: "0 scrolls instantly.",
+                                        value: model.number(["smoothScroll", "smoothingMs"], default: 125, step: 25),
+                                        range: 0...500, low: "Short", high: "Long", format: Format.milliseconds,
+                                        availability: layout.availability(.glide))
+                        }
+                        if layout.shows(.shiftScrollsSideways) {
+                            Toggle(isOn: model.toggle(["smoothScroll", "shiftScrollsHorizontally"], default: true)) {
+                                RowLabel("Hold Shift to scroll sideways",
+                                         availability: layout.availability(.shiftScrollsSideways))
+                            }
+                            .accessibilityLabel("Hold Shift to scroll sideways")
+                        }
+                    }
+                    .disabled(!config.smoothScrollEnabled)
+                }
+                if layout.shows(.switchesAt) {
+                    Section("Main Wheel") { switchesAt(layout.availability(.switchesAt)) }
+                }
+                if !layout.advancedThumbWheelRows.isEmpty {
+                    Section("Thumb Wheel") {
+                        ThumbWheelRows(path: ["thumbWheel"], rows: .advanced, availability: layout.availability(.thumbWheelAction))
+                    }
+                }
             }
-            .disclosedRow()
+            .disabled(model.readOnly)
         }
+    }
+
+    /// The SmartShift threshold: how fast a scroll frees the wheel.
+    private func switchesAt(_ availability: ControlAvailability) -> some View {
+        let threshold = model.config.int(["scrollWheel", "smartShiftThreshold"])
+        return ValueSlider(title: "Switches at", help: "How fast you scroll before the wheel frees up.",
+                           value: Binding(get: { Double(min(threshold ?? 12, 50)) },
+                                          set: { model.set(Int($0.rounded()), at: ["scrollWheel", "smartShiftThreshold"], debounce: true) }),
+                           range: 1...50, low: "Slower", high: "Faster",
+                           format: { String(Int($0.rounded())) },
+                           availability: availability, mouseDefault: threshold == nil)
     }
 }

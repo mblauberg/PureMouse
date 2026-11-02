@@ -61,6 +61,23 @@ struct PaneBanners: View {
     }
 }
 
+/// The save-failure notice inside a sheet, which covers the pane's own banner: the same `Banner`
+/// as `PaneBanners`, for the one notice a change made in the sheet can raise.
+struct SheetBanners: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        if model.writeError != nil {
+            let notice = Notice.writeError
+            Section {
+                Banner(title: notice.title, message: notice.message(model), symbol: notice.symbol) {
+                    NoticeActions(notice: notice)
+                }
+            }
+        }
+    }
+}
+
 /// A notice at the top of a pane: its symbol, a title over its message, and its buttons, with a
 /// link to the rest in General. A row of its own, since `LabeledContent` would squeeze a long
 /// message beside the buttons. The Apps tab's suggestion uses it too.

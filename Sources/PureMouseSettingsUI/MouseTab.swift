@@ -125,7 +125,7 @@ struct MouseHeader: View {
                 Spacer()
                 if selection.segment == .buttons { findByPressing }
             }
-            Picker("Mouse settings", selection: Binding(get: { selection.segment }, set: { selection.select($0) })) {
+            Picker("Mouse settings", selection: Binding(get: { selection.segment }, set: { model.clearCaptureOutcome(); selection.select($0) })) {
                 ForEach(MouseSegment.allCases, id: \.self) { Text($0.title).tag($0) }
             }
             .pickerStyle(.segmented)
@@ -135,6 +135,9 @@ struct MouseHeader: View {
         // In line with the grouped boxes below, whose form insets them by the same margin.
         .padding(.horizontal, 20)
         .padding(.top)
+        .onChange(of: model.captureOutcome) { _, outcome in
+            if let outcome { AccessibilityNotification.Announcement(outcome.message).post() }
+        }
     }
 
     @ViewBuilder private var findByPressing: some View {
