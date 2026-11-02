@@ -48,8 +48,8 @@ case nil, "run":
 case "permissions":
     // The exit status is the allowed set's raw value; the daemon polls it (Daemon.pollPermissions).
     let allowed = Permissions.current
-    print("Accessibility: \(allowed.contains(.accessibility) ? "allowed" : "not allowed")")
-    print("Input Monitoring: \(allowed.contains(.inputMonitoring) ? "allowed" : "not allowed")")
+    print("Accessibility: \(allowed.contains(.accessibility) ? "Allowed" : "Not allowed")")
+    print("Input Monitoring: \(allowed.contains(.inputMonitoring) ? "Allowed" : "Not allowed")")
     exit(allowed.rawValue)
 case "action" where arguments.count == 2:
     // Fires one action as a button would, to check it still works (e.g. after a macOS upgrade).
@@ -80,7 +80,7 @@ case "login-status":
     do {
         print(try login.loginStatus().json())
     } catch {
-        CLIError.fail("cannot read the login state", error)
+        CLIError.fail("can't read the login state", error)
     }
 case "register", "unregister", "stop", "start", "login", "menu":
     // launchd kills a job's process group when booting it out, and the menu bar app (one of the
@@ -91,37 +91,37 @@ case "register", "unregister", "stop", "start", "login", "menu":
         do {
             print(try login.register())
         } catch {
-            CLIError.fail("cannot register", error)
+            CLIError.fail("can't register", error)
         }
     case ("unregister", _):
         do {
             try login.unregister()
         } catch {
-            CLIError.fail("cannot unregister", error)
+            CLIError.fail("can't unregister", error)
         }
     case ("stop", _):
         do {
             print(try login.stopAll())
         } catch {
-            CLIError.fail("cannot stop", error)
+            CLIError.fail("can't stop", error)
         }
     case ("start", _):
         do {
             print(try login.start())
         } catch {
-            CLIError.fail("cannot start", error)
+            CLIError.fail("can't start", error)
         }
     case ("login", let setting?) where setting == "on" || setting == "off":
         do {
             print(try setting == "on" ? login.loginOn() : login.loginOff())
         } catch {
-            CLIError.fail("cannot change login", error)
+            CLIError.fail("can't change login", error)
         }
     case ("menu", let setting?) where setting == "on" || setting == "off":
         do {
             print(try login.showMenu(setting == "on"))
         } catch {
-            CLIError.fail("cannot change the menu bar icon", error)
+            CLIError.fail("can't change the menu bar icon", error)
         }
     default:
         usage()

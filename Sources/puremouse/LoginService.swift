@@ -235,7 +235,7 @@ struct LaunchdAgentService: LoginService {
         process.arguments = arguments
         process.standardOutput = pipe
         process.standardError = pipe
-        guard (try? process.run()) != nil else { return (-1, "cannot run launchctl") }
+        guard (try? process.run()) != nil else { return (-1, "can't run launchctl") }
         let output = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
         process.waitUntilExit()
         return (process.terminationStatus, output.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -247,11 +247,11 @@ struct LaunchdAgentService: LoginService {
         var description: String {
             switch self {
             case .stillRunning(let target, let output):
-                "PureMouse did not stop (\(output)); try `launchctl bootout \(target)`"
+                "PureMouse didn't stop (\(output)); try `launchctl bootout \(target)`"
             case .bootstrap(let output):
-                "launchd would not start PureMouse (\(output)); check it is allowed under System Settings › General › Login Items"
+                "launchd wouldn't start PureMouse (\(output)); check it's allowed under System Settings › General › Login Items"
             case .kickstart(let output):
-                "launchd would not restart PureMouse (\(output))"
+                "launchd wouldn't restart PureMouse (\(output))"
             }
         }
     }

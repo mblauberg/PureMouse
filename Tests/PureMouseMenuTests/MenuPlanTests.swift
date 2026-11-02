@@ -78,7 +78,7 @@ struct MenuPlanTests {
         state.statusTooNew = true
         #expect(lines(state).hasPrefix("""
             header PureMouse Is Off, The mouse works as it does without PureMouse
-            Update PureMouse… [attention, -> openReleases]
+            Update PureMouse [attention, -> openReleases]
             ---
             """))
     }
@@ -101,20 +101,19 @@ struct MenuPlanTests {
     }
 
     /// Hide Menu Bar Icon is always there as Quit's alternate (AppKit shows it while ⌥ is held,
-    /// also when ⌥ is pressed after the menu opens); Reload Config and Show Log only when ⌥ was
-    /// held as it opened.
-    @Test func optionAddsReloadAndShowLog() {
-        #expect(!lines(Self.running()).contains("Reload Config"))
+    /// also when ⌥ is pressed after the menu opens); Show Log only when ⌥ was held as it opened.
+    /// There is no Reload Config: the config applies on save.
+    @Test func optionAddsShowLog() {
         #expect(!lines(Self.running()).contains("Show Log"))
         #expect(lines(Self.running()).hasSuffix(Self.footer))
         #expect(lines(Self.running(), option: true).hasSuffix(Self.footer))
         #expect(lines(Self.running(), option: true).contains("""
             Pause PureMouse [-> setPaused(true)]
-            Reload Config [-> reloadConfig]
             Show Log in Finder [-> showLog]
             ---
             Settings…
             """))
+        #expect(!lines(Self.running(), option: true).contains("Reload"))
     }
 
     @Test func twoMiceEachGetAHeader() {
@@ -201,9 +200,9 @@ struct MenuPlanTests {
         state.logiOptionsRunning = true
         #expect(lines(state).contains("""
             v0.3.0
-            Update PureMouse… [attention, -> openReleases]
-            Allow Accessibility Access… [attention, -> openPrivacy(PureMouseAppSupport.PrivacyPane.accessibility)]
-            Allow Input Monitoring… [attention, -> openPrivacy(PureMouseAppSupport.PrivacyPane.inputMonitoring)]
+            Update PureMouse [attention, -> openReleases]
+            Allow Accessibility Access [attention, -> openPrivacy(PureMouseAppSupport.PrivacyPane.accessibility)]
+            Allow Input Monitoring [attention, -> openPrivacy(PureMouseAppSupport.PrivacyPane.inputMonitoring)]
             Fix Config File… [attention, -> openSettings(Optional(PureMouseAppSupport.SettingsPane.tab(PureMouseAppSupport.SettingsTab.general)))]
             Logi Options+ Is Running… [attention, -> openSettings(Optional(PureMouseAppSupport.SettingsPane.tab(PureMouseAppSupport.SettingsTab.general)))]
             ---

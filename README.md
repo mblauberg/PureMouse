@@ -57,7 +57,7 @@ connects is retried once a minute until it does.</sub>
 - Map any button to Mission Control, App Exposé, Show Desktop, Launchpad, Spaces, back and
   forward, volume, brightness, tabs, zoom, a keyboard shortcut or a shell command.
 - Hold the gesture button and move the mouse for four more actions.
-- **Select by Pressing** finds a button by pressing it.
+- **Find by Pressing…** finds a button by pressing it.
 
 **Scrolling**
 - Smooth, accelerated scrolling on both wheels, with Precise, Balanced and Gliding presets or

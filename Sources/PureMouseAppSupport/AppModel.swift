@@ -45,7 +45,7 @@ public final class AppModel {
             self?.statusChanged()
         }
         link.statusLoaded = { [weak self] in self?.statusLoaded() }
-        link.controlFailed = { alert("PureMouse could not be reached", $0.localizedDescription) }
+        link.controlFailed = { alert("PureMouse couldn't be reached.", $0.localizedDescription) }
         store.daemonConfigError = { [link] in link.configError }
         store.flushed = { [weak self] in self?.sendConfiguredDPIIfWanted() }
         // Config first: the status pass reads `notifications.lowBattery`.
@@ -127,9 +127,6 @@ public final class AppModel {
 
     public func cancelCapture() { capture.cancel() }
 
-    /// Asks the daemon to reload the config now (it also reloads on its own when the file changes).
-    public func reloadDaemonConfig() { link.reloadDaemonConfig() }
-
     // MARK: Config
 
     public var config: ConfigTree { store.config }
@@ -164,7 +161,7 @@ public final class AppModel {
             case .success: success()
             case .failure(let error):
                 failure()
-                alert("PureMouse could not do that", error.description)
+                alert("PureMouse couldn't do that.", error.description)
             }
         }
     }

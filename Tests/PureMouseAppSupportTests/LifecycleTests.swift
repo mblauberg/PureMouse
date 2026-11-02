@@ -85,7 +85,7 @@ import Testing
             let events = try await perform(exiting: status) { model, record in
                 model.perform(.menuOff) { record("success") }
             }
-            #expect(events == (status == 0 ? ["success"] : ["alert: PureMouse could not do that"]))
+            #expect(events == (status == 0 ? ["success"] : ["alert: PureMouse couldn't do that."]))
         }
     }
 
@@ -95,7 +95,7 @@ import Testing
             let events = try await perform(exiting: status) { model, record in
                 model.perform(.menuOff, then: { record("success") }, otherwise: { record("failure") })
             }
-            #expect(events == (status == 0 ? ["success"] : ["failure", "alert: PureMouse could not do that"]))
+            #expect(events == (status == 0 ? ["success"] : ["failure", "alert: PureMouse couldn't do that."]))
         }
     }
 

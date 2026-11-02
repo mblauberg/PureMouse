@@ -105,25 +105,6 @@ extension AppModel {
     }
 }
 
-/// A right-aligned button under the last group, like System Settings' "Restore Defaults".
-struct FooterButton: View {
-    let title: String
-    let action: () -> Void
-
-    init(_ title: String, action: @escaping () -> Void) {
-        self.title = title
-        self.action = action
-    }
-
-    var body: some View {
-        HStack {
-            Spacer()
-            Button(title, action: action)
-        }
-        .padding(.top, 4)
-    }
-}
-
 /// The row under a pane's last group (docs/ui-design.md): Restore Defaults at the leading edge,
 /// Advanced… at the trailing edge, either optional. Advanced… opens the pane's `AdvancedSheet`.
 /// Goes in the last section's footer.

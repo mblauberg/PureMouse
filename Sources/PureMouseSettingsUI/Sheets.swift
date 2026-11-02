@@ -241,7 +241,7 @@ struct CommandSheet: View {
                 .font(.body.monospaced())
                 .lineLimit(3...8)
                 .accessibilityLabel("Command")
-            Text("Runs with /bin/sh as you. PureMouse does not show its output.")
+            Text("Runs with /bin/sh as you. PureMouse doesn't show its output.")
                 .font(.callout).foregroundStyle(.secondary)
             HStack {
                 Spacer()

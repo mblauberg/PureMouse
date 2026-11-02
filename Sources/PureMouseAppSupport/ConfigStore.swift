@@ -73,7 +73,7 @@ public final class ConfigStore {
             return
         }
         guard let data = try? Data(contentsOf: url) else {
-            configProblem = "PureMouse cannot read \(Format.tildePath(url.path))."
+            configProblem = "PureMouse can't read \(Format.tildePath(url.path))."
             return
         }
         guard data != diskBytes else { return }
@@ -196,14 +196,14 @@ public final class ConfigStore {
     private func describeSave(_ error: Error) -> String {
         switch error {
         case ConfigFile.SaveError.fileHasError:
-            "The config file changed and has an error, so this change was not saved."
+            "The config file changed and has an error, so this change wasn't saved."
         case ConfigFile.SaveError.rejected(let reason):
             ConfigCheck.message(for: reason)
         case ConfigFile.SaveError.writeFailed(let reason):
-            "PureMouse could not save \(Format.tildePath(locations.config.path)): \(reason.localizedDescription)"
+            "PureMouse couldn't save \(Format.tildePath(locations.config.path)): \(reason.localizedDescription)"
         case ConfigFile.SaveError.backupFailed(let reason):
-            "PureMouse could not keep the current file as \(backupName), "
-                + "so this change was not saved: \(reason.localizedDescription)"
+            "PureMouse couldn't keep the current file as \(backupName), "
+                + "so this change wasn't saved: \(reason.localizedDescription)"
         default:
             error.localizedDescription
         }

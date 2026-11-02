@@ -62,7 +62,6 @@ enum MenuAction {
     case setDPI(Int)
     case start
     case setPaused(Bool)
-    case reloadConfig
     case showLog
     case quit
     case hideMenuBarIcon
@@ -94,8 +93,9 @@ struct MenuItem {
 enum MenuPlan {
     static let offSubtitle = "The mouse works as it does without PureMouse"
 
-    /// The rows in order. `option`: ⌥ was held as the menu opened, which adds Reload Config and
-    /// Show Log in Finder (the headers' and Hide Menu Bar Icon's alternates are always there).
+    /// The rows in order. `option`: ⌥ was held as the menu opened, which adds Show Log in Finder
+    /// (the headers' and Hide Menu Bar Icon's alternates are always there). There is no Reload
+    /// Config: the config applies on save.
     static func rows(for state: MenuState, option: Bool) -> [MenuRow] {
         var rows: [MenuRow] = []
         let running = state.daemonRunning
@@ -129,7 +129,6 @@ enum MenuPlan {
             let paused = state.paused
             rows.append(.item(MenuItem(title: paused ? "Resume PureMouse" : "Pause PureMouse", action: .setPaused(!paused))))
             if option {
-                rows.append(.item(MenuItem(title: "Reload Config", action: .reloadConfig)))
                 rows.append(.item(MenuItem(title: "Show Log in Finder", action: .showLog)))
             }
         }
@@ -137,7 +136,7 @@ enum MenuPlan {
         rows.append(.separator)
         rows.append(.item(MenuItem(title: "Settings…", key: ",", action: .openSettings(nil))))
         rows.append(.item(MenuItem(title: "Quit PureMouse", key: "q", action: .quit)))
-        // No key equivalent: macOS reserves ⌥⌘Q for "Quit and Keep Windows".
+        // ⌥⌘Q: AppKit pairs an alternate with Quit only when both share "q" (docs/ui-language.md).
         rows.append(.item(MenuItem(title: "Hide Menu Bar Icon", key: "q", alternate: true, action: .hideMenuBarIcon)))
         return rows
     }
@@ -151,13 +150,13 @@ enum MenuPlan {
     /// The warning rows; with PureMouse off, only a status too new to read.
     static func attentionRows(_ state: MenuState) -> [MenuRow] {
         var rows: [MenuRow] = []
-        if state.statusTooNew { rows.append(attention("Update PureMouse…", .openReleases)) }
+        if state.statusTooNew { rows.append(attention("Update PureMouse", .openReleases)) }
         guard state.daemonRunning else { return rows }
         if state.accessibilityMissing {
-            rows.append(attention("Allow Accessibility Access…", .openPrivacy(.accessibility)))
+            rows.append(attention("Allow Accessibility Access", .openPrivacy(.accessibility)))
         }
         if state.inputMonitoringMissing, state.hasBluetoothDevice {
-            rows.append(attention("Allow Input Monitoring…", .openPrivacy(.inputMonitoring)))
+            rows.append(attention("Allow Input Monitoring", .openPrivacy(.inputMonitoring)))
         }
         if state.configError { rows.append(attention("Fix Config File…", .openSettings(.tab(.general)))) }
         if state.logiOptionsRunning { rows.append(attention("Logi Options+ Is Running…", .openSettings(.tab(.general)))) }

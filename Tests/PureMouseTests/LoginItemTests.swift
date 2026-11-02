@@ -189,7 +189,7 @@ private final class Rig: @unchecked Sendable {
         #expect(try rig.item.stopAll() == "PureMouse stopped; it starts again at login.")
         #expect(rig.service.calls == ["stop daemon", "stop menu"])
         #expect(rig.service.registered == [.daemon, .menu])
-        #expect(try rig.item.stopAll() == "PureMouse was not running.")
+        #expect(try rig.item.stopAll() == "PureMouse wasn't running.")
     }
 
     @Test func stopDoesNotPromiseALoginStartWhenTheJobIsNotRegistered() throws {
@@ -382,11 +382,11 @@ private final class Rig: @unchecked Sendable {
         // login off: login off, running unchanged, nothing stopped.
         rig.forget()
         #expect(try rig.item.loginOff()
-            == "PureMouse will not start at login; it keeps running until you quit it (`puremouse stop`).")
+            == "PureMouse won't start at login; it keeps running until you quit it (`puremouse stop`).")
         #expect(axes(rig) == [false, true, false, menuShown])
         #expect(rig.service.calls == ["unregister daemon", "unregister menu"])
         _ = try rig.item.stopAll()
-        #expect(try rig.item.loginOff() == "PureMouse will not start at login.")
+        #expect(try rig.item.loginOff() == "PureMouse won't start at login.")
         #expect(axes(rig) == [false, false, false, false])
     }
 
@@ -476,34 +476,34 @@ private final class Rig: @unchecked Sendable {
 
     @Test func aCopyOutsideApplicationsIsToldToMoveIt() {
         let alert = LoginItem.startFailureAlert(LoginItem.Failure.translocated)
-        #expect(alert.title == "PureMouse needs to be in your Applications folder")
+        #expect(alert.title == "PureMouse needs to be in your Applications folder.")
         #expect(alert.body == "Move it there, then open it again.")
     }
 
     @Test func aCopyThatIsNotInstalledIsToldToInstallIt() {
         let alert = LoginItem.startFailureAlert(LoginItem.Failure.notInBundle)
-        #expect(alert.title == "This copy of PureMouse cannot open at login")
+        #expect(alert.title == "This copy of PureMouse can't open at login.")
         #expect(alert.body == "Install it from the disk image, then open it again.")
     }
 
     @Test func anyOtherFailureGetsTheNextStepNotTheRawError() {
         struct Raw: Error, CustomStringConvertible { var description: String { "Bootstrap failed: 5" } }
         let alert = LoginItem.startFailureAlert(Raw())
-        #expect(alert.title == "PureMouse could not start")
+        #expect(alert.title == "PureMouse couldn't start.")
         #expect(alert.body == "Try again. If it keeps happening, restart your Mac.")
     }
 
     @Test func theFinderAlertHasNoPathsAndAsksForTheTwoPermissions() {
         let alert = LoginItem.runningAlert
-        #expect(alert.title == "PureMouse is running")
+        #expect(alert.title == "PureMouse is running.")
         #expect(alert.body == "It will open at login. macOS will ask you to allow Accessibility and Input Monitoring. "
             + "Choose Allow for each, or turn them on in System Settings > Privacy & Security.")
         #expect(!alert.body.contains("/"))
     }
 
     @Test func aCommandLineFailureNamesTheProgram() {
-        #expect(CLIError.line("cannot register", LoginItem.Failure.translocated)
-            == "puremouse: cannot register: PureMouse needs to be in your Applications folder. Move it there, then open it again.")
+        #expect(CLIError.line("can't register", LoginItem.Failure.translocated)
+            == "puremouse: can't register: PureMouse needs to be in your Applications folder. Move it there, then open it again.")
         #expect(CLIError.line("unknown or device-only action", "explode")
             == "puremouse: unknown or device-only action: explode")
     }

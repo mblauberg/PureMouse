@@ -75,7 +75,6 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         case .setDPI(let dpi): model.setDPI(dpi)
         case .start: action.command.map { model.perform($0) }
         case .setPaused(let paused): model.setPaused(paused)
-        case .reloadConfig: model.reloadDaemonConfig()
         case .showLog: NSWorkspace.shared.activateFileViewerSelecting([model.locations.log])
         case .quit: app.quitAll()
         case .hideMenuBarIcon: app.hideMenuBarIcon()

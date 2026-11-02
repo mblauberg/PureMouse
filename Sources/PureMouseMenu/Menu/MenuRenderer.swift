@@ -68,6 +68,9 @@ struct MenuRenderer {
         }
         header.attributedTitle = text
         header.image = StatusIcon.headerImage()
+        // macOS 27 hides menu item images unless asked; the header is the menu's one key item
+        // and the only one with an image (docs/ui-design.md, Symbols).
+        if #available(macOS 27, *) { header.preferredImageVisibility = .visible }
         header.setAccessibilityLabel(MenuPlan.spokenHeader(title: title, lines: lines))
         return header
     }
