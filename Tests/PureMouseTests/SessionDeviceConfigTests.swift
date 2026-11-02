@@ -128,6 +128,18 @@ struct SessionDeviceConfigTests {
         #expect(s2.capturing == nil && !other.controls.contains { $0.diverted })
     }
 
+    @Test(arguments: [true, false])
+    func aMouseWithoutDPIIsAdoptedForAControlOnlyADeviceEntryBinds(bound: Bool) async throws {
+        let h = try DaemonHarness(bound ? #"{"devices": {"\#(Self.m2)": {"buttons": {"back": "none"}}}}"# : "{}")
+        defer { h.close() }
+        let fake = FakeDevice.synthetic
+        fake.features[5] = nil  // 0x2201
+        let endpoint = h.daemon.listen(fake.transport, index: directDeviceIndex)
+        endpoint.timeout = .milliseconds(100)
+        defer { endpoint.close() }
+        #expect(await h.daemon.adopt(endpoint) == (bound ? .adopted : .notAMouse))
+    }
+
     @Test func theM750WithTheExampleConfigLogsNoErrorsAcrossReloads() async throws {
         let example = try String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .appending(path: "../../config.example.json").standardized, encoding: .utf8)

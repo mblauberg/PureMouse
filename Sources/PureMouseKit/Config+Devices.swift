@@ -18,7 +18,7 @@ extension Config {
     }
 
     /// The global and per-app scopes of the top level and of every device entry: whatever any
-    /// mouse may use, for decisions that cover them all (permissions).
+    /// mouse may use, for decisions that cover them all (permissions, the adoption gate).
     public var everyScope: [AppSettings] {
         ([self] + devices.keys.sorted().compactMap { devices[$0] }).flatMap { config in
             [config.global] + config.apps.keys.sorted().compactMap { config.apps[$0] }

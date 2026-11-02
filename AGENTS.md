@@ -218,7 +218,8 @@ one. This file covers how to work on it safely.
   level, device, app. The key is `m` plus the 0x0003 model ID, else `p` plus the product ID
   (`Config.deviceKey`, read at adoption by `Identification`; a 0x0003 timeout leaves it nil and the
   top level applies). The daemon hands each session `config.forDevice(model)` at adoption and on
-  reload; permission decisions cover every scope (`Config.everyScope`, `Daemon.postsEvents`). Nothing
+  reload; permission decisions and the adoption gate cover every scope (`Config.everyScope`,
+  `Daemon.postsEvents`). Nothing
   is special-cased by model or product ID: a session uses what its mouse reports, and a bound
   control it lacks is a debug line once per session.
 - Per-app settings (`apps`) are merged onto the global ones by the Kit decoder (`Config+Apps.swift`,

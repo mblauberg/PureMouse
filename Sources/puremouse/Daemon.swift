@@ -614,7 +614,8 @@ final class Daemon {
         } catch {
             return .noAnswer
         }
-        let configured = config.boundControls
+        // Before identification the model is unknown, so a control bound in any scope counts.
+        let configured = Set(config.everyScope.flatMap(\.bindings.keys))
         guard hasDPI || controls.contains(where: { configured.contains($0.cid) }) else { return .notAMouse }
         let pid: UInt16? = device.interface.isReceiver
             ? slotProducts[key] : UInt16(exactly: device.interface.productID)
