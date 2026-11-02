@@ -175,7 +175,7 @@ final class Session {
             scroll?.profileForBurst = { [weak self] in self?.profileUnderPointer() ?? ScrollEngine.Profile() }
         }
         for cid in config.boundControls.sorted() where controls[cid]?.isDivertable != true {
-            SessionLog.error("\(name): control \(ControlNames.describe(cid)) is missing or not divertable; skipped")
+            Log.error("\(name): control \(ControlNames.describe(cid)) is missing or not divertable; skipped")
         }
     }
 
@@ -313,14 +313,14 @@ final class Session {
                     // Cached indices only: diagnostics must never add adoption traffic or timeouts.
                     let features = (1...255).compactMap { device.feature(at: UInt8($0)) }.sorted()
                         .map { String(format: "%04x", $0) }
-                    SessionLog.info("\(name): configured; features(PureMouse)=\(features.joined(separator: " "))")
+                    Log.info("\(name): configured; features(PureMouse)=\(features.joined(separator: " "))")
                     return
                 } catch is CancellationError {
                     return
                 } catch HIDPPError.closed {
                     return
                 } catch {
-                    SessionLog.error("\(name): configure attempt \(attempt) failed: \(error)")
+                    Log.error("\(name): configure attempt \(attempt) failed: \(error)")
                 }
                 // Usually the mouse is asleep; its reconnect event will also trigger a retry.
                 try? await Task.sleep(for: environment.configureRetryDelay)
@@ -378,7 +378,7 @@ final class Session {
                 state.battery = try await UnifiedBattery.status(device, levels: state.batteryLevels ?? UnifiedBattery.allLevels)
             }
         } catch {
-            if !stops(error) { SessionLog.debug("\(name): reading battery failed: \(error)") }
+            if !stops(error) { Log.debug("\(name): reading battery failed: \(error)") }
         }
     }
 
@@ -403,7 +403,7 @@ final class Session {
         do {
             return try await device.hasFeature(SmartShiftEnhanced.id) ? .enhanced : nil
         } catch where Self.isDeviceAnswer(error) {
-            SessionLog.error("\(name): SmartShift Enhanced failed (untested mouse): \(error)")
+            Log.error("\(name): SmartShift Enhanced failed (untested mouse): \(error)")
             return nil
         }
     }
@@ -443,7 +443,7 @@ final class Session {
             }
             state.wheelMode = mode ?? current
         } catch where enhanced && Self.isDeviceAnswer(error) {
-            SessionLog.error("\(name): SmartShift Enhanced failed (untested mouse): \(error)")
+            Log.error("\(name): SmartShift Enhanced failed (untested mouse): \(error)")
         }
     }
 
@@ -463,7 +463,7 @@ final class Session {
         do {
             state.resolutions = try await AdjustableDPI.resolutions(device)
         } catch where Self.isDeviceAnswer(error) {
-            SessionLog.error("\(name): reading supported DPI failed: \(error); DPI is set as configured")
+            Log.error("\(name): reading supported DPI failed: \(error); DPI is set as configured")
         }
     }
 
@@ -471,7 +471,7 @@ final class Session {
     func supportedDPI(near target: Int) -> Int {
         let dpi = state.resolutions?.nearest(to: target) ?? target
         if dpi != target, snapLogged.insert(target).inserted {
-            SessionLog.info("\(name): dpi \(target) is not supported; using \(dpi)")
+            Log.info("\(name): dpi \(target) is not supported; using \(dpi)")
         }
         return dpi
     }
@@ -520,14 +520,14 @@ final class Session {
                 try await ReprogControls.setDiverted(self.device, cid: cid, divert: false, rawXY: false)
             }
         }
-        SessionLog.info("\(name): restored native behaviour")
+        Log.info("\(name): restored native behaviour")
     }
 
     private func attempt(_ what: String, _ body: () async throws -> Void) async {
         do {
             try await body()
         } catch {
-            SessionLog.error("\(name): \(what) failed: \(error)")
+            Log.error("\(name): \(what) failed: \(error)")
         }
     }
 }

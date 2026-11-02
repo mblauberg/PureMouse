@@ -3,12 +3,12 @@ import Testing
 @testable import PureMouseKit
 @testable import puremouse
 
-@MainActor
+@Suite(.quietLog) @MainActor
 struct SessionCaptureTests {
     @Test func capturePressIsLoggedByName() async throws {
         let log = CapturedLog()
         var captured: [UInt16] = []
-        try await Log.$capture.withValue({ log.append($0) }) {
+        try await Log.$testOutput.withValue(.lines { log.append($0) }) {
             let h = try await SessionHarness(.m750)
             defer { h.close() }
             try await h.session.apply()

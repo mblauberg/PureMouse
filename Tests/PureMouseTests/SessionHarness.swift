@@ -45,3 +45,19 @@ final class CapturedLog: @unchecked Sendable {
     var lines: [Log.Line] { lock.withLock { storage } }
     func append(_ line: Log.Line) { lock.withLock { storage.append(line) } }
 }
+
+/// Drops the lines a suite's tests log instead of writing them to the runner's stderr. A test that
+/// reads its lines sets its own `.lines` output inside, which wins for that task tree.
+struct QuietLog: SuiteTrait, TestTrait, TestScoping {
+    var isRecursive: Bool { true }
+
+    func provideScope(for test: Test, testCase: Test.Case?,
+                      performing function: @Sendable () async throws -> Void) async throws {
+        guard testCase != nil else { return try await function() }
+        try await Log.$testOutput.withValue(.lines { _ in }) { try await function() }
+    }
+}
+
+extension Trait where Self == QuietLog {
+    static var quietLog: Self { Self() }
+}

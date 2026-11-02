@@ -24,7 +24,7 @@ import Testing
     @Test func logLinesFollowTheRotation() throws {
         let fixture = try LogFixture()
         let file = try #require(LogFile.attachStderr(url: fixture.log, fd: fixture.fd, rotateAt: 200))
-        Log.$testFile.withValue(file) {
+        Log.$testOutput.withValue(.file(file)) {
             for n in 0..<5 { Log.info("message \(n) of five, long enough to pass the cap quickly") }
         }
         let rotated = URL(fileURLWithPath: fixture.log.path + ".1")

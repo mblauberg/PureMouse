@@ -3,7 +3,7 @@ import HIDPPTesting
 import Testing
 @testable import puremouse
 
-@MainActor
+@Suite(.quietLog) @MainActor
 struct SessionDiversionTests {
     @Test func exampleScansOnlyTheUnboundVirtualControl() async throws {
         let h = try await SessionHarness(config: SessionHarness.example(), inheriting: .init(fresh: true))
@@ -57,7 +57,7 @@ struct SessionDiversionTests {
         let fake = FakeDevice.mxMaster3S
         fake.setReporting(0x56, diverted: true, persistent: true)
         let log = CapturedLog()
-        try await Log.$capture.withValue({ log.append($0) }) {
+        try await Log.$testOutput.withValue(.lines { log.append($0) }) {
             let h = try await SessionHarness(fake, inheriting: .init(fresh: true))
             defer { h.close() }
             try await h.session.apply()

@@ -3,7 +3,7 @@ import HIDPPTesting
 import Testing
 @testable import puremouse
 
-@MainActor
+@Suite(.quietLog) @MainActor
 struct SessionOfflineTests {
     private func offline() async throws -> (SessionHarness, TestTime) {
         let clock = TestTime()
@@ -85,7 +85,7 @@ struct SessionOfflineTests {
         #expect(!h.session.isConfiguring && h.fake.transport.sent.isEmpty)
         clock.now += Session.offlineReconfigureGap
         let log = CapturedLog()
-        try await Log.$capture.withValue({ log.append($0) }) {
+        try await Log.$testOutput.withValue(.lines { log.append($0) }) {
             for _ in 0..<20 { h.fake.emit(0x1004, params: [75, 4, 0, 0]) }
             try await eventually { !h.session.isConfiguring }
         }

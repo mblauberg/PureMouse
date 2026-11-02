@@ -2,7 +2,7 @@ import HIDPP
 import Testing
 @testable import puremouse
 
-@MainActor
+@Suite(.quietLog) @MainActor
 struct SessionActionTests {
     @Test func optionalFeatureRepliesNeverHideTransportFailures() {
         for error in [HIDPPError.timeout, .closed, .sendFailed(-1)] {

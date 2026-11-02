@@ -4,7 +4,7 @@ import PureMouseKit
 import Testing
 @testable import puremouse
 
-@MainActor
+@Suite(.quietLog) @MainActor
 struct SessionApplyTests {
     @Test func m750DoesNotRepeatMissingWheelAndClutchLookups() async throws {
         let h = try await SessionHarness(.m750, config: SessionHarness.config(#"{"smoothScroll":{},"buttons":{"middle":"toggleScrollMode"}}"#))
@@ -40,7 +40,7 @@ struct SessionApplyTests {
         let h = try await SessionHarness(fake)
         defer { h.close() }
         let log = CapturedLog()
-        try await Log.$capture.withValue({ log.append($0) }) {
+        try await Log.$testOutput.withValue(.lines { log.append($0) }) {
             h.session.configure()
             try await eventually { !h.session.status.online }
         }
@@ -73,7 +73,7 @@ struct SessionApplyTests {
 
     @Test func permissionDenialLeavesWheelsNativeAndLogsReason() async throws {
         let log = CapturedLog()
-        try await Log.$capture.withValue({ log.append($0) }) {
+        try await Log.$testOutput.withValue(.lines { log.append($0) }) {
             let h = try await SessionHarness(config: SessionHarness.example(),
                                              environment: .init(canPostEvents: false))
             defer { h.close() }
