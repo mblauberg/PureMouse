@@ -36,8 +36,14 @@ Bugs in macOS, Logitech firmware or Logi Options+ belong with their vendors.
 
 ## Verifying a download
 
-Each release lists the SHA-256 of its download. Releases built by the release workflow also carry
-`SHA256SUMS` and a build attestation. In the folder holding the download:
+Each release lists the SHA-256 of its download. Compare it with:
+
+```sh
+shasum -a 256 PureMouse-<version>.zip
+```
+
+Releases built by the release workflow also carry `SHA256SUMS` and a build attestation. In the
+folder holding the download:
 
 ```sh
 shasum -a 256 -c SHA256SUMS --ignore-missing

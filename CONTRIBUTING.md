@@ -34,7 +34,8 @@ very good reason, agreed in an issue first:
 - **No dependencies.** System frameworks only. The background process and the shared library use
   no UI toolkit; only the menu bar app links AppKit and SwiftUI.
 - **Zero idle CPU.** No polling and no timers while nothing is happening: work starts from a device
-  event, a file change or a notification.
+  event, a file change or a notification. The only exceptions are the two retries the README
+  notes under "Lightweight by design".
 - **A footprint budget.** Memory and download size are published in the README, and CI fails a
   bundle over its size budget. Say in your pull request what your change costs.
 - **Nothing persisted on the mouse.** Every setting is applied again on reconnect and undone on

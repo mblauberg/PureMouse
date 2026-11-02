@@ -8,7 +8,7 @@ file that shows it.
 ## Permissions
 
 PureMouse asks for two permissions, for the background process only (`puremouse`), when it starts
-without them. The menu bar app needs neither. Source:
+without them. Source:
 [`Sources/puremouse/Permissions.swift`](../Sources/puremouse/Permissions.swift).
 
 | Permission | What PureMouse does with it | What it never does |
@@ -16,11 +16,20 @@ without them. The menu bar app needs neither. Source:
 | **Accessibility** (posting events, `CGRequestPostEventAccess`) | Posts the scrolls, keystrokes, swipes and clicks your buttons and wheels are set to | Read the screen or other apps' contents, or control their windows |
 | **Input Monitoring** (`IOHIDRequestAccess`, listen) | Reads HID++ reports from a Logitech mouse over Bluetooth, and lets macOS open a receiver if it refuses otherwise. A receiver normally works without it | Record what you type or click, or open devices from other makers |
 
-PureMouse opens only Logitech receivers and Logitech Bluetooth devices that speak HID++, and uses
-only their HID++ reports ([`Sources/HIDPP/HIDInterface.swift`](../Sources/HIDPP/HIDInterface.swift),
-[`Sources/HIDPP/Report.swift`](../Sources/HIDPP/Report.swift)). Until a permission is
-granted, the features that need it stay off and the mouse works as it does without PureMouse.
-[Troubleshooting](troubleshooting.md#permissions) covers granting them.
+PureMouse opens Logitech receivers and Logitech Bluetooth devices only, and uses only their HID++
+reports ([`Sources/HIDPP/HIDInterface.swift`](../Sources/HIDPP/HIDInterface.swift),
+[`Sources/HIDPP/Report.swift`](../Sources/HIDPP/Report.swift)). macOS matches Bluetooth devices
+by maker, so the reports of another Logitech Bluetooth device, such as a keyboard's keystrokes,
+also reach the background process, which discards them unread
+([ADR 6](adr/0006-ble-input-value-matching.md) plans to stop that).
+
+Without Accessibility the wheels stay native and buttons set to actions do nothing; DPI and
+SmartShift settings still apply. [Troubleshooting](troubleshooting.md#permissions) covers granting
+permissions.
+
+The menu bar app needs neither permission. It asks to show notifications the first time it has a
+low-battery warning to show, or when you turn the warning on
+([`Sources/PureMouseMenu/Model/Notifier.swift`](../Sources/PureMouseMenu/Model/Notifier.swift)).
 
 ## What it reads on this Mac
 
@@ -42,7 +51,7 @@ All of them are in your home folder. Nothing is written to the mouse or the rece
 | File | Written by | What it holds |
 |---|---|---|
 | `~/.config/puremouse/config.json` | Settings, when you change something ([`Sources/PureMouseMenu/Logic/ConfigFile.swift`](../Sources/PureMouseMenu/Logic/ConfigFile.swift)); a copy of the example config on first open if there is none ([`Sources/puremouse/LoginItem.swift`](../Sources/puremouse/LoginItem.swift)) | Your settings. A symlinked config has its target replaced, not the link |
-| `~/Library/Logs/PureMouse.log`, and `PureMouse.log.1` once it passes 1 MiB | The background process ([`Sources/puremouse/Log.swift`](../Sources/puremouse/Log.swift)) | Starts with the macOS version, mice by name and product ID with their features, permission state, config errors, and failed `run` commands. With `--verbose`, also button presses and the bundle ID of the app whose settings apply |
+| `~/Library/Logs/PureMouse.log`, and `PureMouse.log.1` once it passes 1 MiB | The background process ([`Sources/puremouse/Log.swift`](../Sources/puremouse/Log.swift)) | Starts with the macOS version, mice by name and product ID with their features, permission state, config errors, failed `run` commands and anything a `run` command writes to its error output. With `--verbose`, also button presses and the bundle ID of the app whose settings apply |
 | `~/Library/LaunchAgents/io.github.mblauberg.puremouse.plist` and `….menu.plist` | `puremouse register`, which opening the app runs ([`Sources/puremouse/LoginItem.swift`](../Sources/puremouse/LoginItem.swift)) | Start-at-login entries naming the app's two programs. `puremouse unregister` removes them |
 | `~/Library/Application Support/PureMouse/status.json` | The background process ([`Sources/puremouse/Channel.swift`](../Sources/puremouse/Channel.swift)) | What the menu shows: connected mice, battery, DPI, permission and config state |
 | `~/Library/Application Support/PureMouse/control.json` | The menu bar app ([`Sources/PureMouseMenu/Model/AppModel.swift`](../Sources/PureMouseMenu/Model/AppModel.swift)) | Requests to the background process: pause, select by pressing, use the configured DPI. Removed when the background process starts ([`Sources/puremouse/Channel.swift`](../Sources/puremouse/Channel.swift)) |
@@ -61,7 +70,7 @@ Pressing **Check for Updates** in Settings › About makes one HTTPS GET of
 `https://api.github.com/repos/mblauberg/PureMouse/releases/latest` and compares the version it
 returns with yours ([`Sources/PureMouseMenu/Logic/UpdateCheck.swift`](../Sources/PureMouseMenu/Logic/UpdateCheck.swift)).
 It uses an ephemeral session, so no cookies or cache are kept. GitHub sees what any web request
-shows: your IP address and a standard user agent naming the app and the macOS version. There are
+shows: your IP address and a standard user agent naming the app and the system version. There are
 no background checks, and the background process has no network code at all.
 
 Buttons such as **View Release** and **How to Remove** open a GitHub page in your browser.
