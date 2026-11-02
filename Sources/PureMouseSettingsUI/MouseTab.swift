@@ -120,24 +120,28 @@ struct MouseHeader: View {
     let selection: MouseSelection
 
     var body: some View {
-        // The segments sit in the middle; the two sides share what is left equally, so the pop-up
-        // gets the room beside them and cuts a long name with an ellipsis instead of overlapping.
+        // The segments sit in the middle whichever sides are present: each side is a slot that
+        // stays in the layout when empty (its Spacer keeps it), and the two share what is left
+        // equally, so the pop-up gets the room beside them and cuts a long name with an ellipsis
+        // instead of overlapping. The stack's own spacing keeps them apart.
         HStack {
-            Group {
+            HStack(spacing: 0) {
                 // The leading slot is the mouse pop-up's, with two or more mice (docs/ui-design.md).
                 if model.showsMouseMenu { MousePopUp() }
+                Spacer(minLength: 0)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity)
             Picker("Mouse settings", selection: Binding(get: { selection.segment }, set: { model.clearCaptureOutcome(); selection.select($0) })) {
                 ForEach(MouseSegment.allCases, id: \.self) { Text($0.title).tag($0) }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
             .fixedSize()
-            Group {
+            HStack(spacing: 0) {
+                Spacer(minLength: 0)
                 if selection.segment == .buttons { findByPressing }
             }
-            .frame(maxWidth: .infinity, alignment: .trailing)
+            .frame(maxWidth: .infinity)
         }
         // In line with the grouped boxes below, whose form insets them by the same margin.
         .padding(.horizontal, 20)
