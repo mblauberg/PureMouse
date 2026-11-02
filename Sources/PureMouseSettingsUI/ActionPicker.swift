@@ -164,6 +164,7 @@ struct ActionPicker: View {
         VStack(alignment: .leading, spacing: 6) {
             SearchField(text: $query, placeholder: "Search actions", focusOnAppear: focusSearch,
                         onMove: move, onSubmit: submit)
+                .accessibilityLabel("Search actions")
             ScrollViewReader { proxy in
                 List(selection: Binding(get: { highlighted }, set: { select($0) })) {
                     ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
@@ -288,6 +289,7 @@ struct SearchField: NSViewRepresentable {
     func makeNSView(context: Context) -> NSSearchField {
         let field = NSSearchField()
         field.placeholderString = placeholder
+        field.setAccessibilityLabel(placeholder)
         field.delegate = context.coordinator
         field.sendsSearchStringImmediately = true
         field.focusRingType = .none

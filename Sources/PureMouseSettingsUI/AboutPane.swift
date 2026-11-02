@@ -5,6 +5,7 @@ import SwiftUI
 struct AboutPane: View {
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.openURL) private var openURL
 
     private var daemonVersion: String? { model.status?.version }
 
@@ -35,13 +36,13 @@ struct AboutPane: View {
             UpdateRow()
                 .padding(.top, 6)
             HStack(spacing: 8) {
-                Link("GitHub", destination: Links.repository)
+                link("GitHub", Links.repository)
                 separator
-                Link("Releases", destination: Links.releases)
+                link("Releases", Links.releases)
                 separator
-                Link("Licence", destination: Links.licence)
+                link("Licence", Links.licence)
                 separator
-                Link("Support PureMouse", destination: Links.sponsors)
+                link("Support PureMouse", Links.sponsors)
             }
             .padding(.top, 6)
             VStack(spacing: 2) {
@@ -57,6 +58,15 @@ struct AboutPane: View {
         .padding(.bottom, 36)
         .padding(.horizontal, 40)
         .frame(maxWidth: .infinity)
+    }
+
+    /// A link whose hit target is 20 pt tall: its line of text is 16, and the `.link` button style
+    /// takes the label's text alone as its frame.
+    private func link(_ title: String, _ destination: URL) -> some View {
+        Button { openURL(destination) } label: { Text(title).padding(.vertical, 2).contentShape(Rectangle()) }
+            .buttonStyle(.plain)
+            .foregroundStyle(.tint)
+            .accessibilityAddTraits(.isLink)
     }
 
     /// Between links; read aloud as nothing.

@@ -119,7 +119,8 @@ struct ButtonsPane: View {
             LabeledContent {
                 actionButton(action, target: BindingTarget(button: key))
             } label: {
-                DisclosureLabel(title: NamedButton.title(forKey: key), help: model.config.gestureSummary(key), isExpanded: isExpanded)
+                DisclosureLabel(title: NamedButton.title(forKey: key), help: model.config.gestureSummary(key),
+                                spokenTitle: "\(NamedButton.title(forKey: key)) directions", isExpanded: isExpanded)
             }
             .padding(.leading, indented ? 16 : 0)
             .listRowBackground(rowFill(key))

@@ -26,11 +26,11 @@ struct PresetsSheet: View {
                 }
             } footer: {
                 HStack {
-                    Button { add(presets) } label: { Image(systemName: "plus") }
+                    Button { add(presets) } label: { glyph("plus.circle") }
                         .disabled(!DPIPresets.canAdd(current, to: presets) || model.readOnly)
                         .accessibilityLabel(DPIPresets.addLabel)
                         .help("Saves the current pointer speed")
-                    Button { checked.map { remove($0, from: presets) } } label: { Image(systemName: "minus") }
+                    Button { checked.map { remove($0, from: presets) } } label: { glyph("minus.circle") }
                         .disabled(checked == nil || model.readOnly)
                         .accessibilityLabel(checked.map(DPIPresets.removeLabel) ?? "Remove Preset")
                         .help("Removes the checked preset")
@@ -41,9 +41,15 @@ struct PresetsSheet: View {
                 // Borderless, as under System Settings' lists: a section footer draws bordered
                 // buttons at mixed sizes (a disabled one full size, an enabled one a mini capsule).
                 .buttonStyle(.borderless)
-                .imageScale(.large)
+                // A bare plus or minus is 14 pt wide and, for the minus, 2 pt tall; the circled
+                // symbols at title3 with `glyph`'s padding make a 21 pt target.
+                .font(.title3)
             }
         }
+    }
+
+    private func glyph(_ name: String) -> some View {
+        Image(systemName: name).padding(3).contentShape(Rectangle())
     }
 
     private func row(_ preset: Int, checked: Bool, presets: [Int]) -> some View {
@@ -53,6 +59,8 @@ struct PresetsSheet: View {
                 Spacer()
                 if checked { Image(systemName: "checkmark") }
             }
+            // A line of text is 16 pt tall; the padding takes the row's target to 20.
+            .padding(.vertical, 2)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

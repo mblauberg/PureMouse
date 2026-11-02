@@ -171,7 +171,8 @@ struct AppSheet: View {
             LabeledContent {
                 actionButton(state.own, target: target, sameAsEverywhere: everywhere, spokenEverywhere: spokenEverywhere)
             } label: {
-                DisclosureLabel(title: title(button), help: caption, isExpanded: isExpanded)
+                DisclosureLabel(title: title(button), help: caption, spokenTitle: "\(title(button)) directions",
+                                isExpanded: isExpanded)
             }
             .padding(.leading, indented ? 16 : 0)
             .actionEditorPopover($editor, for: target, save: apply)

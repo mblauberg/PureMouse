@@ -131,6 +131,7 @@ struct EndLabeledSlider: View {
             Slider(value: $value, in: range) { Text(title) }
                 .labelsHidden()
         } else {
+            // The slider speaks its own title (the pair would otherwise leave it unnamed).
             Slider(value: $value, in: range) {
                 Text(title)
             } minimumValueLabel: {
@@ -138,6 +139,7 @@ struct EndLabeledSlider: View {
             } maximumValueLabel: {
                 Text(high)
             }
+            .accessibilityLabel(title)
         }
     }
 }
@@ -250,6 +252,9 @@ extension AdvancedSheet where Leading == EmptyView {
 struct DisclosureLabel: View {
     let title: String
     var help: String?
+    /// What VoiceOver calls the disclosure where the title alone names another control in the row
+    /// (a gesture button's action pop-up).
+    var spokenTitle: String?
     @Binding var isExpanded: Bool
 
     var body: some View {
@@ -267,10 +272,12 @@ struct DisclosureLabel: View {
                     if let help { Text(help).font(.subheadline).foregroundStyle(.secondary) }
                 }
             }
+            // A line of text is 16 pt tall; the padding takes the hit target to the 20 pt minimum.
+            .padding(.vertical, 2)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(title)
+        .accessibilityLabel(spokenTitle ?? title)
         .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
     }
 }
