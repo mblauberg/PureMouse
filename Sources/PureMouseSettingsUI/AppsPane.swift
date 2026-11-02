@@ -350,7 +350,7 @@ private struct AppDetail: View {
             .disabled(model.readOnly)
 
             if model.primaryDevice?.offers(\.thumbWheel) != false || config.contains(scope + ["thumbWheel"]) {
-                Section("Thumb wheel") {
+                Section("Thumb Wheel") {
                     ThumbWheelRows(path: scope + ["thumbWheel"], base: globalThumbWheel(config),
                                    inherited: config.thumbWheelChoice(at: ["thumbWheel"]).label, spokenSuffix: spoken)
                 }

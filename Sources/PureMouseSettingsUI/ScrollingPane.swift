@@ -59,7 +59,7 @@ struct ScrollingPane: View {
             }
 
             if device?.offers(\.smartShift) != false || config.contains(["scrollWheel"]) {
-                Section("Main wheel") {
+                Section("Main Wheel") {
                     let inverted = config.bool(["scrollWheel", "inverted"])
                     Toggle(isOn: model.toggle(["scrollWheel", "inverted"], default: false)) {
                         RowLabel("Reverse direction", help: "Classic wheel direction while the trackpad stays natural.",
@@ -91,7 +91,7 @@ struct ScrollingPane: View {
                         // Scrolling speed: nothing to tune while the wheel performs actions.
                         .disabled(!smooth || !config.thumbWheel(at: ["thumbWheel"]).scrolls)
                 } header: {
-                    Text("Thumb wheel")
+                    Text("Thumb Wheel")
                 } footer: {
                     restoreDefaults
                 }

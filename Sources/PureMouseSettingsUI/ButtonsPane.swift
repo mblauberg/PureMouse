@@ -39,7 +39,7 @@ struct ButtonsPane: View {
                             value: model.number(["gesture", "repeatIntervalMs"], default: 400, step: 50),
                             range: 150...1000, low: "Fast", high: "Slow", format: Format.milliseconds)
             } header: {
-                    Text("Gesture feel")
+                    Text("Gesture Feel")
                 } footer: {
                 FooterButton("Restore Defaults") {
                     model.update {
