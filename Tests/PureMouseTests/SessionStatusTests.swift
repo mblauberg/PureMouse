@@ -40,7 +40,7 @@ struct SessionStatusTests {
         defer { h.close() }
         try await h.session.apply()
         let status = h.session.status
-        #expect(status.capabilities == Capabilities(dpi: true, smartShift: false, smoothScroll: false, thumbWheel: false,
+        #expect(status.capabilities == Capabilities(dpi: true, smartShift: false, smoothScroll: true, thumbWheel: false,
                                                     haptics: nil, battery: true))
         // 0x0050 and 0x0051 are not divertable, 0x00D7 is virtual; the rest report raw XY.
         #expect(status.controls.map(\.cid) == [0x52, 0x53, 0x56, 0xFD])
@@ -163,7 +163,8 @@ struct SessionStatusTests {
     @Test func theM750WithSmoothScrollingSendsNoWheelWriteAndSaysWhyOnce() async throws {
         let log = CapturedLog()
         try await Log.$testOutput.withValue(.lines { log.append($0) }) {
-            let h = try await SessionHarness(.m750, config: SessionHarness.config(#"{"smoothScroll": {}}"#), identify: true)
+            let h = try await SessionHarness(.m750WithoutWheelFeature, config: SessionHarness.config(#"{"smoothScroll": {}}"#),
+                                             identify: true)
             defer { h.close() }
             try await h.session.apply()
             try await h.session.apply()
@@ -185,7 +186,7 @@ struct SessionStatusTests {
     @Test func withoutAccessibilityAMouseWithNoWheelsLogsNoWheelError() async throws {
         let log = CapturedLog()
         try await Log.$testOutput.withValue(.lines { log.append($0) }) {
-            let h = try await SessionHarness(.m750, config: SessionHarness.config(#"{"smoothScroll": {}}"#),
+            let h = try await SessionHarness(.m750WithoutWheelFeature, config: SessionHarness.config(#"{"smoothScroll": {}}"#),
                                              environment: .init(canPostEvents: false))
             defer { h.close() }
             try await h.session.apply()

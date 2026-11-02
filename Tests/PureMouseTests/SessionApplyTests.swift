@@ -20,17 +20,20 @@ struct SessionApplyTests {
         h.fake.emit(0x1B04, params: [0, 0x52])
         await h.session.deviceActions.drain()
         #expect(h.fake.transport.sent.isEmpty)
-        #expect(h.session.restoreSteps == h.session.divertedControls.count)
+        // The notched wheel is diverted, so quitting hands it back.
+        #expect(h.fake.lowResWheelDiverted)
+        #expect(h.session.restoreSteps == 1 + h.session.divertedControls.count)
     }
 
     @Test func restoreStepsCountWheelsOfUnknownPresence() async throws {
         let h = try await SessionHarness(.m750, config: SessionHarness.config(#"{"smoothScroll":{}}"#))
         defer { h.close() }
-        // Nothing looked up yet: `restore` may resolve and write both wheels.
-        #expect(h.device.knownPresence(of: 0x2121) == nil && h.device.knownPresence(of: 0x2150) == nil)
-        #expect(h.session.restoreSteps == 2 + h.session.divertedControls.count)
+        // Nothing looked up yet: `restore` may resolve and write any of the three wheels.
+        #expect([0x2121, 0x2130, 0x2150].allSatisfy { h.device.knownPresence(of: $0) == nil })
+        #expect(h.session.restoreSteps == 3 + h.session.divertedControls.count)
         try await h.session.apply()
-        #expect(h.session.restoreSteps == h.session.divertedControls.count)
+        // Only the notched wheel is there, and diverted.
+        #expect(h.session.restoreSteps == 1 + h.session.divertedControls.count)
     }
 
     @Test func enhancedTimeoutReachesConfigureRetry() async throws {

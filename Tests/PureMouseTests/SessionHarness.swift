@@ -22,7 +22,8 @@ struct SessionHarness {
         device.timeout = .milliseconds(100)
         let controls = try await ReprogControls.controls(device)
         let identity = identify
-            ? await Identification.read(device, productID: UInt16(exactly: fake.transport.productID)) : Identification()
+            ? await Identification.read(device, kind: DeviceName.Kind(rawValue: fake.kind),
+                                        productID: UInt16(exactly: fake.transport.productID)) : Identification()
         session = Session(device: device, name: fake.name, identity: identity, id: "fake", controls: controls,
                           config: config.forDevice(identity.deviceKey), inheriting: inherited, environment: environment)
     }
@@ -52,6 +53,48 @@ struct SessionHarness {
     }
 }
 
+/// A frame clock a test turns by hand, so a glide's frames are counted rather than waited for.
+@MainActor
+final class ManualFrames: FrameClock {
+    private(set) var running = false
+
+    override func start() -> Bool {
+        running = true
+        return true
+    }
+
+    override func stop() { running = false }
+
+    /// Runs frames of `seconds` each until the engine stops the clock; returns how many it took.
+    @discardableResult
+    func runToRest(frame seconds: Double = 1.0 / 60, limit: Int = 600) -> Int {
+        var frames = 0
+        while running, frames < limit {
+            onFrame?(seconds)
+            frames += 1
+        }
+        return frames
+    }
+}
+
+/// The scrolls a session's engine posts, in place of the system, with the clock that drives it.
+@MainActor
+final class ScrollRecorder {
+    let frames = ManualFrames()
+    private(set) var posts: [(dx: Int, dy: Int)] = []
+    var dy: Int { posts.reduce(0) { $0 + $1.dy } }
+    var dx: Int { posts.reduce(0) { $0 + $1.dx } }
+
+    var environment: SessionEnvironment {
+        SessionEnvironment(canPostEvents: true, configureRetryDelay: .milliseconds(1),
+                           frameClock: { self.frames }, postScroll: { self.posts.append(($0, $1)) })
+    }
+
+    /// The pixels one notch up moves, whichever way the system scrolls: the engine applies the
+    /// natural-scrolling flip itself.
+    static var upwardNotch: Int { (SystemScrollSettings.naturalScrolling ? -1 : 1) * Int(ScrollEngine.pixelsPerNotch) }
+}
+
 /// A daemon on a config file of its own, adopting fakes as it adopts mice.
 @MainActor
 final class DaemonHarness {
@@ -67,11 +110,16 @@ final class DaemonHarness {
 
     /// Adopts `fake` and waits for its first configure to end.
     func adopt(_ fake: FakeDevice) async throws -> Session {
+        #expect(await tryAdopting(fake) == .adopted)
+        return try await settled(fake)
+    }
+
+    /// One adoption attempt on `fake`, whatever its outcome.
+    func tryAdopting(_ fake: FakeDevice) async -> Daemon.Adoption {
         let endpoint = daemon.listen(fake.transport, index: fake.index)
         endpoint.timeout = .milliseconds(100)
         endpoints.append(endpoint)
-        #expect(await daemon.adopt(endpoint) == .adopted)
-        return try await settled(fake)
+        return await daemon.adopt(endpoint)
     }
 
     /// The session for `fake` once it has finished configuring.
@@ -98,6 +146,13 @@ final class DaemonHarness {
 }
 
 extension FakeDevice {
+    /// The M750 with its 0x2130 wheel removed: a mouse with no wheel feature PureMouse takes over.
+    static var m750WithoutWheelFeature: FakeDevice {
+        let fake = FakeDevice.m750
+        fake.features = fake.features.filter { $0.value != 0x2130 }
+        return fake
+    }
+
     /// No real mouse: a model ID, buttons, adjustable DPI, a high-resolution wheel and a battery,
     /// but no SmartShift, thumb wheel or haptics; for showing a mouse is configured with only
     /// what it reports.

@@ -20,6 +20,16 @@ import Testing
         #expect(fake.requests(feature: 0x2130, function: 1).map(\.params.first) == [0x01, 0x00])
     }
 
+    @Test func onlyBitZeroOfTheReportingByteMeansDiverted() async throws {
+        let fake = FakeDevice.mxErgo
+        let device = fake.endpoint()
+        defer { device.close() }
+        fake.responses[.init(0x2130, 0)] = [0x02]
+        #expect(try await LowResWheel.diverted(device) == false)
+        fake.responses[.init(0x2130, 0)] = [0x03]
+        #expect(try await LowResWheel.diverted(device))
+    }
+
     @Test func aNotchEventReachesTheHandlerParsed() async throws {
         let fake = FakeDevice.m750
         let device = fake.endpoint()
