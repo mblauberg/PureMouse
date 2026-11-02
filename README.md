@@ -103,7 +103,7 @@ PureMouse from Applications opens Settings too, even with the menu bar icon hidd
 </p>
 
 <details>
-<summary>More settings: scrolling, general, apps and pointer</summary>
+<summary>More settings: scrolling, general, apps, pointer and about</summary>
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-scrolling-dark.png">
@@ -120,6 +120,10 @@ PureMouse from Applications opens Settings too, even with the menu bar icon hidd
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-pointer-dark.png">
     <img src="docs/images/settings-pointer-light.png" width="400" align="top" alt="Pointer settings: resolution and DPI presets">
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-about-dark.png">
+    <img src="docs/images/settings-about-light.png" width="400" align="top" alt="About settings: version, links, Check for Updates and a Support PureMouse link">
   </picture>
 </p>
 </details>
