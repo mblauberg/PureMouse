@@ -497,7 +497,7 @@ private final class Rig: @unchecked Sendable {
         let alert = LoginItem.runningAlert
         #expect(alert.title == "PureMouse is running.")
         #expect(alert.body == "It will open at login. macOS will ask you to allow Accessibility and Input Monitoring. "
-            + "Choose Allow for each, or turn them on in System Settings > Privacy & Security.")
+            + "Choose Allow for each, or turn them on in System Settings › Privacy & Security.")
         #expect(!alert.body.contains("/"))
     }
 
