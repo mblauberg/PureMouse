@@ -111,7 +111,7 @@ struct ScrollingPane: View {
             .labelsHidden()
             .fixedSize()
         } label: {
-            RowLabel("Wheel mode", help: "Mode when the mouse connects. A button can still switch it.",
+            RowLabel("Wheel mode", help: "Mode when the mouse connects.",
                      mouseDefault: mode == nil, availability: availability)
         }
     }
