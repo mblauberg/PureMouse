@@ -126,9 +126,16 @@ check_release_signature() {
         print -u2 -- "$name: not signed by a Developer ID Application identity"
         ok=1
     fi
-    if ! print -r -- $text | grep -x "TeamIdentifier=$team" >/dev/null; then
+    if ! print -r -- $text | grep -Fx -- "TeamIdentifier=$team" >/dev/null; then
         print -u2 -- "$name: team is $(print -r -- $text | sed -n 's/^TeamIdentifier=//p'), not $team"
         ok=1
     fi
     return $ok
+}
+
+# developer_id_requirement <team ID>
+# A code requirement met only by a Developer ID Application certificate of that team, issued under
+# Apple's root (the OIDs mark the Developer ID intermediate and leaf), for `codesign --verify -R`.
+developer_id_requirement() {
+    print -r -- "anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = \"$1\""
 }

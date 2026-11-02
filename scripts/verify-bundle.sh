@@ -71,6 +71,10 @@ for component in $components; do
     if (( release )) && [[ -n $team ]]; then
         if ! problems=$(check_release_signature "$details" $team $name 2>&1); then
             for line in ${(f)problems}; do fail "$line"; done
+        # The text names the signer; this proves it: a Developer ID leaf from that team, chained to
+        # Apple, so a self-made certificate with the same names cannot pass.
+        elif ! codesign --verify --strict -R="$(developer_id_requirement $team)" $bundle 2>/dev/null; then
+            fail "$name: not a Developer ID signature from team $team under Apple's root"
         fi
     fi
 done
