@@ -175,7 +175,7 @@ final class Session {
             scroll?.profileForBurst = { [weak self] in self?.profileUnderPointer() ?? ScrollEngine.Profile() }
         }
         for cid in config.boundControls.sorted() where controls[cid]?.isDivertable != true {
-            SessionLog.error("\(name): control 0x\(String(cid, radix: 16)) is missing or not divertable; skipped")
+            SessionLog.error("\(name): control \(ControlNames.describe(cid)) is missing or not divertable; skipped")
         }
     }
 
@@ -516,7 +516,7 @@ final class Session {
             }
         }
         for cid in divertedControls {
-            await attempt("release control 0x\(String(cid, radix: 16))") {
+            await attempt("release \(ControlNames.describe(cid))") {
                 try await ReprogControls.setDiverted(self.device, cid: cid, divert: false, rawXY: false)
             }
         }

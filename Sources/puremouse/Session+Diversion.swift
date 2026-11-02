@@ -39,7 +39,7 @@ extension Session {
                 try await setDiverted(cid, false)
                 releasing.remove(cid)
             } catch {
-                SessionLog.debug("\(name): releasing 0x\(String(cid, radix: 16)) failed: \(error)")
+                SessionLog.debug("\(name): releasing \(ControlNames.describe(cid)) failed: \(error)")
                 throw error
             }
         }
@@ -65,13 +65,13 @@ extension Session {
             do {
                 reporting = try await ReprogControls.reporting(device, cid: cid)
             } catch where Self.isDeviceAnswer(error) {
-                SessionLog.debug("\(name): reading 0x\(String(cid, radix: 16))'s reporting failed: \(error); skipped")
+                SessionLog.debug("\(name): reading \(ControlNames.describe(cid))'s reporting failed: \(error); skipped")
                 continue
             }
             try ensureOpen()
             if reporting.persistent {
                 if persistentControls.insert(cid).inserted {
-                    SessionLog.info(String(format: "%@: control 0x%04x is persistently diverted; leaving it unchanged (Logi Options+ may own it)", name, cid))
+                    SessionLog.info("\(name): \(ControlNames.describe(cid)) is persistently diverted; leaving it unchanged (Logi Options+ may own it)")
                 }
                 releasing.remove(cid)
             } else if reporting.diverted {

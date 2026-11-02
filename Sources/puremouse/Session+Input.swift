@@ -83,7 +83,10 @@ extension Session {
         let (pressed, released) = held.update(cids)
         released.forEach(release)
         if capturing != nil {
-            if let first = pressed.first { onCapture?(first) }
+            if let first = pressed.first {
+                SessionLog.info("\(name): pressed \(ControlNames.describe(first)) for selection")
+                onCapture?(first)
+            }
             return
         }
         pressed.forEach(press)
@@ -137,7 +140,7 @@ extension Session {
     }
 
     private func press(_ cid: UInt16) {
-        SessionLog.debug("\(name): press 0x\(String(cid, radix: 16))")
+        SessionLog.debug("\(name): press \(ControlNames.describe(cid))")
         switch binding(for: cid) {
         case .action(let action):
             perform(action)

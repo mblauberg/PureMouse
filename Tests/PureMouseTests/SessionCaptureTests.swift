@@ -5,6 +5,22 @@ import Testing
 
 @MainActor
 struct SessionCaptureTests {
+    @Test func capturePressIsLoggedByName() async throws {
+        let log = CapturedLog()
+        var captured: [UInt16] = []
+        try await Log.$capture.withValue({ log.append($0) }) {
+            let h = try await SessionHarness(.m750)
+            defer { h.close() }
+            try await h.session.apply()
+            h.session.onCapture = { captured.append($0) }
+            h.session.beginCapture()
+            await h.session.diversion.drain()
+            h.fake.emit(0x1B04, params: [0, 0xFD])
+        }
+        #expect(captured == [0xFD])
+        #expect(log.lines.contains(Log.Line(level: "info", message: "Signature Plus M750: pressed DPI button (0x00fd) for selection")))
+    }
+
     @Test func captureNeverDivertsOrListsPrimaryButtons() async throws {
         let fake = FakeDevice.mxMaster3S
         for cid: UInt16 in [0x50, 0x51] {

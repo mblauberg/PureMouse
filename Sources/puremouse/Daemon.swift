@@ -235,7 +235,6 @@ final class Daemon {
 
     private func beginCapture(_ session: Session) {
         session.onCapture = { [weak self, unowned session] cid in
-            Log.info("\(session.name): pressed 0x\(String(cid, radix: 16)) for selection")
             self?.endCapture(.pressed, cid: cid, deviceID: session.id)
         }
         session.beginCapture()
