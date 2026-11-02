@@ -107,14 +107,29 @@ extension AppModel {
 
 /// The row under a pane's last group (docs/ui-design.md): Restore Defaults at the leading edge,
 /// Advanced… at the trailing edge, either optional. Advanced… opens the pane's `AdvancedSheet`.
-/// Goes in the last section's footer.
+/// Goes in the last section's footer, so it scrolls with the form.
+///
+/// With a `restoreMessage`, Restore Defaults asks first: a confirmation whose button is a plain
+/// "Restore Defaults" (chosen on purpose, so not the destructive style) and whose message says
+/// what returns to its default.
 struct PaneFooter: View {
     var restoreDefaults: (() -> Void)?
+    var restoreMessage: String?
     var advanced: (() -> Void)?
+    @State private var confirmingRestore = false
 
     var body: some View {
         HStack {
-            if let restoreDefaults { Button("Restore Defaults", action: restoreDefaults) }
+            if let restoreDefaults {
+                Button(restoreMessage == nil ? "Restore Defaults" : "Restore Defaults…") {
+                    if restoreMessage == nil { restoreDefaults() } else { confirmingRestore = true }
+                }
+                .confirmationDialog("Restore defaults?", isPresented: $confirmingRestore) {
+                    Button("Restore Defaults", action: restoreDefaults)
+                } message: {
+                    Text(restoreMessage ?? "")
+                }
+            }
             Spacer()
             if let advanced { Button("Advanced…", action: advanced) }
         }

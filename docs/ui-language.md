@@ -70,7 +70,7 @@ One term per concept. "Retire" lists words that must not appear in UI text for t
 | Mouse resolution | Pointer Speed (row, menu, action); "DPI" beside a number; caption says it's this mouse's own speed, separate from System Settings › Mouse | Resolution, Tracking (except as System Settings' own name) |
 | Saved pointer speeds | presets | chips, steps |
 | A value left unset | "Using the mouse's own setting." (caption); "Mouse Default" (picker entry) | "Mouse default." fragment, "Works as Normal", bare "Default" |
-| A per-tab reset | Restore Defaults (pane footer; resets everything on that tab, advanced rows included) | Reset |
+| A per-tab reset | Restore Defaults (pane footer; resets everything on that tab, advanced rows included); "Restore Defaults…" when it asks first | Reset |
 | Settings moved off the default view | Advanced… (pane footer button, opens a sheet) | More, Fine-tuning, Expert |
 | Running now vs at login | Start / Stop change only whether PureMouse runs now; "Open at login" is the separate switch | Start that also turns on login |
 | Identify a button by pressing it | Find by Pressing… | Select by Pressing |
