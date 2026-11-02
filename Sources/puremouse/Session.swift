@@ -38,6 +38,9 @@ final class Session {
     let globalProfile: ScrollEngine.Profile
     /// Controls a previous session diverted that this one no longer binds; released on apply.
     var releasing: Set<UInt16>
+    var needsDiversionScan: Bool
+    /// Another program's persistent settings are never changed, including during capture/restore.
+    var persistentControls: Set<UInt16>
     let scroll: ScrollEngine?
     /// Whether any scope scrolls smoothly, so the main wheel is diverted too.
     let smoothAnywhere: Bool
@@ -111,7 +114,10 @@ final class Session {
     struct Inherited {
         var state = DeviceState()
         var diverted: Set<UInt16> = []
+        var persistentControls: Set<UInt16> = []
         var wheelsMayBeDiverted = false
+        /// Only a newly adopted endpoint needs to discover a previous process's diversions.
+        var fresh = false
         /// Not handed down by `inheritance`: the daemon sets it, so a session starts handed back
         /// while the pointer is on another Mac.
         var away = false
@@ -148,6 +154,8 @@ final class Session {
         appProfiles = config.apps.filter { $0.value.setsSmoothScroll }.mapValues { Self.profile($0, config) }
         thumbSettings = global.thumbWheel
         releasing = inherited.diverted.subtracting(bound.keys)
+        needsDiversionScan = inherited.fresh
+        persistentControls = inherited.persistentControls
         state = inherited.state
         // The wheels come to PureMouse when any scope scrolls smoothly; the thumb wheel alone
         // when any scope gives it actions. Either way scrolling then runs here.
@@ -170,10 +178,13 @@ final class Session {
     }
 
     /// Controls this session diverts or still owes a release, for handing to its replacement.
-    var divertedControls: Set<UInt16> { releasing.union(bound.keys).union(capturing ?? []) }
+    var divertedControls: Set<UInt16> {
+        releasing.union(bound.keys).union(capturing ?? []).subtracting(persistentControls)
+    }
 
     var inheritance: Inherited {
-        Inherited(state: state, diverted: divertedControls, wheelsMayBeDiverted: wheelsMayBeDiverted)
+        Inherited(state: state, diverted: divertedControls, persistentControls: persistentControls,
+                  wheelsMayBeDiverted: wheelsMayBeDiverted)
     }
 
     var status: Status.Device {

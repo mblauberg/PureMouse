@@ -601,7 +601,7 @@ final class Daemon {
         guard endpoints[key] === device, sessions[key] == nil else { return .noAnswer }
         Log.info("adopting \(name) pid=\(pidLabel) on \(device.interface.product) index \(device.index)")
         let session = Session(device: device, name: name, id: deviceID(key), controls: controls, config: config,
-                              inheriting: Session.Inherited(away: handingOff))
+                              inheriting: Session.Inherited(fresh: true, away: handingOff))
         add(session, key)
         return .adopted
     }

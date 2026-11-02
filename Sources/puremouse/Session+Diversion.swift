@@ -16,6 +16,7 @@ extension Session {
         // A gesture held as capture starts must not act when it is let go.
         held.forgetGesture()
         enqueueDiversion { session in
+            try await session.scanStaleDiversions()
             for cid in extras where session.capturing != nil && !session.away {
                 try await session.setDiverted(cid, true)
             }
@@ -49,7 +50,29 @@ extension Session {
     /// A diversion write on this session's behalf; refused once the session is finished.
     private func setDiverted(_ cid: UInt16, _ divert: Bool, rawXY: Bool = false) async throws {
         try ensureOpen()
+        guard !persistentControls.contains(cid) else { return }
         try await ReprogControls.setDiverted(device, cid: cid, divert: divert, rawXY: rawXY)
+    }
+
+    /// Fresh adoption only, on the diversion chain. A failed scan stays pending, and controls
+    /// already discovered still count toward restore even when a later read fails.
+    private func scanStaleDiversions() async throws {
+        guard needsDiversionScan else { return }
+        for cid in controls.keys.sorted() where controls[cid]?.isDivertable == true
+            && bound[cid] == nil && ![0x0050, 0x0051].contains(cid) {
+            try ensureOpen()
+            let reporting = try await ReprogControls.reporting(device, cid: cid)
+            try ensureOpen()
+            if reporting.persistent {
+                if persistentControls.insert(cid).inserted {
+                    SessionLog.info(String(format: "%@: control 0x%04x is persistently diverted; leaving it unchanged (Logi Options+ may own it)", name, cid))
+                }
+                releasing.remove(cid)
+            } else if reporting.diverted {
+                releasing.insert(cid)
+            }
+        }
+        needsDiversionScan = false
     }
 
     /// Queues `body` to run after every diversion change asked for before it and before any
@@ -69,6 +92,7 @@ extension Session {
     /// Diverts the controls the session wants (`Handoff.wantedControls`) and releases the rest:
     /// those owed a release, and while away the bound and capturing ones too, each independently.
     private func applyDiversion() async throws {
+        try await scanStaleDiversions()
         let wanted = Handoff.wantedControls(bound: Set(bound.keys), capturing: capturing, away: away)
         let unwanted = Set(bound.keys).union(capturing ?? []).subtracting(wanted)
         // Each control stands alone; a failed one keeps counting in `divertedControls` (it is
