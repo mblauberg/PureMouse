@@ -36,6 +36,11 @@ private let menuApp = URL(fileURLWithPath: "/Applications/PureMouse.app/Contents
     #expect(bare.daemon == nil)
 }
 
+@Test func anEmptyCompanionOverrideIsUnsetAsInTheDaemon() {
+    let locations = Locations(environment: ["PUREMOUSE_COMPANION_DIR": ""], home: home, bundle: menuApp)
+    #expect(locations.companion.path == "/Users/someone/Library/Application Support/PureMouse")
+}
+
 @Test func liveLocationsReadThisProcessesEnvironment() {
     let environment = ProcessInfo.processInfo.environment
     let expected = Locations(environment: environment, home: FileManager.default.homeDirectoryForCurrentUser,

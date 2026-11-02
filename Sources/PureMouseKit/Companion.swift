@@ -10,11 +10,14 @@ public enum Companion {
     public static let daemonLabel = "io.github.mblauberg.puremouse"
     public static let menuLabel = "io.github.mblauberg.puremouse.menu"
 
-    /// `PUREMOUSE_COMPANION_DIR`, the one place it is read; empty counts as unset.
-    public static let overrideDirectory: String? = {
-        guard let dir = ProcessInfo.processInfo.environment["PUREMOUSE_COMPANION_DIR"], !dir.isEmpty else { return nil }
+    /// `PUREMOUSE_COMPANION_DIR` in `environment`, the one place it is parsed; empty counts as unset.
+    public static func overrideDirectory(in environment: [String: String]) -> String? {
+        guard let dir = environment["PUREMOUSE_COMPANION_DIR"], !dir.isEmpty else { return nil }
         return dir
-    }()
+    }
+
+    /// This process's `overrideDirectory(in:)`.
+    public static let overrideDirectory = overrideDirectory(in: ProcessInfo.processInfo.environment)
 
     /// `~/Library/Application Support/PureMouse`, or `overrideDirectory` when set (tests and
     /// development, so a fixture never collides with an installed daemon).

@@ -15,11 +15,12 @@ dirty freed malloc memory. An earlier target of 10 MB is below that floor.
 ## Decision
 
 - Budgets are measured numbers, in `scripts/measure-menu.budgets`: the median of 5 rig runs plus
-  2 MB (fresh launch at most 16 MB, after the menu has been opened at most 22 MB), lowered when a
-  change earns it.
+  2 MB, rounded up (fresh launch at most 16 MB; after the menu has been opened, at most 22 MB
+  once and 23 MB after ten opens), lowered when a change earns it.
 - `MallocSpaceEfficient=1` is set for the menu app (launchd environment and `LSEnvironment`) only if
-  the saving is accepted (rig, 5 runs: 14.2 MB after three opens against 19.9, and 10.1 fresh
-  against 14.1).
+  the saving is accepted (rig, 5 runs each, side by side before the rig took the shipped bundle's
+  `Info.plist`: 14.2 MB after three opens against 20.1, and 10.1 fresh against the baseline's
+  fresh; `docs/companion.md`, Allocator). The gate is re-run on the current build before adoption.
 - `NSMenu` stays.
 
 ## Alternatives rejected
