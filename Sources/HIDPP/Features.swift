@@ -238,8 +238,9 @@ public enum AdjustableDPI {
 
 /// 0x2202 EXTENDED_ADJUSTABLE_DPI: resolution on mice without 0x2201 (the G Pro X 2 family), with
 /// separate X and Y axes and a lift-off distance. Function numbers and layouts follow Solaar's
-/// `ExtendedAdjustableDpi`, which assumes one sensor; no raw capture is public, so everything
-/// here is checked against that layout and hand-built fixtures only.
+/// `ExtendedAdjustableDpi` and `produce_dpi_list` (settings_templates.py at e7304c4), which assume
+/// one sensor; no raw capture is public, so everything here is inferred from that source and
+/// checked against hand-built fixtures only.
 public enum ExtendedDPI {
     public static let id: UInt16 = 0x2202
 
@@ -250,9 +251,11 @@ public enum ExtendedDPI {
         public let liftOffDistance: Bool
     }
 
-    /// The sensor's resolution, as getDpi reports it (the X axis; the Y axis follows it on a write).
+    /// The sensor's resolution, as getDpi reports it.
     public struct Reading: Equatable, Sendable {
         public let x: Int
+        /// The Y axis, meaningful only with a separate Y axis (`Capabilities.separateY`).
+        public let y: Int
         /// 0 low, 1 medium, 2 high; kept as read, so a write leaves it alone.
         public let liftOffDistance: UInt8
     }
@@ -268,32 +271,47 @@ public enum ExtendedDPI {
         return Capabilities(separateY: params[2] & 0x01 != 0, liftOffDistance: params[2] & 0x02 != 0)
     }
 
-    /// The resolutions both axes accept (the X list alone without a separate Y), from the first
-    /// reply of each list only: the lists seen are a range, which fits one reply.
+    /// Why the two axes' lists cannot be used together.
+    public enum ListError: Error, Equatable, Sendable {
+        /// The X and Y lists share no resolution, so no one value can be written to both.
+        case noCommonResolution
+    }
+
+    /// The most reply pages read for one list (Solaar reads up to 256; real lists are a few).
+    static let maxListPages = 32
+
+    /// The resolutions both axes accept (the X list alone without a separate Y). Throws
+    /// `ListError.noCommonResolution` when the axes share none.
     public static func resolutions(_ d: HIDPPDevice, capabilities: Capabilities) async throws
         -> AdjustableDPI.Resolutions {
         let x = try await list(d, direction: 0)
         guard capabilities.separateY else { return x }
         let y = try await list(d, direction: 1)
         let common = x.values.filter(y.values.contains)
-        guard !common.isEmpty else { throw HIDPPError.malformedResponse }
+        guard !common.isEmpty else { throw ListError.noCommonResolution }
         return AdjustableDPI.Resolutions(common)
     }
 
+    /// One axis's list, read a page at a time (the page index is the third parameter) and joined
+    /// until a 0x0000 word ends it: a long list, or a range whose bounds fall on different pages,
+    /// continues in the next reply.
     private static func list(_ d: HIDPPDevice, direction: UInt8) async throws -> AdjustableDPI.Resolutions {
-        guard let list = parseResolutions(try await d.call(id, 2, [0, direction, 0])) else {
-            throw HIDPPError.malformedResponse
+        var words: [UInt8] = []
+        for page in 0..<maxListPages {
+            let reply = try await d.call(id, 2, [0, direction, UInt8(page)])
+            guard reply.count > 3 else { throw HIDPPError.malformedResponse }
+            words += reply.dropFirst(3)
+            if endsList(words) {
+                guard let list = AdjustableDPI.Resolutions(words: words[...]) else { throw HIDPPError.malformedResponse }
+                return list
+            }
         }
-        return list
+        throw HIDPPError.malformedResponse
     }
 
-    /// getDpiList (function 2) reply: three header bytes, then words as in 0x2201, ended by
-    /// 0x0000. Nil without that terminator, since the rest of the list would be in a later reply.
-    public static func parseResolutions(_ params: [UInt8]) -> AdjustableDPI.Resolutions? {
-        let words = params.dropFirst(3)
-        guard stride(from: words.startIndex, to: words.endIndex - 1, by: 2)
-            .contains(where: { words[$0] == 0 && words[$0 + 1] == 0 }) else { return nil }
-        return AdjustableDPI.Resolutions(words: words)
+    /// Whether the words so far hold the 0x0000 that ends a list, counted from the first byte.
+    private static func endsList(_ bytes: [UInt8]) -> Bool {
+        stride(from: 0, to: bytes.count - 1, by: 2).contains { bytes[$0] == 0 && bytes[$0 + 1] == 0 }
     }
 
     /// getDpi (function 5).
@@ -302,14 +320,14 @@ public enum ExtendedDPI {
         return reading
     }
 
-    /// [sensor, X, default X, Y, default Y, lift-off distance], big endian. A zero X means the
-    /// default.
+    /// [sensor, X, default X, Y, default Y, lift-off distance], big endian. A zero X (or Y) means
+    /// the default.
     public static func parseReading(_ params: [UInt8]) -> Reading? {
         guard params.count >= 10 else { return nil }
         func word(_ i: Int) -> Int { Int(UInt16(bigEndian: params[i], params[i + 1])) }
         let x = word(1) == 0 ? word(3) : word(1)
         guard x > 0 else { return nil }
-        return Reading(x: x, liftOffDistance: params[9])
+        return Reading(x: x, y: word(5) == 0 ? word(7) : word(5), liftOffDistance: params[9])
     }
 
     /// setDpi (function 6): [sensor, X, Y, lift-off distance]. Without a separate Y axis, Y is
@@ -326,10 +344,20 @@ public enum ExtendedDPI {
 }
 
 /// 0x2130 LOWRES_WHEEL: the main wheel of a mouse whose wheel has only whole notches (Lift,
-/// Signature M650/M750, MX Ergo). Function numbers and layouts follow Solaar's `LowresMode`
-/// (function 0 reads and function 1 writes the reporting byte, bit 0 set meaning "report to
-/// HID++") and its `lowres_wheel_up`/`lowres_wheel_down` rules (the event is function 0, its
-/// first byte a signed notch count). No raw capture of this feature is public.
+/// Signature M650/M750, MX Ergo). The layout is read from one source, Solaar (settings_templates.py,
+/// hidpp20.py and diversion.py at e7304c4), for protocol facts only:
+/// - `LowresMode` is a plain on/off setting on this feature, so it uses the default feature
+///   read and write functions, 0x00 and 0x10: function 0 reads and function 1 writes, with the
+///   boolean validator's 0x01 for on and 0x00 for off (settings.py `FeatureRW`, settings_validator.py
+///   `BooleanValidator`).
+/// - `get_lowres_wheel_status` reads function 0 and takes bit 0 of byte 0 as "HID++" (set) or
+///   "HID" (clear).
+/// - The `lowres_wheel_up` and `lowres_wheel_down` rules take a function 0 notification whose first
+///   byte is a signed notch count, positive for up.
+/// The Linux kernel driver has no 0x2130 code, and no raw capture of the feature is public (the M750
+/// dump in issue #1 lists the feature but reads none of it). So the direction of a positive count
+/// on a real wheel is Solaar's word alone, and the first M750 or Ergo owner should confirm it.
+/// Because a write cannot be assumed to take, `Session` reads the byte back after asking.
 public enum LowResWheel {
     public static let id: UInt16 = 0x2130
 

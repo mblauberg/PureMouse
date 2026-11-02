@@ -27,31 +27,19 @@ struct ExtendedDPITests {
         #expect(ExtendedDPI.parseCapabilities([0, 0]) == nil)
     }
 
-    @Test func listSkipsThreeHeaderBytesAndReadsRangesAsIn2201() throws {
-        // 100, step 50, 25600, terminator.
-        let range = try #require(ExtendedDPI.parseResolutions([0, 0, 0, 0x00, 0x64, 0xE0, 0x32, 0x64, 0x00, 0, 0]))
-        #expect(range.values.first == 100 && range.values.last == 25600 && range.values.count == 511)
-        #expect(range.nearest(to: 801) == 800)
-        let discrete = try #require(ExtendedDPI.parseResolutions([0, 1, 0, 0x01, 0x90, 0x03, 0x20, 0x06, 0x40, 0, 0]))
-        #expect(discrete.values == [400, 800, 1600])
-    }
-
-    @Test func aListWithoutItsTerminatorOrWithABadStepIsRefused() {
-        #expect(ExtendedDPI.parseResolutions([0, 0, 0, 0x00, 0x64, 0xE0, 0x32, 0x64, 0x00]) == nil)
-        #expect(ExtendedDPI.parseResolutions([0, 0, 0, 0, 0]) == nil)
-        #expect(ExtendedDPI.parseResolutions([0, 0, 0, 0xE0, 0x32, 0, 0]) == nil)
-    }
-
     @Test func readingTakesTheDefaultWhenTheCurrentValueIsZero() throws {
         let superstrike: [UInt8] = [0, 0x03, 0x20, 0x03, 0x20, 0x03, 0x20, 0x03, 0x20, 2]
-        #expect(ExtendedDPI.parseReading(superstrike) == .init(x: 800, liftOffDistance: 2))
-        #expect(ExtendedDPI.parseReading([0, 0, 0, 0x06, 0x40, 0, 0, 0, 0, 1]) == .init(x: 1600, liftOffDistance: 1))
+        #expect(ExtendedDPI.parseReading(superstrike) == .init(x: 800, y: 800, liftOffDistance: 2))
+        #expect(ExtendedDPI.parseReading([0, 0, 0, 0x06, 0x40, 0, 0, 0, 0, 1]) == .init(x: 1600, y: 0, liftOffDistance: 1))
+        // A zero Y is the default Y, as a zero X is the default X.
+        #expect(ExtendedDPI.parseReading([0, 0x03, 0x20, 0x03, 0x20, 0, 0, 0x01, 0x90, 2]) == .init(x: 800, y: 400, liftOffDistance: 2))
+        #expect(ExtendedDPI.parseReading([0, 0x03, 0x20, 0x03, 0x20, 0x02, 0x58, 0x01, 0x90, 2])?.y == 600)
         #expect(ExtendedDPI.parseReading([0, 0, 0, 0, 0, 0, 0, 0, 0, 1]) == nil)
         #expect(ExtendedDPI.parseReading([0, 0x03, 0x20]) == nil)
     }
 
     @Test func aWriteSetsBothAxesAndKeepsTheLiftOffDistanceOnlyWhereItExists() {
-        let read = ExtendedDPI.Reading(x: 800, liftOffDistance: 2)
+        let read = ExtendedDPI.Reading(x: 800, y: 800, liftOffDistance: 2)
         let both = ExtendedDPI.Capabilities(separateY: true, liftOffDistance: true)
         #expect(ExtendedDPI.parameters(dpi: 1200, capabilities: both, keeping: read) == [0, 0x04, 0xB0, 0x04, 0xB0, 2])
         let one = ExtendedDPI.Capabilities(separateY: false, liftOffDistance: false)

@@ -40,6 +40,14 @@ public final class FakeDevice {
     /// A mouse in onboard-profile mode (0x8100) can acknowledge a DPI write and keep its own
     /// resolution; the readback then shows the old value.
     public var ignoresDPIWrites = false
+    /// Like `ignoresDPIWrites`, for the Y axis of 0x2202 alone: X is taken, Y keeps its value.
+    public var ignoresDPIYWrites = false
+    /// A 0x2130 reporting write is acknowledged and not taken, so the byte reads back as before.
+    public var ignoresLowResWheelWrites = false
+    /// The words of 0x2202's DPI list per direction (0 X, 1 Y), terminator included, served 13
+    /// bytes to a reply behind a three-byte header, as the page index asks. A direction without
+    /// one gets the single reply of `responses` or the default.
+    public var extendedDPILists: [UInt8: [UInt8]] = [:]
     /// getDeviceType's answer (0x0005 function 2): 3 is a mouse.
     public var kind: UInt8 = 3
     /// Features whose next root lookup goes unanswered (`dropFirstLookup`), and those dropped.
@@ -172,16 +180,23 @@ public final class FakeDevice {
             return reply(controls[i].reporting)
         case (0x2121, 2): responses[Call(feature, 1)] = p; return reply(p)
         case (0x2150, 2): responses[Call(feature, 1)] = p; return reply(p)
-        case (0x2130, 1): responses[Call(feature, 0)] = p; return reply(p)
+        case (0x2130, 1):
+            if !ignoresLowResWheelWrites { responses[Call(feature, 0)] = p }
+            return reply(p)
         case (0x2201, 3):
             if !ignoresDPIWrites { responses[Call(feature, 2)] = p }
             return reply(p)
+        case (0x2202, 2) where r.params.count >= 3 && extendedDPILists[r.params[1]] != nil:
+            let words = extendedDPILists[r.params[1]]!, page = Int(r.params[2])
+            let chunk = words.dropFirst(page * 13).prefix(13)
+            return reply(Array(r.params.prefix(3)) + chunk + Array(repeating: 0, count: 13 - chunk.count))
         case (0x2202, 6):
             // [sensor, X, Y, lift-off distance] in; [sensor, X, default X, Y, default Y, lift-off] out.
             guard p.count >= 6 else { return FakeTransport.error(to: r, code: 2) }
             let old = responses[Call(feature, 5)] ?? Self.defaults[Call(feature, 5)]!
             if !ignoresDPIWrites {
-                responses[Call(feature, 5)] = [p[0], p[1], p[2], old[3], old[4], p[3], p[4], old[7], old[8], p[5]]
+                let y = ignoresDPIYWrites ? [old[5], old[6]] : [p[3], p[4]]
+                responses[Call(feature, 5)] = [p[0], p[1], p[2], old[3], old[4], y[0], y[1], old[7], old[8], p[5]]
             }
             return reply(p)
         case (0x2110, 1), (0x2111, 2):

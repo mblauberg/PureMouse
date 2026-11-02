@@ -57,9 +57,63 @@ import Testing
         #expect(caps == .init(separateY: true, liftOffDistance: true))
         let list = try await ExtendedDPI.resolutions(device, capabilities: caps)
         #expect(list.values.first == 100 && list.values.last == 25600 && list.values.count == 511)
-        #expect(try await ExtendedDPI.get(device) == .init(x: 800, liftOffDistance: 2))
+        #expect(try await ExtendedDPI.get(device) == .init(x: 800, y: 800, liftOffDistance: 2))
         // Both axes' lists were read, since Y is separate.
         #expect(fake.requests(feature: 0x2202, function: 2).map(\.params) == [[0, 0, 0], [0, 1, 0]])
+    }
+
+    /// Words are two bytes, so a 13-byte reply page ends mid-word every other time.
+    private static func bytes(_ words: [UInt16]) -> [UInt8] { words.flatMap { [UInt8($0 >> 8), UInt8($0 & 0xFF)] } }
+
+    @Test func aListSpanningRepliesIsReadWholeWithARangeAndAWordSplitAcrossPages() async throws {
+        let fake = FakeDevice.superstrike
+        // 100...500 by hundreds, then the range 600, step 50, 1000: byte 12 (the step word's
+        // first) is the last of page 0 and its second byte opens page 1, which also holds the
+        // range's upper bound and the terminator.
+        fake.extendedDPILists[0] = Self.bytes([100, 200, 300, 400, 500, 600, 0xE032, 1000, 0])
+        let device = fake.endpoint()
+        defer { device.close() }
+        let list = try await ExtendedDPI.resolutions(device, capabilities: .init(separateY: false, liftOffDistance: true))
+        #expect(list.values == [100, 200, 300, 400, 500] + Array(stride(from: 600, through: 1000, by: 50)))
+        #expect(fake.requests(feature: 0x2202, function: 2).map(\.params) == [[0, 0, 0], [0, 0, 1]])
+    }
+
+    @Test func bothAxesListsAreIntersectedAcrossPages() async throws {
+        let fake = FakeDevice.superstrike
+        fake.extendedDPILists[0] = Self.bytes([100, 200, 300, 400, 500, 600, 0xE032, 1000, 0])
+        fake.extendedDPILists[1] = Self.bytes([300, 400, 500, 600, 700, 800, 900, 0])
+        let device = fake.endpoint()
+        defer { device.close() }
+        let list = try await ExtendedDPI.resolutions(device, capabilities: .init(separateY: true, liftOffDistance: true))
+        #expect(list.values == [300, 400, 500, 600, 700, 800, 900])
+        // Y's list is longer than a page too (16 bytes), so each axis took two requests.
+        #expect(fake.requests(feature: 0x2202, function: 2).map(\.params) == [[0, 0, 0], [0, 0, 1], [0, 1, 0], [0, 1, 1]])
+    }
+
+    @Test func axesThatShareNoResolutionAreReportedAsSuch() async throws {
+        let fake = FakeDevice.superstrike
+        fake.extendedDPILists[0] = Self.bytes([100, 200, 0])
+        fake.extendedDPILists[1] = Self.bytes([300, 400, 0])
+        let device = fake.endpoint()
+        defer { device.close() }
+        await #expect(throws: ExtendedDPI.ListError.noCommonResolution) {
+            try await ExtendedDPI.resolutions(device, capabilities: .init(separateY: true, liftOffDistance: true))
+        }
+        // The X list alone is fine where there is no separate Y axis.
+        let list = try await ExtendedDPI.resolutions(device, capabilities: .init(separateY: false, liftOffDistance: true))
+        #expect(list.values == [100, 200])
+    }
+
+    @Test func aListThatNeverEndsIsGivenUpAfterTheBoundOnPages() async throws {
+        let fake = FakeDevice.superstrike
+        // 440 bytes of the word 0x0100: no aligned 0x0000 anywhere, beyond the 32 pages read.
+        fake.extendedDPILists[0] = Array((0..<220).flatMap { _ in [UInt8(0x01), 0x00] })
+        let device = fake.endpoint()
+        defer { device.close() }
+        await #expect(throws: HIDPPError.self) {
+            try await ExtendedDPI.resolutions(device, capabilities: .init(separateY: false, liftOffDistance: false))
+        }
+        #expect(fake.requests(feature: 0x2202, function: 2).count == ExtendedDPI.maxListPages)
     }
 
     @Test func aWriteSetsBothAxesAndKeepsTheLiftOffDistance() async throws {
