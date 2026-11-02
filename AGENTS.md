@@ -103,6 +103,9 @@ one. This file covers how to work on it safely.
   Enhanced 0x2111. Enhanced writes always include mode, with torque 0 to leave torque unchanged.
   Haptic 0x19B0 is play-only, gated by its waveform capability mask: never write strength,
   enable flags or configuration (persistence is unknown). Log haptic absence once per session.
+  It is looked up only by a haptic action, never by apply, so `capabilities.haptics` stays unknown
+  until one runs; an action's lookup that changes the capabilities publishes them
+  (`Session.capabilitiesMayHaveChanged`).
   Enhanced SmartShift may skip malformed/feature-error replies only; timeouts and transport
   failures must reach configure's retry handling. Feature summaries use already resolved
   indices after a successful apply, never extra adoption queries. The MX Master 3S is the
@@ -209,17 +212,19 @@ one. This file covers how to work on it safely.
   silences them. Both are diverted when any scope (global or an app) scrolls smoothly; the thumb
   wheel alone when any scope gives it actions (`Session.applyWheels`). Where the scope in effect
   does not scroll smoothly, the diverted wheel still scrolls, with zero smoothing. Only wheels the
-  mouse has are taken over. Smooth scrolling needs a main wheel in `Session.smoothScrollWheels`
-  (0x2121 for now; a new kind of wheel is added there, and `capabilities.smoothScroll` follows); a
-  mouse without one scrolls natively, with one info line per session ("isn't supported for smooth
-  scrolling yet").
+  mouse has are taken over, each through its `Session.Wheel.feature`. Smooth scrolling needs the
+  main wheel's (0x2121 for now; `capabilities.smoothScroll` follows it); a mouse without it
+  scrolls natively, with one info line per session (`Session.smoothScrollUnsupported`).
 - Per-device settings (`devices.<key>`, `Config+Devices.swift`) are resolved by the Kit decoder:
   each entry is decoded on top of the top level, then `apps` on top of that, so precedence is top
   level, device, app. The key is `m` plus the 0x0003 model ID, else `p` plus the product ID
   (`Config.deviceKey`, read at adoption by `Identification`; a 0x0003 timeout leaves it nil and the
-  top level applies). The daemon hands each session `config.forDevice(model)` at adoption and on
-  reload; permission decisions and the adoption gate cover every scope (`Config.everyScope`,
-  `Daemon.postsEvents`). Nothing
+  top level applies). A receiver mouse keyed by its product but adopted before its slot was
+  announced gets its key, and a session on that key's settings, when it next links up
+  (`Daemon.sessionSlotAnnounced`). The daemon hands each session `config.forDevice(deviceKey)` at
+  adoption and on reload; permission decisions cover every scope (`Config.everyScope`,
+  `Daemon.postsEvents`). The adoption gate (`Daemon.gates`) checks every bound control
+  (`Config.everyBoundControl`) before identification, then the mouse's own settings. Nothing
   is special-cased by model or product ID: a session uses what its mouse reports, and a bound
   control it lacks is a debug line once per session.
 - Per-app settings (`apps`) are merged onto the global ones by the Kit decoder (`Config+Apps.swift`,
@@ -368,10 +373,11 @@ one. This file covers how to work on it safely.
   behaviour in `FakeDevice` and its readback in a probe fixture.
 - Per-app settings: a new per-app section needs a case in `Config.appSections`, decoding on top of
   the global value in `Config.decodeApps`, a `sets…` flag, and its lookup at the moment it applies.
-  Every config section decodes on a `base` (`init(_:base:)`); a new section takes one, keeps
+  Every config section decodes on a `base` (its `init(_:base:)`); a new section takes one, keeps
   its range checks and adds cases to the golden decode test (`ConfigGoldenTests`).
 - Per-device settings: a new per-device section needs a case in `Config.deviceSections` and
-  decoding in `Config.decodeSections`, which the top level and each device entry share.
+  decoding in `Config.decodeSections`, the one layering point: the top level decodes its sections
+  there, and each device entry decodes its own there on top of the top level's.
 - Thumb-wheel actions: `Config.ThumbWheel.presets` (Kit) names action pairs; `ThumbStepper` counts
   rotation into steps (remainder kept, reset at each movement's start), paced per action
   (`ThumbStepper.pacing`: media keys free, shortcuts 50 ms, zoom 40 ms, animated actions 300 ms

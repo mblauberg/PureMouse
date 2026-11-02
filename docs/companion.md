@@ -108,7 +108,7 @@ All optional; nil members are left out of the JSON.
 | `devices[].model` | String | The device key used by `devices.<key>` in the config: `m` plus the 12 lowercase hex digits of the 0x0003 model ID when the mouse reports one, else `p` plus the 4-digit lowercase hex product ID (e.g. `pb02c`). Absent when neither is known. Two mice of one model share it |
 | `devices[].unit` | String | The 0x0003 unit ID as 8 lowercase hex digits, when known. Stable for one physical mouse, for per-unit state such as low-battery alerts. Never written to the config |
 | `devices[].kind` | String | A word such as `mouse`, `trackball` or `keyboard`. |
-| `devices[].capabilities` | object | What the mouse reports. Members: `dpi`, `smartShift`, `smoothScroll`, `thumbWheel`, `haptics`, `battery` (each Bool: true has it, false reported not to; absent unknown, e.g. a lookup that failed transiently) and `features` ([String], HID++ feature IDs in hex, for support; not filled yet). Absent until the mouse's first apply has finished |
+| `devices[].capabilities` | object | What the mouse reports. Members: `dpi`, `smartShift`, `smoothScroll`, `thumbWheel`, `haptics` and `battery` (each Bool: true has it, false reported not to; absent unknown, e.g. a lookup that failed transiently). Absent until the mouse's first apply has finished |
 | `devices[].controls[].gestures` | Bool | The control can report raw XY movement. Absent when unknown |
 | `capture.model` | String | The device key (`devices[].model`) of the mouse whose control was pressed |
 
@@ -278,19 +278,23 @@ Choices the contract left open, as the daemon implements them:
   that lacks it, is keyed by its product ID: the interface's for Bluetooth, the slot's wireless
   product ID on a receiver. A 0x0003 that times out leaves `model` absent rather than guess, and that
   mouse uses the top-level settings. A model ID of all zeros or all 0xFF counts as absent, as does
-  such a unit ID. The key is in the adoption log line (`model=`). Two mice of one model share a key,
+  such a unit ID. A receiver mouse keyed by its product but found before its slot announced one
+  gets its key when the slot next announces it linked up, with a session on that key's settings.
+  The key is in the adoption log line (`model=`). Two mice of one model share a key,
   so they share `devices.<key>` and are both reached by a `device` request.
 - **Capabilities** come only from lookups apply has already made (`HIDPPDevice.knownPresence`), so
-  building them sends nothing; apply also looks up haptics (0x19B0). A member is true when its
-  feature is present, false when known absent (`smartShift`: both 0x2110 and 0x2111; `battery`:
-  both 0x1004 and 0x1000; `smoothScroll`: every main wheel PureMouse can take over, which is 0x2121
-  for now, `Session.smoothScrollWheels`), and left out when a lookup failed. They are kept across reloads.
+  building them sends nothing. Haptics (0x19B0) is looked up only by a haptic action, so it is
+  absent until one runs; a capability learned that way after apply is published then. A member is
+  true when its feature is present, false when known absent (`smartShift`: both 0x2110 and 0x2111;
+  `battery`: both 0x1004 and 0x1000; `smoothScroll`: the main wheel PureMouse can take over, 0x2121
+  for now), and left out when unknown. They are kept across reloads.
   `controls` lists only divertable, non-virtual controls, and `gestures` follows the control's
   raw-XY flag. `schema` is 2.
-- **Settings per mouse.** Each session gets `Config.forDevice(model)`, at adoption and on reload. A
+- **Settings per mouse.** Each session gets `Config.forDevice` for its key, at adoption and on
+  reload. A mouse without DPI is adopted only for a control bound in its own settings. A
   reload keeps a mouse's live DPI unless its own resolved `dpi` or `dpiPresets` changed. A setting
   the mouse cannot use is skipped quietly: a bound control it lacks is a debug line once per
-  session, `toggleScrollMode` without SmartShift and smooth scrolling on a wheel not yet supported an info line
+  session, `toggleScrollMode` without SmartShift and smooth scrolling without 0x2121 an info line
   once per session, and a DPI snapped to the sensor's list is logged once per mouse, not per reload.
 - **Login.** "Hidden" is remembered by a `menu-hidden` file in `Companion.directory`, written by
   `menu off` and removed by `menu on`; `unregister` keeps it. The CLI calls `setsid()` and boots

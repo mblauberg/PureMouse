@@ -67,9 +67,8 @@ in effect) and the log names the field.
 natural-scrolling setting.
 
 Smooth scrolling needs a wheel PureMouse can take over; for now that is a high-resolution wheel
-(HID++ 0x2121, and 0x2150 for a thumb wheel). On a mouse whose wheel isn't supported for smooth
-scrolling yet, such as the Signature Plus M750, the wheel keeps scrolling natively and the log
-says so once.
+(HID++ 0x2121, and 0x2150 for a thumb wheel). On a mouse without 0x2121, such as the Signature
+Plus M750, the wheel keeps scrolling natively and the log says so once.
 
 ## Thumb wheel
 
