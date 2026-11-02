@@ -13,7 +13,7 @@ struct ProbeTests {
         var lines: [String] = []
         await Probe.dump(device) { lines.append($0) }
         #expect(lines.contains("  features: "))
-        #expect(!fake.transport.sent.contains { fake.feature(of: $0) == 0x0001 && $0.function == 1 })
+        #expect(fake.requests(feature: 0x0001, function: 1).isEmpty)
     }
 
     @Test func zeroControlsPrintsHeaderWithoutControls() async {
