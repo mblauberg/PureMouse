@@ -22,6 +22,7 @@ final class Session {
     /// now holds a different device and the daemon has closed this session to adopt that one.
     var onConnection: ((Report) -> Bool)?
     let config: Config
+    let environment: SessionEnvironment
     /// What applies where no app entry matches.
     let global: Config.AppSettings
     /// Controls bound globally or in any app, all diverted; true for those diverted with raw
@@ -117,11 +118,12 @@ final class Session {
     }
 
     init(device: HIDPPDevice, name: String, id: String, controls: [ReprogControls.Control], config: Config,
-         inheriting inherited: Inherited = Inherited()) {
+         inheriting inherited: Inherited = Inherited(), environment: SessionEnvironment = .live) {
         self.device = device
         self.name = name
         self.id = id
         self.config = config
+        self.environment = environment
         let controls = Dictionary(controls.map { ($0.cid, $0) }, uniquingKeysWith: { a, _ in a })
         self.controls = controls
         pressable = controls.values.filter { $0.isDivertable && !$0.isVirtual }.map(\.cid).sorted()
@@ -160,7 +162,7 @@ final class Session {
             scroll?.profileForBurst = { [weak self] in self?.profileUnderPointer() ?? ScrollEngine.Profile() }
         }
         for cid in config.boundControls.sorted() where controls[cid]?.isDivertable != true {
-            Log.error("\(name): control 0x\(String(cid, radix: 16)) is missing or not divertable; skipped")
+            SessionLog.error("\(name): control 0x\(String(cid, radix: 16)) is missing or not divertable; skipped")
         }
     }
 
@@ -271,17 +273,17 @@ final class Session {
                     // Cached indices only: diagnostics must never add adoption traffic or timeouts.
                     let features = (1...255).compactMap { device.feature(at: UInt8($0)) }.sorted()
                         .map { String(format: "%04x", $0) }
-                    Log.info("\(name): configured; features(PureMouse)=\(features.joined(separator: " "))")
+                    SessionLog.info("\(name): configured; features(PureMouse)=\(features.joined(separator: " "))")
                     return
                 } catch is CancellationError {
                     return
                 } catch HIDPPError.closed {
                     return
                 } catch {
-                    Log.error("\(name): configure attempt \(attempt) failed: \(error)")
+                    SessionLog.error("\(name): configure attempt \(attempt) failed: \(error)")
                 }
                 // Usually the mouse is asleep; its reconnect event will also trigger a retry.
-                try? await Task.sleep(for: .seconds(5))
+                try? await Task.sleep(for: environment.configureRetryDelay)
             }
             guard !Task.isCancelled, !finished, state.online else { return }
             state.online = false
@@ -289,7 +291,7 @@ final class Session {
         }
     }
 
-    private func apply() async throws {
+    func apply() async throws {
         // Resolve the event-bearing features first so their events can be routed.
         _ = try await device.hasFeature(ReprogControls.id)
         _ = try? await device.featureIndex(of: WirelessDeviceStatus.id)
@@ -338,7 +340,7 @@ final class Session {
                 state.battery = try await UnifiedBattery.status(device, levels: state.batteryLevels ?? UnifiedBattery.allLevels)
             }
         } catch {
-            if !stops(error) { Log.debug("\(name): reading battery failed: \(error)") }
+            if !stops(error) { SessionLog.debug("\(name): reading battery failed: \(error)") }
         }
     }
 
@@ -363,7 +365,7 @@ final class Session {
         do {
             return try await device.hasFeature(SmartShiftEnhanced.id) ? .enhanced : nil
         } catch where Self.isOptionalFeatureReplyError(error) {
-            Log.error("\(name): SmartShift Enhanced failed (untested mouse): \(error)")
+            SessionLog.error("\(name): SmartShift Enhanced failed (untested mouse): \(error)")
             return nil
         }
     }
@@ -403,7 +405,7 @@ final class Session {
             }
             state.wheelMode = mode ?? current
         } catch where enhanced && Self.isOptionalFeatureReplyError(error) {
-            Log.error("\(name): SmartShift Enhanced failed (untested mouse): \(error)")
+            SessionLog.error("\(name): SmartShift Enhanced failed (untested mouse): \(error)")
         }
     }
 
@@ -426,7 +428,7 @@ final class Session {
         } catch HIDPPError.closed {
             throw HIDPPError.closed
         } catch {
-            Log.error("\(name): reading supported DPI failed: \(error); DPI is set as configured")
+            SessionLog.error("\(name): reading supported DPI failed: \(error); DPI is set as configured")
         }
     }
 
@@ -434,7 +436,7 @@ final class Session {
     func supportedDPI(near target: Int) -> Int {
         let dpi = state.resolutions?.nearest(to: target) ?? target
         if dpi != target, snapLogged.insert(target).inserted {
-            Log.info("\(name): dpi \(target) is not supported; using \(dpi)")
+            SessionLog.info("\(name): dpi \(target) is not supported; using \(dpi)")
         }
         return dpi
     }
@@ -478,14 +480,14 @@ final class Session {
                 try await ReprogControls.setDiverted(self.device, cid: cid, divert: false, rawXY: false)
             }
         }
-        Log.info("\(name): restored native behaviour")
+        SessionLog.info("\(name): restored native behaviour")
     }
 
     private func attempt(_ what: String, _ body: () async throws -> Void) async {
         do {
             try await body()
         } catch {
-            Log.error("\(name): \(what) failed: \(error)")
+            SessionLog.error("\(name): \(what) failed: \(error)")
         }
     }
 }

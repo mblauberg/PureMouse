@@ -27,7 +27,7 @@ enum Probe {
         }
     }
 
-    private static func dump(_ d: HIDPPDevice) async {
+    static func dump(_ d: HIDPPDevice, print: (String) -> Void = { Swift.print($0) }) async {
         if let name = try? await DeviceName.get(d) { print("  name: \(name)") }
         if let ids = try? await DeviceIdentity.transportIDs(d) {
             let labels = DeviceIdentity.Transport.allCases.compactMap { transport in
@@ -55,23 +55,23 @@ enum Probe {
             }
         }
 
-        await show(d, "smartshift 0x2110 get", 0x2110, 0)
-        await show(d, "smartshift 0x2111 caps", 0x2111, 0)
-        await show(d, "smartshift 0x2111 get", 0x2111, 1)
-        await show(d, "dpi 0x2201 sensors", 0x2201, 0)
-        await show(d, "dpi 0x2201 list", 0x2201, 1, [0])
-        await show(d, "dpi 0x2201 get", 0x2201, 2, [0])
-        await show(d, "hires 0x2121 caps", 0x2121, 0)
-        await show(d, "hires 0x2121 mode", 0x2121, 1)
-        await show(d, "thumb 0x2150 info", 0x2150, 0)
-        await show(d, "thumb 0x2150 status", 0x2150, 1)
-        await show(d, "battery 0x1004 status", 0x1004, 1)
-        await show(d, "battery 0x1000 status", 0x1000, 0)
-        await show(d, "haptic 0x19B0 caps", 0x19B0, 0)
+        await show(d, "smartshift 0x2110 get", 0x2110, 0, print: print)
+        await show(d, "smartshift 0x2111 caps", 0x2111, 0, print: print)
+        await show(d, "smartshift 0x2111 get", 0x2111, 1, print: print)
+        await show(d, "dpi 0x2201 sensors", 0x2201, 0, print: print)
+        await show(d, "dpi 0x2201 list", 0x2201, 1, [0], print: print)
+        await show(d, "dpi 0x2201 get", 0x2201, 2, [0], print: print)
+        await show(d, "hires 0x2121 caps", 0x2121, 0, print: print)
+        await show(d, "hires 0x2121 mode", 0x2121, 1, print: print)
+        await show(d, "thumb 0x2150 info", 0x2150, 0, print: print)
+        await show(d, "thumb 0x2150 status", 0x2150, 1, print: print)
+        await show(d, "battery 0x1004 status", 0x1004, 1, print: print)
+        await show(d, "battery 0x1000 status", 0x1000, 0, print: print)
+        await show(d, "haptic 0x19B0 caps", 0x19B0, 0, print: print)
     }
 
     private static func show(_ d: HIDPPDevice, _ label: String, _ feature: UInt16, _ fn: UInt8,
-                             _ params: [UInt8] = []) async {
+                             _ params: [UInt8] = [], print: (String) -> Void) async {
         do {
             print("  \(label): \(hex(try await d.call(feature, fn, params)))")
         } catch {

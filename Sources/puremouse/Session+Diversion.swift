@@ -38,7 +38,7 @@ extension Session {
                 try await setDiverted(cid, false)
                 releasing.remove(cid)
             } catch {
-                Log.debug("\(name): releasing 0x\(String(cid, radix: 16)) failed: \(error)")
+                SessionLog.debug("\(name): releasing 0x\(String(cid, radix: 16)) failed: \(error)")
                 throw error
             }
         }
@@ -62,7 +62,7 @@ extension Session {
         } onFailure: { [weak self] error in
             guard let self, !self.finished else { return }
             // Usually asleep: the next apply diverts or releases them.
-            Log.debug("\(self.name): diversion change failed: \(error)")
+            SessionLog.debug("\(self.name): diversion change failed: \(error)")
         }
     }
 
@@ -114,9 +114,9 @@ extension Session {
     private func applyWheels() async throws {
         try ensureOpen()
         // Taking the wheels over without permission to post scroll events would silence them.
-        let accessibility = Permissions.current.contains(.accessibility)
+        let accessibility = environment.canPostEvents
         let takeOver = Handoff.wheelsDiverted(scrolling: scroll != nil, accessibility: accessibility, away: away)
-        if scroll != nil && !accessibility { Log.error("\(name): no Accessibility permission; leaving the wheels native") }
+        if scroll != nil && !accessibility { SessionLog.error("\(name): no Accessibility permission; leaving the wheels native") }
         let smooth = takeOver && smoothAnywhere
         // Set before diverting, so `restore` hands them back even if a write below fails.
         if takeOver { wheelsMayBeDiverted = true }

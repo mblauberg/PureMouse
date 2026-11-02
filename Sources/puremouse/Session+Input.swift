@@ -10,7 +10,7 @@ extension Session {
         guard let app = ForegroundApp.shared.underPointer(), let profile = appProfiles[app.lowercased()] else {
             return globalProfile
         }
-        Log.debug("\(name): scrolling with \(app)'s settings")
+        SessionLog.debug("\(name): scrolling with \(app)'s settings")
         return profile
     }
 
@@ -21,7 +21,7 @@ extension Session {
         if report.featureIndex == Receiver.connectionNotification {
             if onConnection?(report) == true { return }
             if Receiver.isLinkEstablished(report) {
-                Log.info("\(name): link up")
+                SessionLog.info("\(name): link up")
                 configure()
             } else {
                 // The mouse is off or out of range: its releases will not arrive.
@@ -41,7 +41,7 @@ extension Session {
         case HiResWheel.id:
             switch HiResWheel.parse(function: report.function, params: report.params) {
             case .scroll(let delta, _): scroll?.wheel(delta, perNotch: wheelMultiplier)
-            case .ratchet(let engaged): Log.debug("\(name): ratchet \(engaged ? "engaged" : "released")")
+            case .ratchet(let engaged): SessionLog.debug("\(name): ratchet \(engaged ? "engaged" : "released")")
             case nil: break
             }
         case ThumbWheel.id:
@@ -56,7 +56,7 @@ extension Session {
             if let battery = UnifiedBattery.parse(function: report.function, params: report.params,
                                                    levels: state.batteryLevels ?? UnifiedBattery.allLevels),
                battery != state.battery {
-                Log.debug("\(name): battery \(battery.percent.map { "\($0)%" } ?? "?") \(battery.isCharging ? "charging" : "")")
+                SessionLog.debug("\(name): battery \(battery.percent.map { "\($0)%" } ?? "?") \(battery.isCharging ? "charging" : "")")
                 state.battery = battery
                 changed()
             }
@@ -70,7 +70,7 @@ extension Session {
             }
         case WirelessDeviceStatus.id:
             if WirelessDeviceStatus.needsReconfiguration(function: report.function, params: report.params) {
-                Log.info("\(name): reconnected")
+                SessionLog.info("\(name): reconnected")
                 configure(after: .milliseconds(100))
             }
         default:
@@ -114,7 +114,7 @@ extension Session {
         var settings = global.thumbWheel
         if appThumbWheel, let app = ForegroundApp.shared.underPointer(), let scoped = config.settings(forApp: app) {
             settings = scoped.thumbWheel
-            Log.debug("\(name): thumb wheel with \(app)'s settings")
+            SessionLog.debug("\(name): thumb wheel with \(app)'s settings")
         }
         thumbSettings = settings
         thumbStepper.reset()
@@ -129,14 +129,14 @@ extension Session {
     /// Only a control some app names needs the lookup.
     private func binding(for cid: UInt16) -> Config.Binding? {
         if appButtons.contains(cid), let app = ForegroundApp.shared.frontmost(), let scoped = config.settings(forApp: app) {
-            Log.debug("\(name): buttons with \(app)'s settings")
+            SessionLog.debug("\(name): buttons with \(app)'s settings")
             return scoped.bindings[cid]
         }
         return global.bindings[cid]
     }
 
     private func press(_ cid: UInt16) {
-        Log.debug("\(name): press 0x\(String(cid, radix: 16))")
+        SessionLog.debug("\(name): press 0x\(String(cid, radix: 16))")
         switch binding(for: cid) {
         case .action(let action):
             perform(action)
@@ -164,7 +164,7 @@ extension Session {
     private func moved(dx: Int, dy: Int) {
         guard let gesture = held.gesture?.gesture,
               let direction = recognizer.move(dx: dx, dy: dy) else { return }
-        Log.debug("\(name): gesture \(direction)")
+        SessionLog.debug("\(name): gesture \(direction)")
         perform(gesture.action(for: direction))
     }
 
@@ -189,7 +189,7 @@ extension Session {
         guard !hapticMissingLogged else { return }
         do {
             guard try await device.hasFeature(Haptic.id) else {
-                Log.info("\(name): haptic action ignored; no 0x19B0 feature")
+                SessionLog.info("\(name): haptic action ignored; no 0x19B0 feature")
                 hapticMissingLogged = true
                 return
             }
@@ -197,14 +197,14 @@ extension Session {
             if hapticCapabilities == nil { hapticCapabilities = try await Haptic.getCapabilities(device) }
             guard hapticCapabilities?.supports(waveform.id) == true else {
                 if unsupportedHaptics.insert(waveform).inserted {
-                    Log.info("\(name): haptic \(waveform.rawValue) ignored; waveform not supported")
+                    SessionLog.info("\(name): haptic \(waveform.rawValue) ignored; waveform not supported")
                 }
                 return
             }
             try ensureOpen()
             try await Haptic.playWaveform(device, waveform: waveform.id)
         } catch {
-            if !stops(error) { Log.error("\(name): haptic \(waveform.rawValue) failed: \(error)") }
+            if !stops(error) { SessionLog.error("\(name): haptic \(waveform.rawValue) failed: \(error)") }
         }
     }
 
@@ -221,14 +221,14 @@ extension Session {
                 try await applyDPI()
                 changed()
             } catch {
-                if !stops(error) { Log.error("\(name): setting DPI failed: \(error)") }
+                if !stops(error) { SessionLog.error("\(name): setting DPI failed: \(error)") }
             }
         }
     }
 
     private func cycleDPI() async {
         guard !config.dpiPresets.isEmpty else {
-            Log.error("\(name): cycleDPI needs dpiPresets in the config")
+            SessionLog.error("\(name): cycleDPI needs dpiPresets in the config")
             return
         }
         do {
@@ -239,17 +239,17 @@ extension Session {
             try await AdjustableDPI.set(device, dpi: next)
             state.liveDPI = next
             try await readDPI()
-            Log.debug("\(name): dpi \(next)")
+            SessionLog.debug("\(name): dpi \(next)")
             changed()
         } catch {
-            if !stops(error) { Log.error("\(name): cycle DPI failed: \(error)") }
+            if !stops(error) { SessionLog.error("\(name): cycle DPI failed: \(error)") }
         }
     }
 
     private func toggleScrollMode() async {
         do {
             guard let clutch = try await clutch() else {
-                Log.error("\(name): toggleScrollMode needs SmartShift")
+                SessionLog.error("\(name): toggleScrollMode needs SmartShift")
                 return
             }
             let next: SmartShift.Mode = try await scrollMode(of: clutch) == .ratchet ? .freespin : .ratchet
@@ -257,9 +257,9 @@ extension Session {
             state.scrollMode = next
             state.wheelMode = next
             changed()
-            Log.debug("\(name): scroll mode \(next)")
+            SessionLog.debug("\(name): scroll mode \(next)")
         } catch {
-            if !stops(error) { Log.error("\(name): toggle scroll mode failed: \(error)") }
+            if !stops(error) { SessionLog.error("\(name): toggle scroll mode failed: \(error)") }
         }
     }
 }
