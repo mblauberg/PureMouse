@@ -364,8 +364,13 @@ private func resolved(_ wheel: Config.ThumbWheel) -> Resolved {
     edited.bindInApp("a.b", button: "gesture", direction: "left", to: .named("spaceLeft"))
     #expect(edited[["apps"]] as? NSDictionary == ["a.b": ["buttons": ["gesture": ["left": "spaceLeft"]]]])
     #expect(edited[["buttons"]] as? NSDictionary == config[["buttons"]] as? NSDictionary)
-    let resolved = try decoded(edited)
-    #expect(resolved.settings(forApp: "a.b") != nil)
+    // The daemon resolves the app's gesture to the inherited click and up, and its own left.
+    let gesture = try #require(try decoded(edited).settings(forApp: "a.b")?.bindings[0x00C3])
+    guard case .gesture(let resolvedGesture) = gesture else { Issue.record("gesture"); return }
+    #expect(resolvedGesture.click == .missionControl)
+    #expect(resolvedGesture.up == .appExpose)
+    #expect(resolvedGesture.left == .spaceLeft)
+    #expect(resolvedGesture.down == .none && resolvedGesture.right == .none)
     // The app's own gesture now: the other directions still show what applies everywhere.
     let own = edited.appButton("a.b", button: "gesture")
     #expect(own.own == .gesture && !own.inheritsGesture)
