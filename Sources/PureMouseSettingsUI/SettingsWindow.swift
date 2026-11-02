@@ -123,8 +123,13 @@ final class SettingsTabs: NSTabViewController {
     /// The Mouse tab, once built.
     weak var mouse: MouseTab?
 
+    /// The selected tab's item; nil while nothing is selected (the index is -1).
+    private var selectedItem: NSTabViewItem? {
+        tabViewItems.indices.contains(selectedTabViewItemIndex) ? tabViewItems[selectedTabViewItemIndex] : nil
+    }
+
     var selectedTab: SettingsTab? {
-        (tabViewItems[selectedTabViewItemIndex].identifier as? String).flatMap(SettingsTab.init)
+        (selectedItem?.identifier as? String).flatMap(SettingsTab.init)
     }
 
     /// Shows Mouse on this segment, now if Mouse is built, else when it is.
@@ -153,7 +158,7 @@ final class SettingsTabs: NSTabViewController {
 
     override func preferredContentSizeDidChange(for viewController: NSViewController) {
         super.preferredContentSizeDidChange(for: viewController)
-        guard viewController === tabViewItems[selectedTabViewItemIndex].viewController else { return }
+        guard let selected = selectedItem?.viewController, viewController === selected else { return }
         fitWindow(animated: view.window?.isVisible == true)
     }
 
@@ -162,7 +167,7 @@ final class SettingsTabs: NSTabViewController {
     /// up (the Apps pane calls it when it opens an app or goes back; the Mouse tab when its
     /// segment changes).
     func refit() {
-        guard let pane = tabViewItems[selectedTabViewItemIndex].viewController,
+        guard let pane = selectedItem?.viewController,
               let host = pane.children.first else { return }
         (host as? MouseTab)?.fit()
         pane.preferredContentSize = LazyPane.fitted(host.preferredContentSize)
@@ -170,7 +175,7 @@ final class SettingsTabs: NSTabViewController {
 
     private func fitWindow(animated: Bool) {
         guard let window = view.window,
-              let content = tabViewItems[selectedTabViewItemIndex].viewController else { return }
+              let content = selectedItem?.viewController else { return }
         let size = content.preferredContentSize
         guard size.height > 0 else { return }
         let maxHeight = (window.screen ?? NSScreen.main)?.visibleFrame.height ?? 900

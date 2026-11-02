@@ -120,3 +120,12 @@ private final class PaneFactory {
         #expect(tab.selection.segment == .scrolling)
     }
 }
+
+@MainActor @Suite struct SettingsTabsSelectionTests {
+    @Test func noSelectionIsNotATab() {
+        let tabs = SettingsTabs()
+        #expect(tabs.selectedTabViewItemIndex == -1)
+        #expect(tabs.selectedTab == nil)
+        tabs.refit()
+    }
+}
