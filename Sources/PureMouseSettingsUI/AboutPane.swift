@@ -37,6 +37,9 @@ struct AboutPane: View {
                 Link("MIT Licence", destination: Links.licence)
             }
             .padding(.top, 2)
+            Link("Support PureMouse", destination: Links.sponsors)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
             UpdateRow()
                 .padding(.top, 6)
             Text("Not affiliated with Logitech.")

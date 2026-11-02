@@ -190,6 +190,10 @@ request; [Security](SECURITY.md) says how to report a vulnerability.
 Bug reports and ideas are welcome in [Issues](https://github.com/mblauberg/PureMouse/issues);
 [Contributing](CONTRIBUTING.md) explains how to ask for a mouse and how to send a change.
 
+## Support
+
+PureMouse is free and open source. If it's made your mouse nicer to use, you can support it on [GitHub Sponsors](https://github.com/sponsors/mblauberg). Thank you!
+
 ## Licence
 
 MIT. See [`LICENSE`](LICENSE).
