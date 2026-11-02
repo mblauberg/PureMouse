@@ -5,7 +5,7 @@ import PureMouseSettingsUI
 import notify
 
 /// The helper's delegate: shows the Settings window at launch, on the pane a `ShowRequest` names
-/// (else the last one shown), and quits when it closes. Config edits are saved, and a select by
+/// (else the last one shown), with its sheet open, and quits when it closes. Config edits are saved, and a select by
 /// pressing still listening is cancelled, however the app ends.
 @MainActor
 final class SettingsApp: NSObject, NSApplicationDelegate {
@@ -13,7 +13,7 @@ final class SettingsApp: NSObject, NSApplicationDelegate {
     private var settings: SettingsWindowController?
     private var showToken: Int32 = -1
     private lazy var menuActions = MainMenu.Actions(
-        showAbout: { [weak self] in self?.show(.tab(.about)) },
+        showAbout: { [weak self] in self?.show(ShowRequest(pane: .tab(.about))) },
         open: { NSWorkspace.shared.open($0) })
     private var terminateSignal: DispatchSourceSignal?
 
@@ -24,14 +24,14 @@ final class SettingsApp: NSObject, NSApplicationDelegate {
         // Asked again while open (the menu bar app posts, then opens this app): the pane is in
         // the file.
         notify_register_dispatch(Companion.showSettingsNotification, &showToken, .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.show(ShowRequest.consume()?.pane) }
+            MainActor.assumeIsolated { self?.show(ShowRequest.consume()) }
         }
         settings = SettingsWindowController(model: model)
         settings?.didClose = { NSApp.terminate(nil) }
         #if DEBUG || DEVHOOKS
         stampWhenVisible()
         #endif
-        show(ShowRequest.consume()?.pane)
+        show(ShowRequest.consume())
         #if DEBUG
         DevHooks.run { [weak self] in self?.show($0) }
         #endif
@@ -68,8 +68,8 @@ final class SettingsApp: NSObject, NSApplicationDelegate {
         model.flush()
     }
 
-    private func show(_ pane: SettingsPane?) {
-        settings?.show(pane: pane)
+    private func show(_ request: ShowRequest?) {
+        settings?.show(request)
     }
 
     /// `kill`, `pkill` and a development menu app's `Process.terminate()` send SIGTERM, which

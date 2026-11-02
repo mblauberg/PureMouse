@@ -74,14 +74,18 @@ struct EndLabeledSlider: View {
         VStack(spacing: 0) {
             Slider(value: $value, in: range) { Text(title) }
                 .labelsHidden()
-            HStack {
-                Text(low)
-                Spacer(minLength: 8)
-                Text(high)
+            // No words under the ends when there are none to say (Pointer Speed before the mouse
+            // has reported its range).
+            if !low.isEmpty || !high.isEmpty {
+                HStack {
+                    Text(low)
+                    Spacer(minLength: 8)
+                    Text(high)
+                }
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
             }
-            .font(.system(size: 10))
-            .foregroundStyle(.secondary)
-            .accessibilityHidden(true)
         }
     }
 }
