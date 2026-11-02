@@ -46,6 +46,7 @@ launchctl kill HUP gui/$UID/io.github.mblauberg.puremouse
 | `gesture.repeatIntervalMs` | Minimum gap between repeated gestures in one hold, 0–5000. Default 400 |
 | `notifications.lowBattery` | Default true. The menu bar app posts a macOS notification when a mouse's battery falls through 20% and again through 5% (level-only mice: when they report low and critical). Needs the menu bar icon shown; the daemon ignores it. Settings › General switches it; macOS asks for permission the first time |
 | `apps` | Buttons, thumb wheel and smooth scrolling for particular apps ([below](#per-app-settings)) |
+| `devices` | Settings for one model of mouse, over the ones above ([below](#per-device-settings)) |
 | `universalControl.handOff` | While the pointer is on another Mac (Universal Control), hand the wheels and buttons back to macOS so they scroll and click there natively; take them again when the pointer returns. Default true; false keeps PureMouse's behaviour, which does nothing on the other Mac |
 
 A number outside its range is an error: the config is not loaded (on reload, the previous one stays
@@ -64,6 +65,10 @@ in effect) and the log names the field.
 
 `scrollWheel.inverted` and `thumbWheel.inverted` keep their meaning relative to the system's
 natural-scrolling setting.
+
+Smooth scrolling needs the mouse to hand its wheel to PureMouse (HID++ 0x2121, and 0x2150 for a
+thumb wheel). A mouse without it, such as the Signature Plus M750, keeps scrolling natively, and
+the log says so once.
 
 ## Thumb wheel
 
@@ -151,6 +156,42 @@ A per-app key that cannot be per-app (such as `dpi`) and an unknown button are s
 reported in the log; a bad value fails the load as anywhere else. Bundle IDs that differ only in
 case name the same app: the log warns, and the entry last in sorted key order applies.
 
+## Per-device settings
+
+`devices` maps a device key to the settings that differ on that model of mouse. Everything else in
+the file applies to every mouse.
+
+```json
+"dpi": 1600,
+"devices": {
+  "mb03440910000": { "name": "MX Master 3S", "dpi": 1200, "buttons": { "top": "launchpad" } },
+  "pb02c": { "dpi": 1000 }
+}
+```
+
+A device key is `m` plus the 12 hex digits of the model ID the mouse reports, or, for a mouse
+that reports none, `p` plus the 4 hex digits of its product ID. The daemon logs each mouse's key
+when it adopts it (`adopting MX Master 3S pid=0xb034 model=mb03440910000 ...`), and `status.json`
+shows it as `model` ([companion.md](companion.md)). Keys are matched regardless of case. Two mice
+of the same model share a key, and so share its settings. A model ID of all zeros or all `f` is
+never a key.
+
+An entry may set `dpi`, `dpiPresets`, `scrollWheel`, `thumbWheel` (`inverted` too), `smoothScroll`,
+`buttons` and `gesture`, plus a `name` for your own reference, which PureMouse ignores. `apps`,
+`universalControl` and `notifications` stay top level; in an entry they are skipped with a warning.
+
+An entry changes only what it names, as an app entry does: the buttons it lists (a gesture per
+direction), the `scrollWheel`, `thumbWheel`, `smoothScroll` and `gesture` keys it sets, and `dpi`;
+`dpiPresets` replaces the whole list. Precedence is the top level, then `devices.<key>`, then
+`apps.<bundle id>`: a mouse with an entry uses the entry over the top level, and the top-level
+`apps` over that. An app that binds `forward` overrides the entry's `forward` in that app, while
+the entry's `back` still applies there.
+
+A key that is neither form (a typo, or a mouse's name) matches no mouse: the log warns and the entry
+is skipped, though a bad value in it still fails the load. Keys that differ only in case warn, and
+the last one applies. A cycled DPI (`cycleDPI`) is kept on reload unless that mouse's own `dpi` or
+`dpiPresets` changed.
+
 ## Buttons, actions and gestures
 
 **Buttons:** `gesture` (thumb), `back`, `forward`, `top` (behind the wheel), `middle` (wheel
@@ -159,7 +200,9 @@ as `"0x00c4"`. Names apply only when the mouse has that control. **Select by Pre
 `puremouse probe`, finds a control's ID. The shared library also holds a table of display names for
 common mouse controls, apart from these config names (for example 0x00fd is the "DPI button");
 the log and the menu adopt it in later changes. Any control works by its hex ID whether or not it
-has a name.
+has a name. A binding the mouse lacks, or cannot hand to PureMouse, is skipped for that mouse
+(noted once in the log at debug level), so one config can serve mice with different buttons; a
+`devices` entry binds a control for one model only.
 
 The left and right buttons (0x0050 and 0x0051) cannot be bound, globally or per app. Their
 bindings are ignored with a warning; **Select by Pressing** always leaves them clicking normally.

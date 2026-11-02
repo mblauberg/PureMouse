@@ -134,6 +134,7 @@ covered too:
 | MX Master 4 | The same, plus haptic feedback as an action |
 | MX Anywhere 3 / 3S | Buttons, DPI, smooth scrolling, SmartShift and battery |
 | MX Vertical / Lift | Buttons, DPI and battery |
+| Signature Plus M750 | Buttons, DPI and battery |
 
 Bluetooth and Logi Bolt or Unifying receivers are picked up automatically. Using a different
 Logitech mouse? Attaching [`puremouse probe` output](docs/troubleshooting.md#inspecting-a-mouse)

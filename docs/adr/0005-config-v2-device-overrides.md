@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted, not built
+Accepted. The decoder and the daemon apply `devices` (`Config+Devices.swift`,
+`Config.forDevice`); Settings does not write it yet ([ADR 12](0012-multi-device-settings-scopes.md)).
 
 ## Context
 

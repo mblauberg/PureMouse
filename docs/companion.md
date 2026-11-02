@@ -108,7 +108,7 @@ All optional; nil members are left out of the JSON.
 | `devices[].model` | String | The device key used by `devices.<key>` in the config: `m` plus the 12 lowercase hex digits of the 0x0003 model ID when the mouse reports one, else `p` plus the 4-digit lowercase hex product ID (e.g. `pb02c`). Absent when neither is known. Two mice of one model share it |
 | `devices[].unit` | String | The 0x0003 unit ID as 8 lowercase hex digits, when known. Stable for one physical mouse, for per-unit state such as low-battery alerts. Never written to the config |
 | `devices[].kind` | String | A word such as `mouse`, `trackball` or `keyboard`. |
-| `devices[].capabilities` | object | What the mouse reports. Members: `dpi`, `smartShift`, `smoothScroll`, `thumbWheel`, `haptics`, `battery` (each Bool: true has it, false reported not to; absent unknown, e.g. a lookup that failed transiently) and `features` ([String], HID++ feature IDs in hex, for support) |
+| `devices[].capabilities` | object | What the mouse reports. Members: `dpi`, `smartShift`, `smoothScroll`, `thumbWheel`, `haptics`, `battery` (each Bool: true has it, false reported not to; absent unknown, e.g. a lookup that failed transiently) and `features` ([String], HID++ feature IDs in hex, for support; not filled yet). Absent until the mouse's first apply has finished |
 | `devices[].controls[].gestures` | Bool | The control can report raw XY movement. Absent when unknown |
 | `capture.model` | String | The device key (`devices[].model`) of the mouse whose control was pressed |
 
@@ -271,7 +271,26 @@ Choices the contract left open, as the daemon implements them:
   daemon). A capture still listening when the config reloads or the daemon pauses reports
   `cancelled`. A mouse adopted during a capture joins it; one lost during it simply drops out.
   The daemon acts on a capture token once, so rewriting `control.json` with the same token does
-  not restart it.
+  not restart it. With `capture.device`, only mice with that key listen, and only they join when
+  adopted during it; a mouse with no key is reached only by a request without `device`.
+- **Identity.** Read once per adoption (`Identification.read`): the name (0x0005), kind (0x0005
+  getDeviceType), and model and unit IDs (0x0003). A mouse whose 0x0003 answers with an error, or
+  that lacks it, is keyed by its product ID: the interface's for Bluetooth, the slot's wireless
+  product ID on a receiver. A 0x0003 that times out leaves `model` absent rather than guess, and that
+  mouse uses the top-level settings. A model ID of all zeros or all 0xFF counts as absent, as does
+  such a unit ID. The key is in the adoption log line (`model=`). Two mice of one model share a key,
+  so they share `devices.<key>` and are both reached by a `device` request.
+- **Capabilities** come only from lookups apply has already made (`HIDPPDevice.knownPresence`), so
+  building them sends nothing; apply also looks up haptics (0x19B0). A member is true when its
+  feature is present, false when known absent (`smartShift`: both 0x2110 and 0x2111; `battery`:
+  both 0x1004 and 0x1000), and left out when a lookup failed. They are kept across reloads.
+  `controls` lists only divertable, non-virtual controls, and `gestures` follows the control's
+  raw-XY flag. `schema` is 2.
+- **Settings per mouse.** Each session gets `Config.forDevice(model)`, at adoption and on reload. A
+  reload keeps a mouse's live DPI unless its own resolved `dpi` or `dpiPresets` changed. A setting
+  the mouse cannot use is skipped quietly: a bound control it lacks is a debug line once per
+  session, `toggleScrollMode` without SmartShift and smooth scrolling without 0x2121 an info line
+  once per session, and a DPI snapped to the sensor's list is logged once per mouse, not per reload.
 - **Login.** "Hidden" is remembered by a `menu-hidden` file in `Companion.directory`, written by
   `menu off` and removed by `menu on`; `unregister` keeps it. The CLI calls `setsid()` and boots
   the menu agent out last, after removing its plist, because launchd kills the menu job's process

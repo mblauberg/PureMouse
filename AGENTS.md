@@ -208,7 +208,17 @@ one. This file covers how to work on it safely.
 - The wheels are only diverted when PureMouse can post events (Accessibility). Diverting without it
   silences them. Both are diverted when any scope (global or an app) scrolls smoothly; the thumb
   wheel alone when any scope gives it actions (`Session.applyWheels`). Where the scope in effect
-  does not scroll smoothly, the diverted wheel still scrolls, with zero smoothing.
+  does not scroll smoothly, the diverted wheel still scrolls, with zero smoothing. Only wheels the
+  mouse has are taken over: smooth scrolling needs 0x2121 (0x2150 for the thumb wheel), and a mouse
+  without it scrolls natively with one info line per session.
+- Per-device settings (`devices.<key>`, `Config+Devices.swift`) are resolved by the Kit decoder:
+  each entry is decoded on top of the top level, then `apps` on top of that, so precedence is top
+  level, device, app. The key is `m` plus the 0x0003 model ID, else `p` plus the product ID
+  (`Config.deviceKey`, read at adoption by `Identification`; a 0x0003 timeout leaves it nil and the
+  top level applies). The daemon hands each session `config.forDevice(model)` at adoption and on
+  reload; permission decisions cover every scope (`Config.everyScope`, `Daemon.postsEvents`). Nothing
+  is special-cased by model or product ID: a session uses what its mouse reports, and a bound
+  control it lacks is a debug line once per session.
 - Per-app settings (`apps`) are merged onto the global ones by the Kit decoder (`Config+Apps.swift`,
   `Config.AppSettings`); only `buttons`, `thumbWheel` (including `reversed`, not `inverted`) and
   `smoothScroll` are per-app. The app is looked up only when some app sets that section (`Session.appButtons`,
@@ -228,7 +238,8 @@ one. This file covers how to work on it safely.
   replacement session inherits the flag and keeps it until its own apply has set the wheels
   native.
 - Select by pressing (`Control.capture`) diverts every pressable, unbound control
-  (`Session.beginCapture`) for at most `Daemon.captureDuration`; the first press goes to
+  (`Session.beginCapture`) of every mouse, or only those whose key matches `capture.device`
+  (`Daemon.targets`), for at most `Daemon.captureDuration`; the first press goes to
   `onCapture` and performs nothing; a gesture held as capture starts is dropped, so letting it go
   does not click. Every way out (press, timeout, cancel, reload, pause) goes
   through `Daemon.endCapture`, which hands the extra controls back, each independently (one that
@@ -338,8 +349,10 @@ one. This file covers how to work on it safely.
   inherited across reloads; if the mouse answers the list request with an error, the configured
   value is sent unchanged, while a timeout fails the apply so configure retries.
   `cycleDPI` sets `Session.liveDPI`, which overrides `config.dpi` in `apply()`; `Daemon.reload`
-  clears it only when `dpi` or `dpiPresets` changed, and `Control.useConfiguredDPI` clears it on
-  request (`AppModel.setDPI` sends it, since choosing the saved value changes nothing on disk).
+  clears it only when that mouse's resolved `dpi` or `dpiPresets` changed (`Daemon.keepsLiveDPI`),
+  and `Control.useConfiguredDPI` clears it on request, for every mouse or those whose key is
+  `Control.device` (`AppModel.setDPI` sends it, since choosing the saved value changes nothing on
+  disk). A snapped DPI is logged once per mouse (`DeviceState.snapLogged`), not per reload.
 
 ## Extending
 
@@ -354,6 +367,8 @@ one. This file covers how to work on it safely.
   the global value in `Config.decodeApps`, a `sets…` flag, and its lookup at the moment it applies.
   Every config section decodes on a `base` (`init(_:base:)`); a new section takes one, keeps
   its range checks and adds cases to the golden decode test (`ConfigGoldenTests`).
+- Per-device settings: a new per-device section needs a case in `Config.deviceSections` and
+  decoding in `Config.decodeSections`, which the top level and each device entry share.
 - Thumb-wheel actions: `Config.ThumbWheel.presets` (Kit) names action pairs; `ThumbStepper` counts
   rotation into steps (remainder kept, reset at each movement's start), paced per action
   (`ThumbStepper.pacing`: media keys free, shortcuts 50 ms, zoom 40 ms, animated actions 300 ms
