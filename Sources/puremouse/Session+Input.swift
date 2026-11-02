@@ -245,7 +245,7 @@ extension Session {
         }
         do {
             guard let feature = try await dpiFeature(), !state.dpiRefused else { return }
-            let current = if let dpi = state.dpi { dpi } else { try await readDPI(feature) }
+            let current = if let dpi = state.dpi { dpi } else { try await readDPI(feature).x }
             guard let next = Config.nextPreset(config.dpiPresets.map(supportedDPI(near:)), after: current) else { return }
             try await writeDPI(next, feature)
             state.liveDPI = next

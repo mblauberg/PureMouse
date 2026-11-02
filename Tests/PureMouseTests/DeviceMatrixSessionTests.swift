@@ -107,17 +107,24 @@ struct DeviceMatrixSessionTests {
         #expect(log.lines.filter { $0.message.contains("cannot be set") }.count == 1)
     }
 
-    @Test func cyclingDPIAfterARefusalWritesNothing() async throws {
+    /// The 0x2201 writes after the config is applied and the back button cycles the presets once.
+    private func writesAfterCycling(refusing: Bool) async throws -> Int {
         let h = try DaemonHarness(#"{"dpi": 800, "dpiPresets": [800, 2400], "buttons": {"back": "cycleDPI"}}"#)
         defer { h.close() }
         let fake = FakeDevice.mxMaster3S
-        fake.ignoresDPIWrites = true  // keeps its own DPI, as an onboard profile does
+        fake.ignoresDPIWrites = refusing  // keeps its own DPI, as an onboard profile does
         let session = try await h.adopt(fake)
-        #expect(session.status.capabilities?.dpi == false)
+        #expect(session.status.capabilities?.dpi == !refusing)
         fake.emit(0x1B04, params: [0, 0x53])
         fake.emit(0x1B04, params: [0, 0])
         await session.deviceActions.drain()
-        #expect(fake.requests(feature: 0x2201, function: 3).count == 1)
+        return fake.requests(feature: 0x2201, function: 3).count
+    }
+
+    @Test func cyclingDPIAfterARefusalWritesNothing() async throws {
+        // Control: the same press on a mouse that takes the DPI writes once more after the apply.
+        #expect(try await writesAfterCycling(refusing: false) == 2)
+        #expect(try await writesAfterCycling(refusing: true) == 1)
     }
 
     @Test func aMismatchIsNotARefusalWhileTheSupportedListIsUnknown() async throws {
@@ -127,6 +134,92 @@ struct DeviceMatrixSessionTests {
         fake.failures[.init(0x2201, 1)] = .error(2)  // the list cannot be read, so the target is sent as is
         let session = try await h.adopt(fake)
         #expect(session.status.capabilities?.dpi == true)
+    }
+
+    // MARK: 0x2202 lists, axes and refusals
+
+    private static func words(_ values: [UInt16]) -> [UInt8] { values.flatMap { [UInt8($0 >> 8), UInt8($0 & 0xFF)] } }
+
+    @Test func aListSpanningRepliesSetsTheValueNearestToTheConfiguredOne() async throws {
+        let h = try DaemonHarness(#"{"dpi": 990}"#)
+        defer { h.close() }
+        let fake = FakeDevice.superstrike
+        // 100...500 by hundreds, then 600...1000 by 50: the range's upper bound is on the second page.
+        let list = Self.words([100, 200, 300, 400, 500, 600, 0xE032, 1000, 0])
+        fake.extendedDPILists = [0: list, 1: list]
+        let session = try await h.adopt(fake)
+        #expect(fake.dpi == 1000 && session.status.dpi == 1000)
+        #expect(session.status.dpiSteps.last == 1000 && session.status.dpiSteps.count == 14)
+    }
+
+    @Test func axesThatShareNoResolutionMeanNoWriteAndDPIIsNotControllable() async throws {
+        let h = try DaemonHarness(#"{"dpi": 800}"#)
+        defer { h.close() }
+        let fake = FakeDevice.superstrike
+        fake.extendedDPILists = [0: Self.words([100, 200, 400, 0]), 1: Self.words([300, 500, 0])]
+        let log = CapturedLog()
+        let session = try await Log.$testOutput.withValue(.lines { log.append($0) }) {
+            let session = try await h.adopt(fake)
+            try await session.apply()  // nothing is read or written again, nothing said again
+            return session
+        }
+        #expect(fake.requests(feature: 0x2202, function: 6).isEmpty)
+        #expect(session.status.capabilities?.dpi == false)
+        #expect(log.lines.filter { $0.message.contains("share no resolution") }.count == 1)
+        // One reply per axis, read once: the second apply does not read them again.
+        #expect(fake.requests(feature: 0x2202, function: 2).count == 2)
+    }
+
+    @Test func aMouseThatTakesTheXAxisAndKeepsYIsRefused() async throws {
+        let log = CapturedLog()
+        let h = try DaemonHarness(#"{"dpi": 1600}"#)
+        defer { h.close() }
+        let fake = FakeDevice.superstrike
+        fake.ignoresDPIYWrites = true
+        let session = try await Log.$testOutput.withValue(.lines { log.append($0) }) {
+            let session = try await h.adopt(fake)
+            try await session.apply()
+            return session
+        }
+        #expect(fake.dpi == 1600)  // X took it
+        #expect(session.status.capabilities?.dpi == false)
+        #expect(fake.requests(feature: 0x2202, function: 6).count == 1)  // tried once, never again
+        #expect(log.lines.filter { $0.message.contains("cannot be set") && $0.message.contains("1600 by 800") }.count == 1)
+    }
+
+    @Test func aMouseThatTakesBothAxesIsNotRefused() async throws {
+        let h = try DaemonHarness(#"{"dpi": 1600}"#)
+        defer { h.close() }
+        let fake = FakeDevice.superstrike
+        let session = try await h.adopt(fake)
+        #expect(session.status.capabilities?.dpi == true && session.status.dpi == 1600)
+    }
+
+    // MARK: A refusal is tried again when the DPI settings change
+
+    private func refusedAfterReload(to json: String) async throws -> (refused: Bool, writes: Int) {
+        let h = try DaemonHarness(#"{"dpi": 800, "dpiPresets": [800, 1600]}"#)
+        defer { h.close() }
+        let fake = FakeDevice.g305  // keeps its own DPI on a write
+        let first = try await h.adopt(fake)
+        #expect(first.status.capabilities?.dpi == false)
+        fake.ignoresDPIWrites = false  // now it would take a write
+        try h.reload(json)
+        var session = first
+        try await eventually { session = h.daemon.sessions.values.first ?? first; return session !== first && !session.isConfiguring }
+        return (session.status.capabilities?.dpi == false, fake.requests(feature: 0x2201, function: 3).count)
+    }
+
+    @Test func aChangedDPIOrPresetListTriesAMouseThatRefusedAgain() async throws {
+        let changedDPI = try await refusedAfterReload(to: #"{"dpi": 1200, "dpiPresets": [800, 1600]}"#)
+        #expect(!changedDPI.refused && changedDPI.writes == 2)
+        let changedPresets = try await refusedAfterReload(to: #"{"dpi": 800, "dpiPresets": [800, 3200]}"#)
+        #expect(!changedPresets.refused)
+    }
+
+    @Test func aReloadThatLeavesDPIAloneKeepsTheRefusal() async throws {
+        let unrelated = try await refusedAfterReload(to: #"{"dpi": 800, "dpiPresets": [800, 1600], "smoothScroll": {}}"#)
+        #expect(unrelated.refused && unrelated.writes == 1)
     }
 
     // MARK: Battery by voltage
@@ -139,6 +232,17 @@ struct DeviceMatrixSessionTests {
         try await h.session.apply()
         let battery = try #require(h.session.status.battery)
         #expect(battery.percent == nil)
+        #expect(battery.level == .full && !battery.charging)  // 4088 mV, the fixture's reading
         #expect(h.session.status.capabilities?.battery == true)
+    }
+
+    @Test func theVoltageDecidesTheLevel() async throws {
+        let fake = FakeDevice.m750
+        fake.features = fake.features.mapValues { $0 == 0x1004 ? 0x1001 : $0 }
+        fake.responses[.init(0x1001, 0)] = [0x0E, 0x74, 0]  // 3700 mV
+        let h = try await SessionHarness(fake, identify: true)
+        defer { h.close() }
+        try await h.session.apply()
+        #expect(h.session.status.battery?.level == .low)
     }
 }

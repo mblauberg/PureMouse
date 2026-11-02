@@ -32,7 +32,7 @@ extension Session {
     /// list, and reads back the one in effect. Runs on `deviceActions`.
     func applyDPI() async throws {
         guard let feature = try await dpiFeature() else { return }
-        try await readResolutions(feature)
+        if !state.dpiRefused { try await readResolutions(feature) }
         if let target = state.liveDPI ?? config.dpi, !state.dpiRefused {
             let dpi = supportedDPI(near: target)
             try await writeDPI(dpi, feature)
@@ -56,30 +56,42 @@ extension Session {
         }
     }
 
-    /// Reads the resolution in effect after a write of `dpi`. One that differs means the mouse did
-    /// not take it, as with an onboard profile (0x8100, which is never written): its DPI is then
-    /// not controllable, said once and not retried. Judged only against a known list of supported
-    /// resolutions, as `dpi` is then one the sensor accepts; without it a sensor's rounding would
-    /// read as a refusal.
+    /// Reads the resolution in effect after a write of `dpi`; every axis written must show it. One
+    /// that differs means the mouse did not take it, as with an onboard profile (0x8100, which is
+    /// never written), or took it on one axis only: its DPI is then not controllable, said once
+    /// and not retried. Judged only against a known list of supported resolutions, as `dpi` is
+    /// then one the sensor accepts; without it a sensor's rounding would read as a refusal.
     func confirmDPI(_ dpi: Int, _ feature: DPIFeature) async throws {
         let current = try await readDPI(feature)
-        guard current != dpi, state.resolutions != nil else { return }
+        guard !current.shows(dpi), state.resolutions != nil else { return }
         state.dpiRefused = true
         Log.info("\(name): dpi stays \(current) after setting \(dpi); its DPI cannot be set from here")
         changed()
     }
 
+    /// What the sensor reads back: the X axis, and the Y axis where it has its own.
+    struct DPIReading: CustomStringConvertible {
+        let x: Int
+        let y: Int?
+
+        func shows(_ dpi: Int) -> Bool { x == dpi && (y ?? dpi) == dpi }
+        var description: String { y.map { "\(x) by \($0)" } ?? "\(x)" }
+    }
+
     /// Reads the resolution in effect, for the status and the gesture distance, which is
-    /// physical and so scales with it.
+    /// physical and so scales with it (that of the X axis).
     @discardableResult
-    func readDPI(_ feature: DPIFeature) async throws -> Int {
-        let current: Int
+    func readDPI(_ feature: DPIFeature) async throws -> DPIReading {
+        let current: DPIReading
         switch feature {
-        case .adjustable: current = try await AdjustableDPI.get(device)
-        case .extended: current = try await ExtendedDPI.get(device).x
+        case .adjustable:
+            current = DPIReading(x: try await AdjustableDPI.get(device), y: nil)
+        case .extended(let capabilities):
+            let reading = try await ExtendedDPI.get(device)
+            current = DPIReading(x: reading.x, y: capabilities.separateY ? reading.y : nil)
         }
-        state.dpi = current
-        recognizer.threshold = GestureRecognizer.counts(millimetres: config.gesture.distanceMm, dpi: current)
+        state.dpi = current.x
+        recognizer.threshold = GestureRecognizer.counts(millimetres: config.gesture.distanceMm, dpi: current.x)
         return current
     }
 
@@ -93,6 +105,11 @@ extension Session {
             case .adjustable: state.resolutions = try await AdjustableDPI.resolutions(device)
             case .extended(let capabilities): state.resolutions = try await ExtendedDPI.resolutions(device, capabilities: capabilities)
             }
+        } catch ExtendedDPI.ListError.noCommonResolution {
+            // Definitive, unlike a list that cannot be read: no one value suits both axes.
+            state.dpiRefused = true
+            Log.error("\(name): its X and Y axes share no resolution; its DPI cannot be set from here")
+            changed()
         } catch where Self.isDeviceAnswer(error) {
             Log.error("\(name): reading supported DPI failed: \(error); DPI is set as configured")
         }

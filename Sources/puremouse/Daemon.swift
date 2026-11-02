@@ -740,7 +740,11 @@ final class Daemon {
     private func replace(_ old: Session, at key: Key, identity: Identification, keepingLiveDPI: Bool) {
         old.close()
         var inherited = old.inheritance
-        if !keepingLiveDPI { inherited.state.liveDPI = nil }
+        // A changed `dpi` or `dpiPresets` is a new request, so a mouse that refused DPI is tried again.
+        if !keepingLiveDPI {
+            inherited.state.liveDPI = nil
+            inherited.state.dpiRefused = false
+        }
         inherited.away = handingOff
         inherited.diversionAfter = old.diversionEnd
         add(Session(device: old.device, name: old.name, identity: identity, id: old.id,
