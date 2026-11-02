@@ -1,5 +1,6 @@
 #if DEBUG || DEVHOOKS
 import AppKit
+import PureMouseAppSupport
 import PureMouseKit
 import notify
 
@@ -79,17 +80,17 @@ private enum Rig {
             MainActor.assumeIsolated { handle(app: app) }
         }
         let ready = "status \(Companion.statusNotification)\nrig \(bell)\npid \(getpid())\n"
-        try? Data(ready.utf8).write(to: Companion.directory.appending(path: "rig-ready"), options: .atomic)
+        try? Data(ready.utf8).write(to: Locations.live.companion.appending(path: "rig-ready"), options: .atomic)
     }
 
     private static func handle(app: AppController) {
-        guard let text = try? String(contentsOf: Companion.directory.appending(path: "rig-command"), encoding: .utf8)
+        guard let text = try? String(contentsOf: Locations.live.companion.appending(path: "rig-command"), encoding: .utf8)
         else { return }
         let words = text.split(whereSeparator: \.isWhitespace).map(String.init)
         guard words.count == 2 else { return }
         let (number, verb) = (words[0], words[1])
         func done() {
-            try? Data(number.utf8).write(to: Companion.directory.appending(path: "rig-ack"), options: .atomic)
+            try? Data(number.utf8).write(to: Locations.live.companion.appending(path: "rig-ack"), options: .atomic)
         }
         switch verb {
         case "menu":

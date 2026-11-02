@@ -73,7 +73,7 @@ A budgets file without a whole-number limit for `fresh`, `open-1`, `open-10` and
 is also exit 2. `scripts/measure-bare-appkit.sh` measures the bare AppKit comparison.
 
 The rig is isolated from the installed app. It builds the release menu with `-DDEVHOOKS` into
-`.build/rig`, wraps it, with the function that `build-app.sh` uses for the shipped menu app (`scripts/menu-bundle.zsh`), in a bundle of its own (`io.github.mblauberg.puremouse.menu.rig`) and starts
+`.build/rig`, wraps it, with the function that assembles the shipped menu app (`make_menu_bundle` in `scripts/lib.zsh`), in a bundle of its own (`io.github.mblauberg.puremouse.menu.rig`) and starts
 it against a throwaway companion directory (`PUREMOUSE_COMPANION_DIR`, `PUREMOUSE_CONFIG` and
 `PUREMOUSE_DAEMON` set), with a sleeping process standing in for the daemon and a one-mouse
 `status.json`. A companion directory also renames the doorbells (a short hash of it is appended,

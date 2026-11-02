@@ -91,7 +91,7 @@ private func fullStatus() -> Status {
 
 @Test(.enabled(if: Companion.overrideDirectory == nil))
 func doorbellsKeepTheirNamesWithoutACompanionDirectory() {
-    // So an old build and a new one still pair.
+    // Unset leaves the shipped names.
     #expect(Companion.doorbell("io.github.mblauberg.puremouse.status", directory: nil) == "io.github.mblauberg.puremouse.status")
     // This test run has no fixture directory, so the shipped names are the plain ones.
     #expect(Companion.statusNotification == "io.github.mblauberg.puremouse.status")

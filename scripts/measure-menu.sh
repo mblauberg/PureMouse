@@ -26,7 +26,7 @@ set -euo pipefail
 zmodload zsh/datetime
 # An unexpected command failure is a harness error (2), not a budget failure (1).
 TRAPZERR() { exit 2 }
-source "${0:A:h}/menu-bundle.zsh"
+source "${0:A:h}/lib.zsh"
 cd "${0:A:h}/.."
 
 runs=5
@@ -59,8 +59,7 @@ while (( $# )); do
 done
 [[ $runs == <-> && $runs -ge 1 ]] || { print -u2 "--runs needs a number"; exit 2 }
 
-menu_label=io.github.mblauberg.puremouse.menu
-daemon_label=io.github.mblauberg.puremouse
+daemon_label=$label
 rig_label=$menu_label.rig
 scratch=$PWD/.build/rig
 app=$scratch/PureMouse\ Rig.app
@@ -114,7 +113,7 @@ bin=$(swift build -c release --product PureMouseMenu --scratch-path $scratch/bui
 [[ -x $bin/PureMouseMenu ]] || fail "no built menu at $bin (run without --no-build)"
 
 rm -rf $app
-make_menu_bundle $bin/PureMouseMenu $rig_label "PureMouse Rig" rig 14.0 $app
+make_menu_bundle $bin/PureMouseMenu $app $rig_label rig 0
 codesign --force --sign - --identifier $rig_label $app >/dev/null 2>&1 || fail "could not sign the rig bundle"
 
 # The Settings helper, once it exists, is built and measured too.
