@@ -59,7 +59,7 @@ extension Session {
     private func scanStaleDiversions() async throws {
         guard needsDiversionScan else { return }
         for cid in controls.keys.sorted() where controls[cid]?.isDivertable == true
-            && bound[cid] == nil && ![0x0050, 0x0051].contains(cid) {
+            && bound[cid] == nil && !Config.reservedControls.contains(cid) {
             try ensureOpen()
             let reporting = try await ReprogControls.reporting(device, cid: cid)
             try ensureOpen()

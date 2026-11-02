@@ -135,14 +135,17 @@ final class Session {
         self.environment = environment
         let controls = Dictionary(controls.map { ($0.cid, $0) }, uniquingKeysWith: { a, _ in a })
         self.controls = controls
-        pressable = controls.values.filter { $0.isDivertable && !$0.isVirtual }.map(\.cid).sorted()
+        pressable = controls.values.filter {
+            $0.isDivertable && !$0.isVirtual && !Config.reservedControls.contains($0.cid)
+        }.map(\.cid).sorted()
             .map { Status.Device.Control(cid: $0, name: Config.Button(cid: $0)?.rawValue) }
         let global = config.global
         self.global = global
         let scopes = [global] + Array(config.apps.values)
         var bound: [UInt16: Bool] = [:]
         for scope in scopes {
-            for (cid, binding) in scope.bindings where controls[cid]?.isDivertable == true {
+            for (cid, binding) in scope.bindings where controls[cid]?.isDivertable == true
+                && !Config.reservedControls.contains(cid) {
                 let isGesture = if case .gesture = binding { true } else { false }
                 bound[cid] = (bound[cid] ?? false) || (isGesture && controls[cid]?.supportsRawXY == true)
             }
