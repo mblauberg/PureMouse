@@ -1,4 +1,5 @@
 import Foundation
+import PureMouseKit
 
 /// Live defaults preserve the daemon's permission checks and set the reapply schedule. Tests can
 /// exercise device behaviour without event-posting permission or the live waits: a test that sets
@@ -21,6 +22,26 @@ struct SessionEnvironment {
     var attemptTimeout: Duration?
     /// The wall clock, for the time settings were applied.
     var date: () -> Date = { Date() }
+    /// Arms a one-shot deadline for one press, a hold or a double-click wait (`Session.press`),
+    /// and returns its handle; the press's release or the drop of every press cancels it, so none
+    /// is armed while no button is down or waiting. A test supplies a clock it turns by hand.
+    var deadline: @MainActor (Duration, @escaping @MainActor () -> Void) -> Deadline = { delay, fire in
+        let task = Task { @MainActor in
+            do {
+                try await Task.sleep(for: delay)
+                fire()
+            } catch {}
+        }
+        return Deadline { task.cancel() }
+    }
+    /// Performs an action that only touches the system (`SystemActions`); a test records them.
+    var performSystem: @MainActor (Action) -> Void = { SystemActions.perform($0) }
+    /// The buttons a session holds down and the clicks it posts for them; a test records the posts.
+    var heldButtons: () -> HeldButtons = { HeldButtons() }
+    /// The system's double-click interval in seconds, read when a click starts to wait for a second.
+    var doubleClickSeconds: () -> Double? = {
+        UserDefaults.standard.object(forKey: Config.systemDoubleClickKey) as? Double
+    }
 
     /// Three attempts, `retryDelay` apart, each request of which waits at most `attemptTimeout`
     /// (per request, not per attempt). A mouse answering from any moment in the window has its
@@ -35,5 +56,18 @@ struct SessionEnvironment {
     static var live: Self {
         Self(canPostEvents: Permissions.current.contains(.accessibility),
              configureRetryDelay: reapplyRetryDelay, attemptTimeout: reapplyAttemptTimeout)
+    }
+}
+
+/// A deadline armed by `SessionEnvironment.deadline`; cancelling one that has fired does nothing.
+@MainActor
+final class Deadline {
+    private var onCancel: (() -> Void)?
+
+    init(cancel: @escaping () -> Void) { onCancel = cancel }
+
+    func cancel() {
+        onCancel?()
+        onCancel = nil
     }
 }

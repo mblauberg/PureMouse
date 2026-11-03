@@ -20,6 +20,18 @@ enum NativeButton {
     @discardableResult
     static func postMiddle(down: Bool) -> Bool { post(number: 2, down: down) }
 
+    /// Posts the left button's press or release at the pointer, for Drag Lock: while it is down,
+    /// moving the mouse drags.
+    @discardableResult
+    static func postLeft(down: Bool) -> Bool {
+        let location = CGEvent(source: nil)?.location ?? .zero
+        guard let event = CGEvent(mouseEventSource: CGEventSource(stateID: .hidSystemState),
+                                  mouseType: down ? .leftMouseDown : .leftMouseUp,
+                                  mouseCursorPosition: location, mouseButton: .left) else { return false }
+        event.post(tap: .cghidEventTap)
+        return true
+    }
+
     /// Posts the button's press or release at the pointer. Returns false for a control without
     /// a click.
     @discardableResult
@@ -43,21 +55,36 @@ enum NativeButton {
 
 /// The buttons a session holds down: the controls last reported pressed, the gesture button
 /// with the gesture it was bound to when pressed, native clicks posted for buttons bound
-/// only in other apps, and middle clicks held down for buttons bound to Middle Click. `drop` lets
-/// go of all of it, posting the native releases, whenever the mouse's own releases may never
-/// arrive: link down, reconnect, reload, pause, quit.
+/// only in other apps, middle clicks held down for buttons bound to Middle Click, and the left
+/// button Drag Lock holds. `drop` lets go of all of it, posting the releases, whenever the
+/// mouse's own releases may never arrive: link down, reconnect, reload, pause, quit, a hand-off.
 struct HeldButtons {
     private(set) var pressed: [UInt16] = []
     private(set) var gesture: (cid: UInt16, gesture: Config.Binding.Gesture)?
     private(set) var native: Set<UInt16> = []
     private(set) var middle: Set<UInt16> = []
+    /// Drag Lock has the left button down.
+    private(set) var dragging = false
     private let post: (UInt16, Bool) -> Bool
     private let postMiddle: (Bool) -> Bool
+    private let postLeft: (Bool) -> Bool
 
     init(post: @escaping (UInt16, Bool) -> Bool = { NativeButton.post($0, down: $1) },
-         postMiddle: @escaping (Bool) -> Bool = { NativeButton.postMiddle(down: $0) }) {
+         postMiddle: @escaping (Bool) -> Bool = { NativeButton.postMiddle(down: $0) },
+         postLeft: @escaping (Bool) -> Bool = { NativeButton.postLeft(down: $0) }) {
         self.post = post
         self.postMiddle = postMiddle
+        self.postLeft = postLeft
+    }
+
+    /// Drag Lock: presses the left button, or lets go of the one it pressed.
+    mutating func toggleDragLock() {
+        if dragging {
+            _ = postLeft(false)
+            dragging = false
+        } else {
+            dragging = postLeft(true)
+        }
     }
 
     /// Takes the controls now down; returns those newly pressed and those let go.
@@ -111,6 +138,10 @@ struct HeldButtons {
         if !middle.isEmpty {
             _ = postMiddle(false)
             middle = []
+        }
+        if dragging {
+            _ = postLeft(false)
+            dragging = false
         }
         pressed = []
         gesture = nil
