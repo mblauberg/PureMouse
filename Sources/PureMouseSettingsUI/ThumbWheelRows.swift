@@ -111,7 +111,8 @@ struct ThumbWheelRows: View {
     }
 
     private var resolvedPairs: [(id: String, label: String, left: ButtonAction, right: ButtonAction)] {
-        appPackPairs.map { (id: $0.id, label: $0.label, left: $0.left.buttonAction, right: $0.right.buttonAction) }
+        guard let app = appBundleID else { return [] }
+        return ActionPackCatalog.shared.resolvedThumbWheelPairs(for: app)
     }
 
     private var menuOptions: [ThumbWheelChoice] {

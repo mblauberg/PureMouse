@@ -28,6 +28,7 @@ stand_in_app() {
             -output $dir/bin/$(component_executable $component) /usr/bin/true 2>/dev/null
     done
     assemble_bundle $dir/bin $dir/PureMouse.app $version 42 >/dev/null
+    touch "$(component_path $dir/PureMouse.app "$(settings_component)")/Contents/Resources/ActionPacks.json"
     print -r -- $dir/PureMouse.app
 }
 
@@ -80,6 +81,7 @@ for component in \$components; do
         -output .build/stub/\$(component_executable \$component) /usr/bin/true 2>/dev/null
 done
 assemble_bundle .build/stub .build/app/PureMouse.app \$version 1
+touch "\$(component_path .build/app/PureMouse.app "\$(settings_component)")/Contents/Resources/ActionPacks.json"
 touch .build/app/PureMouse.app/Contents/Resources/NEW
 scripts/sign-bundle.sh .build/app/PureMouse.app --identity - 2>/dev/null
 if [[ '$mode' == wrong-identifier ]]; then

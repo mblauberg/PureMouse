@@ -14,13 +14,16 @@ struct PickerEntry: Identifiable, Equatable {
     let kind: Kind
     /// An SF Symbol shown before the label.
     var symbol: String?
+    /// The shortcut's glyphs, trailing the row (a pack action's).
     var shortcutText: String?
-    var helpText: String?
+    /// Under the label, in secondary text: what to know before choosing (a pack action's keymap note).
+    var note: String?
+    /// The app's pack action this entry is: searched with the catalogue's own matcher.
+    var packAction: ActionPackEntry?
+    /// The pack's app name, the section its actions sit in.
     var appName: String?
-    var category: String?
-    var keywords: [String]?
-    var shortcutWords: String?
-    var isPackAction: Bool = false
+
+    var isPackAction: Bool { packAction != nil }
 
     /// The picker's entries, in order. Gesture directions get neither Mouse Default nor Hold and
     /// Move. On a mouse or in an app, `inherited` (what applies elsewhere, and where from) adds the
@@ -45,27 +48,13 @@ struct PickerEntry: Identifiable, Equatable {
         entries.append(PickerEntry(id: "none", label: "Do Nothing", group: nil, kind: .set(.named("none")),
                                    symbol: ActionCatalog.symbol(for: "none")))
 
-        // App-first: on an app's page, that app's actions follow the top three entries
+        // On an app's page, that app's pack follows the top entries, in a section named for the app.
         if let app, let pack = ActionPackCatalog.shared.pack(for: app) {
             for action in pack.actions {
-                let shortcutText = Shortcut.display(action.payload)
-                let spoken = Shortcut.spoken(action.payload)
-                let shortcutWords = spoken + " " + action.payload.replacingOccurrences(of: "+", with: " ")
-                let groupTitle = "\(pack.name)'s Actions: \(action.category)"
                 entries.append(PickerEntry(
-                    id: action.id,
-                    label: action.label,
-                    detail: nil,
-                    group: groupTitle,
-                    kind: .set(action.buttonAction),
-                    symbol: packSymbol(for: action),
-                    shortcutText: shortcutText,
-                    helpText: action.keymapNote,
-                    appName: pack.name,
-                    category: action.category,
-                    keywords: action.keywords,
-                    shortcutWords: shortcutWords,
-                    isPackAction: true
+                    id: action.id, label: action.label, group: pack.name, kind: .set(action.buttonAction),
+                    symbol: action.symbol ?? "app", shortcutText: Shortcut.display(action.payload),
+                    note: action.keymapNote, packAction: action, appName: pack.name
                 ))
             }
         }
@@ -93,49 +82,6 @@ struct PickerEntry: Identifiable, Equatable {
         return entries
     }
 
-    private static func packSymbol(for action: ActionPackEntry) -> String {
-        switch action.category {
-        case "Meeting":
-            if action.id.contains("Audio") || action.id.contains("Microphone") || action.id.contains("mute") {
-                return "mic"
-            }
-            if action.id.contains("video") || action.id.contains("Camera") {
-                return "video"
-            }
-            if action.id.contains("Hand") {
-                return "hand.raised"
-            }
-            if action.id.contains("Share") {
-                return "display"
-            }
-            if action.id.contains("Chat") {
-                return "bubble.left"
-            }
-            if action.id.contains("participants") {
-                return "person.2"
-            }
-            return "video"
-        case "Tools":
-            return action.id.contains("Brush") ? "paintbrush" : "wrench"
-        case "Editing", "Edit":
-            return action.id.contains("blade") ? "scissors" : "pencil"
-        case "View", "Slide Show":
-            return "eye"
-        case "Tabs":
-            return "square.on.square"
-        case "Navigation":
-            return "arrow.right"
-        case "Formatting", "Alignment":
-            return "text.alignleft"
-        case "Insert":
-            return "plus.circle"
-        case "Folding":
-            return "chevron.up.chevron.down"
-        default:
-            return "app"
-        }
-    }
-
     var isHaptic: Bool { group == ActionCatalog.hapticGroup }
 
     /// Whether a mouse or an app may choose Mouse Default for the button `key`: only where the mouse
@@ -149,7 +95,8 @@ struct PickerEntry: Identifiable, Equatable {
     }
 
     func matches(_ action: ButtonAction) -> Bool {
-        switch (kind, action) {
+        if let packAction { return packAction.matches(action) }
+        return switch (kind, action) {
         case (.set(let mine), _): mine == action
         case (.shortcut, .keys), (.command, .run), (.gesture, .gesture): true
         default: false
@@ -160,22 +107,16 @@ struct PickerEntry: Identifiable, Equatable {
     static func searchTerm(_ query: String) -> String { query.trimmingCharacters(in: .whitespaces) }
 
     func matchesQuery(_ query: String) -> Bool {
-        let q = Self.searchTerm(query)
-        guard !q.isEmpty else { return true }
-        if label.localizedStandardContains(q) { return true }
-        if let group, group.localizedStandardContains(q) { return true }
-        if let category, category.localizedStandardContains(q) { return true }
-        if let appName, appName.localizedStandardContains(q) { return true }
-        if let keywords, keywords.contains(where: { $0.localizedStandardContains(q) || q.localizedStandardContains($0) }) { return true }
-        if let shortcutWords, shortcutWords.localizedStandardContains(q) { return true }
-        if let shortcutText, shortcutText.localizedStandardContains(q) { return true }
-        return false
+        let query = Self.searchTerm(query)
+        if label.localizedStandardContains(query) || (group?.localizedStandardContains(query) ?? false) { return true }
+        guard let packAction else { return false }
+        return ActionPackCatalog.matches(action: packAction, query: query, appName: appName ?? "")
     }
 
     static func filter(_ entries: [PickerEntry], query: String) -> [PickerEntry] {
-        let q = searchTerm(query)
-        guard !q.isEmpty else { return entries }
-        return entries.filter { $0.matchesQuery(q) }
+        let query = searchTerm(query)
+        guard !query.isEmpty else { return entries }
+        return entries.filter { $0.matchesQuery(query) }
     }
 }
 
@@ -209,8 +150,11 @@ enum PickerItem: Identifiable, Equatable {
         }
     }
 
-    /// The rows for a search or browse: sections over six rows fold to five plus Show All (N);
-    /// search ignores folding; in Mouse scope, pack-only matches show the hint.
+    /// The rows for a search or browse. The haptic entries fold into their group's row, which is
+    /// open while `hapticsOpen` or while the search matches one of them. The app's own pack section
+    /// folds to five rows and "Show All (N)" when it has more than six, unless searching or in
+    /// `expandedSections`. In Mouse scope (`app == nil`) a search that finds nothing says which
+    /// apps' packs have it.
     static func visible(
         _ entries: [PickerEntry],
         query: String,
@@ -218,86 +162,49 @@ enum PickerItem: Identifiable, Equatable {
         expandedSections: Set<String> = [],
         app: String? = nil
     ) -> [PickerItem] {
-        let queryTerm = PickerEntry.searchTerm(query)
-        let searching = !queryTerm.isEmpty
-
-        if searching {
-            let filtered = entries.filter { $0.matchesQuery(queryTerm) }
-            let sorted = filtered.sorted { a, b in
-                if a.isPackAction != b.isPackAction {
-                    return a.isPackAction && !b.isPackAction
-                }
-                return false
-            }
-            var items: [PickerItem] = sorted.map { entry in
-                var e = entry
-                if let cat = entry.category {
-                    e.detail = cat
-                }
-                return .entry(e)
-            }
-            if app == nil && items.isEmpty {
-                let matchingApps = ActionPackCatalog.shared.appsMatchingSearch(queryTerm)
-                if !matchingApps.isEmpty {
-                    let phrase: String
-                    if matchingApps.count == 1 {
-                        phrase = matchingApps[0]
-                    } else if matchingApps.count == 2 {
-                        phrase = "\(matchingApps[0]) and \(matchingApps[1])"
-                    } else {
-                        let prefix = matchingApps.dropLast().joined(separator: ", ")
-                        phrase = "\(prefix) and \(matchingApps.last!)"
-                    }
-                    items.append(.packHint("Also in \(phrase). Choose them on the app's page."))
-                }
-            }
-            return items
-        }
-
+        let searching = !PickerEntry.searchTerm(query).isEmpty
+        let expanded = hapticsOpen || searching
+        let packCounts = Dictionary(grouping: entries.filter(\.isPackAction), by: \.group).mapValues(\.count)
+        var shown: [String?: Int] = [:]
         var items: [PickerItem] = []
-        let expanded = hapticsOpen
-        var grouped: [(title: String?, entries: [PickerEntry])] = []
-
-        for entry in entries {
-            if entry.isHaptic { continue }
-            if let last = grouped.last, last.title == entry.group {
-                grouped[grouped.count - 1].entries.append(entry)
+        for entry in PickerEntry.filter(entries, query: query) {
+            if entry.isHaptic {
+                if !items.contains(.hapticGroup(expanded: expanded)) { items.append(.hapticGroup(expanded: expanded)) }
+                if expanded { items.append(.entry(entry)) }
+            } else if entry.isPackAction, !searching, let section = entry.group,
+                      packCounts[section, default: 0] > foldThreshold, !expandedSections.contains(section) {
+                let count = shown[section, default: 0]
+                shown[section] = count + 1
+                if count < foldedRows {
+                    items.append(.entry(entry))
+                } else if count == foldedRows {
+                    items.append(.showAll(section: section, count: packCounts[section, default: 0]))
+                }
             } else {
-                grouped.append((entry.group, [entry]))
+                var entry = entry
+                // A search shows where a pack action lives, since its section is not always in view.
+                if searching, entry.isPackAction { entry.detail = entry.packAction?.category }
+                items.append(.entry(entry))
             }
         }
-
-        for group in grouped {
-            let sectionName = group.title ?? ""
-            let count = group.entries.count
-            let isCustom = sectionName == "Custom"
-            let threshold = isCustom ? 5 : 6
-            let isFolded = count > threshold && !expandedSections.contains(sectionName)
-
-            if isFolded {
-                for entry in group.entries.prefix(5) {
-                    items.append(.entry(entry))
-                }
-                items.append(.showAll(section: sectionName, count: count))
-            } else {
-                for entry in group.entries {
-                    items.append(.entry(entry))
-                }
+        if searching, app == nil, items.isEmpty {
+            let apps = ActionPackCatalog.shared.appsMatchingSearch(PickerEntry.searchTerm(query))
+            if !apps.isEmpty {
+                items.append(.packHint("Also in \(ListFormatter.localizedString(byJoining: apps)). Choose them on the app's page."))
             }
         }
-
-        let hapticEntries = entries.filter(\.isHaptic)
-        if !hapticEntries.isEmpty {
-            items.append(.hapticGroup(expanded: expanded))
-            if expanded {
-                for entry in hapticEntries {
-                    items.append(.entry(entry))
-                }
-            }
-        }
-
         return items
     }
+
+    /// The pack sections to start open: the one whose action is the current binding, so its
+    /// checkmark is in view.
+    static func sectionsHolding(_ current: ButtonAction, in entries: [PickerEntry]) -> Set<String> {
+        Set(entries.filter { $0.isPackAction && $0.matches(current) }.compactMap(\.group))
+    }
+
+    /// A section with more rows than this folds to `foldedRows` and Show All.
+    static let foldThreshold = 6
+    static let foldedRows = 5
 
     /// The group starts open when the current action is one of its waveforms.
     static func opensHaptics(for current: ButtonAction) -> Bool {
@@ -320,7 +227,7 @@ struct ActionPicker: View {
     @State private var query = ""
     @State private var highlighted: String?
     @State private var hapticsOpen: Bool
-    @State private var expandedSections: Set<String> = []
+    @State private var expandedSections: Set<String>
 
     init(current: ButtonAction, entries: [PickerEntry], app: String? = nil, focusSearch: Bool = false, choose: @escaping (PickerEntry) -> Void) {
         self.current = current
@@ -329,17 +236,15 @@ struct ActionPicker: View {
         self.focusSearch = focusSearch
         self.choose = choose
         _hapticsOpen = State(initialValue: PickerItem.opensHaptics(for: current))
+        _expandedSections = State(initialValue: PickerItem.sectionsHolding(current, in: entries))
     }
 
     private var visible: [PickerItem] {
         PickerItem.visible(entries, query: query, hapticsOpen: hapticsOpen, expandedSections: expandedSections, app: app)
     }
 
-    /// Consecutive rows under one header. Search results are flat.
+    /// Consecutive rows under one header.
     private var sections: [(title: String?, items: [PickerItem])] {
-        if !PickerEntry.searchTerm(query).isEmpty {
-            return [(nil, visible)]
-        }
         var sections: [(title: String?, items: [PickerItem])] = []
         for item in visible {
             if let last = sections.last, last.title == item.section {
@@ -349,10 +254,6 @@ struct ActionPicker: View {
             }
         }
         return sections
-    }
-
-    nonisolated static func matchesPackAction(_ action: ActionPackEntry, query: String, appName: String) -> Bool {
-        ActionPackCatalog.matches(action: action, query: query, appName: appName)
     }
 
     var body: some View {
@@ -485,9 +386,12 @@ private struct PickerRow: View {
                 .opacity(checked ? 1 : 0)
                 .accessibilityHidden(true)
             Label {
-                HStack(spacing: 4) {
-                    Text(entry.label)
-                    if let detail = entry.detail { Text(detail).foregroundStyle(.secondary) }
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 4) {
+                        Text(entry.label)
+                        if let detail = entry.detail { Text(detail).foregroundStyle(.secondary) }
+                    }
+                    if let note = entry.note { Text(note).font(.caption).foregroundStyle(.secondary) }
                 }
             } icon: {
                 Image(systemName: entry.symbol ?? "circle")
@@ -500,7 +404,6 @@ private struct PickerRow: View {
             }
         }
         .padding(.leading, entry.isHaptic ? 12 : 0)
-        .help(entry.helpText ?? "")
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(checked ? .isSelected : [])
     }
@@ -709,14 +612,13 @@ struct ActionButton: View {
 
     /// The tooltip: what a shortcut presses or a command runs, shortened to `tooltipLimit`.
     static func tooltip(for action: ButtonAction, in app: String? = nil) -> String {
-        if let app, let packAction = ActionPackCatalog.shared.action(matching: action, in: app),
-           let note = packAction.keymapNote {
-            return note
-        }
-        let text = switch action {
+        var text = switch action {
         case .run(let command): "Runs: \(command)"
         case .keys(let spec): "Presses \(Shortcut.display(spec) ?? spec)"
         default: ""
+        }
+        if let app, let note = ActionPackCatalog.shared.action(matching: action, in: app)?.keymapNote {
+            text += ". \(note)."
         }
         guard text.count > tooltipLimit else { return text }
         let half = (tooltipLimit - 1) / 2

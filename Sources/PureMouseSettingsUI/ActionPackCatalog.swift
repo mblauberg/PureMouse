@@ -1,4 +1,3 @@
-import AppKit
 import Foundation
 import PureMouseAppSupport
 import PureMouseKit
@@ -16,6 +15,7 @@ public struct ActionPackEntry: Identifiable, Sendable, Codable, Equatable {
     public let keymapNote: String?
     public let pairedOpposite: String?
     public let pairLabel: String?
+    public let symbol: String?
 
     public init(
         id: String,
@@ -28,7 +28,8 @@ public struct ActionPackEntry: Identifiable, Sendable, Codable, Equatable {
         keywords: [String]? = nil,
         keymapNote: String? = nil,
         pairedOpposite: String? = nil,
-        pairLabel: String? = nil
+        pairLabel: String? = nil,
+        symbol: String? = nil
     ) {
         self.id = id
         self.bundleIDs = bundleIDs
@@ -41,6 +42,7 @@ public struct ActionPackEntry: Identifiable, Sendable, Codable, Equatable {
         self.keymapNote = keymapNote
         self.pairedOpposite = pairedOpposite
         self.pairLabel = pairLabel
+        self.symbol = symbol
     }
 
     /// The ButtonAction this action binds to.
@@ -106,7 +108,7 @@ public struct ActionPackPair: Identifiable, Sendable, Equatable {
 }
 
 /// Bundled declarative catalogue of per-app actions, loaded on demand only by the Settings helper.
-public final class ActionPackCatalog: @unchecked Sendable {
+public final class ActionPackCatalog: Sendable {
     public static let shared = ActionPackCatalog()
 
     public enum ValidationError: Error, CustomStringConvertible, Equatable {
@@ -115,6 +117,7 @@ public final class ActionPackCatalog: @unchecked Sendable {
         case invalidPayload(actionID: String, payload: String)
         case insufficientActions(packID: String, count: Int)
         case missingVerification(actionID: String)
+        case invalidSourceURL(actionID: String, url: String)
         case invalidPairedOpposite(actionID: String, oppositeID: String)
 
         public var description: String {
@@ -124,6 +127,7 @@ public final class ActionPackCatalog: @unchecked Sendable {
             case .invalidPayload(let actionID, let payload): "Action \(actionID) has invalid shortcut payload: \(payload)"
             case .insufficientActions(let packID, let count): "Pack \(packID) has only \(count) actions (needs at least 6)"
             case .missingVerification(let actionID): "Action \(actionID) is missing source URL or verified date"
+            case .invalidSourceURL(let actionID, let url): "Action \(actionID) source URL must be https: \(url)"
             case .invalidPairedOpposite(let actionID, let oppositeID): "Action \(actionID) references invalid opposite: \(oppositeID)"
             }
         }
@@ -132,19 +136,16 @@ public final class ActionPackCatalog: @unchecked Sendable {
     public let data: ActionCatalogData
     private let packsByBundleID: [String: ActionPack]
     private let actionsByID: [String: ActionPackEntry]
-    public let knownBundleIDs: Set<String>
 
     public init(data: ActionCatalogData) {
         self.data = data
         var byBundle: [String: ActionPack] = [:]
         var byID: [String: ActionPackEntry] = [:]
-        var bundleIDs = Set<String>()
 
         for pack in data.packs {
             for b in pack.bundleIDs {
                 let lower = b.lowercased()
                 byBundle[lower] = pack
-                bundleIDs.insert(lower)
             }
             for action in pack.actions {
                 byID[action.id] = action
@@ -153,22 +154,26 @@ public final class ActionPackCatalog: @unchecked Sendable {
 
         self.packsByBundleID = byBundle
         self.actionsByID = byID
-        self.knownBundleIDs = bundleIDs
     }
 
-    public convenience init() {
-        let loaded = Self.loadData()
+    public convenience init(bundle: Bundle = .main) {
+        let loaded = Self.loadData(in: bundle)
         let decoded = (try? JSONDecoder().decode(ActionCatalogData.self, from: loaded)) ?? ActionCatalogData(packs: [])
         self.init(data: decoded)
     }
 
-    public static func loadData() -> Data {
-        #if SWIFT_PACKAGE
-        if let url = Bundle.module.url(forResource: "ActionPacks", withExtension: "json"),
+    public static func loadData(in bundle: Bundle = .main) -> Data {
+        if let url = bundle.url(forResource: "ActionPacks", withExtension: "json"),
            let data = try? Data(contentsOf: url) {
             return data
         }
-        #endif
+        // Test fallback relative to source file
+        let fallback = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appending(path: "Resources/ActionPacks.json")
+        if let data = try? Data(contentsOf: fallback) {
+            return data
+        }
         return Data()
     }
 
@@ -198,6 +203,9 @@ public final class ActionPackCatalog: @unchecked Sendable {
                 guard !action.sourceURL.trimmingCharacters(in: .whitespaces).isEmpty,
                       !action.verifiedDate.trimmingCharacters(in: .whitespaces).isEmpty else {
                     throw ValidationError.missingVerification(actionID: action.id)
+                }
+                guard action.sourceURL.hasPrefix("https://") else {
+                    throw ValidationError.invalidSourceURL(actionID: action.id, url: action.sourceURL)
                 }
                 for b in action.bundleIDs {
                     guard knownBundles.contains(b.lowercased()) else {
@@ -265,40 +273,40 @@ public final class ActionPackCatalog: @unchecked Sendable {
         return nil
     }
 
-    /// Whether an action in a pack matches search query `query`.
+    /// Whether an action in a pack matches search query `query`: its label, category or app name
+    /// (as Settings searches anywhere), one of its keywords as a whole word, or its shortcut, as
+    /// glyphs ("⇧⌘A"), in words in any order ("command shift a") or as a spec ("shift+cmd+a").
     public static func matches(action: ActionPackEntry, query: String, appName: String) -> Bool {
         let q = query.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return true }
-        if action.label.localizedStandardContains(q) { return true }
-        if action.category.localizedStandardContains(q) { return true }
-        if appName.localizedStandardContains(q) { return true }
-        if let keywords = action.keywords, keywords.contains(where: { $0.localizedStandardContains(q) || q.localizedStandardContains($0) }) { return true }
-        let words = Shortcut.spoken(action.payload) + " " + action.payload.replacingOccurrences(of: "+", with: " ")
-        if words.localizedStandardContains(q) { return true }
+        if action.label.localizedStandardContains(q) || action.category.localizedStandardContains(q)
+            || appName.localizedStandardContains(q) { return true }
+
+        let queryWords = words(q)
+        if !queryWords.isEmpty, let keywords = action.keywords,
+           keywords.contains(where: { keyword in
+               let own = Set(words(keyword))
+               return queryWords.allSatisfy(own.contains)
+           }) {
+            return true
+        }
+
         if let display = Shortcut.display(action.payload), display.localizedStandardContains(q) { return true }
-
-        // Shortcut spec matching (e.g. "shift+cmd+a" matches "cmd+shift+a")
-        if let (qMods, qKey) = Shortcut.parse(q), let (aMods, aKey) = Shortcut.parse(action.payload) {
-            if qMods == aMods && qKey.caseInsensitiveCompare(aKey) == .orderedSame {
-                return true
-            }
+        // A chord typed in words: every word names a modifier or the key, whatever the order.
+        let chord = q.lowercased().split { $0.isWhitespace || $0 == "+" }.map(String.init)
+        if chord.count > 1, let (modifiers, key) = Shortcut.parse(action.payload) {
+            var named: Set<String> = [key.lowercased()]
+            if modifiers.contains(.command) { named.formUnion(["command", "cmd"]) }
+            if modifiers.contains(.shift) { named.insert("shift") }
+            if modifiers.contains(.option) { named.formUnion(["option", "opt", "alt"]) }
+            if modifiers.contains(.control) { named.formUnion(["control", "ctrl"]) }
+            return chord.allSatisfy(named.contains)
         }
-
-        // Shortcut words matching (e.g. "command shift a" matches cmd+shift+a regardless of word order)
-        let qTokens = q.lowercased().split { $0.isWhitespace || $0 == "+" }.map(String.init)
-        if !qTokens.isEmpty, let (aMods, aKey) = Shortcut.parse(action.payload) {
-            var validTokens = Set<String>()
-            validTokens.insert(aKey.lowercased())
-            if aMods.contains(.command) { validTokens.insert("command"); validTokens.insert("cmd") }
-            if aMods.contains(.shift) { validTokens.insert("shift") }
-            if aMods.contains(.option) { validTokens.insert("option"); validTokens.insert("opt"); validTokens.insert("alt") }
-            if aMods.contains(.control) { validTokens.insert("control"); validTokens.insert("ctrl") }
-            if qTokens.allSatisfy({ validTokens.contains($0) }) {
-                return true
-            }
-        }
-
         return false
+    }
+
+    private static func words(_ text: String) -> [String] {
+        text.lowercased().split { $0.isWhitespace || $0.isPunctuation || $0 == "+" }.map(String.init)
     }
 
     /// Names of apps whose pack actions match `query` (for Mouse scope hint).
