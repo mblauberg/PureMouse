@@ -211,8 +211,16 @@ touches.
   SIGTERM, before restoring the mouse).
 - Idle cost is zero CPU. The optional daily update check is run by the system's
   background-activity scheduler, not a timer of ours. The display link runs only while a scroll is
-  gliding. The bounded exceptions are the permission poll, the adoption retries and the reapply
-  retries below; `IdleCostTests` fails on a new timer or poll in the daemon sources.
+  gliding. The bounded exceptions are the permission poll, the adoption retries, the reapply
+  retries below and the button deadlines; `IdleCostTests` fails on a new timer or poll in the
+  daemon sources.
+- A button's triggers cost nothing until it is pressed. A press arms at most one one-shot deadline
+  for itself (`SessionEnvironment.deadline`, held in `Session.presses`): the hold (`holdMs`) while
+  the button is down, or the wait for a second press (`doubleClickMs`) after it is let go. Release,
+  the second press or the deadline itself ends it, and `dropHeld` cancels any left, so a deadline
+  lives only from a press until what it does is decided. A button whose only trigger is its click
+  (`PressPlan.immediate`) arms nothing and fires on press as before; Hold and Move arms nothing
+  either (movement decides it).
 - The reapply retries are one `Session.configure`: 3 attempts, 200 ms apart
   (`SessionEnvironment.reapplyRetryDelay`), each request of an attempt waiting at most 600 ms
   (`reapplyAttemptTimeout`; per request, not per attempt). It starts on an event (wake,
@@ -297,8 +305,15 @@ touches.
   nothing replaces an endpoint a restore is using, and the slot's endpoint is replaced and
   identified afresh once the restores are done (`Daemon.replacementsDue`, `adoptStragglers`). A
   pause is never persisted.
-- Held buttons (`HeldButtons`) are dropped, and native clicks released, whenever the mouse's own
-  release may not come: link down, reconnect, reload, pause and quit (`Session.dropHeld`).
+- Release is guaranteed. Held buttons (`HeldButtons`: a held middle click, Drag Lock's left
+  button, a gesture) are dropped, native clicks released, pending presses forgotten with their
+  deadlines and Precise Pointer ended, whenever the mouse's own release may not come: link down,
+  reconnect, reload, pause, quit and the Universal Control hand-off (`Session.dropHeld`). Precise
+  Pointer changes only the live DPI, never anything the mouse keeps, and its start and end are
+  queued on `Session.deviceActions` with `cycleDPI` and apply, so the end writes back the speed in
+  effect by then (`restorePointerSpeed`: the live DPI, so a `cycleDPI` while held stands) rather
+  than the one it slowed from. A session that finishes mid-hold hands `preciseFrom` to `restore` or
+  to its replacement's apply.
 - A freshly adopted mouse (`Inherited.fresh`) is scanned once for temporary diversions a previous
   process left (`Session.scanStaleDiversions`) and releases those not bound. A timeout keeps the
   scan pending, across reloads too; a device error skips that control.

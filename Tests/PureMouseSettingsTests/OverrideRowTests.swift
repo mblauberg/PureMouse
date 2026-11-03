@@ -112,8 +112,8 @@ private func mouse() throws -> ConfigScope { try #require(ConfigScope.device(mou
     let scope = try mouse()
     // All Mice binds the button to a plain action; the mouse makes it a gesture with one direction.
     let plain = try tree(#"{"buttons": {"gesture": "mute"}, "devices": {"\#(mouseKey)": {"name": "MX", "buttons": {"gesture": {"up": "launchpad"}}}}}"#)
-    let up = try #require(plain.scopedButton("gesture", in: scope).directions.first { $0.name == "up" })
-    let down = try #require(plain.scopedButton("gesture", in: scope).directions.first { $0.name == "down" })
+    let up = try #require(plain.scopedButton("gesture", in: scope).triggers.first { $0.name == "up" })
+    let down = try #require(plain.scopedButton("gesture", in: scope).triggers.first { $0.name == "down" })
     #expect(up.isOwn && up.everywhere == nil)
     #expect(ActionButton.inherited(up, source: InheritedScope.allMice).caption == "Set for this mouse.")
     #expect(!down.isOwn && ActionButton.inherited(down, source: InheritedScope.allMice).caption == nil)
@@ -122,15 +122,15 @@ private func mouse() throws -> ConfigScope { try #require(ConfigScope.device(mou
     // With a wider gesture the unset direction shows that one.
     let wide = try tree(#"{"buttons": {"gesture": {"up": "missionControl"}}, "devices": {"\#(mouseKey)": {"name": "MX", "buttons": {"gesture": {"down": "mute"}}}}}"#)
     let state = wide.scopedButton("gesture", in: scope)
-    let wideUp = try #require(state.directions.first { $0.name == "up" })
+    let wideUp = try #require(state.triggers.first { $0.name == "up" })
     #expect(!wideUp.isOwn && wideUp.inherited == .named("missionControl"))
-    #expect(try #require(state.directions.first { $0.name == "down" }).isOwn)
+    #expect(try #require(state.triggers.first { $0.name == "down" }).isOwn)
 }
 
 @MainActor @Test func anAppsOwnDirectionIsMarkedToo() throws {
     let config = try tree(#"{"apps": {"com.example.x": {"buttons": {"back": {"left": "mute"}}}}}"#)
     let state = config.appButton("com.example.x", button: "back")
-    let left = try #require(state.directions.first { $0.name == "left" })
+    let left = try #require(state.triggers.first { $0.name == "left" })
     #expect(ActionButton.inherited(left, source: InheritedScope.mouseSettings).caption == "Set for this app.")
     #expect(ActionButton.inherited(left, source: InheritedScope.mouseSettings).resetTitle == "Use Mouse Setting")
 }

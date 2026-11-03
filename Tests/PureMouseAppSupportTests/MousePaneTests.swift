@@ -19,15 +19,20 @@ private func tree(_ json: String) throws -> ConfigTree { try ConfigTree(data: Da
 
 // MARK: Buttons
 
-@Test func theGestureRowSummarisesItsDirections() throws {
-    #expect(GestureSummary.text(click: .named("missionControl"), directionsSet: 4) == "Click: Mission Control, 4 directions set.")
-    #expect(GestureSummary.text(click: .named("none"), directionsSet: 0) == "Click: Do Nothing, no directions set.")
-    #expect(GestureSummary.text(click: .standard, directionsSet: 1) == "Click: Do Nothing, 1 direction set.")
+@Test func aRowWithMoreWaysToPressSummarisesThem() throws {
+    let standard: [ButtonAction] = [.named("missionControl"), .named("appExpose"), .named("spaceLeft"), .named("spaceRight")]
+    #expect(Triggers.directionsSummary(standard) == "Mission Control, App Exposé, Spaces")
+    #expect(Triggers.directionsSummary([.named("none"), .standard]) == "No Action")
     var config = ConfigTree()
     config.bind("gesture", to: .gesture)
-    #expect(config.gestureSummary("gesture") == "Click: Do Nothing, 4 directions set.")
-    let set = try tree(#"{"buttons": {"gesture": {"click": "missionControl", "up": "spaceLeft", "down": "none", "left": {"keys": "cmd+w"}}}}"#)
-    #expect(set.gestureSummary("gesture") == "Click: Mission Control, 2 directions set.")
+    #expect(config.scopedButton("gesture", in: .global).summary == "Hold and Move: Mission Control, App Exposé, Spaces.")
+    let set = try tree(#"{"buttons": {"gesture": {"click": "missionControl", "up": "spaceLeft", "down": "none", "left": "showDesktop"}}}"#)
+    #expect(set.scopedButton("gesture", in: .global).summary == "Hold and Move: Move Left a Space, Show Desktop.")
+    let forward = try tree(#"{"buttons": {"forward": {"click": "navigateForward", "doubleClick": "missionControl", "hold": "precisePointer"}}}"#)
+    #expect(forward.scopedButton("forward", in: .global).summary == "Double-click: Mission Control. Hold: Precise Pointer.")
+    // A click alone has no child rows to sum up.
+    #expect(try tree(#"{"buttons": {"back": "mute"}}"#).scopedButton("back", in: .global).summary == nil)
+    #expect(try tree(#"{"buttons": {"back": {"click": "mute"}}}"#).scopedButton("back", in: .global).summary == nil)
 }
 
 @Test func choosingHoldAndMoveSeedsOnlyMissingDirections() throws {
@@ -70,9 +75,12 @@ private func tree(_ json: String) throws -> ConfigTree { try ConfigTree(data: Da
 @Test func advancedOnButtonsNeedsSomeHoldAndMoveButton() throws {
     #expect(!ConfigTree().usesGestures)
     #expect(!(try tree(#"{"buttons": {"back": "missionControl"}, "gesture": {"distanceMm": 6}}"#)).usesGestures)
-    #expect(try tree(#"{"buttons": {"gesture": {"click": "none"}}}"#).usesGestures)
+    // A table with no direction that does something is no Hold and Move: a click, a double-click
+    // or a hold alone has nothing for the sheet to tune.
+    #expect(!(try tree(#"{"buttons": {"gesture": {"click": "none"}}}"#)).usesGestures)
+    #expect(!(try tree(#"{"buttons": {"forward": {"click": "navigateForward", "hold": "missionControl", "up": "none"}}}"#)).usesGestures)
     #expect(try tree(#"{"apps": {"com.apple.Safari": {"buttons": {"top": {"up": "nextTab"}}}}}"#).usesGestures)
-    #expect(try tree(#"{"devices": {"m1234": {"buttons": {"0x00c3": {"click": "none"}}}}}"#).usesGestures)
+    #expect(try tree(#"{"devices": {"m1234": {"buttons": {"0x00c3": {"click": "none", "down": "appExpose"}}}}}"#).usesGestures)
 }
 
 @Test func restoreDefaultsOnButtonsClearsButtonsAndGestureOnly() throws {

@@ -36,6 +36,12 @@ public enum Action: Equatable, Decodable, Sendable {
     case haptic(HapticWaveform)
     case keys(Keystroke)
     case run(String)
+    /// Slows the pointer while its button is held: the live DPI drops to `dpi` (snapped to the
+    /// mouse's steps), or to half the speed in effect when nil, and returns when the button is let
+    /// go. Handled by the device session; only a click or a hold can be one (`isWhileHeld`).
+    case precisePointer(dpi: Int?)
+    /// Presses the left button and keeps it down until the next Drag Lock, so the pointer drags.
+    case dragLock
 
     /// Every action that has a name, by its config name.
     public static let named: [String: Action] = [
@@ -48,12 +54,30 @@ public enum Action: Equatable, Decodable, Sendable {
         "middleClick": .middleClick,
         "brightnessUp": .brightnessUp, "brightnessDown": .brightnessDown,
         "nextTab": .nextTab, "previousTab": .previousTab, "zoomIn": .zoomIn, "zoomOut": .zoomOut,
+        "precisePointer": .precisePointer(dpi: nil), "dragLock": .dragLock,
     ]
+
+    /// Lasts while its button is held rather than happening once, so it can be a click (which then
+    /// owns the button: the binding's other triggers do nothing) or a hold, and nothing else.
+    public var isWhileHeld: Bool {
+        if case .precisePointer = self { true } else { false }
+    }
+
+    /// The config name, for messages: `named`'s key, or the object form's.
+    public var name: String {
+        switch self {
+        case .precisePointer: "precisePointer"
+        case .keys: "keys"
+        case .run: "run"
+        case .haptic: "haptic"
+        default: Self.named.first { $0.value == self }?.key ?? "\(self)"
+        }
+    }
 
     /// Handled by the device session rather than `SystemActions`.
     public var actsOnDevice: Bool {
         switch self {
-        case .toggleScrollMode, .cycleDPI, .haptic: true
+        case .toggleScrollMode, .cycleDPI, .haptic, .precisePointer: true
         default: false
         }
     }
@@ -78,9 +102,11 @@ public enum Action: Equatable, Decodable, Sendable {
             self = .run(command)
         } else if let waveform = try c.decodeIfPresent(HapticWaveform.self, forKey: AnyKey("haptic")) {
             self = .haptic(waveform)
+        } else if let dpi = try c.decodeIfPresent(Int.self, forKey: AnyKey("precisePointer"), in: Config.dpiRange) {
+            self = .precisePointer(dpi: dpi)
         } else {
             throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath,
-                debugDescription: "expected an action name, {\"keys\": ...}, {\"run\": ...} or {\"haptic\": ...}"))
+                debugDescription: "expected an action name, {\"keys\": ...}, {\"run\": ...}, {\"haptic\": ...} or {\"precisePointer\": ...}"))
         }
     }
 }

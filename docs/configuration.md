@@ -50,7 +50,7 @@ own keys. A file is laid over it, so a key left out means the default set's valu
 The set needs the Accessibility permission, since it posts scrolls and keystrokes. To turn a piece
 off, say so in the file: `"smoothScroll": {"enabled": false}`, `"back": "default"` (the mouse's own
 button) or `"gesture": "default"`. A gesture written in the file keeps the default directions it does
-not name; set a direction to `"none"` to drop it.
+not name; set a direction to `"none"` to drop it, or give it a `hold` to replace them all.
 
 PureMouse never rewrites an existing config to apply a new default set. A setting that the file leaves
 out takes the default set's value, so upgrading can change what such a file does for the keys it omits
@@ -69,10 +69,12 @@ saves the file as `config.json.bak`).
 | `scrollWheel.smartShiftThreshold` | 1–50 enables SmartShift's automatic free-spin; 255 disables it. Must be 1–255. Requires 0x2110 or 0x2111 |
 | `thumbWheel.inverted` | Invert the thumb wheel's scrolling: in hardware, or in software while PureMouse handles the wheel. Scrolling only: actions follow `reversed`. Global only |
 | `thumbWheel.action`, `left`, `right`, `step`, `reversed` | What turning the thumb wheel does, and which way ([below](#thumb-wheel)) |
-| `buttons` | Button → action or gesture, including play-only haptics, or `"default"` for no binding: the mouse's own behaviour ([below](#buttons-actions-and-gestures)). `back`, `forward` and `gesture` are bound by the [default set](#defaults). The left and right buttons cannot be bound |
+| `buttons` | Button → action or trigger table ([below](#buttons-actions-and-gestures)), including play-only haptics, or `"default"` for no binding: the mouse's own behaviour. `back`, `forward` and `gesture` are bound by the [default set](#defaults). The left and right buttons cannot be bound |
 | `smoothScroll` | PureMouse scrolls both wheels itself unless `enabled` is false, when they scroll normally ([below](#smooth-scrolling)). On by default |
 | `gesture.distanceMm` | How far the mouse moves before a gesture fires, in millimetres, 0.5–50. Default 4 |
 | `gesture.repeatIntervalMs` | Minimum gap between repeated gestures in one hold, 0–5000. Default 400 |
+| `holdMs` | How long a button is held before its `hold` fires, 150–1000 milliseconds. Default 350. Settings does not show it |
+| `doubleClickMs` | How long a click waits for a second press where `doubleClick` is set, 150–1000 milliseconds. Default: the system's double-click interval (System Settings › Mouse), else 500. Settings does not show it |
 | `notifications.lowBattery` | Default true. The menu bar app posts a macOS notification when a mouse's battery falls through 20% and again through 5% (level-only mice: when they report low and critical). A mouse that reconnects already below 20% warns once, if PureMouse can tell it is the same mouse as before (it reports its unit ID) and had not already warned at that level. The warning goes away when the mouse is charging or back at 25% or more, when the 5% warning replaces it, and when you switch this off. Works with the menu bar icon hidden (the menu bar app then runs without an icon); the daemon ignores it. Settings › General switches it; macOS asks for permission the first time |
 | `apps` | Buttons, thumb wheel and smooth scrolling for particular apps ([below](#per-app-settings)) |
 | `devices` | Settings for one model of mouse, over the ones above ([below](#per-device-settings)) |
@@ -171,7 +173,7 @@ one; Settings › Apps shows it as the **Swap directions** switch, which reads a
 ```
 
 Each app entry changes only what it names, on top of the global settings: the buttons it lists,
-a gesture's directions it lists (the others stay as the global gesture has them), and the
+a trigger table's triggers it lists (the others stay as the global table has them), and the
 `thumbWheel` and `smoothScroll` keys it sets. A thumb wheel `left` or `right` alone keeps the other
 direction and the step; an `action` keeps the step only if it is the global pair, else it brings its
 own. Bundle IDs match regardless of case; one for an app
@@ -246,8 +248,8 @@ An entry may set `dpi`, `dpiPresets`, `scrollWheel`, `thumbWheel` (`inverted` to
 `buttons` and `gesture`, plus a `name` for your own reference, which PureMouse ignores. `apps`,
 `universalControl` and `notifications` stay top level; in an entry they are skipped with a warning.
 
-An entry changes only what it names, as an app entry does: the buttons it lists (a gesture per
-direction), the `scrollWheel`, `thumbWheel`, `smoothScroll` and `gesture` keys it sets, and `dpi`;
+An entry changes only what it names, as an app entry does: the buttons it lists (a trigger table per
+trigger), the `scrollWheel`, `thumbWheel`, `smoothScroll` and `gesture` keys it sets, and `dpi`;
 `dpiPresets` replaces the whole list. Precedence is the top level, then `devices.<key>`, then
 `apps.<bundle id>`: a mouse with an entry uses the entry over the top level, and the top-level
 `apps` over that. An app that binds `forward` overrides the entry's `forward` in that app, while
@@ -357,8 +359,9 @@ and right. Existing directions are kept.
 **Actions:** `missionControl`, `appExpose`, `showDesktop`, `launchpad`, `spaceLeft`, `spaceRight`,
 `navigateBack`, `navigateForward`, `toggleScrollMode`, `cycleDPI`, `playPause`, `nextTrack`,
 `previousTrack`, `volumeUp`, `volumeDown`, `mute`, `middleClick`, `brightnessUp`, `brightnessDown`,
-`nextTab`, `previousTab`, `zoomIn`, `zoomOut`, `none`, `{"keys": "cmd+shift+4"}`,
-`{"run": "open -a Safari"}`, `{"haptic": "sharpStateChange"}`.
+`nextTab`, `previousTab`, `zoomIn`, `zoomOut`, `precisePointer`, `dragLock`, `none`,
+`{"keys": "cmd+shift+4"}`, `{"run": "open -a Safari"}`, `{"haptic": "sharpStateChange"}`,
+`{"precisePointer": 400}`.
 
 `run` starts the command with `/bin/sh -c`, as you, and does not wait for it. Its output is
 discarded; a command that exits non-zero is logged once with its first 80 characters and its exit
@@ -371,7 +374,17 @@ Settings › Keyboard › Keyboard Shortcuts › Mission Control, or Ctrl+Left/R
 which most apps share; use `{"keys": ...}` for an app that differs.
 
 `middleClick` holds the middle button down while its control is held, so a press can drag
-(middle-drag, autoscroll). As a gesture's click or direction, it is one full click.
+(middle-drag, autoscroll): as a bare action, as a table's `click` with no `doubleClick` or `hold`,
+and as a `hold`. Where the click fires on release, after a double-click or as a Hold and Move direction,
+it is one full click.
+
+`precisePointer` slows the pointer while its button is held: to half the current resolution, or to
+the resolution given (`{"precisePointer": 400}`, 50–25600), each snapped to a step the mouse supports.
+Only the live resolution changes, which the mouse does not keep. On release the pointer returns to
+whatever its speed is by then, so a `cycleDPI` during the hold is not undone. `dragLock` holds the
+left button down at one click and lets go at the next, so a drag needs no held button. Both end on
+release (Precise Pointer) or are let go (Drag Lock) when the mouse disconnects, the config reloads,
+PureMouse pauses or quits, or Universal Control takes the pointer.
 
 `cycleDPI` switches to the next of `dpiPresets` above the current resolution, wrapping to the
 lowest. The choice survives reconnects until a config change alters `dpi` or `dpiPresets`.
@@ -394,8 +407,50 @@ mouse has it or the config binds it.
 Haptic actions also work for gesture directions. Automatic feedback on DPI changes is not
 implemented.
 
-**Gestures:** an object with any of `click`, `up`, `down`, `left` and `right`, each an action.
-While a gesture button is held, the pointer stays still.
+**Triggers ([ADR 0024](adr/0024-one-action-model.md)):** a button's value is an action, or a table of
+what each way of pressing it does:
+
+```json
+"buttons": {
+  "forward": { "click": "navigateForward", "doubleClick": "missionControl", "hold": "precisePointer" },
+  "gesture": { "click": "missionControl", "up": "missionControl", "down": "appExpose" },
+  "top": "dragLock"
+}
+```
+
+| Key | Fires |
+|---|---|
+| `click` | A press and release. A bare action (`"back": "navigateBack"`) is the same as `{"click": …}` |
+| `doubleClick` | A second press within the double-click interval (`doubleClickMs`) |
+| `hold` | Once the button has been held `holdMs`; the click is then not sent |
+| `up`, `down`, `left`, `right` | **Hold and Move:** holding the button and moving the mouse that way (`gesture.distanceMm`). While the button is held the pointer stays still; released without moving, it clicks |
+
+What a table costs is only the wait it asks for. With only a click bound, the press fires
+immediately, as before. With `hold`, the click fires on release instead of on press. With
+`doubleClick`, a single click fires once the interval has passed without a second press. A table
+that names no `click` (here, or in the wider table it is laid over) leaves the click to the mouse, as
+Mouse Default does: a quick tap posts the button's ordinary click, press and release together (the
+wheel click, back and forward), the top and DPI buttons do what they do without PureMouse, and a
+control with no behaviour of its own does nothing. `"click": "none"` names a click: the button does
+nothing. Hold and Move's
+directions take the place of `hold`: a table may have one or the other, and having both is an
+error at `hold`. The `scroll` key is reserved for Hold and Scroll and is an error until it ships; any
+other unknown key is an error at that key. `precisePointer` lasts while the button is held, so it is
+accepted only as `click` or `hold` (an error elsewhere, including the thumb wheel). As the click it
+starts at the press and owns the button, so Settings does not combine it with `doubleClick` or
+`hold`; as the hold it starts after the hold delay, and a quick click still clicks.
+
+A table in a mouse's or an app's `buttons` changes only the triggers it names; the others come from
+the wider scope's table (the top level for a mouse, the mouse or top level for an app). Set one to
+`"none"` to switch it off there. Writing one hold form drops the other from the wider table, so a
+`hold` replaces inherited directions and a direction replaces an inherited `hold`. A bare action
+replaces the whole table, and a table over a wider bare action starts with no triggers. Settings
+writes a table back to a bare action once its click is all that is left. Adding Double-click or
+Hold to a button whose click is Mouse Default writes a table with no `click`, so a quick tap stays the
+mouse's own; Settings writes `"click": "none"` only when the person chooses **Do Nothing** for the
+click. Choosing **Mouse Default** for the click of a table takes its `click` key out, and a table
+left with no click and no trigger is written as no entry (the bare default), or as `"default"` where
+a wider bare action or the default set's binding would otherwise apply.
 
 ## System Settings
 

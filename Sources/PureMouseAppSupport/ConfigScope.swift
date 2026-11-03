@@ -224,10 +224,9 @@ extension ConfigTree {
         (value as? String) == Config.Binding.nativeValue
     }
 
-    /// What a gesture object looks like to the decoder: some keys, all of them directions.
+    /// `value` as a trigger table, when the decoder reads it as one (`Gesture.isTable`).
     private static func isGestureShape(_ value: Any?) -> [String: Any]? {
-        guard let object = value as? [String: Any], !object.isEmpty,
-              object.keys.allSatisfy(Gesture.directions.contains) else { return nil }
+        guard let object = value as? [String: Any], Gesture.isTable(object) else { return nil }
         return object
     }
 
@@ -248,8 +247,8 @@ extension ConfigTree {
         return cleaned
     }
 
-    /// `buttons` in a device: per control, the device's binding over the top level's, a gesture
-    /// per direction when both are gestures (`Config.Binding.decode`). Reserved controls (the
+    /// `buttons` in a device: per control, the device's binding over the top level's, a table
+    /// per trigger when both are tables (`Config.Binding.decode`, `Gesture.merge`). Reserved controls (the
     /// primary clicks) are never bound. `rest` is what follows `buttons`: nothing (all of them), a
     /// button name, then keys inside its binding. `device` is the raw entry: a `null` direction
     /// leaves the other side's, and a `null` binding is none.
@@ -282,7 +281,7 @@ extension ConfigTree {
                 if Self.isNative(top) {
                     binding = nil  // Mouse Default: the top level's binding is cleared
                 } else if let top = Self.isGestureShape(top), let base = Self.isGestureShape(base) {
-                    binding = base.merging(top) { base, top in top is NSNull ? base : top }
+                    binding = Gesture.merge(top, over: base)
                 } else {
                     binding = top
                 }
@@ -295,8 +294,8 @@ extension ConfigTree {
         }
         guard let binding = Self.normalised(binding) else { return nil }
         guard rest.count > 1 else { return binding }
-        // Directions are a gesture's; any other binding has none (its other keys read as they are).
-        if Gesture.directions.contains(rest[1]), Self.isGestureShape(binding) == nil { return nil }
+        // Triggers are a table's; any other binding has none (its other keys read as they are).
+        if Gesture.triggers.contains(rest[1]), Self.isGestureShape(binding) == nil { return nil }
         return Self.lookup(["b": binding], ["b"] + rest.dropFirst())
     }
 }

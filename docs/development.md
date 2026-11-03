@@ -142,7 +142,8 @@ the full list. The ones used most:
 | `PUREMOUSE_DEV_SUBMENU=pointer` | The menu shows Pointer Speed's rows as the menu itself, to capture the submenu without hovering (with `PUREMOUSE_DEV_MENU=1`, and `PUREMOUSE_DEV_MICE=2` for the sections) |
 | `PUREMOUSE_DEV_ICON=<directory>` | Writes the menu bar icon's running, paused, off, attention and paused-attention states as `<state>@1x.png` and `<state>@2x.png` and exits, before reading a config or a status (`DevHooks.writeIcons`) |
 | `PUREMOUSE_DEV_PANE=<pane>` | Opens a tab (`general`, `mouse`, `apps`, `about`) or a Mouse segment (`buttons`, `scrolling`, `pointer`) |
-| `PUREMOUSE_DEV_PICKER=<button>` | A button's action picker on Mouse › Buttons; with `PUREMOUSE_DEV_APP`, on the app's Buttons page |
+| `PUREMOUSE_DEV_PICKER=<button>` | A button's action picker on Mouse › Buttons; with `PUREMOUSE_DEV_APP`, on the app's Buttons page. `<button>.doubleClick` or `<button>.hold` opens that child row's picker, expanding the row |
+| `PUREMOUSE_DEV_EXPAND=<button>` | Expands a button's Double-click and Hold rows on Mouse › Buttons, or on the app's page with `PUREMOUSE_DEV_APP` |
 | `PUREMOUSE_DEV_SHORTCUT=<button>` | A button's shortcut sheet on Mouse › Buttons; with `PUREMOUSE_DEV_APP`, that button's shortcut editor sheet over the app's page (`AppPage.body`) |
 | `PUREMOUSE_DEV_SHORTCUT_TEXT=1` | With `PUREMOUSE_DEV_SHORTCUT`, opens the shortcut sheet with its "Enter as Text…" text field already shown (`ShortcutSheet`) |
 | `PUREMOUSE_DEV_MOUSE=<device key>\|all` | Chooses that mouse on Mouse, or All Mice; `PUREMOUSE_DEV_OTHERS=1` opens Buttons' Other controls; `PUREMOUSE_DEV_MORE=1` opens an app page's More thumb wheel options |
@@ -154,6 +155,26 @@ the full list. The ones used most:
 | `PUREMOUSE_DEV_HOVER=<part>`, `PUREMOUSE_DEV_BUTTON=<button>`, `PUREMOUSE_DEV_FOUND=<button>` | Show the device card's hovered, selected and found-row states on Buttons (`middle`, `top`, `forward`, `back`, `thumbWheel`, `thumbRest`) |
 | `PUREMOUSE_DEV_ARRIVAL=thumbWheel\|mainWheel` | On Scrolling, arrives as the device card's part would; `PUREMOUSE_DEV_ARRIVAL_HOLD=1` keeps the outline |
 | `PUREMOUSE_DEV_AX_DUMP=1` | Prints each control's accessibility role, label and size for every tab and Mouse segment (with `PUREMOUSE_DEV_PANE`, for what the sheet, picker and shortcut hooks open), and exits 1 on an unlabelled or duplicate control or one under 20 × 20 pt (`DevAXDump`). Run it on the spare Mac, not the one in use |
+
+Config fixtures for these live in `scripts/fixtures`, for `PUREMOUSE_CONFIG` (copy one first: Settings
+writes to it). `buttons-triggers.json` gives Forward a click, a double-click (Mission Control) and a
+hold (Precise Pointer), the top button Drag Lock, the wheel press Precise Pointer, Safari its own Forward double-click with the hold
+switched off, and sets `holdMs` and `doubleClickMs` (500, so the caption reads 0.5 s);
+`buttons-click-only.json` is the same buttons with only their clicks. For the Buttons captures and
+AX dump of [#158](https://github.com/mblauberg/PureMouse/issues/158), on the spare Mac:
+
+```sh
+cp scripts/fixtures/buttons-triggers.json "$TMPDIR/triggers.json"
+PUREMOUSE_CONFIG="$TMPDIR/triggers.json" PUREMOUSE_DEV_PANE=buttons PUREMOUSE_DEV_EXPAND=forward \
+  PUREMOUSE_DEV_APPEARANCE=dark PUREMOUSE_DEV_CAPTURE="$TMPDIR/triggers-dark.png" .build/debug/PureMouseSettings
+PUREMOUSE_CONFIG="$TMPDIR/triggers.json" PUREMOUSE_DEV_PANE=buttons PUREMOUSE_DEV_PICKER=forward \
+  PUREMOUSE_DEV_AX_DUMP=1 .build/debug/PureMouseSettings
+```
+
+`PUREMOUSE_DEV_PICKER=middle` shows More Ways to Press dimmed with "Remove Hold first.", since the
+wheel press's click is Precise Pointer. For the idle cost of triggers, run the daemon on one fixture and
+then the other and compare `scripts/measure-input.sh` (above); the trigger run should show no extra
+idle CPU or wakeups.
 
 A release build carries none of this; with `-DDEVHOOKS` it carries only the rig's part
 ([Footprint rig](#footprint-rig)).

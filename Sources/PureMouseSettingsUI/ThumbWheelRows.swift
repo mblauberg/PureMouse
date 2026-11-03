@@ -352,7 +352,9 @@ struct ThumbWheelRows: View {
                          choose: { entry in choose(entry, for: target, current: action) },
                          accessibilityName: spokenName,
                          sameAsInherited: inherits ? value.inherited : nil,
-                         source: source)
+                         source: source,
+                         // Kit takes a while-held action only on a button.
+                         row: PickerEntry.Row(allowsWhileHeld: false))
         } label: {
             RowLabel(title, note: note, spokenTitle: spokenName)
         }
@@ -363,7 +365,7 @@ struct ThumbWheelRows: View {
     private func choose(_ entry: PickerEntry, for target: BindingTarget, current: ButtonAction) {
         switch entry.kind {
         case .set(let action): apply(action, to: target)
-        case .gesture: break
+        case .gesture, .trigger: break
         case .shortcut:
             let initial = if case .keys(let spec) = current { spec } else { "" }
             DispatchQueue.main.async { sheet = SheetRequest(kind: .shortcut, target: target, initial: initial) }

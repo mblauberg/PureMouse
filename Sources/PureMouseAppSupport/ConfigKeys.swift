@@ -94,10 +94,9 @@ extension ConfigTree {
         ButtonAction(json: self[entryPrefix(for: scope) + ["buttons", buttonKey(button, in: scope), direction]])
     }
 
-    /// Binds a button. `.gesture` keeps an existing gesture, or starts one whose click does what
-    /// the button did (in a device, what applied there), so a gesture object is never empty (an
-    /// empty one is not a gesture). A mouse whose top level already makes the button a gesture
-    /// writes nothing: the gesture, click included, applies there already.
+    /// Binds a button to a bare action, which replaces its whole binding (the Click row writes
+    /// through `bindClick`, which keeps the other triggers). `.gesture` is Hold and Move
+    /// (`bindHoldAndMove`).
     public mutating func bind(_ button: String, to binding: ButtonAction, in scope: ConfigScope = .global) {
         if binding == .standard || (binding == .mouseDefault && scope == .global) {
             removeButton(button, in: scope)
@@ -119,39 +118,7 @@ extension ConfigTree {
         case .keys(let spec): set(["keys": spec], at: path, in: scope)
         case .run(let command): set(["run": command], at: path, in: scope)
         case .haptic(let waveform): set(["haptic": waveform], at: path, in: scope)
-        case .gesture:
-            if case .gesture = self.binding(button, in: scope) { return }
-            // Mouse Default hides the wider gesture. Choosing Hold and Move over it gives the gesture
-            // back whole (its directions included), as "Same as …" does.
-            if scope != .global, self.binding(button, in: scope) == .mouseDefault, self.binding(button) == .gesture {
-                removeButton(button, in: scope)
-                return
-            }
-            var before = self[entryPrefix(for: scope) + path]
-            if before == nil {
-                // A mouse inherits the wider binding through `resolved`; an app does not, so the top
-                // level's gesture is read for it. Kit merges a scope's gesture over the global one,
-                // so a seeded direction would hide that gesture's own.
-                if scope.deviceKey != nil {
-                    let inherited = resolved(path, in: scope)
-                    if ButtonAction(json: inherited) == .gesture { return }
-                    before = inherited
-                } else if self.binding(button) == .gesture {
-                    return
-                }
-            }
-            // A mouse set to Mouse Default clicks natively; the gesture's click then does nothing.
-            let click: Any = before.flatMap { ButtonAction(json: $0) == .mouseDefault ? nil : $0 }
-                .flatMap { $0 is String || $0 is [String: Any] ? $0 : nil } ?? "none"
-            var seeded: [String: Any] = ["click": click]
-            // A new Hold and Move starts with the standard directions where the target scope has
-            // none. Keep any direction already supplied by this scope or inherited from a mouse's
-            // global binding.
-            let defaults = ["up": "missionControl", "down": "appExpose",
-                            "left": "spaceLeft", "right": "spaceRight"]
-            let hasResolvedDirection = defaults.keys.contains { resolved(path + [$0], in: scope) != nil }
-            if !hasResolvedDirection { seeded.merge(defaults) { current, _ in current } }
-            set(seeded, at: path, in: scope)
+        case .gesture: bindHoldAndMove(button, in: scope)
         }
     }
 
@@ -163,7 +130,19 @@ extension ConfigTree {
     public mutating func bind(_ button: String, direction: String, to binding: ButtonAction, in scope: ConfigScope = .global) {
         let button = buttonKey(button, in: scope)
         let path = ["buttons", button, direction]
+        // A bare action has no triggers to give back; to gain one it becomes a table whose click it
+        // is, so the object never mixes an action's keys with a table's (Kit rejects that).
+        if let bare = self[entryPrefix(for: scope) + ["buttons", button]], !(bare is NSNull), Self.table(bare) == nil {
+            guard binding != .standard else { return }
+            // Mouse Default has no click to carry over: the table names none, so a tap stays the mouse's.
+            let native = (bare as? String) == Config.Binding.nativeValue
+            set(native ? [String: Any]() : ["click": bare], at: ["buttons", button], in: scope)
+        }
         let own = self[entryPrefix(for: scope) + ["buttons", button]] as? [String: Any]
+        // A direction is Hold and Move, the hold form that replaces `hold`.
+        if Gesture.directions.contains(direction), binding != .standard, own?["hold"] != nil {
+            set(nil, at: ["buttons", button, "hold"], in: scope)
+        }
         switch binding {
         case .standard:
             let others = own?.keys.filter { $0 != direction } ?? []

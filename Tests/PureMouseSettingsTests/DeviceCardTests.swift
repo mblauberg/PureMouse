@@ -360,11 +360,14 @@ private let allButtons = Set(NamedButton.allCases)
 
     @Test func buttonsPaneDoesNotRelyOnARowBackground() throws {
         // A grouped form on macOS draws no `listRowBackground` (#133), so a row is marked in its content.
-        let source = try String(contentsOf: URL(fileURLWithPath: #filePath)
+        let ui = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appending(path: "Sources/PureMouseSettingsUI/ButtonsPane.swift"), encoding: .utf8)
-        #expect(!source.contains("listRowBackground"))
-        #expect(source.contains(".rowMark("))
+            .appending(path: "Sources/PureMouseSettingsUI")
+        let source = try String(contentsOf: ui.appending(path: "ButtonsPane.swift"), encoding: .utf8)
+        // The pane hands the mark to the button's rows (`TriggerRows`), which draw it.
+        let rows = try String(contentsOf: ui.appending(path: "TriggerRows.swift"), encoding: .utf8)
+        #expect(!source.contains("listRowBackground") && !rows.contains("listRowBackground"))
+        #expect(source.contains("mark: RowMark.of(") && rows.contains(".rowMark("))
     }
 }
 

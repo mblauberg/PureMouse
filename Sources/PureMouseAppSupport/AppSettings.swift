@@ -57,41 +57,14 @@ extension ConfigTree {
 
     // MARK: Buttons
 
-    /// Binds a button in one app. `.standard` removes the app's key, so the wider binding applies;
-    /// `.mouseDefault` writes `"default"`, so the button is native in the app whatever is bound wider.
-    /// `.gesture` keeps the app's gesture, or starts one whose click does what the button did there:
-    /// what applies to the first of the `inheriting` scopes (`AppModel.appInheritedScopes`), which is
-    /// the value the app's page shows, so its object is never empty.
+    /// Binds a button's click in one app (`bindClick`): `.standard` gives it back to the mice,
+    /// `.mouseDefault` writes `"default"`, so the button is native in the app whatever is bound
+    /// wider, and `.gesture` is Hold and Move (`bindHoldAndMove`). What the button does where the
+    /// app leaves it alone is what the first of the `inheriting` scopes resolves
+    /// (`AppModel.appInheritedScopes`), the value the app's page shows.
     public mutating func bindInApp(_ app: String, button: String, to binding: ButtonAction,
                                    inheriting: [ConfigScope] = [.global]) {
-        let scope = Self.appScope(app)
-        guard binding == .gesture else {
-            bind(button, to: binding, in: scope)
-            return
-        }
-        if case .gesture = self.binding(button, in: scope) { return }
-        // What applies where the app leaves the button alone.
-        let wider = inheriting.first ?? .global
-        let inherited: Any? = wider.deviceKey != nil ? resolved(["buttons", button], in: wider) : self[["buttons", buttonKey(button)]]
-        // Mouse Default hides the wider gesture; choosing Hold and Move gives it back whole.
-        if self.binding(button, in: scope) == .mouseDefault, ButtonAction(json: inherited) == .gesture {
-            bind(button, to: .standard, in: scope)
-            return
-        }
-        let path = scope.prefix + ["buttons", buttonKey(button, in: scope)]
-        let click: Any
-        if self.binding(button, in: scope) == .mouseDefault {
-            click = "none"  // native in this app: the gesture's click then does nothing
-        } else if let own = self[path], own is String || own is [String: Any] {
-            click = own
-        } else {
-            switch ButtonAction(json: inherited) {
-            case .standard, .mouseDefault: click = "none"
-            case .gesture: click = (inherited as? [String: Any])?["click"] ?? "none"
-            default: click = inherited ?? "none"
-            }
-        }
-        set(["click": click], at: path)
+        bindClick(button, to: binding, in: Self.appScope(app), inheriting: inheriting)
     }
 
     /// Binds one direction of an app's gesture. `.standard` removes the key, so the global
@@ -152,25 +125,31 @@ extension ConfigTree {
     /// in the wider scopes, which applies while the scope leaves the button alone (`own` is
     /// `.standard`). A mouse's wider scope is the top level; an app's is each mouse it may run
     /// with (`inheriting`), and the value is `Varies by Mouse` when they resolve it differently.
+    /// At the top level, the binding alone. A table's triggers inherit one by one (`AppButton.Trigger`).
     public func scopedButton(_ button: String, in scope: ConfigScope, inheriting: [ConfigScope] = [.global]) -> AppButton {
         let own = binding(button, in: scope)
+        guard scope != .global else {
+            let triggers = own == .gesture
+                ? Gesture.triggers.map { AppButton.Trigger(name: $0, own: gestureBinding(button, $0), everywhere: nil) } : []
+            return AppButton(own: own, everywhere: .standard, triggers: triggers, isTopLevel: true)
+        }
         let wider = inheriting.isEmpty ? [ConfigScope.global] : inheriting
         let bindings = wider.map { resolvedBinding(button, in: $0) }
         let everywhere = Applied(bindings)
-        // A plain action of the app's own replaces a global gesture, so it has no directions.
+        // A bare action of the scope's own replaces a wider table, so it has no triggers.
         guard own == .gesture || (own == .standard && bindings.contains(.gesture)) else {
-            return AppButton(own: own, everywhere: everywhere.first, directions: [], variesByMouse: everywhere.varies)
+            return AppButton(own: own, everywhere: everywhere.first, triggers: [], variesByMouse: everywhere.varies)
         }
-        let directions = Gesture.directions.map { direction in
+        let triggers = Gesture.triggers.map { trigger in
             let inherited: [ButtonAction?] = zip(wider, bindings).map { scope, binding in
-                binding == .gesture ? resolvedGestureBinding(button, direction, in: scope) : nil
+                binding == .gesture ? resolvedGestureBinding(button, trigger, in: scope) : nil
             }
             let none = ButtonAction.named("none")
             let effective = inherited.map { $0 == nil || $0 == .standard ? none : $0! }
-            return AppButton.Direction(name: direction, own: gestureBinding(button, direction, in: scope),
-                                       everywhere: inherited[0], variesByMouse: Applied(effective).varies)
+            return AppButton.Trigger(name: trigger, own: gestureBinding(button, trigger, in: scope),
+                                     everywhere: inherited[0], variesByMouse: Applied(effective).varies)
         }
-        return AppButton(own: own, everywhere: everywhere.first, directions: directions, variesByMouse: everywhere.varies)
+        return AppButton(own: own, everywhere: everywhere.first, triggers: triggers, variesByMouse: everywhere.varies)
     }
 
     // MARK: Summary
@@ -219,63 +198,167 @@ public enum AppSegment: String, CaseIterable, Sendable {
     }
 }
 
-/// A button on an app's page: the app's own binding and the one the mice resolve, which applies
-/// while the app leaves the button alone (`own` is `.standard`).
+/// A button as its row shows it, on an app's page, a mouse's or All Mice: the scope's own binding
+/// and the one the wider scopes resolve, which applies while the scope leaves the button alone (`own`
+/// is `.standard`). A trigger table's rows (ADR 24): the pop-up holds the click, and Double-click and
+/// Hold (Hold and Move's directions under it) are child rows once they do something or are set here.
 public struct AppButton: Equatable, Sendable {
-    /// One gesture direction: the app's own (`.standard` when it leaves it out) and, when the
-    /// button is a gesture everywhere, the global direction, which applies while the app's is unset.
-    public struct Direction: Equatable, Sendable {
+    /// One trigger of a table: the scope's own (`.standard` when it leaves it out) and, when the
+    /// wider scope's binding is a table, its trigger, which applies while the scope's is unset.
+    public struct Trigger: Equatable, Sendable {
         public let name: String
         public let own: ButtonAction
+        /// nil at the top level, or where the wider binding is no table.
         public let everywhere: ButtonAction?
-        /// The mice resolve this direction differently.
+        /// The mice resolve this trigger differently.
         public var variesByMouse = false
 
-        /// What the row shows while the scope leaves the direction out.
-        public var inheritedLabel: String { variesByMouse ? Applied<ButtonAction>.variesLabel : inherited.label }
+        /// What the row shows while the scope leaves the trigger out.
+        public var inheritedLabel: String { variesByMouse ? Applied<ButtonAction>.variesLabel : inherited.triggerLabel }
         public var inheritedSpokenLabel: String { variesByMouse ? Applied<ButtonAction>.variesLabel : inherited.spokenLabel }
 
-        /// The scope sets this direction itself, whether or not a wider gesture has one.
+        /// The scope sets this trigger itself, whether or not a wider table has one.
         public var isOwn: Bool { own != .standard }
 
-        /// What applies while the scope leaves the direction out: the wider gesture's, else nothing.
+        /// What applies while the scope leaves the trigger out: the wider table's, else nothing; for
+        /// the click, the mouse's own (Mouse Default), since a table with no click leaves it so.
         public var inherited: ButtonAction {
-            guard let everywhere, everywhere != .standard else { return .named("none") }
+            guard let everywhere, everywhere != .standard else { return name == "click" ? .standard : .named("none") }
             return everywhere
+        }
+    }
+
+    /// Where the child rows' values come from: Hold is its own action, or Hold and Move.
+    public struct Child: Equatable, Sendable {
+        public let name: String
+        /// The scope's own value, `.standard` when it leaves the trigger out; Hold and Move is `.gesture`.
+        public let own: ButtonAction
+        /// What applies while it does: the wider table's, else nothing.
+        public let inherited: ButtonAction
+        public var variesByMouse = false
+
+        public var effective: ButtonAction { own != .standard ? own : inherited }
+        /// The trigger does something.
+        public var isSet: Bool { effective != .standard && effective != .named("none") }
+        public var inheritedLabel: String {
+            variesByMouse ? Applied<ButtonAction>.variesLabel : inherited.triggerLabel
+        }
+        public var inheritedSpokenLabel: String {
+            variesByMouse ? Applied<ButtonAction>.variesLabel : inherited.triggerSpokenLabel
         }
     }
 
     public let own: ButtonAction
     public let everywhere: ButtonAction
-    /// The gesture's directions, when the button is a gesture in this app: its own, or the global
-    /// one it inherits (Hold and Move everywhere, nothing set here). Empty otherwise.
-    public let directions: [Direction]
+    /// The table's triggers, when the button is a table here: its own, or the wider one it
+    /// inherits (nothing set here). Empty otherwise.
+    public let triggers: [Trigger]
     /// The mice resolve the button differently, so `everywhere` is only the first one's.
     public var variesByMouse = false
+    /// All Mice: nothing is wider, so a trigger is shown only while it does something.
+    public var isTopLevel = false
 
-    /// What the row shows while the app leaves the button alone: the value the mice share, else
+    public func trigger(_ name: String) -> Trigger? { triggers.first { $0.name == name } }
+
+    /// What the row shows while the scope leaves the button alone: the value the mice share, else
     /// "Varies by Mouse".
     public var inheritedLabel: String { variesByMouse ? Applied<ButtonAction>.variesLabel : everywhere.label }
     public var inheritedSpokenLabel: String { variesByMouse ? Applied<ButtonAction>.variesLabel : everywhere.spokenLabel }
 
-    /// The caption under a Hold and Move row, as the Mouse page words it (`GestureSummary`): what a
-    /// click does and how many directions do something, each the app's own or else the one the mice
-    /// give it. nil when the button is no gesture here, or the mice give a direction different things
-    /// while the app leaves it alone (the row says "Varies by Mouse", and one mouse's summary would be
-    /// wrong for the others).
-    public var gestureSummary: String? {
-        guard !directions.isEmpty,
-              !directions.contains(where: { $0.variesByMouse && !$0.isOwn }) else { return nil }
-        func effective(_ direction: Direction) -> ButtonAction { direction.isOwn ? direction.own : direction.inherited }
-        let click = directions.first { $0.name == "click" }.map(effective) ?? .standard
-        let moves = directions.filter { $0.name != "click" }.map(effective).filter { $0 != .standard && $0 != .named("none") }
-        return GestureSummary.text(click: click, directionsSet: moves.count)
+    // MARK: Click
+
+    /// The pop-up's value: the click. `.standard` while the scope leaves it to the wider scope. A
+    /// table that names no click, with none wider showing through, reads Mouse Default: a quick tap is
+    /// the mouse's own (`.mouseDefault` on a mouse or in an app, where it is a value of its own).
+    public var click: ButtonAction {
+        guard own == .gesture, let click = trigger("click") else { return own }
+        if click.isOwn { return click.own }
+        if !clickLeftToMouse { return .standard }
+        return isTopLevel ? .standard : .mouseDefault
     }
 
-    /// The app leaves the button to a gesture set in the mice: its directions show, collapsed and
-    /// shown as for any inherited row, and editing one writes only that direction under the app
-    /// (`ConfigTree.bindInApp(_:button:direction:to:)`).
-    public var inheritsGesture: Bool { own == .standard && !directions.isEmpty }
+    /// The scope's table names no click and no wider table gives it one, so a quick tap is the mouse's.
+    public var clickLeftToMouse: Bool { canLeaveClickToMouse && trigger("click")?.isOwn == false }
+
+    /// The scope's own table can hand the click to the mouse by leaving it out: no wider table names
+    /// one that would show through (`ConfigTree.bindClick`, Mouse Default).
+    public var canLeaveClickToMouse: Bool {
+        guard own == .gesture, let click = trigger("click") else { return false }
+        return click.everywhere == nil || click.everywhere == .standard
+    }
+
+    /// What a click does while the scope leaves it: the wider table's click, else the wider binding.
+    public var clickInheritedLabel: String {
+        guard everywhere == .gesture, !variesByMouse, let click = trigger("click") else { return inheritedLabel }
+        return click.variesByMouse ? Applied<ButtonAction>.variesLabel : click.inherited.label
+    }
+
+    public var clickInheritedSpokenLabel: String {
+        guard everywhere == .gesture, !variesByMouse, let click = trigger("click") else { return inheritedSpokenLabel }
+        return click.variesByMouse ? Applied<ButtonAction>.variesLabel : click.inherited.spokenLabel
+    }
+
+    /// The click applies in place of the button's own behaviour: what Precise Pointer on the click
+    /// is checked against (it owns the button, so no other trigger can be told apart from it).
+    public var effectiveClick: ButtonAction {
+        guard click == .standard else { return click }
+        if everywhere == .gesture { return trigger("click")?.inherited ?? .named("none") }
+        return everywhere
+    }
+
+    // MARK: Children
+
+    public var doubleClick: Child {
+        let trigger = trigger("doubleClick")
+        return Child(name: "doubleClick", own: trigger?.own ?? .standard, inherited: trigger?.inherited ?? .named("none"),
+                     variesByMouse: trigger?.variesByMouse ?? false)
+    }
+
+    /// The Hold row: the scope's `hold`, Hold and Move (`.gesture`) when it sets a direction, and
+    /// the wider table's either way while it sets neither (one hold form hides the other).
+    public var hold: Child {
+        let ownMoves = Gesture.directions.contains { trigger($0)?.isOwn == true }
+        let own: ButtonAction = ownMoves ? .gesture : trigger("hold")?.own ?? .standard
+        let widerMoves = Gesture.directions.contains { name in
+            trigger(name).map { $0.inherited != .named("none") } ?? false
+        }
+        let inherited: ButtonAction = widerMoves ? .gesture : trigger("hold")?.inherited ?? .named("none")
+        let varies = (Gesture.directions + ["hold"]).contains { trigger($0)?.variesByMouse == true }
+        return Child(name: "hold", own: own, inherited: inherited, variesByMouse: varies)
+    }
+
+    /// Hold and Move's directions, shown under the Hold row while it is Hold and Move.
+    public var directions: [Trigger] {
+        hold.effective == .gesture ? Gesture.directions.compactMap(trigger) : []
+    }
+
+    /// Whether a child row shows: it does something, or (on a mouse or in an app) the scope sets it
+    /// itself, "No Action" included.
+    public func shows(_ child: Child) -> Bool {
+        child.isSet || (!isTopLevel && child.own != .standard)
+    }
+
+    /// The child rows that show, in order, before any the user has just added.
+    public var children: [Child] { [doubleClick, hold].filter(shows) }
+
+    /// The caption of a collapsed row with children: "Double-click: Mission Control. Hold: Precise
+    /// Pointer." nil when there are none, or the mice give one different things while the scope
+    /// leaves it alone (the row says "Varies by Mouse", and one mouse's summary would be wrong).
+    public var summary: String? {
+        let children = children
+        guard !children.isEmpty, !children.contains(where: { $0.variesByMouse && $0.own == .standard }) else { return nil }
+        return children.map { child in
+            if child.name == "hold", child.effective == .gesture {
+                let actions = directions.map { $0.isOwn ? $0.own : $0.inherited }
+                return "Hold and Move: \(Triggers.directionsSummary(actions))."
+            }
+            return "\(Gesture.label(child.name)): \(child.effective.triggerLabel)."
+        }.joined(separator: " ")
+    }
+
+    /// The app leaves the button to a table set in the mice: its rows show as for any inherited
+    /// row, and editing one writes only that trigger under the app.
+    public var inheritsGesture: Bool { own == .standard && !triggers.isEmpty }
 }
 
 /// The Apps list: the apps the config names, plus those added in this session, which are saved
