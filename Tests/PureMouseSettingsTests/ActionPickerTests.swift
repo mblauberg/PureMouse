@@ -6,7 +6,7 @@ import Testing
 
 // The action picker's entries (`PickerEntry`, in the Settings view code).
 
-@Test func anAppPickerOffersTheInheritedValueInsteadOfDefault() {
+@MainActor @Test func anAppPickerOffersTheInheritedValueInsteadOfDefault() {
     let entries = PickerEntry.all(allowsDefault: false, allowsGesture: true, inherited: ActionButton.inherited(.standard, inheriting: "Mission Control"))
     #expect(entries.first?.label == "Same as Mouse Settings")
     #expect(entries.first?.detail == "(Mission Control)")
@@ -127,7 +127,7 @@ private func mouse(haptics: Bool?) -> Status.Device {
                   wheelMode: nil, controls: [], capabilities: .init(haptics: haptics))
 }
 
-@Test func theHapticWaveformsShowUnlessTheMouseIsKnownToLackAMotor() {
+@MainActor @Test func theHapticWaveformsShowUnlessTheMouseIsKnownToLackAMotor() {
     let unbound = ButtonAction.named("mute")
     // Known to lack it: hidden. Known to have it, or unknown, or no mouse: shown.
     #expect(!ActionButton.offersHaptics(for: unbound, devices: [mouse(haptics: false)]))
@@ -161,3 +161,128 @@ private func mouse(haptics: Bool?) -> Status.Device {
     #expect(long.count < 75 && long.hasPrefix("Runs: open") && long.contains("…"))
     #expect(ActionButton.tooltip(for: .run("open -a Safari")) == "Runs: open -a Safari")
 }
+
+// MARK: Action Packs (Issue #154)
+
+@MainActor @Test func appFirstPickerListsAppActionsBeforeGenericGroups() {
+    let entries = PickerEntry.all(allowsDefault: true, allowsGesture: true, app: "us.zoom.xos")
+    let packEntries = entries.filter(\.isPackAction)
+    #expect(!packEntries.isEmpty)
+    #expect(packEntries.allSatisfy { $0.appName == "Zoom" })
+
+    // Pack actions come before generic groups (e.g. desktop, media)
+    let firstPackIndex = entries.firstIndex { $0.isPackAction }!
+    let firstGenericIndex = entries.firstIndex { $0.id == "missionControl" }!
+    #expect(firstPackIndex < firstGenericIndex)
+
+    // First entries are the top entries (default, none)
+    #expect(entries[0].id == "default")
+    #expect(entries[1].id == "none")
+    #expect(entries[2].isPackAction)
+
+    // Trailing shortcut text is populated
+    let muteEntry = entries.first { $0.id == "zoom.muteAudio" }!
+    #expect(muteEntry.shortcutText == "⇧⌘A")
+}
+
+@MainActor @Test func appWithoutPackHasNoPackActions() {
+    let entries = PickerEntry.all(allowsDefault: true, allowsGesture: true, app: "com.unknown.app")
+    #expect(!entries.contains { $0.isPackAction })
+}
+
+@MainActor @Test func sectionFoldingAndFlatSearch() {
+    let dummyEntries = (1...8).map { i in
+        PickerEntry(id: "item\(i)", label: "Item \(i)", group: "Test Group", kind: .set(.named("item\(i)")))
+    }
+
+    // Folded: 5 items + 1 showAll item
+    let folded = PickerItem.visible(dummyEntries, query: "", hapticsOpen: false, expandedSections: [], app: nil)
+    #expect(folded.count == 6)
+    if case .showAll(let title, let total) = folded.last {
+        #expect(title == "Test Group")
+        #expect(total == 8)
+    } else {
+        Issue.record("Expected showAll item at end of folded section")
+    }
+
+    // Expanded: all 8 items
+    let expanded = PickerItem.visible(dummyEntries, query: "", hapticsOpen: false, expandedSections: ["Test Group"], app: nil)
+    #expect(expanded.count == 8)
+
+    // Search query: folding is ignored
+    let searchResults = PickerItem.visible(dummyEntries, query: "item", hapticsOpen: false, expandedSections: [], app: nil)
+    #expect(searchResults.count == 8)
+
+    // Search in Mouse scope (app == nil) matching pack action shows hint
+    let mouseHintResults = PickerItem.visible([], query: "brush", hapticsOpen: false, expandedSections: [], app: nil)
+    #expect(mouseHintResults.contains {
+        if case .packHint(let text) = $0 {
+            return text.contains("Adobe Photoshop") && text.contains("Choose them on the app's page.")
+        }
+        return false
+    })
+}
+
+@MainActor @Test func pickingPackActionWritesOrdinaryBinding() throws {
+    var tree = ConfigTree()
+    let entries = PickerEntry.all(allowsDefault: true, allowsGesture: true, app: "us.zoom.xos")
+    let muteEntry = entries.first { $0.id == "zoom.muteAudio" }!
+    guard case .set(let action) = muteEntry.kind else {
+        Issue.record("Expected .set kind")
+        return
+    }
+
+    // Applies to tree using standard config tree binding
+    tree.bindInApp("us.zoom.xos", button: "back", to: action)
+
+    // Verify ordinary binding was written: keys = "cmd+shift+a"
+    #expect(tree.string(["apps", "us.zoom.xos", "buttons", "back", "keys"]) == "cmd+shift+a")
+
+    // The written config contains no reference to catalogue or action ID
+    let jsonString = String(decoding: tree.data(), as: UTF8.self)
+    #expect(!jsonString.contains("zoom.muteAudio"))
+    #expect(!jsonString.contains("ActionPack"))
+}
+
+@MainActor @Test func displayNameResolution() {
+    // Stored binding equal to pack action displays pack name
+    #expect(ActionButton.displayName(for: .keys("cmd+shift+a"), in: "us.zoom.xos") == "Mute or Unmute Microphone")
+
+    // Unrelated shortcut in pack app displays ordinary shortcut
+    #expect(ActionButton.displayName(for: .keys("cmd+shift+9"), in: "us.zoom.xos") == "⇧⌘9")
+
+    // App without pack displays ordinary shortcut
+    #expect(ActionButton.displayName(for: .keys("cmd+shift+a"), in: "com.unknown.app") == "⇧⌘A")
+
+    // Spoken value for pack action uses pack action label
+    let spoken = ActionButton.spokenValue(for: .keys("cmd+shift+a"), in: "us.zoom.xos", inheriting: nil, spokenInheriting: nil)
+    #expect(spoken == "Mute or Unmute Microphone")
+}
+
+@MainActor @Test func layoutKeymapDependentHelpNote() {
+    // Final Cut Pro blade cut action has keymap note
+    let fcpTooltip = ActionButton.tooltip(for: .keys("cmd+b"), in: "com.apple.FinalCut")
+    #expect(fcpTooltip == "Depends on your keymap.")
+
+    // Standard pack action without keymap note has standard tooltip
+    let zoomTooltip = ActionButton.tooltip(for: .keys("cmd+shift+a"), in: "us.zoom.xos")
+    #expect(zoomTooltip == "Presses ⇧⌘A")
+}
+
+@MainActor @Test func thumbWheelPackPairWritesOrdinaryBindingsAndRecognizesChoice() {
+    var tree = ConfigTree()
+    let pairs = ActionPackCatalog.shared.resolvedThumbWheelPairs(for: "com.adobe.Photoshop")
+    let pair = ActionPackCatalog.shared.pairs(for: "com.adobe.Photoshop").first { $0.label == "Brush Size" }!
+    let choice = ThumbWheelChoice.packPair(id: pair.id, label: pair.label)
+
+    tree.chooseThumbWheel(choice, at: ["apps", "com.adobe.Photoshop", "thumbWheel"], pairs: pairs)
+
+    // Ordinary bindings written for left and right
+    #expect(tree.string(["apps", "com.adobe.Photoshop", "thumbWheel", "left", "keys"]) == "[")
+    #expect(tree.string(["apps", "com.adobe.Photoshop", "thumbWheel", "right", "keys"]) == "]")
+
+    // ConfigTree resolves ordinary bindings back into pack pair choice
+    let resolved = tree.thumbWheelChoice(at: ["apps", "com.adobe.Photoshop", "thumbWheel"], pairs: pairs)
+    #expect(resolved == choice)
+}
+

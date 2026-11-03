@@ -14,6 +14,13 @@ struct PickerEntry: Identifiable, Equatable {
     let kind: Kind
     /// An SF Symbol shown before the label.
     var symbol: String?
+    var shortcutText: String?
+    var helpText: String?
+    var appName: String?
+    var category: String?
+    var keywords: [String]?
+    var shortcutWords: String?
+    var isPackAction: Bool = false
 
     /// The picker's entries, in order. Gesture directions get neither Mouse Default nor Hold and
     /// Move. On a mouse or in an app, `inherited` (what applies elsewhere, and where from) adds the
@@ -22,7 +29,7 @@ struct PickerEntry: Identifiable, Equatable {
     /// (that is "Same as …" then), unless it is `current`. `haptics`: whether to list the haptic
     /// waveforms (`ControlAvailability`).
     static func all(allowsDefault: Bool, allowsGesture: Bool, inherited: InheritedValue<String>? = nil,
-                    haptics: Bool = true, current: ButtonAction = .standard) -> [PickerEntry] {
+                    haptics: Bool = true, current: ButtonAction = .standard, app: String? = nil) -> [PickerEntry] {
         var entries: [PickerEntry] = []
         if let inherited {
             entries.append(PickerEntry(id: "inherit", label: inherited.entry, detail: "(\(inherited.inherited))", group: nil,
@@ -37,6 +44,32 @@ struct PickerEntry: Identifiable, Equatable {
         }
         entries.append(PickerEntry(id: "none", label: "Do Nothing", group: nil, kind: .set(.named("none")),
                                    symbol: ActionCatalog.symbol(for: "none")))
+
+        // App-first: on an app's page, that app's actions follow the top three entries
+        if let app, let pack = ActionPackCatalog.shared.pack(for: app) {
+            for action in pack.actions {
+                let shortcutText = Shortcut.display(action.payload)
+                let spoken = Shortcut.spoken(action.payload)
+                let shortcutWords = spoken + " " + action.payload.replacingOccurrences(of: "+", with: " ")
+                let groupTitle = "\(pack.name)'s Actions: \(action.category)"
+                entries.append(PickerEntry(
+                    id: action.id,
+                    label: action.label,
+                    detail: nil,
+                    group: groupTitle,
+                    kind: .set(action.buttonAction),
+                    symbol: packSymbol(for: action),
+                    shortcutText: shortcutText,
+                    helpText: action.keymapNote,
+                    appName: pack.name,
+                    category: action.category,
+                    keywords: action.keywords,
+                    shortcutWords: shortcutWords,
+                    isPackAction: true
+                ))
+            }
+        }
+
         for group in ActionCatalog.groups {
             for name in group.names {
                 entries.append(PickerEntry(id: name, label: ActionCatalog.label(for: name), group: group.title,
@@ -58,6 +91,49 @@ struct PickerEntry: Identifiable, Equatable {
                                        kind: .gesture, symbol: "arrow.up.and.down.and.arrow.left.and.right"))
         }
         return entries
+    }
+
+    private static func packSymbol(for action: ActionPackEntry) -> String {
+        switch action.category {
+        case "Meeting":
+            if action.id.contains("Audio") || action.id.contains("Microphone") || action.id.contains("mute") {
+                return "mic"
+            }
+            if action.id.contains("video") || action.id.contains("Camera") {
+                return "video"
+            }
+            if action.id.contains("Hand") {
+                return "hand.raised"
+            }
+            if action.id.contains("Share") {
+                return "display"
+            }
+            if action.id.contains("Chat") {
+                return "bubble.left"
+            }
+            if action.id.contains("participants") {
+                return "person.2"
+            }
+            return "video"
+        case "Tools":
+            return action.id.contains("Brush") ? "paintbrush" : "wrench"
+        case "Editing", "Edit":
+            return action.id.contains("blade") ? "scissors" : "pencil"
+        case "View", "Slide Show":
+            return "eye"
+        case "Tabs":
+            return "square.on.square"
+        case "Navigation":
+            return "arrow.right"
+        case "Formatting", "Alignment":
+            return "text.alignleft"
+        case "Insert":
+            return "plus.circle"
+        case "Folding":
+            return "chevron.up.chevron.down"
+        default:
+            return "app"
+        }
     }
 
     var isHaptic: Bool { group == ActionCatalog.hapticGroup }
@@ -83,12 +159,23 @@ struct PickerEntry: Identifiable, Equatable {
     /// The search as typed, without its surrounding spaces; empty means no search.
     static func searchTerm(_ query: String) -> String { query.trimmingCharacters(in: .whitespaces) }
 
+    func matchesQuery(_ query: String) -> Bool {
+        let q = Self.searchTerm(query)
+        guard !q.isEmpty else { return true }
+        if label.localizedStandardContains(q) { return true }
+        if let group, group.localizedStandardContains(q) { return true }
+        if let category, category.localizedStandardContains(q) { return true }
+        if let appName, appName.localizedStandardContains(q) { return true }
+        if let keywords, keywords.contains(where: { $0.localizedStandardContains(q) || q.localizedStandardContains($0) }) { return true }
+        if let shortcutWords, shortcutWords.localizedStandardContains(q) { return true }
+        if let shortcutText, shortcutText.localizedStandardContains(q) { return true }
+        return false
+    }
+
     static func filter(_ entries: [PickerEntry], query: String) -> [PickerEntry] {
-        let query = searchTerm(query)
-        guard !query.isEmpty else { return entries }
-        return entries.filter {
-            $0.label.localizedStandardContains(query) || ($0.group?.localizedStandardContains(query) ?? false)
-        }
+        let q = searchTerm(query)
+        guard !q.isEmpty else { return entries }
+        return entries.filter { $0.matchesQuery(q) }
     }
 }
 
@@ -97,6 +184,8 @@ struct PickerEntry: Identifiable, Equatable {
 enum PickerItem: Identifiable, Equatable {
     case entry(PickerEntry)
     case hapticGroup(expanded: Bool)
+    case showAll(section: String, count: Int)
+    case packHint(String)
 
     static let hapticGroupID = "group.haptics"
     static let hapticCaption = "Makes the mouse vibrate. Needs an MX Master 4."
@@ -105,6 +194,8 @@ enum PickerItem: Identifiable, Equatable {
         switch self {
         case .entry(let entry): entry.id
         case .hapticGroup: Self.hapticGroupID
+        case .showAll(let section, _): "showAll.\(section)"
+        case .packHint: "hint.pack"
         }
     }
 
@@ -113,23 +204,98 @@ enum PickerItem: Identifiable, Equatable {
         switch self {
         case .entry(let entry): entry.isHaptic ? nil : entry.group
         case .hapticGroup: nil
+        case .showAll(let section, _): section
+        case .packHint: nil
         }
     }
 
-    /// The rows for a search: the haptic entries fold into their group's row, which is open while
-    /// `hapticsOpen` or while the search matches one of them.
-    static func visible(_ entries: [PickerEntry], query: String, hapticsOpen: Bool) -> [PickerItem] {
-        let searching = !PickerEntry.searchTerm(query).isEmpty
-        let expanded = hapticsOpen || searching
+    /// The rows for a search or browse: sections over six rows fold to five plus Show All (N);
+    /// search ignores folding; in Mouse scope, pack-only matches show the hint.
+    static func visible(
+        _ entries: [PickerEntry],
+        query: String,
+        hapticsOpen: Bool,
+        expandedSections: Set<String> = [],
+        app: String? = nil
+    ) -> [PickerItem] {
+        let queryTerm = PickerEntry.searchTerm(query)
+        let searching = !queryTerm.isEmpty
+
+        if searching {
+            let filtered = entries.filter { $0.matchesQuery(queryTerm) }
+            let sorted = filtered.sorted { a, b in
+                if a.isPackAction != b.isPackAction {
+                    return a.isPackAction && !b.isPackAction
+                }
+                return false
+            }
+            var items: [PickerItem] = sorted.map { entry in
+                var e = entry
+                if let cat = entry.category {
+                    e.detail = cat
+                }
+                return .entry(e)
+            }
+            if app == nil && items.isEmpty {
+                let matchingApps = ActionPackCatalog.shared.appsMatchingSearch(queryTerm)
+                if !matchingApps.isEmpty {
+                    let phrase: String
+                    if matchingApps.count == 1 {
+                        phrase = matchingApps[0]
+                    } else if matchingApps.count == 2 {
+                        phrase = "\(matchingApps[0]) and \(matchingApps[1])"
+                    } else {
+                        let prefix = matchingApps.dropLast().joined(separator: ", ")
+                        phrase = "\(prefix) and \(matchingApps.last!)"
+                    }
+                    items.append(.packHint("Also in \(phrase). Choose them on the app's page."))
+                }
+            }
+            return items
+        }
+
         var items: [PickerItem] = []
-        for entry in PickerEntry.filter(entries, query: query) {
-            if entry.isHaptic {
-                if !items.contains(.hapticGroup(expanded: expanded)) { items.append(.hapticGroup(expanded: expanded)) }
-                if expanded { items.append(.entry(entry)) }
+        let expanded = hapticsOpen
+        var grouped: [(title: String?, entries: [PickerEntry])] = []
+
+        for entry in entries {
+            if entry.isHaptic { continue }
+            if let last = grouped.last, last.title == entry.group {
+                grouped[grouped.count - 1].entries.append(entry)
             } else {
-                items.append(.entry(entry))
+                grouped.append((entry.group, [entry]))
             }
         }
+
+        for group in grouped {
+            let sectionName = group.title ?? ""
+            let count = group.entries.count
+            let isCustom = sectionName == "Custom"
+            let threshold = isCustom ? 5 : 6
+            let isFolded = count > threshold && !expandedSections.contains(sectionName)
+
+            if isFolded {
+                for entry in group.entries.prefix(5) {
+                    items.append(.entry(entry))
+                }
+                items.append(.showAll(section: sectionName, count: count))
+            } else {
+                for entry in group.entries {
+                    items.append(.entry(entry))
+                }
+            }
+        }
+
+        let hapticEntries = entries.filter(\.isHaptic)
+        if !hapticEntries.isEmpty {
+            items.append(.hapticGroup(expanded: expanded))
+            if expanded {
+                for entry in hapticEntries {
+                    items.append(.entry(entry))
+                }
+            }
+        }
+
         return items
     }
 
@@ -145,6 +311,7 @@ enum PickerItem: Identifiable, Equatable {
 struct ActionPicker: View {
     let current: ButtonAction
     let entries: [PickerEntry]
+    var app: String? = nil
     /// Opened from the keyboard: the search field takes focus at once. Opened with the pointer,
     /// nothing is focused (no ring or caret) until the first keystroke, which goes to the search.
     var focusSearch = false
@@ -153,19 +320,26 @@ struct ActionPicker: View {
     @State private var query = ""
     @State private var highlighted: String?
     @State private var hapticsOpen: Bool
+    @State private var expandedSections: Set<String> = []
 
-    init(current: ButtonAction, entries: [PickerEntry], focusSearch: Bool = false, choose: @escaping (PickerEntry) -> Void) {
+    init(current: ButtonAction, entries: [PickerEntry], app: String? = nil, focusSearch: Bool = false, choose: @escaping (PickerEntry) -> Void) {
         self.current = current
         self.entries = entries
+        self.app = app
         self.focusSearch = focusSearch
         self.choose = choose
         _hapticsOpen = State(initialValue: PickerItem.opensHaptics(for: current))
     }
 
-    private var visible: [PickerItem] { PickerItem.visible(entries, query: query, hapticsOpen: hapticsOpen) }
+    private var visible: [PickerItem] {
+        PickerItem.visible(entries, query: query, hapticsOpen: hapticsOpen, expandedSections: expandedSections, app: app)
+    }
 
-    /// Consecutive rows under one header.
+    /// Consecutive rows under one header. Search results are flat.
     private var sections: [(title: String?, items: [PickerItem])] {
+        if !PickerEntry.searchTerm(query).isEmpty {
+            return [(nil, visible)]
+        }
         var sections: [(title: String?, items: [PickerItem])] = []
         for item in visible {
             if let last = sections.last, last.title == item.section {
@@ -175,6 +349,10 @@ struct ActionPicker: View {
             }
         }
         return sections
+    }
+
+    nonisolated static func matchesPackAction(_ action: ActionPackEntry, query: String, appName: String) -> Bool {
+        ActionPackCatalog.matches(action: action, query: query, appName: appName)
     }
 
     var body: some View {
@@ -237,6 +415,23 @@ struct ActionPicker: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+        case .showAll(let section, let count):
+            Button {
+                expandedSections.insert(section)
+            } label: {
+                HStack {
+                    Text("Show All (\(count))")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Show all \(count) actions in \(section)")
+        case .packHint(let text):
+            Text(text)
+                .foregroundStyle(.secondary)
+                .selectionDisabled()
         }
     }
 
@@ -253,18 +448,29 @@ struct ActionPicker: View {
         switch item {
         case .entry(let entry): choose(entry)
         case .hapticGroup: hapticsOpen.toggle()
+        case .showAll(let section, _): expandedSections.insert(section)
+        case .packHint: break
         }
     }
 
     private func move(_ delta: Int) {
-        let list = visible
+        let list = visible.filter {
+            if case .packHint = $0 { return false }
+            return true
+        }
         guard !list.isEmpty else { return }
         let index = list.firstIndex { $0.id == highlighted } ?? (delta > 0 ? -1 : list.count)
         highlighted = list[min(max(index + delta, 0), list.count - 1)].id
     }
 
     private func submit() {
-        if let item = visible.first(where: { $0.id == highlighted }) ?? visible.first { activate(item) }
+        let selectable = visible.filter {
+            if case .packHint = $0 { return false }
+            return true
+        }
+        if let item = selectable.first(where: { $0.id == highlighted }) ?? selectable.first {
+            activate(item)
+        }
     }
 }
 
@@ -287,8 +493,14 @@ private struct PickerRow: View {
                 Image(systemName: entry.symbol ?? "circle")
                     .opacity(entry.symbol == nil ? 0 : 1)
             }
+            if let shortcut = entry.shortcutText {
+                Spacer(minLength: 8)
+                Text(shortcut)
+                    .foregroundStyle(.secondary)
+            }
         }
         .padding(.leading, entry.isHaptic ? 12 : 0)
+        .help(entry.helpText ?? "")
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(checked ? .isSelected : [])
     }
@@ -399,6 +611,8 @@ struct ActionButton: View {
     var source = InheritedScope.mouseSettings
     /// The scope whose mice decide whether the haptic waveforms are listed.
     var scope = ConfigScope.global
+    /// The bundle ID of the app whose pack actions apply.
+    var app: String? = nil
     @State private var openedFromKeyboard = false
 
     /// A scope's binding as its row shows it: `.standard` leaves it to the inherited label.
@@ -416,15 +630,37 @@ struct ActionButton: View {
     /// Longer labels (a command) are shortened in the middle to this many characters.
     static let labelLimit = 32
 
-    private var label: String { inherited?.effective ?? action.label }
+    private var label: String {
+        if let inherited, inherited.isInherited { return inherited.effective }
+        return Self.displayName(for: action, in: app)
+    }
+
+    /// Display name order for a stored binding: its label if it has one, else a match against the app's catalogue.
+    public static func displayName(for action: ButtonAction, in app: String? = nil) -> String {
+        if let app, let packAction = ActionPackCatalog.shared.action(matching: action, in: app) {
+            return packAction.label
+        }
+        return action.label
+    }
 
     /// What VoiceOver reads as the value: a shortcut in words ("Shift Command 4"), not glyphs, and
     /// an inherited one with its source ("Mission Control, same as Mouse Settings").
+    static func spokenValue(for action: ButtonAction, in app: String? = nil, inheriting: String?, spokenInheriting: String?,
+                            source: String = InheritedScope.mouseSettings) -> String {
+        let ownSpoken: String? = if action == .standard {
+            nil
+        } else if let app, let packAction = ActionPackCatalog.shared.action(matching: action, in: app) {
+            packAction.label
+        } else {
+            action.spokenLabel
+        }
+        guard let inheriting else { return ownSpoken ?? action.spokenLabel }
+        return InheritedValue(own: ownSpoken, inherited: spokenInheriting ?? inheriting, source: source).spoken
+    }
+
     static func spokenValue(for action: ButtonAction, inheriting: String?, spokenInheriting: String?,
                             source: String = InheritedScope.mouseSettings) -> String {
-        guard let inheriting else { return action.spokenLabel }
-        let own = action == .standard ? nil : action.spokenLabel
-        return InheritedValue(own: own, inherited: spokenInheriting ?? inheriting, source: source).spoken
+        spokenValue(for: action, in: nil, inheriting: inheriting, spokenInheriting: spokenInheriting, source: source)
     }
 
     /// The haptic waveforms, unless the mouse is known to have no motor; a bound one still shows.
@@ -445,14 +681,15 @@ struct ActionButton: View {
             PopUpLabel(text: Self.shortened(label))
         }
         .fixedSize()
-        .help(Self.tooltip(for: action))
+        .help(Self.tooltip(for: action, in: app))
         .accessibilityLabel(accessibilityName)
-        .accessibilityValue(Self.spokenValue(for: action, inheriting: sameAsInherited, spokenInheriting: spokenInherited, source: source))
+        .accessibilityValue(Self.spokenValue(for: action, in: app, inheriting: sameAsInherited, spokenInheriting: spokenInherited, source: source))
         .accessibilityHint("Opens the list of actions")
         .popover(isPresented: $isPresented, arrowEdge: .bottom) {
             ActionPicker(current: action,
                          entries: PickerEntry.all(allowsDefault: allowsDefault, allowsGesture: allowsGesture,
-                                                  inherited: inherited, haptics: offersHaptics, current: action),
+                                                  inherited: inherited, haptics: offersHaptics, current: action, app: app),
+                         app: app,
                          focusSearch: openedFromKeyboard) { entry in
                 isPresented = false
                 choose(entry)
@@ -468,10 +705,14 @@ struct ActionButton: View {
     }
 
     /// The tooltips are under 75 characters (docs/ui-language.md).
-    static let tooltipLimit = 74
+    nonisolated static let tooltipLimit = 74
 
     /// The tooltip: what a shortcut presses or a command runs, shortened to `tooltipLimit`.
-    static func tooltip(for action: ButtonAction) -> String {
+    static func tooltip(for action: ButtonAction, in app: String? = nil) -> String {
+        if let app, let packAction = ActionPackCatalog.shared.action(matching: action, in: app),
+           let note = packAction.keymapNote {
+            return note
+        }
         let text = switch action {
         case .run(let command): "Runs: \(command)"
         case .keys(let spec): "Presses \(Shortcut.display(spec) ?? spec)"
@@ -480,5 +721,9 @@ struct ActionButton: View {
         guard text.count > tooltipLimit else { return text }
         let half = (tooltipLimit - 1) / 2
         return text.prefix(half) + "…" + text.suffix(tooltipLimit - 1 - half)
+    }
+
+    static func tooltip(for action: ButtonAction) -> String {
+        tooltip(for: action, in: nil)
     }
 }
