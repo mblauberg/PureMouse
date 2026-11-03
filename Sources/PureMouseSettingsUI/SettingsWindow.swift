@@ -146,6 +146,17 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
         return true
     }
 
+    /// The window's undo manager is the model's, so Edit › Undo and ⌘Z step through settings changes,
+    /// except while any text is being edited: a field editor or a text view (TextEditor, NSTextView)
+    /// keeps its own (the window's default one), so ⌘Z undoes typing first. The model's manager
+    /// groups by hand (`groupsByEvent` off), and typing registered on it outside a group raises
+    /// "must begin a group". None while the config is read-only: its steps would do nothing.
+    public func windowWillReturnUndoManager(_ window: NSWindow) -> UndoManager? {
+        if window.firstResponder is NSText { return nil }
+        if model.readOnly { return nil }
+        return model.undoManager
+    }
+
     public func windowDidMove(_ notification: Notification) {
         guard let window, window.isVisible else { return }
         defaults.set(NSStringFromPoint(NSPoint(x: window.frame.minX, y: window.frame.maxY)), forKey: Self.positionKey)

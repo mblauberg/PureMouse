@@ -288,14 +288,14 @@ private struct ShortPane: View {
         #expect(item.viewController?.preferredContentSize.height == 0)
     }
 
-    private func controller() throws -> (SettingsWindowController, UserDefaults, URL) {
+    private func controller(undoManager: UndoManager? = nil) throws -> (SettingsWindowController, UserDefaults, URL) {
         let folder = FileManager.default.temporaryDirectory.appending(path: "pm-sizing-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let config = folder.appending(path: "config.json")
         try Data("{}".utf8).write(to: config)
         let locations = Locations(config: config, log: folder.appending(path: "log"), daemon: nil, companion: folder)
         let defaults = UserDefaults(suiteName: "pm-\(UUID().uuidString)")!
-        let model = AppModel(locations: locations, defaults: defaults, alert: { _, _ in })
+        let model = AppModel(locations: locations, defaults: defaults, alert: { _, _ in }, undoManager: undoManager)
         return (SettingsWindowController(model: model, defaults: defaults), defaults, folder)
     }
 
@@ -334,5 +334,47 @@ private struct ShortPane: View {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.titled], backing: .buffered, defer: true)
         defaults.set(NSStringFromPoint(NSPoint(x: -90000, y: 90000)), forKey: "SettingsWindowTopLeft")
         #expect(!controller.restorePosition(of: window))
+    }
+
+    @Test func theWindowReturnsTheModelsUndoManagerUnlessAFieldEditorOwnsIt() throws {
+        let manager = UndoManager()
+        let (controller, _, folder) = try controller(undoManager: manager)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 300, height: 100), styleMask: [.titled], backing: .buffered, defer: true)
+        let field = NSTextField(frame: NSRect(x: 10, y: 10, width: 200, height: 24))
+        field.isEditable = true
+        window.contentView?.addSubview(field)
+        #expect(controller.windowWillReturnUndoManager(window) === manager)
+        #expect(window.makeFirstResponder(field))
+        #expect((window.firstResponder as? NSText)?.isFieldEditor == true)
+        #expect(controller.windowWillReturnUndoManager(window) == nil, "typing keeps its own undo")
+        window.delegate = controller
+        let editing = try #require(window.undoManager, "AppKit falls back to the window's own")
+        #expect(editing !== manager)
+        #expect(window.makeFirstResponder(nil))
+        #expect(controller.windowWillReturnUndoManager(window) === manager)
+    }
+
+    @Test func anyTextViewKeepsItsOwnUndoToo() throws {
+        let manager = UndoManager()
+        let (controller, _, folder) = try controller(undoManager: manager)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 300, height: 100), styleMask: [.titled], backing: .buffered, defer: true)
+        // TextEditor and NSTextView are not field editors, but they register typing undo too: on
+        // the model's manager (groups by hand) that raises "must begin a group".
+        let textView = NSTextView(frame: NSRect(x: 10, y: 10, width: 200, height: 60))
+        textView.isEditable = true
+        window.contentView?.addSubview(textView)
+        #expect(controller.windowWillReturnUndoManager(window) === manager)
+        #expect(window.makeFirstResponder(textView))
+        #expect(!textView.isFieldEditor)
+        #expect(controller.windowWillReturnUndoManager(window) == nil)
+    }
+
+    @Test func aWindowWithoutAModelUndoManagerReturnsNone() throws {
+        let (controller, _, folder) = try controller()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 300, height: 100), styleMask: [.titled], backing: .buffered, defer: true)
+        #expect(controller.windowWillReturnUndoManager(window) == nil)
     }
 }

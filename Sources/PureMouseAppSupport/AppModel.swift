@@ -31,17 +31,23 @@ public final class AppModel {
     /// The mouse chosen in Settings' pop-up, by device key, remembered per user. nil is All Mice.
     /// Whether it applies is `scope`'s to say.
     public internal(set) var rememberedMouse: String?
+    /// The window's undo manager, for the Settings helper; nil for the menu bar app, which keeps no
+    /// history (`ConfigStore.keepHistory(on:)`).
+    @ObservationIgnored public let undoManager: UndoManager?
     /// Only a model that announces low battery keeps the bands announced (the menu app's).
     @ObservationIgnored private var batteryAlerts: (store: BatteryAlertStore, announce: Announce, withdraw: Withdraw)?
 
     /// `notifications`: post and take down low-battery notifications (`BatteryAlert`); nil for a
-    /// model that never does.
+    /// model that never does. `undoManager`: the window's, to undo and redo config changes on; nil
+    /// keeps no history.
     public init(locations: Locations = .live, defaults: UserDefaults = .standard, alert: @escaping Alert,
-                notifications: (announce: Announce, withdraw: Withdraw)? = nil) {
+                notifications: (announce: Announce, withdraw: Withdraw)? = nil, undoManager: UndoManager? = nil) {
         self.defaults = defaults
+        self.undoManager = undoManager
         rememberedMouse = defaults.string(forKey: Self.mouseKey)
         link = DaemonLink(locations: locations)
         store = ConfigStore(locations: locations)
+        if let undoManager { store.keepHistory(on: undoManager) }
         capture = CaptureController(link: link)
         self.alert = alert
         batteryAlerts = notifications.map { (BatteryAlertStore(url: locations.batteryAlerts), $0.announce, $0.withdraw) }
