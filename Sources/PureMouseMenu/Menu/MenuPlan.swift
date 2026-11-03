@@ -234,7 +234,7 @@ enum MenuPlan {
         if state.logiOptionsRunning {
             // Quit carries the warning; the login item is its follow-up, so a plain row under it.
             rows.append(attention(LogiOptionsAction.quit.title, .quitLogiOptions))
-            rows.append(.item(MenuItem(title: LogiOptionsAction.openLoginItems.title + "…", action: .openLoginItems)))
+            rows.append(.item(MenuItem(title: LogiOptionsAction.openLoginItems.title, action: .openLoginItems)))
         }
         return rows
     }

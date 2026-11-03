@@ -11,7 +11,8 @@ import PureMouseAppSupport
 ///   Every window on screen is listed on its own (the window, then its sheet or popover).
 ///
 /// It reports a control with no label, a button with no name (an image button), two controls with
-/// the same label in one window, and a control smaller than 20 × 20 pt (docs/ui-design.md,
+/// the same label in one window, a button whose label does not start with the text it shows, a switch
+/// that is not the form's switch (`AXToggle` in place of `AXSwitch`), and a control smaller than 20 × 20 pt (docs/ui-design.md,
 /// "Motion, sound and accessibility"). `PUREMOUSE_DEV_AX_DUMP_DELAY` is the seconds each view gets
 /// to lay out (default 2).
 @MainActor
@@ -29,6 +30,8 @@ enum DevAXDump {
         let role: String
         let subrole: String
         let label: String
+        /// The text the control draws, where the tree reports it (a button's own title).
+        let title: String
         let value: String
         let size: CGSize
         var isControl: Bool { DevAXDump.controlRoles.contains(role) }
@@ -76,6 +79,7 @@ enum DevAXDump {
                 let flag = entry.isControl && entry.label.isEmpty && entry.subrole.isEmpty ? "  <-- NO LABEL" : ""
                 let text = [entry.subrole.isEmpty ? "" : " (\(entry.subrole))",
                             entry.label.isEmpty ? "" : " \"\(entry.label)\"",
+                            entry.title.isEmpty || entry.title == entry.label ? "" : " [shows \"\(entry.title)\"]",
                             entry.value.isEmpty ? "" : " = \(entry.value)"].joined()
                 let size = entry.isControl ? "  \(Int(entry.size.width.rounded()))x\(Int(entry.size.height.rounded()))" : ""
                 print(String(repeating: "  ", count: entry.depth) + entry.role + text + size + flag)
@@ -104,6 +108,12 @@ enum DevAXDump {
                 continue
             }
             seen[entry.label, default: 0] += 1
+            if entry.role == "AXButton", !entry.title.isEmpty, !entry.label.hasPrefix(entry.title) {
+                problems.append("label does not start with the text it shows: \(name) shows \"\(entry.title)\"")
+            }
+            if entry.role == "AXCheckBox", entry.subrole == "AXToggle" {
+                problems.append("a toggle, not the form's switch: \(name)")
+            }
             // AppKit draws a slider 16 pt tall whatever the form does; its hit area is the whole track.
             // The mini switch is 36-38 x 16-18 and a slider 16 tall: AppKit sizes both, and the
             // allowed `.controlSize(.mini)` is the switch's. The row around each takes the click.
@@ -138,7 +148,8 @@ enum DevAXDump {
         // A `Menu` of the button style names itself in its title; its label is the description of
         // the symbol drawn on its face ("Up and down Chevrons"), the same for every pop-up.
         if role == "AXMenuButton", !string(node, "accessibilityTitle").isEmpty { label = string(node, "accessibilityTitle") }
-        if label.isEmpty { label = string(node, "accessibilityTitle") }
+        let title = string(node, "accessibilityTitle")
+        if label.isEmpty { label = title }
         let value = string(node, "accessibilityValue")
         var size = CGSize.zero
         if node.responds(to: NSSelectorFromString("accessibilityFrame")),
@@ -149,7 +160,7 @@ enum DevAXDump {
         var childDepth = depth
         if interesting {
             entries.append(Entry(depth: depth, role: role, subrole: string(node, "accessibilitySubrole"),
-                                 label: label, value: String(value.prefix(60)), size: size))
+                                 label: label, title: title, value: String(value.prefix(60)), size: size))
             childDepth += 1
         }
         if node.responds(to: NSSelectorFromString("accessibilityChildren")),

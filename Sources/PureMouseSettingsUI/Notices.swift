@@ -13,14 +13,14 @@ extension Notice {
         }
     }
 
-    var title: String {
+    @MainActor func title(_ model: AppModel) -> String {
         switch self {
         case .configError: "The config file isn't valid."
         case .writeError: "That change wasn't saved."
         case .statusTooNew: "PureMouse needs an update."
         case .off: "PureMouse is off."
         case .paused: "PureMouse is paused."
-        case .inputMonitoring: "PureMouse needs Input Monitoring."
+        case .inputMonitoring: Self.inputMonitoringTitle(waiting: model.waitingForInputMonitoring.map(\.name))
         case .logiOptions: "Logi Options+ is running."
         case .accessibility: "PureMouse needs Accessibility."
         case .noMouse: "No mouse found."
@@ -38,10 +38,10 @@ extension Notice {
         case .paused: "The mouse works as it does without PureMouse. Changes here apply when it resumes."
         case .inputMonitoring:
             Self.inputMonitoringMessage(waiting: model.waitingForInputMonitoring.map(\.name))
-        case .noMouse: "Turn on your mouse or plug in its receiver. Its settings appear here once it connects."
-        case .logiOptions: "Only one app can control the buttons. Quit it, then remove its login item so it stays quit."
+        case .noMouse: "Turn on your mouse or plug in its receiver."
+        case .logiOptions: "Only one app can control the buttons. Quit Logi Options+, then remove it from Login Items so it stays quit."
         case .accessibility:
-            "Allow it in System Settings to use smooth scrolling and button actions. PureMouse restarts itself when you do."
+            "PureMouse can't scroll smoothly or press shortcuts until you allow it in System Settings. It restarts itself once you do."
         }
     }
 }
@@ -53,17 +53,21 @@ struct PaneBanners: View {
     @Environment(\.settings) private var settings
     /// The pane's settings do nothing without Accessibility.
     var needsAccessibility = false
+    /// False above a bare empty state, where there is no form to put the banner in.
+    var inForm = true
 
     var body: some View {
         // A pane that has no mouse to show says so in place (docs/ui-design.md, empty states).
         let notices = BannerPlan.items(for: BannerPlan.State(model: model, needsAccessibility: needsAccessibility))
             .filter { $0 != .noMouse }
         if let notice = notices.first {
-            Section {
-                Banner(title: notice.title, message: notice.message(model), symbol: notice.symbol,
-                       more: BannerPlan.moreText(notices.count - 1), showMore: { settings?.open(.tab(.general)) }) {
-                    NoticeActions(notice: notice)
-                }
+            let banner = Banner(title: notice.title(model), message: notice.message(model), symbol: notice.symbol,
+                                more: BannerPlan.moreText(notices.count - 1), showMore: { settings?.open(.tab(.general)) },
+                                actions: { NoticeActions(notice: notice) }, link: { NoticeLink(notice: notice) })
+            if inForm {
+                Section { banner }
+            } else {
+                banner.padding(.horizontal, 30).padding(.top, 20)
             }
         }
     }
@@ -78,7 +82,7 @@ struct SheetBanners: View {
         if model.writeError != nil {
             let notice = Notice.writeError
             Section {
-                Banner(title: notice.title, message: notice.message(model), symbol: notice.symbol) {
+                Banner(title: notice.title(model), message: notice.message(model), symbol: notice.symbol) {
                     NoticeActions(notice: notice)
                 }
             }
@@ -86,10 +90,11 @@ struct SheetBanners: View {
     }
 }
 
-/// A notice at the top of a pane: its symbol, a title over its message, and its buttons, with a
-/// link to the rest in General. A row of its own, since `LabeledContent` would squeeze a long
-/// message beside the buttons. The Apps tab's suggestion uses it too.
-struct Banner<Actions: View>: View {
+/// A notice at the top of a pane: its title with its symbol, the message under it, and its buttons
+/// to the side, with a link to the rest in General. A row of its own, since `LabeledContent` would
+/// squeeze a long message beside the buttons. The symbol sits in the title's line, so the message
+/// starts at the form's own text edge. General's rows and the Apps tab's suggestion use it too.
+struct Banner<Actions: View, Link: View>: View {
     let title: String
     let message: String
     var symbol = "exclamationmark.triangle.fill"
@@ -97,18 +102,23 @@ struct Banner<Actions: View>: View {
     var more: String?
     var showMore: () -> Void = {}
     @ViewBuilder var actions: Actions
+    /// A link-style button under the message.
+    @ViewBuilder var link: Link
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: symbol)
-                .symbolRenderingMode(.multicolor)
-                .font(.title3)
-                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).fontWeight(.semibold)
+                Label {
+                    Text(title).fontWeight(.semibold)
+                } icon: {
+                    Image(systemName: symbol)
+                        .symbolRenderingMode(.multicolor)
+                        .accessibilityHidden(true)
+                }
                 Text(message).foregroundStyle(.secondary).font(.callout)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
+                link
                 if let more {
                     Button(more, action: showMore)
                         .buttonStyle(.link)
@@ -123,20 +133,36 @@ struct Banner<Actions: View>: View {
     }
 }
 
-/// A notice as a row of General's Status section.
+extension Banner where Link == EmptyView {
+    init(title: String, message: String, symbol: String = "exclamationmark.triangle.fill", more: String? = nil,
+         showMore: @escaping () -> Void = {}, @ViewBuilder actions: () -> Actions) {
+        self.init(title: title, message: message, symbol: symbol, more: more, showMore: showMore,
+                  actions: actions, link: { EmptyView() })
+    }
+}
+
+/// A notice as a row of General's Status section: the same banner, in the form.
 struct NoticeRow: View {
     @Environment(AppModel.self) private var model
     let notice: Notice
 
     var body: some View {
-        LabeledContent {
-            NoticeActions(notice: notice)
-        } label: {
-            Label {
-                RowLabel(notice.title, help: notice.message(model))
-            } icon: {
-                Image(systemName: notice.symbol).symbolRenderingMode(.multicolor)
+        Banner(title: notice.title(model), message: notice.message(model), symbol: notice.symbol,
+               actions: { NoticeActions(notice: notice) }, link: { NoticeLink(notice: notice) })
+    }
+}
+
+/// The link-style button some notices carry under their message.
+struct NoticeLink: View {
+    let notice: Notice
+
+    var body: some View {
+        if let action = notice.logiOptionsLink, let url = action.url {
+            Button { NSWorkspace.shared.open(url) } label: {
+                Text(action.title).foregroundStyle(.link).frame(minHeight: 20).contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .font(.callout)
         }
     }
 }
@@ -171,18 +197,13 @@ struct NoticeActions: View {
         case .paused:
             Button("Resume") { model.setPaused(false) }
         case .logiOptions:
-            VStack(alignment: .trailing) {
-                Button(LogiOptionsAction.quit.title) { LogiOptionsQuit.shared.ask { model.askDaemonToRecheck() } }
-                Button(LogiOptionsAction.openLoginItems.title) {
-                    LogiOptionsAction.openLoginItems.url.map { NSWorkspace.shared.open($0) }
-                }
-            }
+            Button(LogiOptionsAction.quit.title) { LogiOptionsQuit.shared.ask { model.askDaemonToRecheck() } }
         case .accessibility:
-            Button("Open System Settings") { NSWorkspace.shared.open(PrivacyPane.accessibility.url) }
-                .accessibilityLabel("Allow Accessibility in System Settings")
+            Button("Allow Accessibility…") { NSWorkspace.shared.open(PrivacyPane.accessibility.url) }
+                .accessibilityLabel("Allow Accessibility…, opens System Settings")
         case .inputMonitoring:
-            Button("Open System Settings") { NSWorkspace.shared.open(PrivacyPane.inputMonitoring.url) }
-                .accessibilityLabel("Allow Input Monitoring in System Settings")
+            Button("Allow Input Monitoring…") { NSWorkspace.shared.open(PrivacyPane.inputMonitoring.url) }
+                .accessibilityLabel("Allow Input Monitoring…, opens System Settings")
         case .noMouse:
             EmptyView()
         }

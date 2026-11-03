@@ -178,10 +178,13 @@ Each level has one mechanism, and each label says what it reveals.
   button where one exists: no mouse found, Bluetooth off, PureMouse paused or off, Logi Options+
   running, permission not allowed, no apps added.
 - **No mouse.** With PureMouse running and not paused, and no mouse known (none adopted, none waiting, none in the config), the Mouse
-  pane is a "No Mouse Found" `ContentUnavailableView` instead of empty tabs. A Bluetooth mouse that
-  is seen but waiting for Input Monitoring is not "no mouse": the pane, General and the menu say
-  so and offer Allow Input Monitoring. General's Input Monitoring row reads "Not needed" when no
-  Bluetooth mouse is in play. A pane's content stays within 600 pt.
+  pane has no header (no segments, no Find by Pressing…) and no boxed card: a plain "No Mouse Found"
+  `ContentUnavailableView` with one bordered button, Open Bluetooth Settings…. General's row reads
+  "No mouse found." with a caption and no button. A Bluetooth mouse that is seen but waiting for
+  Input Monitoring is not "no mouse": the pane, General and the menu say "<Mouse> is waiting for
+  Input Monitoring" and offer Allow Input Monitoring…. While that notice shows, General's
+  Permissions row is status only. The row reads "Not needed" when no Bluetooth mouse is in play.
+  A pane's content stays within 600 pt.
 - An error shows next to the control it concerns. Alerts only for an actionable failure or an
   action that cannot be undone (Reset All Settings…, Use Last Working Config…); never at launch,
   never for information.
@@ -319,9 +322,10 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
 - **Notices.** `BannerPlan.items` gives them in order: config error, unsaved change, status too
   new, PureMouse off, paused, Input Monitoring (a Bluetooth mouse is waiting), Logi Options+,
   Accessibility on the panes that need it, no mouse (General only; the Mouse panes say it in
-  place). The Logi Options+ notice offers Quit Logi Options+ (`LogiOptionsAction.quit`: asks the
-  app to quit through `NSRunningApplication.terminate()`, never a signal, and never starts it) and
-  Open Login Items Settings, in the banner, General's row and the menu. It appears and clears in
+  place). The Logi Options+ notice offers Quit Logi Options+ as its only bordered button
+  (`LogiOptionsAction.quit`: asks the app to quit through `NSRunningApplication.terminate()`,
+  never a signal, and never starts it) and Open Login Items Settings… as a link-style button
+  under its caption, in the banner, General's row and the menu. It appears and clears in
   place, as the daemon re-checks (see [How it works](how-it-works.md#permissions)). A pane shows
   only the first, with "N more notices" opening General, whose Status section lists them all as rows
   (off is its PureMouse row). Use Last Working Config… asks before it replaces the file.
@@ -332,7 +336,7 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
 
 | Place | Shown by default | Advanced |
 |---|---|---|
-| General | Status (PureMouse running/paused/off, Start or Stop, active notices), Open at login, Show in menu bar, Low battery notification, Permissions | Advanced… sheet: Work with Universal Control, Config file, Log, Reset All Settings… |
+| General | Status (PureMouse running/paused/off, Start or Stop, active notices), Open at login, Show in menu bar, Low battery notifications (a disabled switch that keeps the choice, with Open Notification Settings…, while macOS has them off), Permissions (status only) | Advanced… sheet: Work with Universal Control, Config file, Log, Reset All Settings… |
 | Mouse header | Buttons, Scrolling, Pointer segments; mouse pop-up with two or more mice; Find by Pressing… and the device card on Buttons | — |
 | Mouse › Buttons | One row per button with its action | Gesture directions (disclosure, collapsed, caption summarises them; choosing Hold and Move expands it); Other controls (disclosure); Advanced… sheet, only while some button anywhere is Hold and Move: gesture Distance and Repeat |
 | Mouse › Scrolling | Smooth scrolling, Feel, Speed; Main Wheel: Reverse direction, Wheel mode, SmartShift; Thumb Wheel: Action (Turn left/right when Custom); each when the mouse has it | Advanced… sheet, each row only when it applies: Acceleration, Glide, Hold Shift to scroll sideways (dimmed while smooth scrolling is off); Switches at (while SmartShift is on); thumb wheel Reverse direction (when it scrolls here or in some app), Swap directions and Turn distance (when it has actions), Speed (when it scrolls) |

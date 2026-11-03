@@ -27,11 +27,26 @@ public enum Notice: CaseIterable, Sendable {
 }
 
 extension Notice {
-    /// What macOS holds back without Input Monitoring: a Bluetooth mouse's replies. Names the mice
-    /// seen, else says it of Bluetooth mice.
+    /// What macOS holds back without Input Monitoring: a Bluetooth mouse's replies. The title names
+    /// the mice seen and waiting; with none named (a mouse in use whose grant was taken back) it
+    /// says what PureMouse needs.
+    public static func inputMonitoringTitle(waiting: [String]) -> String {
+        switch waiting.count {
+        case 0: "PureMouse needs Input Monitoring."
+        case 1: "\(waiting[0]) is waiting for Input Monitoring."
+        default: "\(list(waiting)) are waiting for Input Monitoring."
+        }
+    }
+
     public static func inputMonitoringMessage(waiting: [String]) -> String {
-        let subject = waiting.isEmpty ? "your Bluetooth mouse" : waiting.joined(separator: " and ")
-        return "Allow it in System Settings to use \(subject). A USB receiver works without it. PureMouse restarts itself when you do."
+        let subject = waiting.isEmpty ? "your Bluetooth mouse" : waiting.count == 1 ? "it" : "them"
+        return "PureMouse can't see \(subject) until you allow it in System Settings. It restarts itself once you do."
+    }
+
+    /// "A", "A and B", "A, B and C".
+    static func list(_ names: [String]) -> String {
+        guard names.count > 1 else { return names.first ?? "" }
+        return names.dropLast().joined(separator: ", ") + " and " + names[names.count - 1]
     }
 }
 

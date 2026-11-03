@@ -35,29 +35,26 @@ struct GeneralPane: View {
                 .disabled(model.locations.daemon == nil)
                 if openAtLogin.needsApproval {
                     LabeledContent {
-                        Button("Open Login Items Settings") { NSWorkspace.shared.open(OpenAtLogin.settingsURL) }
+                        Button("Open Login Items Settings…") { NSWorkspace.shared.open(OpenAtLogin.settingsURL) }
                     } label: {
                         RowLabel("Approve PureMouse", help: "In System Settings › General › Login Items, allow PureMouse to run in the background.")
                     }
                 }
                 Toggle(isOn: Binding(get: { showsInMenuBar }, set: { setShowsInMenuBar($0) })) {
-                    RowLabel("Show in menu bar", help: "Low battery notifications and update checks carry on when it's hidden. Open PureMouse from Applications to get back here.")
+                    RowLabel("Show in menu bar", help: "Battery alerts and update checks keep running when it's hidden.")
                 }
                 .accessibilityLabel("Show in menu bar")
+                .help("Open PureMouse from Applications to get back to Settings when the icon is hidden.")
                 .disabled(model.locations.daemon == nil)
                 lowBatteryRow
             }
 
             Section {
                 PermissionRow(title: "Accessibility", help: "Lets PureMouse scroll, press shortcuts and swipe for you.",
-                              granted: model.daemonRunning ? model.status?.permissions.accessibility : nil) {
-                    NSWorkspace.shared.open(PrivacyPane.accessibility.url)
-                }
-                PermissionRow(title: "Input Monitoring", help: "Needed for Bluetooth mice. USB receivers work without it.",
+                              granted: model.daemonRunning ? model.status?.permissions.accessibility : nil)
+                PermissionRow(title: "Input Monitoring", help: "Needed for Bluetooth mice.",
                               granted: model.daemonRunning ? model.status?.permissions.inputMonitoring : nil,
-                              needed: model.inputMonitoringNeeded) {
-                    NSWorkspace.shared.open(PrivacyPane.inputMonitoring.url)
-                }
+                              needed: model.inputMonitoringNeeded)
             } header: {
                 Text("Permissions")
             } footer: {
@@ -104,24 +101,21 @@ struct GeneralPane: View {
     }
 
     /// The menu bar app posts the notifications, with or without its icon (it runs windowless when
-    /// the icon is hidden).
+    /// the icon is hidden). While macOS has them off the switch is disabled and keeps what was chosen.
     private var lowBatteryRow: some View {
         let help = notificationsDenied ? "Notifications are off for PureMouse in System Settings."
             : "Tells you when the battery falls to 20% and 5%."
-        return LabeledContent {
-            HStack {
-                if notificationsDenied {
-                    Button("Open System Settings") { NSWorkspace.shared.open(NotificationPermission.settingsURL) }
-                        .accessibilityLabel("Allow notifications in System Settings")
-                }
-                Toggle("Low battery notification", isOn: Binding(get: { model.lowBatteryNotificationsOn },
-                                                                 set: { setLowBatteryNotifications($0) }))
-                    .toggleStyle(.switch)
-                    .labelsHidden()
-                    .disabled(model.readOnly)
+        return Group {
+            Toggle(isOn: Binding(get: { model.lowBatteryNotificationsOn }, set: { setLowBatteryNotifications($0) })) {
+                RowLabel("Low battery notifications", help: help)
             }
-        } label: {
-            RowLabel("Low battery notification", help: help)
+            .accessibilityLabel("Low battery notifications")
+            .disabled(model.readOnly || notificationsDenied)
+            if notificationsDenied {
+                // Outside the toggle: a disabled toggle would disable its label's button too.
+                Button("Open Notification Settings…") { NSWorkspace.shared.open(NotificationPermission.settingsURL) }
+                    .buttonStyle(.bordered)
+            }
         }
     }
 
@@ -241,9 +235,9 @@ private struct PermissionRow: View {
     /// nil while PureMouse is off: only the daemon knows (grants are per process).
     let granted: Bool?
     /// Whether anything PureMouse does now needs it; a permission that is neither granted nor
-    /// needed (Input Monitoring with no Bluetooth mouse) reads "Not needed" and offers nothing.
+    /// needed (Input Monitoring with no Bluetooth mouse) reads "Not needed". The row only reports:
+    /// a permission that is not allowed has its notice above, with the button that opens its pane.
     var needed = true
-    let open: () -> Void
 
     var body: some View {
         let state = PermissionState(granted: granted, needed: needed)
@@ -254,8 +248,6 @@ private struct PermissionRow: View {
                     Label(state.word, systemImage: "checkmark.circle.fill")
                 case .notAllowed:
                     Label(state.word, systemImage: "exclamationmark.triangle.fill")
-                    Button("Open System Settings", action: open)
-                        .accessibilityLabel("Open \(title) privacy settings")
                 case .notNeeded, .unavailable:
                     Text(state.word)
                 }

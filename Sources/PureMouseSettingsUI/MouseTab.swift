@@ -124,6 +124,16 @@ struct MouseHeader: View {
         // stays in the layout when empty (its Spacer keeps it), and the two share what is left
         // equally, so the pop-up gets the room beside them and cuts a long name with an ellipsis
         // instead of overlapping. The stack's own spacing keeps them apart.
+        // With no mouse at all there is nothing to choose between: the pane says so, bare.
+        if model.hasNoMouse {
+            Color.clear.frame(height: 0).accessibilityHidden(true)
+                .onChange(of: model.hasNoMouse) { settings?.refit() }
+        } else {
+            strip
+        }
+    }
+
+    private var strip: some View {
         HStack {
             HStack(spacing: 0) {
                 // The leading slot is the mouse pop-up's, with two or more mice (docs/ui-design.md).
@@ -148,6 +158,7 @@ struct MouseHeader: View {
         .padding(.top)
         // The pop-up and its note come and go with the mice known, which changes the strip's height.
         .onChange(of: model.showsMouseMenu) { settings?.refit() }
+        .onChange(of: model.hasNoMouse) { settings?.refit() }
         .onChange(of: model.captureOutcome) { _, outcome in
             if let outcome { AccessibilityNotification.Announcement(outcome.message).post() }
         }
@@ -213,17 +224,17 @@ struct MouseSegmentPane<Content: View>: View {
     var body: some View {
         Group {
             if model.hasNoMouse {
-                PaneForm {
-                    PaneBanners()
-                    Section {
-                        ContentUnavailableView {
-                            Label("No Mouse Found", systemImage: "computermouse")
-                        } description: {
-                            Text("Turn on your mouse or plug in its receiver. Its settings appear here once it connects.")
-                        }
-                        // A form row sizes to its content and sits leading; the empty state centres in the row.
-                        .frame(maxWidth: .infinity)
+                VStack(spacing: 0) {
+                    // Notices still show above it, as the one banner of the other panes.
+                    PaneBanners(inForm: false)
+                    ContentUnavailableView {
+                        Label("No Mouse Found", systemImage: "computermouse")
+                    } description: {
+                        Text("Turn on your mouse or plug in its receiver. Its settings will appear in this pane once it connects.")
+                    } actions: {
+                        Button("Open Bluetooth Settings…") { NSWorkspace.shared.open(Links.bluetoothSettings) }
                     }
+                    .frame(maxWidth: .infinity, minHeight: 260)
                 }
             } else {
                 content

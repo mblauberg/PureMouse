@@ -40,7 +40,7 @@ once Options+ has quit, and comes back if it starts again.
 1. **Quit Logi Options+** (in the notice or the menu) asks the app to quit, as its own Quit item
    would. It does not force anything, and PureMouse never starts it.
 2. Options+ starts again at login and restarts its background agent unless you remove its login item.
-   **Open Login Items Settings** opens System Settings › General › Login Items; under "Allow in the
+   **Open Login Items Settings…** opens System Settings › General › Login Items; under "Allow in the
    Background" turn off Logi Options+ (its agent is `com.logi.cp-dev-mgr`). It may also be listed
    under "Open at Login".
 3. To remove Options+ for good, run Logitech's uninstaller (the Logi Options+ installer app, or
