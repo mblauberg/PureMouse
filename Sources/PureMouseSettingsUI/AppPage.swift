@@ -114,7 +114,13 @@ struct AppPage: View {
             }
             .accessibilityLabel("Use PureMouse in \(identity.name)")
         } footer: {
-            if !on { Text(ConfigTree.useInAppOffNote) }
+            // Leading, as the Apps list's note is: a bare footer Text sits at the trailing edge.
+            if !on {
+                Text(ConfigTree.useInAppOffNote)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
     }
 
