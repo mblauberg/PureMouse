@@ -303,15 +303,19 @@ struct LiveUpdateFiles: UpdateFiles {
     }
 }
 
-/// Opens the installed app the way double-clicking it does: `puremouse` with no arguments runs
-/// `register`, which replaces the running background process and menu bar app with the new copy's
-/// (`LoginItem.finderLaunch`). The same path as opening it by hand.
+/// Starts the installed app's new copy through LaunchServices, as `puremouse register`, which
+/// replaces the running background process and menu bar app with the new copy's. Not the bare
+/// double-click (`LoginItem.finderLaunch`), which also opens Settings: an update that was started
+/// from the menu must not put a window on screen. A new instance is asked for (`-n`), since
+/// arguments are only passed to one that is launched.
 public enum UpdateRelaunch {
+    public static func arguments(for app: URL) -> [String] { ["-n", app.path, "--args", "register"] }
+
     /// Whether `open` accepted the app.
     public static func open(_ app: URL) -> Bool {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        process.arguments = [app.path]
+        process.arguments = arguments(for: app)
         process.standardError = FileHandle.nullDevice
         guard (try? process.run()) != nil else { return false }
         process.waitUntilExit()

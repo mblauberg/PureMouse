@@ -233,7 +233,7 @@ expect macOS to block it the first time; step 2 clears that before you open it.
   new release brings one quiet notification, and the menu shows **Update to X.Y.Z…** with **Skip
   This Version** under it. Choosing it asks, then downloads the release, checks it against its
   `SHA256SUMS` and that it is signed by the same certificate as this copy, replaces the app and
-  opens it again. Settings › About has the same as **Update and Relaunch**. Quitting PureMouse while it
+  opens it again, with no window if Settings was not open. Settings › About has the same as **Update and Relaunch**, and Settings comes back on About. Quitting PureMouse while it
   runs stops the update. If a check fails, or the app is on a read-only disk or needs an administrator,
   nothing is replaced: the menu says why and links the release page (or opens it), and you update
   by hand. Nothing installs unless you choose it, and the switch in Settings › About turns the

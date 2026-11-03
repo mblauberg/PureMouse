@@ -55,9 +55,13 @@ macOS, the same app.
   as that copy (the mounted image and the check are not the file that is installed), and swapped in
   with one `FileManager.replaceItemAt(…, options: .usingNewMetadataOnly)`. The image is unmounted and
   the download deleted on every path. PureMouse then quits the helper (reversibly, with no quit
-  stamp, so Settings still opens if the relaunch fails) and opens the installed app the way
-  double-clicking it does, which restarts the background process and the menu bar app on the new
-  files.
+  stamp, so Settings still opens if the relaunch fails) and starts the installed app as
+  `puremouse register` (`open -n <app> --args register`), which restarts the background process and
+  the menu bar app on the new files and opens no window. It does not open the app the way
+  double-clicking it does: that also opens Settings, which a quiet menu bar utility must not do
+  after an update from its menu. Settings comes back only if it was showing (where it was), or on
+  About for an update asked for from About, which was showing by definition. The request is posted
+  before `register`, which replaces the process that would have posted it.
 - **The commit point is read from the disk.** `replaceItemAt` can throw after the new bundle is in
   place (an immutable flag or a deny-delete ACL on the old bundle gives Cocoa error 513 once the
   rename is done), leaving the old bundle at the staging path. So a throw is not a verdict. The

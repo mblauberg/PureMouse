@@ -24,7 +24,7 @@ struct UpdateSetup {
     var confirm: @MainActor (UpdateOffer) -> Bool = Alerts.confirmUpdate
     /// Opens the installed app the way double-clicking it does, after quitting Settings; true if
     /// it was accepted.
-    var relaunch: @MainActor (URL) async -> Bool = { UpdateSetup.relaunchLive($0) }
+    var relaunch: @MainActor (URL, InstallSource) async -> Bool = { UpdateSetup.relaunchLive($0, from: $1) }
     var openPage: @MainActor (URL) -> Void = { NSWorkspace.shared.open($0) }
     var terminate: @MainActor () -> Void = { NSApp.terminate(nil) }
     var alert: @MainActor (String, String) -> Void = Alerts.show
@@ -37,13 +37,25 @@ struct UpdateSetup {
                     ask: Alerts.askAboutUpdates, announce: { Notifier.post($0) })
     }
 
-    /// Quits Settings, then opens the installed app. The quit is the reversible one: if the app
-    /// does not open, this process stays and Settings opens again from its menu.
-    @MainActor static func relaunchLive(_ app: URL, launcher: SettingsLauncher = .shared,
+    /// Quits Settings, then starts the installed app's new copy (`register`, which opens no
+    /// window). The quit is the reversible one: if the app does not open, this process stays and
+    /// Settings opens again from its menu. Settings comes back only if it was showing, where it
+    /// was, or on About for an update asked for from About, and is asked for before the app is
+    /// opened: `register` replaces this process, which may not get to ask after.
+    @MainActor static func relaunchLive(_ app: URL, from source: InstallSource, launcher: SettingsLauncher = .shared,
                                         open: @MainActor (URL) -> Bool = UpdateRelaunch.open) -> Bool {
-        launcher.quitRunning()
+        let settingsWasOpen = launcher.quitRunning()
+        switch source {
+        case .about: launcher.open(ShowRequest(pane: .tab(.about)))
+        case .menu: if settingsWasOpen { launcher.open(ShowRequest()) }
+        }
         return open(app)
     }
+}
+
+/// Where an update was asked for, which decides what Settings does across the relaunch.
+enum InstallSource: Equatable {
+    case menu, about
 }
 
 /// The app delegate: owns the model and the status item. Settings is an app of its own
@@ -66,7 +78,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     private let installedApp: URL?
     private let current: String
     private let confirmUpdate: @MainActor (UpdateOffer) -> Bool
-    private let relaunch: @MainActor (URL) async -> Bool
+    private let relaunch: @MainActor (URL, InstallSource) async -> Bool
     private let openPage: @MainActor (URL) -> Void
     private let terminate: @MainActor () -> Void
     private let alert: @MainActor (String, String) -> Void
@@ -214,7 +226,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     /// Update to 1.2.3…: the menu row.
     func installUpdate() {
         guard iconShown, let offer = updates.offer else { return }
-        startInstall(offer)
+        startInstall(offer, from: .menu)
     }
 
     /// Settings' About pane asked for this release (`UpdatePreferences.installRequest`). The request
@@ -225,14 +237,14 @@ final class AppController: NSObject, NSApplicationDelegate {
         guard UpdateInstaller.names(release), let running = UpdateCheck.Version(current), release.version > running else {
             return
         }
-        startInstall(UpdateOffer(version: release.version, page: release.page))
+        startInstall(UpdateOffer(version: release.version, page: release.page), from: .about)
     }
 
     /// Asks, then downloads and checks the release and swaps it in (`UpdateInstaller`), then
     /// relaunches. A refusal leaves the installed app untouched and says why. A copy that cannot be
     /// replaced without a password opens the release page. One install at a time, the installer
     /// being reserved from the confirmation on; none once quitting has begun.
-    func startInstall(_ offer: UpdateOffer) {
+    func startInstall(_ offer: UpdateOffer, from source: InstallSource) {
         guard installTask == nil, !confirming, !leaving else { return }
         confirming = true
         let confirmed = confirmUpdate(offer)
@@ -244,12 +256,12 @@ final class AppController: NSObject, NSApplicationDelegate {
         let release = UpdateCheck.Release(version: offer.version, page: offer.page)
         installTask = Task {
             let outcome = await install(release, current, installedApp)
-            await finishInstall(outcome, offer)
+            await finishInstall(outcome, offer, from: source)
             installTask = nil
         }
     }
 
-    private func finishInstall(_ outcome: UpdateInstallOutcome, _ offer: UpdateOffer) async {
+    private func finishInstall(_ outcome: UpdateInstallOutcome, _ offer: UpdateOffer, from source: InstallSource) async {
         switch outcome {
         case .failed(.cancelled):
             installState = .idle
@@ -261,7 +273,7 @@ final class AppController: NSObject, NSApplicationDelegate {
             installState = .installed
             model.flush()
             guard !leaving else { return }
-            guard let installedApp, await relaunch(installedApp) else {
+            guard let installedApp, await relaunch(installedApp, source) else {
                 alert(UpdateOffer.relaunchFailed.title, UpdateOffer.relaunchFailed.body)
                 return
             }

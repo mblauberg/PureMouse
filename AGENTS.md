@@ -234,7 +234,7 @@ one. This file covers how to work on it safely.
   re-checks the copy, and swaps with one `replaceItemAt`. A throw from the swap is decided from the
   disk (`settle()`: new in place = installed, old = failed, unknown = keep the staged copy), never
   by deleting. Then `AppController` quits the helper reversibly (`quitRunning`, no quit stamp) and
-  `UpdateRelaunch` opens the app. `AppController` keeps the install task: Quit and Hide go through
+  `UpdateRelaunch` starts the new copy as `puremouse register`, which opens no window (a bare launch is `finderLaunch`, which also opens Settings); `relaunchLive` reopens Settings only if `quitRunning()` found it running, or on About for an install asked for from About (`InstallSource`). `AppController` keeps the install task: Quit and Hide go through
   `afterInstallEnds` (cancel, wait, `.terminateLater`), and a commit while leaving does not relaunch.
   Settings › About installs through the menu app, never itself: its button writes
   `UpdatesInstallRequestVersion` (and `…Page`) in the menu domain, `AppController` watches it

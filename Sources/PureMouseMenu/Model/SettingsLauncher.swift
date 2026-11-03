@@ -151,12 +151,18 @@ final class SettingsLauncher {
     }
 
     /// Quits the running helper; later opens still work (the footprint rig's "settings-close").
-    func quitRunning() {
+    /// True if one was running, so a caller that quits it for a moment can open it again.
+    @discardableResult
+    func quitRunning() -> Bool {
         switch system.find() {
         case .success(.app(let app)):
-            system.running(app).forEach { $0.quit() }
+            let running = system.running(app).filter(\.isAlive)
+            running.forEach { $0.quit() }
+            return !running.isEmpty
         case .success(.binary), .failure:
+            let running = binary?.isRunning == true
             binary?.terminate() // SIGTERM, which the helper turns into a normal quit
+            return running
         }
     }
 

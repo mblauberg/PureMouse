@@ -65,6 +65,7 @@ final class InstallSpy {
     var confirmed: [UpdateOffer] = []
     var installs: [(release: UpdateCheck.Release, current: String, app: URL?)] = []
     var relaunched: [URL] = []
+    var relaunchSources: [InstallSource] = []
     var opened: [URL] = []
     var terminated = 0
     var alerts: [String] = []
@@ -273,7 +274,7 @@ struct AppControllerUpdateTests {
             }
             return await spy.outcome
         }
-        setup.relaunch = { spy.relaunched.append($0); return spy.relaunchWorks }
+        setup.relaunch = { spy.relaunched.append($0); spy.relaunchSources.append($1); return spy.relaunchWorks }
         setup.openPage = { spy.opened.append($0) }
         setup.terminate = { spy.terminated += 1 }
         setup.alert = { title, _ in spy.alerts.append(title) }
@@ -358,7 +359,7 @@ struct AppControllerUpdateTests {
         let fake = FakeSystem()
         let launcher = SettingsLauncher(system: fake.system)
         var asked: [URL] = []
-        let opened = UpdateSetup.relaunchLive(Self.app, launcher: launcher) { asked.append($0); return false }
+        let opened = UpdateSetup.relaunchLive(Self.app, from: .menu, launcher: launcher) { asked.append($0); return false }
         #expect(!opened && asked == [Self.app])
         // Quitting for the relaunch is not Quit PureMouse: no stamp, and the next open goes ahead.
         #expect(fake.quitMarks == 0)
@@ -371,11 +372,67 @@ struct AppControllerUpdateTests {
         let helper = FakeSystem.Helper(alive: true)
         fake.running = [helper]
         var quitsWhenOpened = -1
-        _ = UpdateSetup.relaunchLive(Self.app, launcher: SettingsLauncher(system: fake.system)) { _ in
+        _ = UpdateSetup.relaunchLive(Self.app, from: .menu, launcher: SettingsLauncher(system: fake.system)) { _ in
             quitsWhenOpened = helper.quitCount
             return true
         }
         #expect(quitsWhenOpened == 1)
+    }
+
+    // MARK: Settings across the relaunch
+
+    /// Runs `relaunchLive` and records what was asked of Settings before the app was opened.
+    private func relaunch(from source: InstallSource, settingsRunning: Bool) -> (fake: FakeSystem, atOpen: [ShowRequest], helper: FakeSystem.Helper) {
+        let fake = FakeSystem()
+        let helper = FakeSystem.Helper(alive: settingsRunning)
+        fake.running = settingsRunning ? [helper] : []
+        var atOpen: [ShowRequest] = []
+        _ = UpdateSetup.relaunchLive(Self.app, from: source, launcher: SettingsLauncher(system: fake.system)) { _ in
+            atOpen = fake.posts
+            return true
+        }
+        return (fake, atOpen, helper)
+    }
+
+    @Test func aMenuRowInstallWithoutSettingsOpenAsksForNoSettingsWindow() {
+        let run = relaunch(from: .menu, settingsRunning: false)
+        #expect(run.fake.posts.isEmpty && run.fake.opens.isEmpty)
+    }
+
+    @Test func aMenuRowInstallWithSettingsOpenReopensItWhereItWasAfterwards() {
+        let run = relaunch(from: .menu, settingsRunning: true)
+        #expect(run.helper.quitCount == 1)
+        #expect(run.fake.posts == [ShowRequest()] && run.fake.opens.count == 1)
+        // Asked for before the app is opened, so a menu bar app that register replaces cannot lose it.
+        #expect(run.atOpen == [ShowRequest()])
+    }
+
+    @Test func anAboutInstallReopensSettingsOnAbout() {
+        let run = relaunch(from: .about, settingsRunning: true)
+        #expect(run.fake.posts == [ShowRequest(pane: .tab(.about))] && run.fake.opens.count == 1)
+        #expect(run.atOpen == [ShowRequest(pane: .tab(.about))])
+    }
+
+    @Test func anAboutInstallReopensAboutEvenIfSettingsHadJustGone() {
+        let run = relaunch(from: .about, settingsRunning: false)
+        #expect(run.fake.posts == [ShowRequest(pane: .tab(.about))])
+    }
+
+    @Test func theRelaunchOpensTheNewCopyToRegisterAndNothingMore() {
+        #expect(UpdateRelaunch.arguments(for: Self.app) == ["-n", Self.app.path, "--args", "register"])
+    }
+
+    @Test func theMenuRowAndAboutTellTheRelaunchWhereTheyCameFrom() async {
+        for (source, start) in [(InstallSource.menu, { (c: AppController) in c.installUpdate() }),
+                                (InstallSource.about, { (c: AppController) in
+                                    self.preferences.installRequest = UpdateCheck.Release(version: UpdateCheck.Version("0.6.0")!, page: Self.page)
+                                    c.installRequested() })] {
+            let spy = InstallSpy()
+            let controller = offered(spy)
+            start(controller)
+            await settle { spy.terminated > 0 }
+            #expect(spy.relaunchSources == [source])
+        }
     }
 
     // MARK: One installer, also while confirming
@@ -387,7 +444,7 @@ struct AppControllerUpdateTests {
         spy.duringConfirm = { [unowned controller] in
             spy.duringConfirm = nil
             controller.installUpdate()   // the menu row again
-            controller.startInstall(UpdateOffer(version: UpdateCheck.Version("0.6.0")!, page: Self.page))   // About's request
+            controller.startInstall(UpdateOffer(version: UpdateCheck.Version("0.6.0")!, page: Self.page), from: .about)   // About's request
         }
         controller.installUpdate()
         await settle { false }
