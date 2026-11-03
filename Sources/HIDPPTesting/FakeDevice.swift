@@ -50,6 +50,12 @@ public final class FakeDevice {
     public var extendedDPILists: [UInt8: [UInt8]] = [:]
     /// getDeviceType's answer (0x0005 function 2): 3 is a mouse.
     public var kind: UInt8 = 3
+    /// The Easy-Switch hosts 0x1814 and 0x1815 report (a nil name is an empty slot), and the one in
+    /// use. Empty: the mouse answers neither feature with data (as the probe fixtures do).
+    public var hosts: [String?] = []
+    public var currentHost = 0
+    /// 0x0003 function 1's replies, one per firmware entity; function 0 reports their count.
+    public var firmware: [[UInt8]] = []
     /// Features whose next root lookup goes unanswered (`dropFirstLookup`), and those dropped.
     private var lookupsToDrop: Set<UInt16> = []
     public private(set) var droppedLookups: Set<UInt16> = []
@@ -101,6 +107,19 @@ public final class FakeDevice {
     /// Requests sent so far to `feature`'s `function`.
     public func requests(feature: UInt16, function: UInt8) -> [Report] {
         transport.sent.filter { self.feature(of: $0) == feature && $0.function == function }
+    }
+
+    /// Requests sent so far to the Easy-Switch features and 0x0003 that are not reads: every
+    /// 0x1814 function but 0, every 0x1815 function but 0, 1 and 3, and 0x0003 beyond 0 and 1.
+    public var hostWrites: [Report] {
+        transport.sent.filter { report in
+            switch feature(of: report) {
+            case 0x1814: report.function != 0
+            case 0x1815: ![0, 1, 3].contains(report.function)
+            case 0x0003: report.function > 1
+            default: false
+            }
+        }
     }
 
     /// setCidReporting (0x1B04 function 3) requests sent so far for `cid`.
@@ -165,6 +184,24 @@ public final class FakeDevice {
         case (0x0005, 0): return reply([UInt8(name.utf8.count)])
         case (0x0005, 1): return reply(Array(name.utf8.dropFirst(Int(p.first ?? 0)).prefix(16)))
         case (0x0005, 2): return reply([kind])
+        case (0x0003, 0) where !firmware.isEmpty:
+            var identity = responses[Call(0x0003, 0)] ?? Array(repeating: 0, count: 16)
+            identity[0] = UInt8(firmware.count)
+            return reply(identity)
+        case (0x0003, 1) where !firmware.isEmpty:
+            guard let i = p.first, Int(i) < firmware.count else { return FakeTransport.error(to: r, code: 2) }
+            return reply(firmware[Int(i)])
+        case (0x1814, 0) where !hosts.isEmpty: return reply([UInt8(hosts.count), UInt8(currentHost), 0])
+        case (0x1815, 0) where !hosts.isEmpty: return reply([0, UInt8(hosts.count), UInt8(currentHost), 0])
+        case (0x1815, 1) where !hosts.isEmpty:
+            guard let i = p.first, Int(i) < hosts.count else { return FakeTransport.error(to: r, code: 2) }
+            let name = hosts[Int(i)]
+            return reply([i, name == nil ? 0 : 1, 3, 0, UInt8(name?.utf8.count ?? 0)])
+        case (0x1815, 3) where !hosts.isEmpty:
+            guard p.count >= 2, Int(p[0]) < hosts.count, let name = hosts[Int(p[0])] else {
+                return FakeTransport.error(to: r, code: 2)
+            }
+            return reply([p[0], p[1]] + Array(name.utf8.dropFirst(Int(p[1])).prefix(14)))
         case (0x1B04, 0): return reply([UInt8(controls.count)])
         case (0x1B04, 1):
             guard let i = p.first, Int(i) < controls.count else { return FakeTransport.error(to: r, code: 2) }
