@@ -41,13 +41,14 @@ import Testing
     /// The Logi Options+ notice offers to ask the app to quit and to open Login Items; no other
     /// notice carries these, and neither action signals or starts a process.
     @Test func theLogiOptionsNoticeOffersQuitAndLoginItems() {
-        #expect(Notice.logiOptions.logiOptionsActions == [.quit, .openLoginItems])
+        #expect(Notice.logiOptions.logiOptionsActions == [.quit])
+        #expect(Notice.logiOptions.logiOptionsLink == .openLoginItems)
         for notice in Notice.allCases where notice != .logiOptions {
-            #expect(notice.logiOptionsActions.isEmpty, "\(notice)")
+            #expect(notice.logiOptionsActions.isEmpty && notice.logiOptionsLink == nil, "\(notice)")
         }
         #expect(LogiOptionsAction.quit.title == "Quit Logi Options+")
         #expect(LogiOptionsAction.quit.url == nil)
-        #expect(LogiOptionsAction.openLoginItems.title == "Open Login Items Settings")
+        #expect(LogiOptionsAction.openLoginItems.title == "Open Login Items Settings…")
         #expect(LogiOptionsAction.openLoginItems.url == OpenAtLogin.settingsURL)
     }
 
@@ -72,7 +73,13 @@ import Testing
     }
 
     @Test func theInputMonitoringMessageNamesTheMiceOrBluetoothMice() {
-        #expect(Notice.inputMonitoringMessage(waiting: ["MX Anywhere 3S"]).contains("MX Anywhere 3S"))
+        #expect(Notice.inputMonitoringTitle(waiting: ["MX Anywhere 3S"]) == "MX Anywhere 3S is waiting for Input Monitoring.")
+        #expect(Notice.inputMonitoringTitle(waiting: ["MX Anywhere 3S", "M750"]) == "MX Anywhere 3S and M750 are waiting for Input Monitoring.")
+        #expect(Notice.inputMonitoringTitle(waiting: ["A", "B", "C"]) == "A, B and C are waiting for Input Monitoring.")
+        #expect(Notice.inputMonitoringTitle(waiting: []) == "PureMouse needs Input Monitoring.")
+        #expect(Notice.inputMonitoringMessage(waiting: ["MX Anywhere 3S"])
+                == "PureMouse can't see it until you allow it in System Settings. It restarts itself once you do.")
+        #expect(Notice.inputMonitoringMessage(waiting: ["A", "B"]).contains("can't see them"))
         #expect(Notice.inputMonitoringMessage(waiting: []).contains("your Bluetooth mouse"))
     }
 
@@ -105,5 +112,24 @@ import Testing
         #expect(message.contains("replaces the whole config file"))
         #expect(message.contains("config.json.bak"))
         #expect(!UseLastWorkingConfirmation.button.hasSuffix("…"))
+    }
+}
+
+@Suite struct OneObservationEachTests {
+    @Test func askingTwiceKeepsOneObservationPerProcess() {
+        var held = OneObservationEach<Int, String>()
+        var made = 0
+        #expect(held.start(10) { made += 1; return "a" })
+        #expect(!held.start(10) { made += 1; return "b" })
+        #expect(held.start(11) { made += 1; return "c" })
+        #expect(made == 2 && held.count == 2)
+    }
+
+    @Test func aQuitProcessReleasesItsObservation() {
+        var held = OneObservationEach<Int, String>()
+        held.start(10) { "a" }
+        held.finish(10)
+        #expect(held.count == 0)
+        #expect(held.start(10) { "again" }, "a later ask for the same pid is watched afresh")
     }
 }
