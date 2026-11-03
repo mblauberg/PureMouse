@@ -146,13 +146,16 @@ struct AppPage: View {
             // directions start collapsed, and expanding them writes nothing.
             let isExpanded = Binding(get: { expanded.contains(button) },
                                      set: { if $0 { expanded.insert(button) } else { expanded.remove(button) } })
+            // What the gesture does here, as the Mouse page captions it: the app's directions over
+            // what the mice give it.
+            let summary = state.gestureSummary
             LabeledContent {
                 actionButton(state.own, target: target, sameAs: inherited, spokenSameAs: spokenInherited)
             } label: {
-                DisclosureLabel(title: title(button), note: note, spokenTitle: "\(title(button)) directions",
+                DisclosureLabel(title: title(button), help: summary, note: note, spokenTitle: "\(title(button)) directions",
                                 isExpanded: isExpanded)
             }
-            .overridable(note, help: nil)
+            .overridable(note, help: summary)
             .padding(.leading, indented ? 16 : 0)
             if isExpanded.wrappedValue {
                 ForEach(state.directions, id: \.name) { direction in
@@ -221,12 +224,16 @@ struct AppPage: View {
     private func scrolling(_ config: ConfigTree) -> some View {
         PaneBanners(needsAccessibility: true)
         if let suggestion = suggestion(config) {
+            // An ordinary form row, as System Settings draws a suggestion: the words, and a bordered
+            // button at the trailing edge.
             Section {
-                Banner(title: "Suggested for \(identity.name)", message: "The thumb wheel \(describe(suggestion)).",
-                       symbol: "lightbulb.fill") {
+                LabeledContent {
                     Button("Use Suggested Settings") {
                         model.update { $0.chooseThumbWheel(suggestion.choice, at: scope + ["thumbWheel"], base: config.thumbWheelState(inheriting: mice).first) }
                     }
+                    .buttonStyle(.bordered)
+                } label: {
+                    RowLabel("Suggested for \(identity.name)", help: "The thumb wheel \(describe(suggestion)).")
                 }
             }
         }
@@ -235,8 +242,9 @@ struct AppPage: View {
                                                 configured: config.contains(scope + ["thumbWheel"]))
         if thumbWheel.isShown {
             let choice = config.thumbWheelChoice(inheriting: mice)
+            let states = config.thumbWheelState(inheriting: mice)
             Section("Thumb Wheel") {
-                ThumbWheelRows(path: scope + ["thumbWheel"], base: config.thumbWheelState(inheriting: mice).first,
+                ThumbWheelRows(path: scope + ["thumbWheel"], base: states.first, bases: states.values,
                                inherited: choice.first, inheritedVaries: config.thumbWheelVaries(inheriting: mice),
                                inheritedVariesKeys: config.thumbWheelKeysVarying(inheriting: mice, ownPath: scope + ["thumbWheel"]), appName: identity.name,
                                availability: thumbWheel)
@@ -279,16 +287,16 @@ struct AppPage: View {
         let custom = config.overridesScrolling(key)
         let speedPath = scope + ["smoothScroll", "speed"]
         let glidePath = scope + ["smoothScroll", "smoothingMs"]
-        // Left to the mice, a value is theirs: the first one's on the slider, and "Varies by Mouse"
-        // for the number while they differ.
+        // Left to the mice, a value is theirs: the first one's on the slider, and "Varies" (VoiceOver:
+        // "Varies by Mouse") for the number while they differ. The short word fits the readout the
+        // slider rows share, so the track stays where it is on Mouse › Scrolling.
         let speed = config.appliedNumber(["smoothScroll", "speed"], inheriting: mice, default: 1)
         let glide = config.appliedNumber(["smoothScroll", "smoothingMs"], inheriting: mice, default: 125)
         let speedVaries = speed.varies && !config.contains(speedPath)
         let glideVaries = glide.varies && !config.contains(glidePath)
-        let reserve = speedVaries || glideVaries ? Applied<Double>.variesLabel : nil
         return Section {
             Toggle(isOn: Binding(get: { custom }, set: { on in model.update { $0.setOverridesScrolling(key, on, inheriting: mice) } })) {
-                RowLabel("Custom scrolling", help: config.customScrollingCaption(key, inheriting: mice))
+                RowLabel("Custom scrolling", help: ConfigTree.customScrollingCaption)
             }
             .accessibilityLabel("Custom scrolling\(spoken)")
             // The rows appear only while on, so nothing is written until the app has its own values.
@@ -297,13 +305,13 @@ struct AppPage: View {
                             value: model.number(speedPath, default: speed.first, step: 0.05),
                             range: 0.25...3, low: "Slow", high: "Fast", format: Format.multiplier,
                             standing: appStanding(speedPath, config),
-                            variesText: speedVaries ? Applied<Double>.variesLabel : nil, reservesRoomFor: reserve)
+                            variesText: speedVaries ? Applied<Double>.variesLabel : nil)
                     .disclosedRow()
                 ValueSlider(title: "Glide", spokenTitle: "Glide\(spoken)", help: "Short glides stop sooner.",
                             value: model.number(glidePath, default: glide.first, step: 25),
                             range: 0...500, low: "Short", high: "Long", format: Format.milliseconds,
                             standing: appStanding(glidePath, config),
-                            variesText: glideVaries ? Applied<Double>.variesLabel : nil, reservesRoomFor: reserve)
+                            variesText: glideVaries ? Applied<Double>.variesLabel : nil)
                     .disabled(!config.scrollsSmoothly(key, inheriting: mice))
                     .disclosedRow()
             }
@@ -320,6 +328,9 @@ struct AppPageHeader: View {
     let segment: AppSegment
     let select: (AppSegment) -> Void
     let back: () -> Void
+
+    /// The strip's top inset, which is what `.padding(.top)` gives on macOS, as `MouseHeader` has it.
+    static let topInset: CGFloat = 16
 
     var body: some View {
         // Each side is a slot that shares what is left equally, so the segments stay in the middle
@@ -356,7 +367,11 @@ struct AppPageHeader: View {
         }
         // In line with the grouped boxes below, whose form insets them by the same margin.
         .padding(.horizontal, 20)
-        .padding(.top)
+        // A fixed inset, with the strip at its own height: neither is left to the first
+        // `sizeThatFits` pass, which has placed the strip 8 pt lower in one layout than another.
+        .padding(.top, Self.topInset)
+        .fixedSize(horizontal: false, vertical: true)
+        .layoutPriority(1)
         .overlay {
             Button(action: back) { Color.clear }
                 .buttonStyle(.plain)

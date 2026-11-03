@@ -307,6 +307,29 @@ private func changed(_ before: ConfigTree, _ after: ConfigTree) -> Set<String> {
         #expect(step.thumbWheelKeysVarying(inheriting: mice, ownPath: own) == [])
     }
 
+    @Test func anInheritedGestureRowCarriesTheSameSummaryAsOnTheMousePage() throws {
+        let config = try tree("""
+            {"buttons": {"gesture": {"click": "missionControl", "up": "appExpose"}},
+             "devices": {"\(mx)": {"name": "MX"}, "\(m750)": {"name": "M750"}}}
+            """)
+        let mice = [mouse(mx), mouse(m750)]
+        let inherited = config.appButton("a.b", button: "gesture", inheriting: mice)
+        #expect(inherited.inheritsGesture)
+        #expect(inherited.gestureSummary == "Click: Mission Control, 1 direction set.")
+        #expect(inherited.gestureSummary == config.gestureSummary("gesture", in: mouse(mx)))
+        // The app's own direction counts too, over what the mice give.
+        var edited = config
+        edited.bindInApp("a.b", button: "gesture", direction: "left", to: .named("spaceLeft"))
+        #expect(edited.appButton("a.b", button: "gesture", inheriting: mice).gestureSummary == "Click: Mission Control, 2 directions set.")
+        // Not a gesture here: nothing to summarise. Mice that differ: no one summary is right.
+        #expect(try tree(#"{"buttons": {"back": "mute"}}"#).appButton("a.b", button: "back", inheriting: mice).gestureSummary == nil)
+        let differ = try tree("""
+            {"buttons": {"gesture": {"click": "missionControl", "up": "appExpose"}},
+             "devices": {"\(mx)": {"name": "MX", "buttons": {"gesture": {"up": "mute"}}}, "\(m750)": {"name": "M750"}}}
+            """)
+        #expect(differ.appButton("a.b", button: "gesture", inheriting: mice).gestureSummary == nil)
+    }
+
     @Test func oppositeWheelDirectionsVaryEvenWithTheSameActions() throws {
         // Both mice choose Custom with the same two actions, but one swaps them: turning left does
         // a different thing on each.

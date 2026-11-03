@@ -258,6 +258,20 @@ public struct AppButton: Equatable, Sendable {
     public var inheritedLabel: String { variesByMouse ? Applied<ButtonAction>.variesLabel : everywhere.label }
     public var inheritedSpokenLabel: String { variesByMouse ? Applied<ButtonAction>.variesLabel : everywhere.spokenLabel }
 
+    /// The caption under a Hold and Move row, as the Mouse page words it (`GestureSummary`): what a
+    /// click does and how many directions do something, each the app's own or else the one the mice
+    /// give it. nil when the button is no gesture here, or the mice give a direction different things
+    /// while the app leaves it alone (the row says "Varies by Mouse", and one mouse's summary would be
+    /// wrong for the others).
+    public var gestureSummary: String? {
+        guard !directions.isEmpty,
+              !directions.contains(where: { $0.variesByMouse && !$0.isOwn }) else { return nil }
+        func effective(_ direction: Direction) -> ButtonAction { direction.isOwn ? direction.own : direction.inherited }
+        let click = directions.first { $0.name == "click" }.map(effective) ?? .standard
+        let moves = directions.filter { $0.name != "click" }.map(effective).filter { $0 != .standard && $0 != .named("none") }
+        return GestureSummary.text(click: click, directionsSet: moves.count)
+    }
+
     /// The app leaves the button to a gesture set in the mice: its directions show, collapsed and
     /// shown as for any inherited row, and editing one writes only that direction under the app
     /// (`ConfigTree.bindInApp(_:button:direction:to:)`).

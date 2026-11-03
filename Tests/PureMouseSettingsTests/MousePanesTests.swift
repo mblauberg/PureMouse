@@ -326,6 +326,26 @@ private let swappedVolume = #"{"thumbWheel":{"action":"volume","reversed":true},
     #expect(ThumbWheelRows.base(config, .global).reversed == false)
 }
 
+@MainActor @Test func anAppsThumbWheelRowsAreDecidedAcrossEveryMouseItMayRunWith() throws {
+    // Mouse 1 scrolls sideways and mouse 2 zooms; the app leaves the wheel to them. The first mouse
+    // alone has no advanced rows, but zooming on the second has Swap directions and Turn distance.
+    let m2 = "pb02c"
+    let config = try ConfigTree(data: Data(#"""
+        {"devices": {"mb03400000000": {"name": "MX", "thumbWheel": {"action": "scroll"}},
+                     "pb02c": {"name": "M750", "thumbWheel": {"action": "zoom"}}}}
+        """#.utf8))
+    let mice = [try #require(ConfigScope.device(wheelMouse)), try #require(ConfigScope.device(m2))]
+    let path = ["apps", "a.b", "thumbWheel"]
+    let states = config.thumbWheelState(inheriting: mice)
+    #expect(states.values.map(\.scrolls) == [true, false])
+    #expect(ThumbWheelRows.advancedRows(config, path: path, base: states.first).isEmpty, "the first mouse alone")
+    #expect(ThumbWheelRows.advancedRows(config, path: path, base: states.first, bases: states.values) == [.swapDirections, .turnDistance])
+    // Order of the mice does not matter, and mice that agree show what one shows.
+    #expect(ThumbWheelRows.advancedRows(config, path: path, base: states.values[1], bases: states.values.reversed()) == [.swapDirections, .turnDistance])
+    let alike = states.values[0]
+    #expect(ThumbWheelRows.advancedRows(config, path: path, base: alike, bases: [alike, alike]).isEmpty)
+}
+
 @Test func bothThumbWheelSectionsOfScrollingBuildOnAllMicesWheel() throws {
     let source = try String(contentsOf: URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()

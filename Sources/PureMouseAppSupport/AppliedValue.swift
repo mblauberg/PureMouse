@@ -7,6 +7,9 @@ import PureMouseKit
 public struct Applied<Value: Equatable & Sendable>: Sendable {
     /// What the row says while the mice resolve the setting differently.
     public static var variesLabel: String { "Varies by Mouse" }
+    /// The short form for a readout beside a slider or stepper, which has no room for the whole
+    /// phrase without moving the track; VoiceOver and the tooltip still say `variesLabel`.
+    public static var variesReadout: String { "Varies" }
 
     /// The distinct values, in the mice's order. Never empty.
     public let values: [Value]

@@ -14,6 +14,10 @@ final class SettingsContext {
     var app: String?
     /// The part of the device card chosen on Buttons (cleared on leaving Buttons or changing mouse).
     let card = CardSelection()
+    /// The latest ask to bring a Buttons row into view. It has an identity of its own, apart from the
+    /// highlight on `card`: choosing the same part twice leaves `card.button` as it was, but is a new
+    /// request, so the row scrolls into view again after the person has scrolled away.
+    private(set) var rowRequest: RowRequest?
     /// The Scrolling section the device card sent the person to: Scrolling takes it, scrolls it into
     /// view and outlines it, and clears it (`ScrollingPane`).
     var arrival: ScrollingSection?
@@ -32,6 +36,7 @@ final class SettingsContext {
         switch destination {
         case .row(let button):
             card.select(button)
+            requestRow(button)
         case .scrolling(let section):
             arrival = section
             if let selection = tabs?.mouse?.selection {
@@ -42,9 +47,20 @@ final class SettingsContext {
         }
     }
 
+    /// Asks Buttons to bring the row of `button` into view, even if it is the one already chosen.
+    func requestRow(_ button: NamedButton) {
+        rowRequest = RowRequest(id: (rowRequest?.id ?? 0) + 1, button: button)
+    }
+
     /// Fits the window to its pane once a change in the pane's height has laid out
     /// (`SettingsTabs.refit`).
     func refit() {
         DispatchQueue.main.async { [weak self] in self?.tabs?.refit() }
     }
+}
+
+/// A request to bring a Buttons row into view (`SettingsContext.requestRow`). Each one has a new `id`.
+struct RowRequest: Equatable {
+    let id: Int
+    let button: NamedButton
 }
