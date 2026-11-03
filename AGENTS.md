@@ -226,11 +226,20 @@ one. This file covers how to work on it safely.
   page), and the menu shows `Update to X.Y.Z…` and `Skip This Version` until the running version
   catches up (`MenuPlan`). `Update to X.Y.Z…` asks, then `UpdateInstaller` (PureMouseAppSupport,
   ADR 0022; the live parts are in `UpdateInstallLive.swift`) downloads the release's dmg and
-  `SHA256SUMS`, checks the hash, a read-only mount with one `PureMouse.app`, its signature against
-  the requirement taken from the running process (`SecCodeCopySelf`, never the download; the
-  nested menu app's identifier is replaced by the app's), and a strictly newer version, copies it
-  beside the installed app, re-checks the copy, and swaps with one `replaceItemAt`, then
-  `UpdateRelaunch` opens the app. A copy that can't be replaced without a password opens the
+  `SHA256SUMS` (capped during the transfer), checks the hash, the dmg's own signature against the
+  certificate part of the requirement (before mounting), a read-only mount with one `PureMouse.app`,
+  its signature against the requirement taken from the running process (`SecCodeCopySelf`, never
+  the download; the nested menu app's identifier is replaced by the app's), and a version that is
+  newer and equals the announced release, copies it with `ditto` beside the installed app,
+  re-checks the copy, and swaps with one `replaceItemAt`. A throw from the swap is decided from the
+  disk (`settle()`: new in place = installed, old = failed, unknown = keep the staged copy), never
+  by deleting. Then `AppController` quits the helper reversibly (`quitRunning`, no quit stamp) and
+  `UpdateRelaunch` opens the app. `AppController` keeps the install task: Quit and Hide go through
+  `afterInstallEnds` (cancel, wait, `.terminateLater`), and a commit while leaving does not relaunch.
+  Settings › About installs through the menu app, never itself: its button writes
+  `UpdatesInstallRequestVersion` (and `…Page`) in the menu domain, `AppController` watches it
+  (`UpdatePreferences.Watch`), validates and runs the same `startInstall`, and reports back in
+  `UpdatesInstallStatus`. A copy that can't be replaced without a password opens the
   release page instead. Every path unmounts and deletes. Change it only with the matching real
   signature proof, `scripts/test-update-install.sh` (workshop), and keep `puremouse` and
   PureMouseKit free of network and install code. Nothing here is in `puremouse` or PureMouseKit, and the rig drives a

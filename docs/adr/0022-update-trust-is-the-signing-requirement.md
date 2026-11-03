@@ -29,22 +29,50 @@ macOS, the same app.
   identity) and `anchor apple generic … certificate leaf[subject.OU] = …` (Developer ID). An ad-hoc
   signature has only a `cdhash`, which pins nothing across versions, so such a copy is not
   updated by PureMouse (it opens the release page).
-- **Four checks in order; the first failure stops, and the installed app is untouched.**
+- **Checks in order; the first failure stops, and the installed app is untouched.**
   1. The SHA-256 of the dmg equals its line in the release's `SHA256SUMS` (`release.sh` writes
      both). This catches a damaged or truncated download. It is not authenticity: both files come
      from the same place, so the signature is the check that matters.
-  2. `hdiutil attach -nobrowse -readonly` shows exactly one `PureMouse.app` (a real directory,
-     not a link) and nothing else that is an app.
-  3. `SecStaticCodeCheckValidity` with `kSecCSCheckAllArchitectures | kSecCSStrictValidate |
-     kSecCSCheckNestedCode` against that requirement. It fails for an unsigned app, for another
+  2. **The disk image's own signature, before it is mounted.** `release.sh` signs the dmg with the
+     release identity. A disk image's identifier is its file name, so the requirement applied to it
+     is the certificate part of the running app's alone (`SigningRequirement.certificate(of:)`, the
+     parenthesised pin without the identifier clause). An unsigned image, or one signed by another
+     certificate, is refused before `hdiutil attach` parses a byte of its filesystem. The checks
+     after the mount still apply: the dmg's signature says who made the image, not what the bundle
+     inside is.
+  3. `hdiutil attach -nobrowse -readonly -noverify` shows exactly one `PureMouse.app` (a real
+     directory, not a link) and nothing else that is an app.
+  4. `SecStaticCodeCheckValidity` with `kSecCSCheckAllArchitectures | kSecCSStrictValidate |
+     kSecCSCheckNestedCode` against the full requirement. It fails for an unsigned app, for another
      certificate, and for any file changed after signing, and each says so.
-  4. `CFBundleShortVersionString` is strictly newer than the running version, so a replayed older
-     release cannot downgrade.
-- **Install.** The bundle is copied beside the installed app (same volume, so the swap is a
-  rename), checked again as that copy (the mounted image and the check are not the file that is
-  installed), and swapped in with one `FileManager.replaceItemAt`. The image is unmounted and the
-  download deleted on every path. PureMouse then opens the installed app the way double-clicking
-  it does, which restarts the background process and the menu bar app on the new files.
+  5. `CFBundleShortVersionString` is strictly newer than the running version, so a replayed older
+     release cannot downgrade, **and equals the version of the release the person approved**, so a
+     genuine but different (newer or older) signed build cannot stand in for it. The release page
+     must be a tag page; `releases/latest` is refused.
+- **Install.** The bundle is copied beside the installed app with `ditto` (same volume, so the swap
+  is a rename; `ditto` keeps the hard links that make the nested apps share one `Assets.car`, which
+  `FileManager.copyItem` breaks), checked again
+  as that copy (the mounted image and the check are not the file that is installed), and swapped in
+  with one `FileManager.replaceItemAt(…, options: .usingNewMetadataOnly)`. The image is unmounted and
+  the download deleted on every path. PureMouse then quits the helper (reversibly, with no quit
+  stamp, so Settings still opens if the relaunch fails) and opens the installed app the way
+  double-clicking it does, which restarts the background process and the menu bar app on the new
+  files.
+- **The commit point is read from the disk.** `replaceItemAt` can throw after the new bundle is in
+  place (an immutable flag or a deny-delete ACL on the old bundle gives Cocoa error 513 once the
+  rename is done), leaving the old bundle at the staging path. So a throw is not a verdict. The
+  installer reads the install path: the found version with a passing signature means the update is
+  installed (success; the old copy is removed best-effort, clearing flags and ACLs); the running
+  version means it failed (the staged new copy is removed); anything else (missing, another
+  version, a failed check) keeps the staged copy, logs where it is, and reports a failure. The only
+  good copy is never deleted. Both causes are reproduced with real files in the workshop proof.
+- **Cancel and sweep.** The install runs as a task the menu app keeps. Quit and Hide Menu Bar Icon
+  cancel it and wait for it to finish (answering `.terminateLater`), so no image stays mounted and no
+  staged copy is left. Cancellation is checked after the download, before the attach, before the
+  copy and before the replace; after the replace there is nothing left to stop, and an install that
+  commits while the app is leaving does not relaunch. At the start of an install, stale
+  `.PureMouse-update-*` folders beside the app and `PureMouse-update-*` work folders (a killed run's
+  leftovers) are detached and removed.
 - **No prompt and no helper.** If the installed app is on a read-only volume (or running from
   a translocated path), or it, its folder or a folder inside it is not writable by the person
   (an administrator copied it), nothing is downloaded: PureMouse opens the release page and the
@@ -52,9 +80,19 @@ macOS, the same app.
 - **Where.** The menu bar app does it, on the person's say-so (a confirmation alert follows the
   menu row), the one place in the product that downloads. The checksum and dmg come from the
   release the daily check recorded, and the URLs are derived from its tag page, which must be
-  under `github.com/mblauberg/PureMouse/releases/tag/`. The image is limited to 64 MB, written to
-  a file (not held in memory) and hashed in chunks. `puremouse` and PureMouseKit gain no network
+  under `github.com/mblauberg/PureMouse/releases/tag/`. The image is limited to 64 MB and `SHA256SUMS` to 64 KB; the limit is enforced during the transfer
+  (the announced length first, then the bytes as they arrive, deleting the partial file), written to
+  a file in 64 KB chunks (not held in memory) and hashed in chunks. `puremouse` and PureMouseKit gain no network
   or install code (`nm` and `strings` on `puremouse`, as in ADR 21).
+- **One installer: Settings › About asks the menu app.** Settings is a separate helper process, and
+  the installer lives in the menu app. About's **Update and Relaunch** button writes the release
+  version it is showing to the menu app's defaults domain (`UpdatesInstallRequestVersion`, with
+  `UpdatesInstallRequestPage`); the menu app, which watches that key, validates it against the same
+  rules as its own row (a tag page, newer than the running version), clears it, and runs the same
+  confirmation and install. Its progress and failure line come back through `UpdatesInstallStatus`
+  and show under the button. About offers the button only while the menu app is running, and the
+  request makes the menu app active so the alert is seen. The helper never downloads, mounts or
+  replaces anything.
 - **Off switch.** Installing is always asked for. Turning off **Check for updates automatically**
   removes the offer, so the row never appears; Settings › About › **View Release** still opens the
   page for a manual update.
@@ -90,12 +128,20 @@ anyone who re-signs their own build with another identity: they update their own
 
 ## Consequences
 
-- The menu row **Update to X.Y.Z…** asks "Update to PureMouse X.Y.Z?" and then downloads,
-  checks, replaces and relaunches. A refusal shows one line and **View Release**.
+- The menu row **Update to X.Y.Z…** (or Settings › About's **Update and Relaunch**) asks "Update to
+  PureMouse X.Y.Z?" and then downloads, checks, replaces and relaunches. A refusal shows one line and
+  **View Release**. After a successful swap the row is gone (`.installed`) even if the relaunch
+  failed.
 - The request is a second kind: a GET of the dmg and `SHA256SUMS` from `github.com`, when the person
   agrees, with no cookies (an ephemeral session). [Privacy](../privacy.md) says so.
 - The same requirement keeps the Accessibility and Input Monitoring grants and the settings
   (which live outside the app), so an update asks for nothing again.
 - A copy that cannot be replaced by the person falls back to the manual route the README
   describes, with the reason shown.
+- The workshop proof (`scripts/test-update-install.sh`) covers every path above with real
+  signatures, including a disk image signed by another certificate or unsigned, a different genuine
+  version, a swap that throws after committing (immutable flag, deny-delete ACL), a killed run's
+  leftovers, hard links, quarantine and the temporary folder. It does not run the relaunch itself on
+  an installed copy; that end-to-end step needs the owner's go-ahead on a machine with a real
+  install.
 - Notarisation (ADR 14) is separate: a notarised release still has to satisfy the requirement.
