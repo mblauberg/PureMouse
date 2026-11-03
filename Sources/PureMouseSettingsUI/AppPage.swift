@@ -71,7 +71,6 @@ struct AppPage: View {
         // then and took the window past the screen.
         .frame(maxHeight: Self.maxFormHeight)
         .fixedSize(horizontal: false, vertical: true)
-        .softTopEdge()
         .safeAreaInset(edge: .top, spacing: 0) {
             AppPageHeader(key: key, identity: identity, segment: segment, select: select, back: back)
         }
@@ -293,6 +292,7 @@ struct AppPage: View {
         let glide = config.appliedNumber(["smoothScroll", "smoothingMs"], inheriting: mice, default: 125)
         let speedVaries = speed.varies && !config.contains(speedPath)
         let glideVaries = glide.varies && !config.contains(glidePath)
+        let reserve = speedVaries || glideVaries ? Applied<Double>.variesLabel : nil
         return Section {
             Toggle(isOn: Binding(get: { custom }, set: { on in model.update { $0.setOverridesScrolling(key, on, inheriting: mice) } })) {
                 RowLabel("Custom scrolling", help: config.customScrollingCaption(key, inheriting: mice))
@@ -304,13 +304,13 @@ struct AppPage: View {
                             value: model.number(speedPath, default: speed.first, step: 0.05),
                             range: 0.25...3, low: "Slow", high: "Fast", format: Format.multiplier,
                             standing: appStanding(speedPath, config),
-                            variesText: speedVaries ? Applied<Double>.variesLabel : nil)
+                            variesText: speedVaries ? Applied<Double>.variesLabel : nil, reservesRoomFor: reserve)
                     .disclosedRow()
                 ValueSlider(title: "Glide", spokenTitle: "Glide\(spoken)", help: "Short glides stop sooner.",
                             value: model.number(glidePath, default: glide.first, step: 25),
                             range: 0...500, low: "Short", high: "Long", format: Format.milliseconds,
                             standing: appStanding(glidePath, config),
-                            variesText: glideVaries ? Applied<Double>.variesLabel : nil)
+                            variesText: glideVaries ? Applied<Double>.variesLabel : nil, reservesRoomFor: reserve)
                     .disabled(!config.scrollsSmoothly(key, inheriting: mice))
                     .disclosedRow()
             }
@@ -377,12 +377,6 @@ struct AppPageHeader: View {
 }
 
 extension View {
-    /// A soft fade where the form scrolls under the header strip, not the hard line macOS 26 draws
-    /// under an inset: the Mouse tab's strip has no line under it.
-    @ViewBuilder func softTopEdge() -> some View {
-        if #available(macOS 26, *) { scrollEdgeEffectStyle(.soft, for: .top) } else { self }
-    }
-
     /// Asks before removing an app's settings: a system alert whose Remove is a plain verb button
     /// (chosen on purpose, so not the destructive style) and whose Cancel is not the default.
     func removeAppAlert(name: String, isPresented: Binding<Bool>, remove: @escaping () -> Void) -> some View {

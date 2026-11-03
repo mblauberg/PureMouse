@@ -117,6 +117,14 @@ import Testing
         #expect(ButtonRows.named(deviceCIDs: nil, configKeys: []).prefix(2).map(\.rawValue) == ["back", "forward"])
     }
 
+    // The sliders and the thumb wheel's directions say "Varies by Mouse" while the mice differ.
+    @Test func theSlidersAndDirectionsSayWhenTheMiceDiffer() throws {
+        let page = try Self.source("PureMouseSettingsUI/AppPage.swift")
+        #expect(page.contains("variesText: speedVaries") && page.contains("variesText: glideVaries"))
+        #expect(page.contains("inheritedVariesDirections: variesDirections"))
+        #expect(page.contains("config.thumbWheelVaries(inheriting: mice)"))
+    }
+
     // Criterion 2: Buttons and Scrolling, no Pointer; Thumb Wheel under Scrolling.
     @Test func thePageHasTwoSegmentsAndNoPointer() throws {
         let page = try Self.source("PureMouseSettingsUI/AppPage.swift")

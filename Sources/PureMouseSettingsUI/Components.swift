@@ -124,6 +124,9 @@ struct ValueSlider: View {
     /// In an app: said in place of the number while the mice the app leaves the value to differ,
     /// since the slider's position is then only the first mouse's ("Varies by Mouse").
     var variesText: String?
+    /// Room kept for the words a sibling row's readout may say, so the tracks of rows that do and
+    /// do not say them still line up.
+    var reservesRoomFor: String?
     private var note: InheritedOverride? { standing.note }
 
     var body: some View {
@@ -138,6 +141,7 @@ struct ValueSlider: View {
                 ZStack(alignment: .trailing) {
                     Text(format(range.lowerBound)).hidden()
                     Text(format(range.upperBound)).hidden()
+                    if let reservesRoomFor { Text(reservesRoomFor).hidden() }
                     Text(variesText ?? format(value))
                 }
                 .frame(minWidth: 56, alignment: .trailing)
