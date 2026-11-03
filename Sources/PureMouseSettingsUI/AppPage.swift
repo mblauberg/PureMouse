@@ -4,16 +4,13 @@ import PureMouseKit
 import SwiftUI
 
 /// One app's settings (`apps.<key>`) as a page of the Apps tab, in place of its list: a header
-/// strip (‹ Apps, the Buttons and Scrolling segments, the app) over the segment's grouped form, as
+/// strip (‹ Apps, the Buttons and Scrolling segments, the app) above the segment's grouped form, as
 /// the Mouse tab draws its own (`MouseHeader`). Settings apply live, so there is no Done: ‹ Apps,
 /// ⌘[ and Esc go back, and Remove App… at the footer's leading edge asks first. The editors open
 /// as sheets. A value the app leaves unset looks as the mice resolve it, or says "Varies by Mouse"
 /// when they differ; one it sets says "Set for this app." (`InheritedValue`). Choosing a segment
 /// writes nothing, and the page has no Pointer: an app sets buttons, the thumb wheel and scrolling.
 struct AppPage: View {
-    /// The header strip's height, with the margin under it, which the form's cap leaves room for.
-    private static let headerHeight: CGFloat = 60
-
     @Environment(AppModel.self) private var model
     /// The app's key under `apps`.
     let key: String
@@ -26,6 +23,9 @@ struct AppPage: View {
     let remove: () -> Void
 
     @Environment(\.settings) private var settings
+    @Environment(\.paneMaxHeight) private var paneMaxHeight
+    /// The header's height as drawn, which the form's cap leaves room for (about the Mouse tab's strip).
+    @State private var headerHeight: CGFloat = 40
     @State private var presented: String?
     @State private var editor: SheetRequest?
     @State private var expanded: Set<String> = []
@@ -43,42 +43,37 @@ struct AppPage: View {
         BindingTarget(button: button, direction: direction, app: key, appName: identity.name)
     }
 
-    /// The screen's height less the window's toolbar and the page's header strip.
-    private static var maxFormHeight: CGFloat {
-        LazyPane.fitted(NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)).height - headerHeight
-    }
-
     var body: some View {
-        // The form is the root, as in every other pane, and the header an inset above it that stays
-        // in view as the form scrolls. A stack of the two let the window grow past the screen.
-        PaneForm {
-            switch segment {
-            case .buttons: buttons(model.config)
-            case .scrolling: scrolling(model.config)
-            }
-            Section {} footer: {
-                HStack {
-                    Button("Remove App…") { confirmingRemove = true }
-                        .accessibilityLabel("Remove \(identity.name)'s settings")
-                    Spacer()
-                }
-                .padding(.top, 4)
-            }
-        }
-        .disabled(model.readOnly)
-        // As tall as its rows, up to what the screen leaves, then it scrolls (as `AdvancedSheet`'s
-        // form does). Left to be proposed the window's height, the form read as unbounded now and
-        // then and took the window past the screen.
-        .frame(maxHeight: Self.maxFormHeight)
-        .fixedSize(horizontal: false, vertical: true)
-        .safeAreaInset(edge: .top, spacing: 0) {
+        // The header is a view of its own above the form, as the Mouse tab's strip is above its
+        // pane (`MouseTab`): the form scrolls beneath it, and no scroll-edge line is drawn under it.
+        // The form is capped to what the pane's limit leaves below the header, so the two together
+        // never pass it.
+        VStack(spacing: 0) {
             AppPageHeader(key: key, identity: identity, segment: segment, select: select, back: back)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
+            PaneForm {
+                switch segment {
+                case .buttons: buttons(model.config)
+                case .scrolling: scrolling(model.config)
+                }
+                Section {} footer: {
+                    HStack {
+                        Button("Remove App…") { confirmingRemove = true }
+                            .accessibilityLabel("Remove \(identity.name)'s settings")
+                        Spacer()
+                    }
+                    .padding(.top, 4)
+                }
+            }
+            .disabled(model.readOnly)
+            .environment(\.paneMaxHeight, max(paneMaxHeight - headerHeight, 0))
         }
         .actionEditorSheet($editor) { action, target in apply(action, to: target) }
         .removeAppAlert(name: identity.name, isPresented: $confirmingRemove, remove: remove)
         // Gesture directions, other controls and more thumb wheel options change the page's height.
         .onChange(of: expanded) { settings?.refit() }
         .onChange(of: showOthers) { settings?.refit() }
+        .onChange(of: headerHeight) { settings?.refit() }
         #if DEBUG
         .onAppear {
             // With PUREMOUSE_DEV_APP: PUREMOUSE_DEV_OTHERS=1 opens "Other controls", and
@@ -137,7 +132,7 @@ struct AppPage: View {
         let target = bindingTarget(button)
         let inherited = state.inheritedLabel
         let spokenInherited = state.inheritedSpokenLabel
-        let note = ActionButton.inherited(state.own, everywhere: inherited).note { apply(.standard, to: target) }
+        let note = ActionButton.inherited(state.own, inheriting: inherited).note { apply(.standard, to: target) }
         if state.directions.isEmpty {
             LabeledContent {
                 actionButton(state.own, target: target, sameAs: inherited, spokenSameAs: spokenInherited)
@@ -190,8 +185,8 @@ struct AppPage: View {
             isPresented: Binding(get: { presented == id }, set: { presented = $0 ? id : nil }),
             choose: { entry in choose(entry, for: target, current: action) },
             accessibilityName: target.title + spoken,
-            sameAsEverywhere: sameAs,
-            spokenEverywhere: spokenSameAs)
+            sameAsInherited: sameAs,
+            spokenInherited: spokenSameAs)
     }
 
     private func choose(_ entry: PickerEntry, for target: BindingTarget, current: ButtonAction) {
@@ -240,12 +235,10 @@ struct AppPage: View {
                                                 configured: config.contains(scope + ["thumbWheel"]))
         if thumbWheel.isShown {
             let choice = config.thumbWheelChoice(inheriting: mice)
-            // Mice that both choose Custom may still set different actions.
-            let variesDirections = Set(["left", "right"].filter { config.thumbWheelAction($0, inheriting: mice).varies })
             Section("Thumb Wheel") {
                 ThumbWheelRows(path: scope + ["thumbWheel"], base: config.thumbWheelState(inheriting: mice).first,
                                inherited: choice.first, inheritedVaries: config.thumbWheelVaries(inheriting: mice),
-                               inheritedVariesDirections: variesDirections, appName: identity.name,
+                               inheritedVariesKeys: config.thumbWheelKeysVarying(inheriting: mice, ownPath: scope + ["thumbWheel"]), appName: identity.name,
                                availability: thumbWheel)
             }
         }

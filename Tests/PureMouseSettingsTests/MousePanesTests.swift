@@ -170,9 +170,9 @@ import Testing
     #expect(ownApp.caption == "Set for this app." && ownMouse.caption == "Set for this mouse.")
     #expect(ownApp.resetTitle == "Use Mouse Setting" && ownMouse.resetTitle == "Use All Mice Setting")
     // The Buttons list builds both from the same function.
-    let button = ActionButton.inherited(.standard, everywhere: "Mission Control", source: InheritedScope.allMice)
+    let button = ActionButton.inherited(.standard, inheriting: "Mission Control", source: InheritedScope.allMice)
     #expect(button.caption == nil && button.effective == "Mission Control")
-    #expect(ActionButton.inherited(.named("mute"), everywhere: "Mission Control", source: InheritedScope.allMice).caption
+    #expect(ActionButton.inherited(.named("mute"), inheriting: "Mission Control", source: InheritedScope.allMice).caption
         == "Set for this mouse.")
 }
 
