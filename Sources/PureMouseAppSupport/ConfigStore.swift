@@ -232,7 +232,7 @@ public final class ConfigStore {
         }
     }
 
-    private func replace(with data: Data) {
+    func replace(with data: Data) {
         guard let tree = try? ConfigTree(data: data) else { return }
         undo?.clear()
         cancelPendingWrite?()

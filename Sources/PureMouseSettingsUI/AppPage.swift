@@ -54,10 +54,16 @@ struct AppPage: View {
             AppPageHeader(key: key, identity: identity, segment: segment, select: select, back: back)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
             PaneForm {
-                switch segment {
-                case .buttons: buttons(model.config)
-                case .scrolling: scrolling(model.config)
+                useSwitch(model.config)
+                // Everything below the switch dims while PureMouse is off in this app; its settings
+                // stay in the file.
+                Group {
+                    switch segment {
+                    case .buttons: buttons(model.config)
+                    case .scrolling: scrolling(model.config)
+                    }
                 }
+                .disabled(!model.config.isAppEnabled(key))
                 Section {} footer: {
                     HStack {
                         Button("Remove App…") { confirmingRemove = true }
@@ -76,6 +82,7 @@ struct AppPage: View {
         .onChange(of: expanded) { settings?.refit() }
         .onChange(of: showOthers) { settings?.refit() }
         .onChange(of: headerHeight) { settings?.refit() }
+        .onChange(of: model.config.isAppEnabled(key)) { settings?.refit() }
         #if DEBUG
         .onAppear {
             // With PUREMOUSE_DEV_APP: PUREMOUSE_DEV_OTHERS=1 opens "Other controls",
@@ -96,6 +103,29 @@ struct AppPage: View {
             }
         }
         #endif
+    }
+
+    // MARK: Use PureMouse
+
+    /// The page's first row. Off leaves the app to macOS (`apps.<key>.enabled`); nothing is written
+    /// until it is turned off, and turning it on removes the key. Pointer speed and wheel mode are
+    /// the mouse's own, so they stay: the footer says so while it is off.
+    private func useSwitch(_ config: ConfigTree) -> some View {
+        let on = config.isAppEnabled(key)
+        return Section {
+            Toggle(isOn: Binding(get: { on }, set: { value in model.update { $0.setAppEnabled(key, value) } })) {
+                RowLabel("Use PureMouse in this app", help: ConfigTree.useInAppCaption)
+            }
+            .accessibilityLabel("Use PureMouse in \(identity.name)")
+        } footer: {
+            // Leading, as the Apps list's note is: a bare footer Text sits at the trailing edge.
+            if !on {
+                Text(ConfigTree.useInAppOffNote)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
     }
 
     // MARK: Buttons

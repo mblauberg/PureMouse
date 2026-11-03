@@ -69,8 +69,9 @@ config: Config
     83: action
       action: navigateBack
   unknownButtons: [0]
-  apps: [1]
+  apps: [2]
     com.apple.safari: AppSettings
+      enabled: true
       bindings: [5]
         195: gesture
           gesture: Gesture
@@ -108,6 +109,45 @@ config: Config
         shiftScrollsHorizontally: true
       buttons: {83, 86}
       setsButtons: true
+      setsThumbWheel: false
+      setsSmoothScroll: false
+    com.valvesoftware.dota2: AppSettings
+      enabled: false
+      bindings: [4]
+        195: gesture
+          gesture: Gesture
+            click: missionControl
+            up: none
+            down: appExpose
+            left: spaceLeft
+            right: spaceRight
+        196: action
+          action: keys
+            keys: Keystroke
+              key: 21
+              modifiers: CGEventFlags
+                rawValue: 1179648
+        82: action
+          action: toggleScrollMode
+        83: action
+          action: navigateBack
+      thumbWheel: ThumbWheel
+        inverted: nil
+        reversed: false
+        mode: actions
+          actions: (left: Action, right: Action)
+            left: zoomOut
+            right: zoomIn
+        step: 3
+      smoothScroll: SmoothScroll
+        enabled: true
+        speed: 1.0
+        horizontalSpeed: 1.0
+        acceleration: 1.0
+        smoothingMs: 125.0
+        shiftScrollsHorizontally: true
+      buttons: {}
+      setsButtons: false
       setsThumbWheel: false
       setsSmoothScroll: false
   warnings: [0]
@@ -399,6 +439,7 @@ config: Config
   unknownButtons: [0]
   apps: [1]
     com.apple.safari: AppSettings
+      enabled: true
       bindings: [3]
         195: gesture
           gesture: Gesture
@@ -475,6 +516,7 @@ config: Config
   unknownButtons: [0]
   apps: [1]
     a: AppSettings
+      enabled: true
       bindings: [3]
         195: gesture
           gesture: Gesture
@@ -586,6 +628,7 @@ config: Config
   unknownButtons: [0]
   apps: [1]
     x: AppSettings
+      enabled: true
       bindings: [3]
         195: gesture
           gesture: Gesture
@@ -672,6 +715,7 @@ config: Config
   unknownButtons: [0]
   apps: [4]
     com.apple.music: AppSettings
+      enabled: true
       bindings: [4]
         195: gesture
           gesture: Gesture
@@ -706,6 +750,7 @@ config: Config
       setsThumbWheel: true
       setsSmoothScroll: false
     com.apple.preview: AppSettings
+      enabled: true
       bindings: [4]
         195: gesture
           gesture: Gesture
@@ -737,6 +782,7 @@ config: Config
       setsThumbWheel: true
       setsSmoothScroll: true
     com.apple.safari: AppSettings
+      enabled: true
       bindings: [5]
         195: gesture
           gesture: Gesture
@@ -777,6 +823,7 @@ config: Config
       setsThumbWheel: false
       setsSmoothScroll: false
     com.google.chrome: AppSettings
+      enabled: true
       bindings: [4]
         195: gesture
           gesture: Gesture
@@ -864,6 +911,7 @@ config: Config
   unknownButtons: [0]
   apps: [4]
     a: AppSettings
+      enabled: true
       bindings: [3]
         195: gesture
           gesture: Gesture
@@ -896,6 +944,7 @@ config: Config
       setsThumbWheel: true
       setsSmoothScroll: false
     b: AppSettings
+      enabled: true
       bindings: [3]
         195: gesture
           gesture: Gesture
@@ -928,6 +977,7 @@ config: Config
       setsThumbWheel: true
       setsSmoothScroll: false
     c: AppSettings
+      enabled: true
       bindings: [3]
         195: gesture
           gesture: Gesture
@@ -960,6 +1010,7 @@ config: Config
       setsThumbWheel: true
       setsSmoothScroll: false
     d: AppSettings
+      enabled: true
       bindings: [3]
         195: gesture
           gesture: Gesture
@@ -1045,6 +1096,7 @@ config: Config
   unknownButtons: [0]
   apps: [3]
     a: AppSettings
+      enabled: true
       bindings: [3]
         195: gesture
           gesture: Gesture
@@ -1077,6 +1129,7 @@ config: Config
       setsThumbWheel: true
       setsSmoothScroll: false
     b: AppSettings
+      enabled: true
       bindings: [3]
         195: gesture
           gesture: Gesture
@@ -1109,6 +1162,7 @@ config: Config
       setsThumbWheel: true
       setsSmoothScroll: false
     c: AppSettings
+      enabled: true
       bindings: [3]
         195: gesture
           gesture: Gesture
@@ -1187,6 +1241,7 @@ config: Config
   unknownButtons: [0]
   apps: [1]
     com.apple.safari: AppSettings
+      enabled: true
       bindings: [3]
         195: gesture
           gesture: Gesture
@@ -1262,6 +1317,7 @@ config: Config
   unknownButtons: [0]
   apps: [2]
     b.app: AppSettings
+      enabled: true
       bindings: [3]
         195: gesture
           gesture: Gesture
@@ -1291,6 +1347,7 @@ config: Config
       setsThumbWheel: false
       setsSmoothScroll: false
     com.apple.safari: AppSettings
+      enabled: true
       bindings: [3]
         195: gesture
           gesture: Gesture
@@ -2184,6 +2241,7 @@ config: Config
     -: zz
   apps: [1]
     com.apple.safari: AppSettings
+      enabled: true
       bindings: [4]
         195: gesture
           gesture: Gesture

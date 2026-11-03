@@ -26,13 +26,17 @@ public enum StatusText {
 
     /// "USB receiver · Battery 80%", "Applying settings…", "Settings not applied" or "Asleep". The
     /// applied state speaks only while it is not simply applied: no line says all is well.
-    public static func subtitle(_ device: Status.Device) -> String {
+    ///
+    /// `offIn` names the frontmost app when it is turned off, "Off in Dota 2": it replaces the
+    /// connection and battery, but not a problem ("Settings not applied") or "Asleep".
+    public static func subtitle(_ device: Status.Device, offIn app: String? = nil) -> String {
         switch device.applied?.state {
         case .applying: return applying
         case .notApplied: return notApplied
         case .applied, nil: break
         }
         guard device.online else { return "Asleep" }
+        if let app { return "Off in \(app)" }
         return ([connection(device)] + [battery(device.battery)].compactMap { $0 }).joined(separator: " · ")
     }
 

@@ -228,7 +228,9 @@ Each level has one mechanism, and each label says what it reveals.
   ("1,600 DPI, MX Master 3S"), and the status item's label ends "2 mice connected" (the mice
   answering, so two of one model are two) from two.
 - **Quiet when applied.** The menu reports a problem, not that all is well. The header's second
-  line reads "Applying settings…" or "Settings not applied" only while that is true. "Applying
+  line reads "Applying settings…" or "Settings not applied" only while that is true, or "Off in <App>"
+  while the frontmost app is turned off (read when the menu opens, as for "Settings for <app>…"; it
+  adds no row and no daemon traffic, and a problem state above wins over it). "Applying
   settings…" starts once the mouse has answered, so a mouse still silent after a wake keeps reading
   "Asleep", never "Applying". "Settings not applied" comes before "Asleep" only for a mouse that
   answered and did not take its settings; one that answered nothing, or whose link is down, is
@@ -440,7 +442,8 @@ Settings
 ├─ General: Status (PureMouse; one row per device with (i) → About This Mouse sheet; a receiver row
 │            with (i) → Receiver sheet: Pair a Mouse…, Unpair…, last slice) · Open at login ·
 │            Show in menu bar · Low battery notifications · Permissions ·
-│            Advanced…: Universal Control, Config file [Open] [Export Settings…] [Import Settings…],
+│            Advanced…: Universal Control, Config file [Open] [Show in Finder],
+│            Copy settings [Export…] [Import…],
 │            Log, Reset All Settings…
 ├─ Mouse [Buttons | Scrolling | Pointer]
 │   ├─ Buttons: Advanced… gains Ignore repeated clicks (the click, Double-click and Hold rows are
@@ -635,14 +638,14 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
 
 | Place | Shown by default | Advanced |
 |---|---|---|
-| General | Status (the PureMouse row: a Pause switch with Active or Paused beside it, or Off with a Start button; one row per mouse the daemon knows, with its connection, battery and computer, or that its settings are being applied or were not, and an (i) that opens About This Mouse; active notices), Open at login, Show in menu bar, Low battery notifications (while macOS has them off, Open Notification Settings… in place of the switch, whose choice is kept), Permissions (status only) | Advanced… sheet: Work with Universal Control, Config file, Log, Reset All Settings… |
+| General | Status (the PureMouse row: a Pause switch with Active or Paused beside it, or Off with a Start button; one row per mouse the daemon knows, with its connection, battery and computer, or that its settings are being applied or were not, and an (i) that opens About This Mouse; active notices), Open at login, Show in menu bar, Low battery notifications (while macOS has them off, Open Notification Settings… in place of the switch, whose choice is kept), Permissions (status only) | Advanced… sheet: Work with Universal Control, Config file (Open, Show in Finder), Copy settings (Export…, Import…; the File menu has Export Settings… and Import Settings…), Log, Reset All Settings…. The Settings app's File menu has Export Settings… and Import Settings… |
 | Mouse header | Buttons, Scrolling, Pointer segments; mouse pop-up with two or more mice; Find by Pressing… and the device card on Buttons | — |
 | Mouse › Buttons | One row per button, its pop-up the click action (the gesture button reads "Mission Control") | Double-click and Hold child rows (one disclosure per button, only once wanted from More Ways to Press at the foot of the click's picker or once one applies; collapsed, the caption sums them up, "Double-click: Mission Control. Hold: Precise Pointer."; the Double-click row's caption states the wait, "Single clicks wait 0.5 s for a second click."); Hold and Move's directions under its Hold row (choosing it expands the row); Other controls (disclosure: named controls and bound ones, see Device card); Advanced… sheet, only while some button anywhere is Hold and Move: gesture Distance and Repeat |
 | Mouse › Scrolling | Smooth scrolling, Feel, Speed; Main Wheel: Reverse direction, Wheel mode, SmartShift; Thumb Wheel: Action (Turn left/right when Custom); each when the mouse has it | Advanced… sheet, each row only when it applies: Acceleration, Glide, Hold Shift to scroll sideways (dimmed while smooth scrolling is off); Switches at (while SmartShift is on); thumb wheel Reverse direction (when it scrolls here or in some app), Swap directions and Turn distance (when it has actions), Speed (when it scrolls) |
 | Mouse › Pointer | Pointer speed slider (Slow/Fast, no readout); collapsed Exact value with secondary DPI; Presets summary row; all only when the mouse can adjust its speed (else one "Not supported by this mouse." row, unless a value is set) | Exact value (disclosure); Edit Presets… sheet (also opened from the menu) |
-| Apps | App list whose rows name the areas each app changes, Add App (bordered pull-down) in the footer, routing note; empty state with an Add App… button that opens the Applications panel | Each app opens as a page (‹ Apps, Buttons \| Scrolling); on it, Double-click and Hold rows, other controls and more thumb wheel options are disclosures, and the editors are sheets |
+| Apps | App list whose rows name the areas each app changes, Add App (bordered pull-down) in the footer, routing note; empty state with an Add App… button that opens the Applications panel | Each app opens as a page (‹ Apps, Buttons \| Scrolling) whose first row is **Use PureMouse in this app** (off dims every row below in either segment, which stay open to look at, and the list row reads "Off"); on it, Double-click and Hold rows, other controls and more thumb wheel options are disclosures, and the editors are sheets |
 | About | Icon, name, version, Check for Updates, Check for updates automatically (switch), links, Support PureMouse | — |
-| Status menu | Device header, attention rows when active, Update to X.Y.Z… with Skip This Version under it (while a newer release is known), Smooth Scrolling, Pointer Speed, Start/Pause/Resume, Settings…, Settings for <app>… (the frontmost app, if any), Quit PureMouse | ⌥: detail line, Show Log in Finder, Hide Menu Bar Icon |
+| Status menu | Device header, attention rows when active, Update to X.Y.Z… with Skip This Version under it (while a newer release is known), Smooth Scrolling, Pointer Speed, Start/Pause/Resume, Settings…, Settings for <app>… (the frontmost app, if any), Quit PureMouse; the header's second line adds "Off in <App>" | ⌥: detail line, Show Log in Finder, Hide Menu Bar Icon |
 
 **Device rows and About This Mouse.** General › Status lists each known mouse, from status and
 whatever Mouse scope is chosen, only while PureMouse runs. Its (i) is a plain button with a 20 pt

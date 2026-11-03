@@ -168,7 +168,7 @@ code says, so "Run Command" stays until Run Script… replaces it.
 | Per-app off | Use PureMouse in this app (switch); Off (Apps row); Off in <App> (menu) | disable, exclude, bypass |
 | Host switching | Switch to Computer 2 (the command; the status words are in the Glossary) | host, channel, slot |
 | New actions | Open…, Run Shortcut…, Menu Item…, Insert Text…, Run Script… (AppleScript \| Shell), Sequence… (Add Step, Wait), Action Ring… | Run Command, Type Text, Launch, Macro, Workflow |
-| Config transfer | Export Settings…, Import Settings… | Backup, Sync |
+| Config transfer | Export Settings…, Import Settings… (the row "Copy settings" with buttons Export… and Import…, spoken as the full names; the alert "Replace all settings?", with "This file runs commands: N" when the file has them) | Backup, Sync, Restore |
 | Receiver | Logi Bolt receiver, Unifying receiver; Pair a Mouse…, Unpair… | dongle, link |
 
 Picker actions use verbs and never "toggle" ("Mute or Unmute Microphone"). Captions state the cost
