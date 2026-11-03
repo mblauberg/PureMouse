@@ -255,7 +255,7 @@ private struct PermissionRow: View {
                 case .notAllowed:
                     Label(state.word, systemImage: "exclamationmark.triangle.fill")
                     Button("Open System Settings", action: open)
-                        .accessibilityLabel("Allow \(title) in System Settings")
+                        .accessibilityLabel("Open \(title) privacy settings")
                 case .notNeeded, .unavailable:
                     Text(state.word)
                 }

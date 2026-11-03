@@ -352,6 +352,15 @@ helper itself 35.7 MB, with a cold start of 654 ms. Several menu and Settings ch
 between the two runs (the Settings request lock, the login controls, the battery notifications);
 the growth was not bisected. The comparisons below are from the 2026-11-02 set.
 
+With Show in menu bar off the menu app stays resident without a status item (`AppController.resident`), so
+battery notifications and the update check carry on. Medians of 5 rig runs on the same Mac on
+2026-11-03 (shipped build), two sets of 5 on the first-run branch: fresh 6.0 to 7.1 MB (the
+shown icon: 9.1 to 10.8), after 200 doorbells with the last a low battery 5.9 to 7.0, 1.5 s after
+the Settings helper quits 6.0 to 6.9, and after an update check 6.8 to 7.8. The spread between the
+two sets is the Mac's (the shown icon's fresh figure moved the same way between sets), not the
+change's: on the same day the shown icon's open-1 was 13.3 on main and 13.5 on the branch in the
+quiet set. With no AppKit menu to build, the windowless process costs about 3 MB less than the shown one.
+
 What the numbers say:
 
 - **The first menu open costs about 4 MB, once** (8.6 to 12.9 MB shipped; 11.9 to 18.4 without
