@@ -145,6 +145,14 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
         return true
     }
 
+    /// The window's undo manager is the model's, so Edit › Undo and ⌘Z step through settings changes,
+    /// except while a text field is being edited: its field editor keeps its own (the window's
+    /// default one), so ⌘Z undoes typing first.
+    public func windowWillReturnUndoManager(_ window: NSWindow) -> UndoManager? {
+        if (window.firstResponder as? NSText)?.isFieldEditor == true { return nil }
+        return model.undoManager
+    }
+
     public func windowDidMove(_ notification: Notification) {
         guard let window, window.isVisible else { return }
         defaults.set(NSStringFromPoint(NSPoint(x: window.frame.minX, y: window.frame.maxY)), forKey: Self.positionKey)
