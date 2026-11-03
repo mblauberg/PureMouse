@@ -138,7 +138,8 @@ extension Session {
     }
 
     /// The binding for a press: the frontmost app's when an app entry names it, else the global one.
-    /// Only a control some app names needs the lookup.
+    /// Only a control some app names needs the lookup. An app that sets the control to `"default"`
+    /// names it (`AppSettings.buttons`) but has no binding for it, so the press is `nil` here.
     private func binding(for cid: UInt16) -> Config.Binding? {
         if appButtons.contains(cid), let app = ForegroundApp.shared.frontmost(), let scoped = config.settings(forApp: app) {
             Log.debug("\(name): buttons with \(app)'s settings")
@@ -156,7 +157,8 @@ extension Session {
             guard held.holdGesture(cid, gesture) else { return }
             recognizer.begin()
         case nil:
-            // Bound only in other apps: click as the mouse would without PureMouse.
+            // Bound only in other apps, or set to "default" in this one: click as the mouse would
+            // without PureMouse.
             held.clickNatively(cid)
         }
     }

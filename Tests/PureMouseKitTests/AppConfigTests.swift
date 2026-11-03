@@ -101,6 +101,41 @@ import Testing
         #expect(config.bindings[0xC4] == nil && config.boundControls.contains(0xC4))
     }
 
+    @Test func defaultInAnAppMakesTheControlNativeWhileTheGlobalScopeBindsIt() throws {
+        let config = try decode("""
+            {\(Self.base), "apps": {"com.apple.Safari": {"buttons": {"back": "default", "middle": {"keys": "cmd+t"}}}}}
+            """)
+        let safari = try #require(config.settings(forApp: "com.apple.Safari"))
+        // No binding in the app, though the global scope binds it, and the daemon looks the app
+        // up at a press of back (`buttons`), so the press clicks natively.
+        #expect(safari.bindings[0x53] == nil && safari.buttons.contains(0x53) && safari.setsButtons)
+        guard case .action(.keys) = safari.bindings[0x52] else { Issue.record("middle"); return }
+        // Everywhere else the global binding stays, and the control is still diverted.
+        guard case .action(.navigateBack) = config.global.bindings[0x53] else { Issue.record("global back"); return }
+        #expect(config.boundControls.contains(0x53))
+        #expect(config.warnings.isEmpty)
+    }
+
+    @Test func defaultInAnAppDoesNotBindAControlNothingElseBinds() throws {
+        let config = try decode(#"{"apps": {"com.example.x": {"buttons": {"top": "default"}}}}"#)
+        let app = try #require(config.settings(forApp: "com.example.x"))
+        #expect(app.bindings[0xC4] == nil && app.buttons == [0xC4])
+        #expect(config.boundControls.isEmpty)
+    }
+
+    @Test func defaultInAnAppAppliesOnTopOfADeviceThatBindsTheButton() throws {
+        let m = "mb03440910000"
+        let config = try decode("""
+            {"buttons": {"back": "navigateBack"},
+             "devices": {"\(m)": {"buttons": {"back": "mute"}}},
+             "apps": {"com.example.x": {"buttons": {"back": "default"}}}}
+            """)
+        let device = config.forDevice(m)
+        guard case .action(.mute) = device.global.bindings[0x53] else { Issue.record("device back"); return }
+        #expect(device.settings(forApp: "com.example.x")?.bindings[0x53] == nil)
+        #expect(device.settings(forApp: "com.example.x")?.buttons == [0x53])
+    }
+
     @Test func gestureDirectionsMergeOntoTheGlobalGesture() throws {
         let config = try decode("""
             {\(Self.base), "apps": {"com.apple.Safari": {"buttons": {"gesture": {"left": "navigateBack"}}}}}

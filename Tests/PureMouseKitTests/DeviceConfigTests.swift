@@ -38,6 +38,95 @@ import Testing
         #expect(action(topApp.bindings[0x53]) == .navigateBack)
     }
 
+    @Test func defaultOnADeviceClearsTheBindingTheTopLevelGivesIt() throws {
+        let c = try config(#"""
+            {"buttons": {"back": "navigateBack", "0x0056": "navigateForward", "middle": "mute"},
+             "devices": {"\#(Self.m)": {"buttons": {"back": "default", "forward": "default"}}}}
+            """#)
+        let device = c.forDevice(Self.m)
+        // Native there: no binding at all, and no name left behind for the control.
+        #expect(device.bindings[0x53] == nil && device.bindings[0x56] == nil)
+        #expect(action(device.bindings[0x52]) == .mute)
+        #expect(device.buttons.keys.sorted() == ["middle"])
+        #expect(device.unknownButtons.isEmpty && c.warnings.isEmpty)
+        // The top level and other mice keep the binding.
+        #expect(action(c.bindings[0x53]) == .navigateBack)
+        #expect(action(c.forDevice("other").bindings[0x53]) == .navigateBack)
+        #expect(device.global.bindings[0x53] == nil)
+    }
+
+    @Test func defaultOnADeviceHidesAGlobalGestureWhole() throws {
+        let c = try config(#"""
+            {"buttons": {"gesture": {"click": "missionControl", "left": "spaceLeft"}},
+             "devices": {"\#(Self.m)": {"buttons": {"gesture": "default"}}}}
+            """#)
+        #expect(c.forDevice(Self.m).bindings[0xC3] == nil)
+        // A later entry's gesture starts from nothing, not from the cleared one.
+        let again = try config(#"""
+            {"buttons": {"gesture": {"click": "missionControl", "left": "spaceLeft"}},
+             "devices": {"\#(Self.m)": {"buttons": {"gesture": "default"}}},
+             "apps": {"com.example.x": {"buttons": {"gesture": {"right": "spaceRight"}}}}}
+            """#)
+        guard case .gesture(let g) = again.forDevice(Self.m).settings(forApp: "com.example.x")?.bindings[0xC3] else {
+            Issue.record("gesture"); return
+        }
+        #expect(g.right == .spaceRight)
+    }
+
+    @Test func defaultAtTheTopLevelIsTheSameAsLeavingTheButtonOut() throws {
+        let withDefault = try config(#"{"buttons": {"back": "default", "0x00c4": "default", "middle": "mute"}}"#)
+        let without = try config(#"{"buttons": {"middle": "mute"}}"#)
+        #expect(withDefault.bindings.mapValues(String.init(describing:)) == without.bindings.mapValues(String.init(describing:)))
+        #expect(withDefault.buttons.keys.sorted() == without.buttons.keys.sorted())
+        #expect(withDefault.boundControls == without.boundControls)
+        #expect(withDefault.unknownButtons.isEmpty && withDefault.warnings.isEmpty)
+    }
+
+    @Test func defaultKeepsTheReservedAndUnknownWarnings() throws {
+        let c = try config(#"""
+            {"buttons": {"nonsense": "default"},
+             "devices": {"\#(Self.m)": {"buttons": {"0x0050": "default", "bogus": "default"}}},
+             "apps": {"com.example.x": {"buttons": {"0x0051": "default", "bogus": "default"}}}}
+            """#)
+        #expect(c.unknownButtons == ["nonsense"])
+        #expect(c.warnings.contains { $0.contains("devices.\(Self.m).buttons.0x0050") && $0.contains("always click") })
+        #expect(c.warnings.contains { $0.contains("devices.\(Self.m).buttons: unknown button 'bogus'") })
+        #expect(c.warnings.contains { $0.contains("apps.com.example.x.buttons.0x0051") })
+        #expect(c.warnings.contains { $0.contains("apps.com.example.x.buttons: unknown button 'bogus'") })
+        #expect(c.forDevice(Self.m).bindings[0x50] == nil)
+    }
+
+    @Test func defaultIsStillNotAnAction() {
+        #expect(Action.named["default"] == nil)
+        #expect(throws: (any Error).self) {
+            try JSONDecoder().decode(Config.self, from: Data(#"{"thumbWheel": {"left": "default"}}"#.utf8))
+        }
+    }
+
+    @Test func defaultOnAMixedCaseDeviceKeyStillClears() throws {
+        let c = try config(#"""
+            {"buttons": {"back": "navigateBack"},
+             "devices": {"\#(Self.m.uppercased())": {"buttons": {"back": "default"}}}}
+            """#)
+        #expect(c.forDevice(Self.m).bindings[0x53] == nil)
+        #expect(action(c.bindings[0x53]) == .navigateBack)
+    }
+
+    @Test func nameOrderDecidesWhenTwoNamesInOneEntryMeetOneControl() throws {
+        // "0x0053" sorts before "back": the later name decides, as for any two bindings.
+        let c = try config(#"""
+            {"buttons": {"back": "mute"},
+             "devices": {"\#(Self.m)": {"buttons": {"0x0053": "launchpad", "back": "default"}}}}
+            """#)
+        let device = c.forDevice(Self.m)
+        #expect(device.bindings[0x53] == nil && device.buttons.isEmpty)
+        let reverse = try config(#"""
+            {"buttons": {"back": "mute"},
+             "devices": {"\#(Self.m)": {"buttons": {"0x0053": "default", "back": "launchpad"}}}}
+            """#)
+        #expect(action(reverse.forDevice(Self.m).bindings[0x53]) == Action.named["launchpad"])
+    }
+
     @Test func aDeviceSectionAndAnAppSectionMergePerKey() throws {
         let c = try config(#"""
             {"devices": {"\#(Self.m)": {"smoothScroll": {"speed": 2}}},
