@@ -404,7 +404,8 @@ one. This file covers how to work on it safely.
   reload, control change or Bluetooth attach; each of those starts or extends it. Without Input
   Monitoring a Bluetooth mouse is not retried after its first try.
 - HID++ software IDs rotate per request so a late reply cannot complete a newer request. A
-  cancelled request fails at once instead of holding the endpoint until its timeout. Only events
+  cancelled request fails at once instead of holding the endpoint until its timeout, and so does
+  one still queued behind another (`HIDPPDevice.acquire` removes its entry). Only events
   reach `onEvent` (`Report.isEvent`): software ID 0, or a short HID++ 1.0 notification (sub-ID
   0x40-0x7F); a long report at those indices with another software ID is another program's reply.
 - A slot whose ping gets a HID++ 1.0 answer (invalid sub-ID) is ignored, like a keyboard, and

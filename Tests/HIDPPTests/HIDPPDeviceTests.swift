@@ -75,11 +75,18 @@ struct HIDPPDeviceTests {
         #expect(try await next.value.first == 22)
     }
 
-    @Test func cancellationFailsImmediatelyAndSendsQueuedRequest() async throws {
+    /// Longer than any test can last. A test that must end by cancel or close, never by the
+    /// request's own timeout, uses it, since a timer of seconds is a race against a runner whose
+    /// whole process stalls for longer (CI logs show tests spanning 10 s and more); a
+    /// regression then fails by `timeLimit` instead of passing or failing by the clock.
+    private static let neverTimesOut: Duration = .seconds(3600)
+
+    @Test(.timeLimit(.minutes(1)))
+    func cancellationFailsImmediatelyAndSendsQueuedRequest() async throws {
         let transport = FakeTransport()
         let device = HIDPPDevice(interface: transport, index: directDeviceIndex)
         defer { device.close() }
-        device.timeout = .seconds(10)
+        device.timeout = Self.neverTimesOut
         let first = Task { try await device.request(featureIndex: 2, function: 0) }
         try await waitForSends(1, on: transport)
         let queued = Task { try await device.request(featureIndex: 3, function: 0) }
@@ -91,11 +98,80 @@ struct HIDPPDeviceTests {
         #expect(try await queued.value.first == 42)
     }
 
-    @Test func closeFailsPendingAndQueuedWithoutSendingThem() async throws {
+    @Test(.timeLimit(.minutes(1)))
+    func cancellingAQueuedRequestLeavesTheQueueAtOnce() async throws {
         let transport = FakeTransport()
         let device = HIDPPDevice(interface: transport, index: directDeviceIndex)
-        // Long enough that only `close` ends the first request, however slow the runner.
-        device.timeout = .seconds(10)
+        defer { device.close() }
+        device.timeout = Self.neverTimesOut
+        let owner = Task { try await device.request(featureIndex: 2, function: 0) }
+        try await waitForSends(1, on: transport)
+        let abandoned = Task { try await device.request(featureIndex: 3, function: 0) }
+        let kept = Task { try await device.request(featureIndex: 4, function: 0) }
+        try await eventually { device.queuedRequests == 2 }
+        abandoned.cancel()
+        // The owner is still waiting for its reply: the queued caller must not be.
+        try await eventually { device.queuedRequests == 1 }
+        await #expect(throws: CancellationError.self) { try await abandoned.value }
+        #expect(transport.sent.count == 1)
+        transport.deliver(FakeTransport.reply(to: transport.sent[0], params: [1]))
+        #expect(try await owner.value.first == 1)
+        // The one behind the abandoned request still goes out, and the abandoned one never does.
+        try await waitForSends(2, on: transport)
+        #expect(transport.sent[1].featureIndex == 4)
+        transport.deliver(FakeTransport.reply(to: transport.sent[1], params: [2]))
+        #expect(try await kept.value.first == 2)
+        #expect(transport.sent.count == 2 && device.queuedRequests == 0)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aQueuedRequestCancelledAsItIsHandedTheEndpointLeavesNothingStuck() async throws {
+        let transport = FakeTransport()
+        let device = HIDPPDevice(interface: transport, index: directDeviceIndex)
+        defer { device.close() }
+        device.timeout = Self.neverTimesOut
+        let owner = Task { try await device.request(featureIndex: 2, function: 0) }
+        try await waitForSends(1, on: transport)
+        let queued = Task { try await device.request(featureIndex: 3, function: 0) }
+        try await eventually { device.queuedRequests == 1 }
+        // The reply hands the endpoint on and the cancel follows with no turn between: whichever
+        // wins, the caller ends cancelled and the endpoint is free for the next request.
+        transport.deliver(FakeTransport.reply(to: transport.sent[0], params: [1]))
+        queued.cancel()
+        _ = try await owner.value
+        await #expect(throws: CancellationError.self) { try await queued.value }
+        let next = Task { try await device.request(featureIndex: 5, function: 0) }
+        try await eventually { transport.sent.last?.featureIndex == 5 }
+        transport.deliver(FakeTransport.reply(to: transport.sent.last!, params: [3]))
+        #expect(try await next.value.first == 3)
+        #expect(!transport.sent.contains { $0.featureIndex == 3 })
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aRequestAlreadyCancelledNeverQueuesOrSends() async throws {
+        let transport = FakeTransport()
+        let device = HIDPPDevice(interface: transport, index: directDeviceIndex)
+        defer { device.close() }
+        device.timeout = Self.neverTimesOut
+        let owner = Task { try await device.request(featureIndex: 2, function: 0) }
+        try await waitForSends(1, on: transport)
+        let doomed = Task {
+            while !Task.isCancelled { await Task.yield() }
+            return try await device.request(featureIndex: 3, function: 0)
+        }
+        doomed.cancel()
+        await #expect(throws: CancellationError.self) { try await doomed.value }
+        #expect(device.queuedRequests == 0 && transport.sent.count == 1)
+        transport.deliver(FakeTransport.reply(to: transport.sent[0], params: [1]))
+        _ = try await owner.value
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func closeFailsPendingAndQueuedWithoutSendingThem() async throws {
+        let transport = FakeTransport()
+        let device = HIDPPDevice(interface: transport, index: directDeviceIndex)
+        // Only `close` may end the first request, however slow the runner.
+        device.timeout = Self.neverTimesOut
         let first = Task { try await device.request(featureIndex: 1, function: 0) }
         try await waitForSends(1, on: transport)
         let second = Task { try await device.request(featureIndex: 2, function: 0) }
