@@ -186,8 +186,12 @@ struct SessionStatusTests {
     @Test func withoutAccessibilityAMouseWithNoWheelsLogsNoWheelError() async throws {
         let log = CapturedLog()
         try await Log.$testOutput.withValue(.lines { log.append($0) }) {
-            let h = try await SessionHarness(.m750WithoutWheelFeature, config: SessionHarness.config(#"{"smoothScroll": {}}"#),
-                                             environment: .init(canPostEvents: false))
+            // The default set's back, forward and gesture bindings are set aside: without
+            // Accessibility they are logged, correctly, as left native, and this test is about wheels.
+            let h = try await SessionHarness(
+                .m750WithoutWheelFeature,
+                config: SessionHarness.config(#"{"smoothScroll": {}, "buttons": {"back": "default", "forward": "default", "gesture": "default"}}"#),
+                environment: .init(canPostEvents: false))
             defer { h.close() }
             try await h.session.apply()
             try await h.session.apply()
