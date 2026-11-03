@@ -24,7 +24,7 @@ struct UpdateSetup {
     var confirm: @MainActor (UpdateOffer) -> Bool = Alerts.confirmUpdate
     /// Opens the installed app the way double-clicking it does, after quitting Settings; true if
     /// it was accepted.
-    var relaunch: @MainActor (URL, InstallSource) async -> Bool = { UpdateSetup.relaunchLive($0, from: $1) }
+    var relaunch: @MainActor (URL, InstallSource) async -> Bool = { await UpdateSetup.relaunchLive($0, from: $1) }
     var openPage: @MainActor (URL) -> Void = { NSWorkspace.shared.open($0) }
     var terminate: @MainActor () -> Void = { NSApp.terminate(nil) }
     var alert: @MainActor (String, String) -> Void = Alerts.show
@@ -42,10 +42,12 @@ struct UpdateSetup {
     /// Settings opens again from its menu. Settings comes back only if it was showing, where it
     /// was, or on About for an update asked for from About. The new copy does the reopening
     /// (`--settings=`): `register` replaces this process, and a helper that is quitting takes a
-    /// request and exits, so a request from here would be lost.
+    /// request and exits, so a request from here would be lost. Settings is waited for to exit (up
+    /// to `quitWait`) before the app is opened: a helper that was asked to quit but is still running
+    /// would read the new copy's request, then exit.
     @MainActor static func relaunchLive(_ app: URL, from source: InstallSource, launcher: SettingsLauncher = .shared,
-                                        open: @MainActor (URL, ShowRequest?) -> Bool = UpdateRelaunch.open) -> Bool {
-        let settingsWasOpen = launcher.quitRunning()
+                                        open: @MainActor (URL, ShowRequest?) -> Bool = UpdateRelaunch.open) async -> Bool {
+        let settingsWasOpen = await launcher.quitRunningAndWait()
         let reopening: ShowRequest? = switch source {
         case .about: ShowRequest(pane: .tab(.about))
         case .menu: settingsWasOpen ? ShowRequest() : nil

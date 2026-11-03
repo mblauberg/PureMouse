@@ -61,11 +61,15 @@ macOS, the same app.
   app the way double-clicking it does: that also opens Settings, which a quiet menu bar utility must
   not do after an update from its menu. Settings comes back only if it was showing (where it was),
   or on About for an update asked for from About, which was showing by definition. The **new** copy
-  reopens it (`--settings=<pane>`, once it has registered): `register` replaces the old menu bar app,
-  and a helper that is quitting takes a request and exits, so a request from the old process is lost.
-  `open` only says the launch was accepted, and the old process is gone by the time registration
-  could fail, so `--relaunch` also has the new copy show the Finder launch's alert if it cannot
-  register. There is no acknowledgement back to the old process.
+  tries to reopen it (`--settings=<pane>`, once it has registered): `register` replaces the old menu
+  bar app, and a helper that is quitting takes a request and exits, so a request from the old
+  process would be lost. For the same reason the old process waits, up to 3 s, for the helper to
+  exit before it starts the new copy, and goes on regardless after that. Reopening is best effort:
+  if Settings does not come back it opens from the menu. A release older than this one ignores
+  `--relaunch` and `--settings`, so it reopens nothing. `open` only says the launch was accepted,
+  and the old process is gone by the time registration could fail, so `--relaunch` also has the new
+  copy show the Finder launch's alert if it cannot register. There is no acknowledgement back to the
+  old process.
 - **The commit point is read from the disk.** `replaceItemAt` can throw after the new bundle is in
   place (an immutable flag or a deny-delete ACL on the old bundle gives Cocoa error 513 once the
   rename is done), leaving the old bundle at the staging path. So a throw is not a verdict. The

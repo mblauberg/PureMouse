@@ -234,6 +234,14 @@ struct LoginItem {
         init(reopening: String?) { self.reopening = reopening }
     }
 
+    /// `puremouse register --relaunch ...` end to end: nil if the arguments are not a relaunch;
+    /// otherwise the exit status and the alert to show, if any.
+    func relaunch(arguments: [String]) -> (status: Int32, alert: (title: String, body: String)?)? {
+        guard let options = RelaunchOptions(arguments) else { return nil }
+        let alert = relaunch(reopening: options.reopening)
+        return (alert == nil ? 0 : 1, alert)
+    }
+
     /// Starting the new copy after an update: `register`, then Settings if it was showing. The alert
     /// to show, if registering failed: the old copy does not wait for this one (`open` only says it
     /// was launched), so this is the only place that can tell the user. It is the Finder launch's.

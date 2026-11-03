@@ -322,6 +322,26 @@ private final class Rig: @unchecked Sendable {
         #expect(alert?.title == "PureMouse couldn't start.")
     }
 
+    @Test func registerWithoutTheRelaunchFlagIsNotARelaunch() {
+        let rig = Rig()
+        #expect(rig.item.relaunch(arguments: ["register"]) == nil)
+        #expect(rig.service.calls.isEmpty, "the ordinary register path runs on its own")
+    }
+
+    @Test func aRelaunchThatWorksExitsZeroWithNoAlert() {
+        let rig = Rig()
+        let result = rig.item.relaunch(arguments: ["register", "--relaunch", "--settings=about"])
+        #expect(result?.status == 0 && result?.alert == nil)
+        #expect(rig.requestedPanes == ["about"])
+    }
+
+    @Test func aRelaunchThatCannotRegisterExitsOneWithTheAlert() {
+        let rig = Rig(executable: { throw LoginItem.Failure.translocated })
+        let result = rig.item.relaunch(arguments: ["register", "--relaunch"])
+        #expect(result?.status == 1)
+        #expect(result?.alert?.title == LoginItem.Failure.translocated.alert.title)
+    }
+
     @Test func theRelaunchOptionsAreReadFromTheArguments() {
         #expect(LoginItem.RelaunchOptions(["register"]) == nil)
         #expect(LoginItem.RelaunchOptions(["register", "--relaunch"]) == .init(reopening: nil))

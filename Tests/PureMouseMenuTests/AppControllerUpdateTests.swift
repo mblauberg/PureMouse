@@ -355,11 +355,11 @@ struct AppControllerUpdateTests {
         #expect(controller.installState == .installed)
     }
 
-    @Test func afterAFailedRelaunchSettingsStillOpens() {
+    @Test func afterAFailedRelaunchSettingsStillOpens() async {
         let fake = FakeSystem()
         let launcher = SettingsLauncher(system: fake.system)
         var asked: [URL] = []
-        let opened = UpdateSetup.relaunchLive(Self.app, from: .menu, launcher: launcher) { app, _ in asked.append(app); return false }
+        let opened = await UpdateSetup.relaunchLive(Self.app, from: .menu, launcher: launcher) { app, _ in asked.append(app); return false }
         #expect(!opened && asked == [Self.app])
         // Quitting for the relaunch is not Quit PureMouse: no stamp, and the next open goes ahead.
         #expect(fake.quitMarks == 0)
@@ -367,12 +367,12 @@ struct AppControllerUpdateTests {
         #expect(fake.opens.count == 1 && fake.posts.count == 1)
     }
 
-    @Test func theHelperIsQuitBeforeTheAppIsOpened() {
+    @Test func theHelperIsQuitBeforeTheAppIsOpened() async {
         let fake = FakeSystem()
         let helper = FakeSystem.Helper(alive: true)
         fake.running = [helper]
         var quitsWhenOpened = -1
-        _ = UpdateSetup.relaunchLive(Self.app, from: .menu, launcher: SettingsLauncher(system: fake.system)) { _, _ in
+        _ = await UpdateSetup.relaunchLive(Self.app, from: .menu, launcher: SettingsLauncher(system: fake.system)) { _, _ in
             quitsWhenOpened = helper.quitCount
             return true
         }
@@ -382,42 +382,93 @@ struct AppControllerUpdateTests {
     // MARK: Settings across the relaunch
 
     /// Runs `relaunchLive` and records what was asked of the new copy, and of Settings by this process.
-    private func relaunch(from source: InstallSource, settingsRunning: Bool) -> (fake: FakeSystem, reopening: ShowRequest??, helper: FakeSystem.Helper) {
+    private func relaunch(from source: InstallSource, settingsRunning: Bool) async -> (fake: FakeSystem, reopening: ShowRequest??, helper: FakeSystem.Helper) {
         let fake = FakeSystem()
         let helper = FakeSystem.Helper(alive: settingsRunning)
         fake.running = settingsRunning ? [helper] : []
         var reopening: ShowRequest??
-        _ = UpdateSetup.relaunchLive(Self.app, from: source, launcher: SettingsLauncher(system: fake.system)) { _, reopen in
+        _ = await UpdateSetup.relaunchLive(Self.app, from: source, launcher: SettingsLauncher(system: fake.system)) { _, reopen in
             reopening = .some(reopen)
             return true
         }
         return (fake, reopening, helper)
     }
 
-    @Test func aMenuRowInstallWithoutSettingsOpenAsksForNoSettingsWindow() {
-        let run = relaunch(from: .menu, settingsRunning: false)
+    @Test func aMenuRowInstallWithoutSettingsOpenAsksForNoSettingsWindow() async {
+        let run = await relaunch(from: .menu, settingsRunning: false)
         #expect(run.reopening == .some(nil))
         #expect(run.fake.posts.isEmpty && run.fake.opens.isEmpty)
     }
 
     /// This process is replaced by `register`, and a helper that is quitting takes a request and
     /// exits, so the old process opening Settings is lost twice over. The new copy does it.
-    @Test func aMenuRowInstallWithSettingsOpenLeavesReopeningItToTheNewCopy() {
-        let run = relaunch(from: .menu, settingsRunning: true)
+    @Test func aMenuRowInstallWithSettingsOpenLeavesReopeningItToTheNewCopy() async {
+        let run = await relaunch(from: .menu, settingsRunning: true)
         #expect(run.helper.quitCount == 1)
         #expect(run.reopening == .some(ShowRequest()))
         #expect(run.fake.posts.isEmpty && run.fake.opens.isEmpty, "this process asks for nothing: it is about to be replaced")
     }
 
-    @Test func anAboutInstallLeavesReopeningSettingsOnAboutToTheNewCopy() {
-        let run = relaunch(from: .about, settingsRunning: true)
+    @Test func anAboutInstallLeavesReopeningSettingsOnAboutToTheNewCopy() async {
+        let run = await relaunch(from: .about, settingsRunning: true)
         #expect(run.reopening == .some(ShowRequest(pane: .tab(.about))))
         #expect(run.fake.posts.isEmpty && run.fake.opens.isEmpty)
     }
 
-    @Test func anAboutInstallAsksForAboutEvenIfSettingsHadJustGone() {
-        let run = relaunch(from: .about, settingsRunning: false)
+    @Test func anAboutInstallAsksForAboutEvenIfSettingsHadJustGone() async {
+        let run = await relaunch(from: .about, settingsRunning: false)
         #expect(run.reopening == .some(ShowRequest(pane: .tab(.about))))
+    }
+
+    /// The old helper reads a request the new copy posts, and only then handles the quit queued ahead
+    /// of it: it exits with Settings gone and nothing to retry. So the new copy is not started until
+    /// the helper has gone.
+    @Test func theNewCopyIsNotStartedWhileTheHelperIsStillExiting() async {
+        let fake = FakeSystem()
+        let helper = FakeSystem.Helper(alive: true)
+        helper.exitsOnQuit = false
+        fake.running = [helper]
+        var opened = 0
+        let launcher = SettingsLauncher(system: fake.system)
+        let task = Task { @MainActor in
+            await UpdateSetup.relaunchLive(Self.app, from: .about, launcher: launcher) { _, _ in opened += 1; return true }
+        }
+        await settle { false }
+        #expect(helper.quitCount == 1 && opened == 0, "asked to quit, not yet gone")
+        for _ in 0..<5 { fake.runDelayed(); await settle { false } }
+        #expect(opened == 0, "still waiting while it is alive")
+        helper.exit()
+        fake.runDelayed()
+        #expect(await task.value)
+        #expect(opened == 1)
+    }
+
+    @Test func theNewCopyIsStartedAfterTheTimeoutIfTheHelperNeverExits() async {
+        let fake = FakeSystem()
+        let helper = FakeSystem.Helper(alive: true)
+        helper.exitsOnQuit = false
+        fake.running = [helper]
+        var opened = 0
+        let launcher = SettingsLauncher(system: fake.system)
+        let task = Task { @MainActor in
+            await UpdateSetup.relaunchLive(Self.app, from: .menu, launcher: launcher) { _, _ in opened += 1; return true }
+        }
+        var waited: TimeInterval = 0
+        while opened == 0, waited < 10 {
+            await settle { false }
+            waited += fake.delayed.map(\.0).reduce(0, +)
+            fake.runDelayed()
+        }
+        #expect(await task.value)
+        #expect(opened == 1)
+        #expect(waited >= SettingsLauncher.quitWait && waited < SettingsLauncher.quitWait + 1, "about 3 s, then on regardless")
+    }
+
+    @Test func nothingIsWaitedForWhenSettingsIsNotRunning() async {
+        let fake = FakeSystem()
+        var opened = 0
+        _ = await UpdateSetup.relaunchLive(Self.app, from: .menu, launcher: SettingsLauncher(system: fake.system)) { _, _ in opened += 1; return true }
+        #expect(opened == 1 && fake.delayed.isEmpty)
     }
 
     @Test func theRelaunchOpensTheNewCopyToRegisterAndNothingMore() {
