@@ -73,6 +73,8 @@ final class InstallSpy {
     /// waits there too, as detaching the image and deleting the download do.
     var gate: Suspended?
     var cleanup: Suspended?
+    /// Runs while the confirmation is up, as another request arriving during the modal alert does.
+    var duringConfirm: (@MainActor () -> Void)?
 }
 
 /// The question about automatic checks, asked of the person once.
@@ -261,7 +263,7 @@ struct AppControllerUpdateTests {
         preferences.latest = UpdateCheck.Release(version: UpdateCheck.Version("0.6.0")!, page: Self.page)
         var setup = UpdateSetup.inert(preferences: preferences, scheduler: scheduler)
         setup.installedApp = Self.app
-        setup.confirm = { spy.confirmed.append($0); return spy.confirm }
+        setup.confirm = { spy.confirmed.append($0); spy.duringConfirm?(); return spy.confirm }
         setup.install = { release, current, app in
             await MainActor.run { spy.installs.append((release, current, app)) }
             if let gate = await spy.gate {
@@ -374,6 +376,56 @@ struct AppControllerUpdateTests {
             return true
         }
         #expect(quitsWhenOpened == 1)
+    }
+
+    // MARK: One installer, also while confirming
+
+    @Test func aRequestThatArrivesWhileConfirmingIsRefusedSoOnlyOneInstallRuns() async {
+        let spy = InstallSpy()
+        spy.gate = Suspended()
+        let controller = offered(spy)
+        spy.duringConfirm = { [unowned controller] in
+            spy.duringConfirm = nil
+            controller.installUpdate()   // the menu row again
+            controller.startInstall(UpdateOffer(version: UpdateCheck.Version("0.6.0")!, page: Self.page))   // About's request
+        }
+        controller.installUpdate()
+        await settle { false }
+        #expect(spy.confirmed.count == 1, "the second request did not open a second alert")
+        #expect(spy.installs.count == 1)
+        var ended = false
+        controller.afterInstallEnds { ended = true }
+        spy.gate?.release(cancelled: true)
+        await settle { ended }
+        #expect(ended && spy.installs.count == 1 && spy.relaunched.isEmpty)
+    }
+
+    @Test func aRequestFromAboutDuringTheMenusConfirmationStartsNothingMore() async {
+        let spy = InstallSpy()
+        spy.gate = Suspended()
+        let controller = offered(spy)
+        spy.duringConfirm = { [unowned controller] in
+            spy.duringConfirm = nil
+            self.preferences.installRequest = UpdateCheck.Release(version: UpdateCheck.Version("0.6.0")!, page: Self.page)
+            controller.installRequested()
+        }
+        controller.installUpdate()
+        await settle { false }
+        #expect(spy.confirmed.count == 1 && spy.installs.count == 1)
+        #expect(preferences.installRequest == nil)
+        spy.gate?.release(cancelled: true)
+        await settle { false }
+    }
+
+    @Test func quittingWhileTheConfirmationIsUpInstallsNothingAfterIt() async {
+        let spy = InstallSpy()
+        let controller = offered(spy)
+        var ended = false
+        spy.duringConfirm = { [unowned controller] in controller.afterInstallEnds { ended = true } }
+        controller.installUpdate()
+        await settle { false }
+        #expect(ended)
+        #expect(spy.installs.isEmpty && controller.installState == .idle)
     }
 
     // MARK: Lifecycle while installing

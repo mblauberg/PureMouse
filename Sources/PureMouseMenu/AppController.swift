@@ -80,6 +80,9 @@ final class AppController: NSObject, NSApplicationDelegate {
     /// The install under way, kept so that Quit and Hide wait for its cleanup.
     private var installTask: Task<Void, Never>?
     private var installingTitle: String?
+    /// The installer is reserved while the confirmation is up: its alert runs a nested run loop in
+    /// which another request (the menu row, About, another process writing the preference) can arrive.
+    private var confirming = false
     /// Quit, Hide or a termination has been asked for: an install that finishes now is not followed
     /// by a relaunch.
     private var leaving = false
@@ -227,10 +230,15 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     /// Asks, then downloads and checks the release and swaps it in (`UpdateInstaller`), then
     /// relaunches. A refusal leaves the installed app untouched and says why. A copy that cannot be
-    /// replaced without a password opens the release page. One install at a time; none once
-    /// quitting has begun.
+    /// replaced without a password opens the release page. One install at a time, the installer
+    /// being reserved from the confirmation on; none once quitting has begun.
     func startInstall(_ offer: UpdateOffer) {
-        guard installTask == nil, !leaving, confirmUpdate(offer) else { return }
+        guard installTask == nil, !confirming, !leaving else { return }
+        confirming = true
+        let confirmed = confirmUpdate(offer)
+        confirming = false
+        // Quit or Hide may have been chosen while the alert was up; nothing starts after that.
+        guard confirmed, !leaving, installTask == nil else { return }
         installingTitle = offer.installingTitle
         installState = .installing
         let release = UpdateCheck.Release(version: offer.version, page: offer.page)
