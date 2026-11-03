@@ -269,16 +269,19 @@ public final class UpdateReminders {
         UpdateCheck.Version(current).map { version > $0 } ?? true
     }
 
-    /// The release to offer: found by a check, newer than the running app, not skipped, and only
-    /// while automatic checks are on.
+    /// The release to offer: found by a check, newer than the running app, above the highest version
+    /// skipped (skipping 0.7.0 hides 0.6.0 too, if a rollback brings it back), and only while
+    /// automatic checks are on.
     public var offer: UpdateOffer? {
         guard automatic, let latest = preferences.latest, isNewer(latest.version),
-              preferences.skipped != latest.version else { return nil }
+              preferences.skipped.map({ latest.version > $0 }) ?? true else { return nil }
         return UpdateOffer(latest)
     }
 
     private func remind() {
-        guard let offer, preferences.notified != offer.version else { return }
+        // Only a version above the highest already notified is announced, so a release that goes
+        // 0.6.0, 0.7.0, 0.6.0 (a rollback) is not announced twice.
+        guard let offer, preferences.notified.map({ offer.version > $0 }) ?? true else { return }
         // A newer release replaces the reminder for the one before it.
         if let previous = preferences.notified { withdraw(UpdateOffer.notificationID(for: previous)) }
         preferences.notified = offer.version

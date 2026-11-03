@@ -47,9 +47,11 @@ that runs only while its window is open (it shows in the Dock meanwhile, and qui
 it), so the menu bar app stays small. Smooth scrolling runs in step with the display, and only
 while the wheel is moving.
 
-<sub>* Two exceptions, both short-lived: while a permission is still to be granted, PureMouse checks
-for it with growing gaps for up to ten minutes; and a Bluetooth mouse that does not answer when it
-connects is retried once a minute until it does.</sub>
+<sub>* Three exceptions. The optional daily update check (off until you say yes) is scheduled by
+macOS, which picks a convenient moment; PureMouse has no timer for it. The other two are short-lived:
+while a permission is still to be granted, PureMouse checks for it with growing gaps for up to ten
+minutes; and a Bluetooth mouse that does not answer when it connects is retried once a minute until
+it does.</sub>
 
 ## Features
 

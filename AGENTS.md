@@ -171,7 +171,7 @@ one. This file covers how to work on it safely.
   the mice are restored (`exitReporting`).
 - Keep it light: no dependencies, and no AppKit or SwiftUI in the daemon or PureMouseKit. Only
   `PureMouseSettingsUI` and the Settings helper link SwiftUI; the menu bar app links AppKit only
-  (`otool -L .build/release/PureMouseMenu` names no SwiftUI). Idle cost is zero CPU, with one bounded exception: while a
+  (`otool -L .build/release/PureMouseMenu` names no SwiftUI). Idle cost is zero CPU (the optional daily check is run by the system's background-activity scheduler, not a timer of ours), with one bounded exception: while a
   permission needed now is missing, a `puremouse permissions` child runs after 2, 4, 8, 16 and
   32 s and then once a minute, until 10 minutes after the latest start, wake, reload, control
   change or Bluetooth attach (`Daemon.pollPermissions`). The display link runs only while a

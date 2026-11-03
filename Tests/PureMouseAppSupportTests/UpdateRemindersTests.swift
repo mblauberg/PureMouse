@@ -251,6 +251,57 @@ final class UpdateHarness {
         #expect(h.withdrawn == ["update.0.6.0"])
     }
 
+    @Test func aRolledBackReleaseIsNotAnnouncedTwice() async {
+        h.preferences.automatic = true
+        for version in ["0.6.0", "0.7.0", "0.6.0"] {
+            h.answer(version: version, etag: "\"\(version)\"")
+            h.date = h.date.addingTimeInterval(25 * 3600)
+            await h.reminders().check()
+        }
+        #expect(h.announced.map(\.version.text) == ["0.6.0", "0.7.0"])
+    }
+
+    @Test func skippingTwoVersionsKeepsARollbackHidden() async {
+        h.preferences.automatic = true
+        var reminders = h.reminders()
+        for version in ["0.6.0", "0.7.0"] {
+            h.answer(version: version, etag: "\"\(version)\"")
+            h.date = h.date.addingTimeInterval(25 * 3600)
+            reminders = h.reminders()
+            await reminders.check()
+            reminders.skip()
+        }
+        #expect(reminders.offer == nil)
+        h.answer(version: "0.6.0", etag: "\"back\"")  // the latest release is withdrawn on GitHub
+        h.date = h.date.addingTimeInterval(25 * 3600)
+        let after = h.reminders()
+        await after.check()
+        #expect(after.offer == nil)
+        #expect(h.announced.map(\.version.text) == ["0.6.0", "0.7.0"])
+        h.answer(version: "0.8.0", etag: "\"new\"")
+        h.date = h.date.addingTimeInterval(25 * 3600)
+        await after.check()
+        #expect(after.offer?.version.text == "0.8.0")
+    }
+
+    @Test func aCallbackAtTheEarliestTheSchedulerMayRunItStillChecks() async {
+        h.preferences.automatic = true
+        h.preferences.lastCheck = h.date.addingTimeInterval(-23 * 3600)  // due in an hour
+        h.answer()
+        let reminders = h.reminders()
+        reminders.start()
+        let wanted = h.scheduler.delays.last ?? 0
+        #expect(wanted == 3600)
+        // The system may run it a tolerance before its interval is up, never before the delay.
+        let timing = BackgroundActivity.timing(after: wanted)
+        h.date = h.date.addingTimeInterval(timing.interval - timing.tolerance)
+        var finished = false
+        h.scheduler.work?({ finished = true })
+        for _ in 0..<1000 where !finished { await Task.yield() }
+        #expect(h.network.requests.count == 1)
+        #expect(h.scheduler.delays.last == UpdateReminders.interval)  // re-armed for the next day, not for seconds
+    }
+
     @Test func turningTheChecksOffTakesTheReminderDown() async {
         h.answer(version: "0.6.0")
         let reminders = h.reminders()
@@ -503,15 +554,22 @@ final class UpdateHarness {
     @Test(.timeLimit(.minutes(1))) @MainActor func theMenuHearsTheSwitchAnotherProcessWrites() async throws {
         let suite = "PureMouseUpdateWatch-\(UUID().uuidString)"
         defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
-        let (heard, ear) = AsyncStream<Void>.makeStream()
-        let watch = UpdatePreferences.Watch(UserDefaults(suiteName: suite)!) { ear.yield() }
-        var events = heard.makeAsyncIterator()
+        let (heard, ear) = AsyncStream<Bool>.makeStream()
+        let watch = UpdatePreferences.Watch(UserDefaults(suiteName: suite)!) { ear.yield(true) }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/defaults")
         process.arguments = ["write", suite, UpdatePreferences.automaticKey, "-bool", "true"]
         try process.run()
         process.waitUntilExit()
-        _ = await events.next()
+        // Bounded: a refused write (a sandbox) fails here after 10 s instead of waiting out the time limit.
+        let heardIt = await withTaskGroup(of: Bool.self) { group in
+            group.addTask { var events = heard.makeAsyncIterator(); return await events.next() ?? false }
+            group.addTask { try? await Task.sleep(for: .seconds(10)); return false }
+            let first = await group.next() ?? false
+            group.cancelAll()
+            return first
+        }
+        #expect(heardIt, "the write was not heard within 10 s (status \(process.terminationStatus))")
         #expect(UpdatePreferences(UserDefaults(suiteName: suite)!).automatic == true)
         withExtendedLifetime(watch) {}
     }

@@ -93,6 +93,14 @@ struct AboutPane: View {
     }
 }
 
+/// What the About switch does: reads and writes the answer in the menu app's preferences and
+/// nothing else. It makes no request; the menu app hears the write and arms or cancels its schedule.
+struct AutomaticUpdates {
+    let preferences: UpdatePreferences?
+    var isOn: Bool { preferences?.automatic ?? false }
+    func set(_ on: Bool) { preferences?.automatic = on }
+}
+
 /// "Check for Updates": one request when pressed. "Check for updates automatically" is the answer
 /// to the menu bar app's question (`UpdateQuestion`), kept in its preferences, where the menu app
 /// runs the daily check from (`UpdateReminders`); this process makes no request unless the button
@@ -104,6 +112,7 @@ private struct UpdateRow: View {
     @State private var watch: UpdatePreferences.Watch?
 
     private let preferences = NotificationPermission.menuDefaults.map { UpdatePreferences($0) }
+    private var answer: AutomaticUpdates { AutomaticUpdates(preferences: preferences) }
 
     var body: some View {
         VStack(spacing: 6) {
@@ -131,9 +140,9 @@ private struct UpdateRow: View {
         .accessibilityElement(children: .contain)
         .onAppear {
             // The menu bar app stores the answer to its question, and may do so while this shows.
-            automatic = preferences?.automatic ?? false
+            automatic = answer.isOn
             watch = preferences.map { preferences in
-                UpdatePreferences.Watch(preferences.defaults) { automatic = preferences.automatic ?? false }
+                UpdatePreferences.Watch(preferences.defaults) { automatic = answer.isOn }
             }
         }
         .onDisappear { watch = nil }
@@ -141,7 +150,7 @@ private struct UpdateRow: View {
 
     private func setAutomatic(_ on: Bool) {
         automatic = on
-        preferences?.automatic = on
+        answer.set(on)
     }
 
     private func check() {

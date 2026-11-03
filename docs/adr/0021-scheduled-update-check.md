@@ -37,7 +37,7 @@ pressed. The daemon has none, and must not.
   A 304 keeps that release.
 - **Reminders.** A release newer than the running version posts one quiet notification per version
   (clicking it opens the release page), and the menu shows **Update to X.Y.Z…** and **Skip This
-  Version** until the running version is at least X.Y.Z. Skipping hides both for that version only. A newer release's reminder replaces the earlier one, turning the
+  Version** until the running version is at least X.Y.Z. Skipping hides both for that version and any lower one; a notification is posted only for a version above the highest already notified, so a release withdrawn on GitHub and republished is not announced twice. A newer release's reminder replaces the earlier one, turning the
   check off takes it down, and only a release page under `github.com/mblauberg/PureMouse/releases` is accepted from the response.
   Nothing is downloaded or installed, and no window takes focus (the question is the one alert).
 - **Stored** in the menu app's preferences, listed in [Privacy](../privacy.md): the answer, launch

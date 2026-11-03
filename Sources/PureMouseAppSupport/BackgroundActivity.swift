@@ -8,7 +8,7 @@ public final class BackgroundActivity: UpdateScheduling {
     private let identifier: String
     private var scheduler: NSBackgroundActivityScheduler?
 
-    /// The most the system may wait after the nominal time for a convenient moment.
+    /// The most the system may move the run, earlier or later than the nominal time, for a convenient moment.
     static let maximumTolerance: TimeInterval = 60 * 60
     /// The shortest nominal delay; a check that is already due still waits this long after launch.
     static let minimumDelay: TimeInterval = 60
