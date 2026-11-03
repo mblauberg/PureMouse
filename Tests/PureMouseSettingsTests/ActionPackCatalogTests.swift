@@ -1,8 +1,14 @@
+import AppKit
 import Foundation
 import PureMouseAppSupport
 import PureMouseKit
 import Testing
 @testable import PureMouseSettingsUI
+
+private func isISODate(_ text: String) -> Bool {
+    text.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil
+        && ISO8601DateFormatter().date(from: text + "T00:00:00Z") != nil
+}
 
 @Suite struct ActionPackCatalogTests {
     @Test func bundledCatalogueLoadsAndValidates() throws {
@@ -50,7 +56,11 @@ import Testing
                 #expect(!action.category.isEmpty)
                 #expect(!action.sourceURL.isEmpty)
                 #expect(URL(string: action.sourceURL) != nil, "Invalid source URL: \(action.sourceURL)")
-                #expect(action.verifiedDate == "2026-11-04", "Verified date should be 2026-11-04")
+                #expect(isISODate(action.verifiedDate), "Verified date is not YYYY-MM-DD: \(action.verifiedDate)")
+                #expect(action.sourceURL.hasPrefix("https://"), "Source URL is not https: \(action.sourceURL)")
+                if let symbol = action.symbol {
+                    #expect(NSImage(systemSymbolName: symbol, accessibilityDescription: nil) != nil, "No SF Symbol \(symbol)")
+                }
                 #expect(Shortcut.isValid(action.payload) || ActionCatalog.groups.flatMap(\.names).contains(action.payload),
                         "Payload does not parse: \(action.payload)")
 
@@ -59,6 +69,29 @@ import Testing
                 }
             }
         }
+    }
+
+    @Test func validationRequiresHTTPSSources() {
+        let entries = (1...6).map { i in
+            ActionPackEntry(id: "act\(i)", bundleIDs: ["com.test"], label: "Action \(i)", category: "Test", payload: "cmd+\(i)",
+                            sourceURL: i == 6 ? "http://example.com" : "https://example.com", verifiedDate: "2026-11-04")
+        }
+        let data = ActionCatalogData(packs: [ActionPack(id: "test", name: "Test", bundleIDs: ["com.test"], actions: entries)])
+        #expect(throws: ActionPackCatalog.ValidationError.invalidSourceURL(actionID: "act6", url: "http://example.com")) {
+            try ActionPackCatalog.validate(data)
+        }
+    }
+
+    @Test func theCatalogueLoadsFromTheBundleItIsGiven() throws {
+        // The Settings helper has the file in Contents/Resources; the source file is the test fallback.
+        let bundleURL = FileManager.default.temporaryDirectory.appending(path: "packs-\(UUID().uuidString).bundle")
+        let resources = bundleURL.appending(path: "Contents/Resources")
+        try FileManager.default.createDirectory(at: resources, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: bundleURL) }
+        try Data(#"{"packs":[]}"#.utf8).write(to: resources.appending(path: "ActionPacks.json"))
+        let bundle = try #require(Bundle(url: bundleURL))
+        #expect(ActionPackCatalog(bundle: bundle).packs.isEmpty)
+        #expect(!ActionPackCatalog(bundle: Bundle.main).packs.isEmpty)
     }
 
     @Test func validationRejectsDuplicateIds() {
@@ -191,18 +224,19 @@ import Testing
         let nonMatched = catalog.pair(matchingLeft: .keys("]"), right: .keys("["), in: "com.adobe.Photoshop")
         #expect(nonMatched == nil)
 
-        // Final Cut Pro pairs
+        // Final Cut Pro pairs: turning left zooms out
         let fcpPairs = catalog.pairs(for: "com.apple.FinalCut")
-        #expect(fcpPairs.contains { $0.label == "Zoom Timeline" })
+        let fcpZoom = fcpPairs.first { $0.label == "Zoom Timeline" }
+        #expect(fcpZoom?.left.id == "finalcut.zoomOut" && fcpZoom?.right.id == "finalcut.zoomIn")
 
         // Excel pairs
         let excelPairs = catalog.pairs(for: "com.microsoft.Excel")
         #expect(excelPairs.contains { $0.label == "Switch Sheets" })
 
-        // VS Code pairs
+        // VS Code pairs: its own shortcut list names folding, not a positional editor switch
         let vsPairs = catalog.pairs(for: "com.microsoft.VSCode")
-        #expect(vsPairs.contains { $0.label == "Switch Editors" })
-        #expect(vsPairs.contains { $0.label == "Fold Code" })
+        #expect(vsPairs.map(\.label) == ["Fold Code"])
+        #expect(vsPairs.first?.left.id == "vscode.fold")
 
         // App without pairs
         let zoomPairs = catalog.pairs(for: "us.zoom.xos")
@@ -212,8 +246,13 @@ import Testing
     @Test func searchMatchesKeywordsAppCategoryAndShortcuts() {
         let catalog = ActionPackCatalog.shared
 
-        // Keyword search: "mic" should match Zoom audio mute
         let zoom = catalog.pack(for: "us.zoom.xos")!
+        // Keywords are whole words: "webcam" is one, "webc" is part of one
+        let video = zoom.actions.first { $0.id == "zoom.video" }!
+        #expect(!ActionPackCatalog.matches(action: video, query: "webc", appName: "Zoom"))
+        #expect(ActionPackCatalog.matches(action: video, query: "webcam", appName: "Zoom"))
+
+        // Keyword search: "mic" should match Zoom audio mute
         let zoomMute = zoom.actions.first { $0.id == "zoom.muteAudio" }!
         #expect(ActionPackCatalog.matches(action: zoomMute, query: "mic", appName: "Zoom"))
         #expect(ActionPackCatalog.matches(action: zoomMute, query: "microphone", appName: "Zoom"))

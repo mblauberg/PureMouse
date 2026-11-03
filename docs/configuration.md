@@ -215,10 +215,12 @@ resolves and displays the pack action's name (e.g. "Mute or Unmute Microphone" i
 If the binding is edited to another shortcut, it displays as an ordinary shortcut.
 
 Where an app's action pack defines paired opposite actions (such as Photoshop's brush size, Final
-Cut Pro's timeline zoom, Excel's sheet switching, or VS Code's editor switching and code folding),
-the thumb wheel pop-up offers the pair as a single choice (e.g. "Brush Size"). Choosing it writes
-standard `left` and `right` keys to the app's `thumbWheel` configuration, and Settings recognizes
-the pair when reading the file.
+Cut Pro's timeline zoom, Excel's sheet switching, or VS Code's code folding), the thumb wheel
+pop-up offers the pair as a single choice (e.g. "Brush Size"). The first action of the pair in the
+pack is what turning left does, so Swap directions reverses it as it does any `left` and `right`.
+Choosing it writes standard `left` and `right` keys to the app's `thumbWheel` configuration
+("Same as Mouse Settings" removes them again), and Settings recognizes the pair when reading the
+file. Tabs have no pair: the built-in Switch Tabs preset covers every browser.
 
 ## Per-device settings
 

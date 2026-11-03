@@ -408,7 +408,7 @@
           "verifiedDate": "2026-11-04",
           "keywords": ["arrow", "pointer", "tool"],
           "keymapNote": "Depends on your keymap",
-          "symbol": "arrow.default"
+          "symbol": "cursorarrow"
         },
         {
           "id": "finalcut.bladeTool",
@@ -463,7 +463,8 @@
           "payload": "cmd+1",
           "sourceURL": "https://support.microsoft.com/en-us/office/keyboard-shortcuts-in-excel-1798d9d5-842a-42b8-9c99-9b7213f0040f",
           "verifiedDate": "2026-11-04",
-          "keywords": ["format", "cells", "style", "number"]
+          "keywords": ["format", "cells", "style", "number"],
+          "symbol": "textformat"
         },
         {
           "id": "excel.editCell",
@@ -473,7 +474,8 @@
           "payload": "ctrl+u",
           "sourceURL": "https://support.microsoft.com/en-us/office/keyboard-shortcuts-in-excel-1798d9d5-842a-42b8-9c99-9b7213f0040f",
           "verifiedDate": "2026-11-04",
-          "keywords": ["edit", "cell", "formula"]
+          "keywords": ["edit", "cell", "formula"],
+          "symbol": "pencil"
         },
         {
           "id": "excel.insertHyperlink",
@@ -483,7 +485,8 @@
           "payload": "cmd+k",
           "sourceURL": "https://support.microsoft.com/en-us/office/keyboard-shortcuts-in-excel-1798d9d5-842a-42b8-9c99-9b7213f0040f",
           "verifiedDate": "2026-11-04",
-          "keywords": ["link", "url", "hyperlink"]
+          "keywords": ["link", "url", "hyperlink"],
+          "symbol": "link"
         },
         {
           "id": "excel.openFilter",
@@ -493,7 +496,8 @@
           "payload": "cmd+shift+f",
           "sourceURL": "https://support.microsoft.com/en-us/office/keyboard-shortcuts-in-excel-1798d9d5-842a-42b8-9c99-9b7213f0040f",
           "verifiedDate": "2026-11-04",
-          "keywords": ["filter", "sort", "data"]
+          "keywords": ["filter", "sort", "data"],
+          "symbol": "line.3.horizontal.decrease"
         }
       ]
     },
@@ -532,7 +536,8 @@
           "payload": "ctrl+d",
           "sourceURL": "https://support.microsoft.com/en-us/accessibility/powerpoint/use-keyboard-shortcuts-to-create-powerpoint-presentations",
           "verifiedDate": "2026-11-04",
-          "keywords": ["duplicate", "copy", "slide", "shape"]
+          "keywords": ["duplicate", "copy", "slide", "shape"],
+          "symbol": "plus.square.on.square"
         },
         {
           "id": "powerpoint.group",
@@ -542,7 +547,8 @@
           "payload": "cmd+opt+g",
           "sourceURL": "https://support.microsoft.com/en-us/accessibility/powerpoint/use-keyboard-shortcuts-to-create-powerpoint-presentations",
           "verifiedDate": "2026-11-04",
-          "keywords": ["group", "shapes", "objects"]
+          "keywords": ["group", "shapes", "objects"],
+          "symbol": "square.on.square"
         },
         {
           "id": "powerpoint.ungroup",

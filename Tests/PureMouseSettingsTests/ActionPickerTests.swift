@@ -190,37 +190,98 @@ private func mouse(haptics: Bool?) -> Status.Device {
     #expect(!entries.contains { $0.isPackAction })
 }
 
-@MainActor @Test func sectionFoldingAndFlatSearch() {
-    let dummyEntries = (1...8).map { i in
-        PickerEntry(id: "item\(i)", label: "Item \(i)", group: "Test Group", kind: .set(.named("item\(i)")))
-    }
+@MainActor @Test func theAppsSectionFoldsAndSearchIgnoresFolding() {
+    let entries = PickerEntry.all(allowsDefault: true, allowsGesture: true, haptics: false, app: "us.zoom.xos")
+    let pack = entries.filter(\.isPackAction)
+    #expect(pack.count == 8 && pack.allSatisfy { $0.group == "Zoom" })
 
-    // Folded: 5 items + 1 showAll item
-    let folded = PickerItem.visible(dummyEntries, query: "", hapticsOpen: false, expandedSections: [], app: nil)
-    #expect(folded.count == 6)
-    if case .showAll(let title, let total) = folded.last {
-        #expect(title == "Test Group")
-        #expect(total == 8)
-    } else {
-        Issue.record("Expected showAll item at end of folded section")
-    }
+    // Folded: five rows, then Show All (8) in their place.
+    let folded = PickerItem.visible(entries, query: "", hapticsOpen: false, app: "us.zoom.xos")
+    #expect(folded.filter { if case .entry(let e) = $0 { e.isPackAction } else { false } }.count == 5)
+    #expect(folded.contains(.showAll(section: "Zoom", count: 8)))
+    #expect(PickerItem.showAll(section: "Zoom", count: 8).section == "Zoom")
 
-    // Expanded: all 8 items
-    let expanded = PickerItem.visible(dummyEntries, query: "", hapticsOpen: false, expandedSections: ["Test Group"], app: nil)
-    #expect(expanded.count == 8)
+    // Open: all eight, no Show All.
+    let open = PickerItem.visible(entries, query: "", hapticsOpen: false, expandedSections: ["Zoom"], app: "us.zoom.xos")
+    #expect(open.filter { if case .entry(let e) = $0 { e.isPackAction } else { false } }.count == 8)
+    #expect(!open.contains { if case .showAll = $0 { true } else { false } })
 
-    // Search query: folding is ignored
-    let searchResults = PickerItem.visible(dummyEntries, query: "item", hapticsOpen: false, expandedSections: [], app: nil)
-    #expect(searchResults.count == 8)
+    // A search shows every match whatever is folded, and keeps the sections.
+    let found = PickerItem.visible(entries, query: "meeting", hapticsOpen: false, app: "us.zoom.xos")
+    #expect(found.count == 7)
+    #expect(found.allSatisfy { $0.section == "Zoom" })
 
-    // Search in Mouse scope (app == nil) matching pack action shows hint
-    let mouseHintResults = PickerItem.visible([], query: "brush", hapticsOpen: false, expandedSections: [], app: nil)
-    #expect(mouseHintResults.contains {
-        if case .packHint(let text) = $0 {
-            return text.contains("Adobe Photoshop") && text.contains("Choose them on the app's page.")
-        }
-        return false
+    // The sheet opens the section holding the current binding.
+    #expect(PickerItem.sectionsHolding(.keys("cmd+shift+f"), in: entries) == ["Zoom"])
+    #expect(PickerItem.sectionsHolding(.keys("cmd+shift+9"), in: entries).isEmpty)
+}
+
+@MainActor @Test func everyOtherSectionAndPageListsAsBefore() {
+    // Generic sections never fold, however long.
+    let long = (1...8).map { PickerEntry(id: "item\($0)", label: "Item \($0)", group: "Test Group", kind: .set(.named("item\($0)"))) }
+    #expect(PickerItem.visible(long, query: "", hapticsOpen: false).count == 8)
+
+    // An app without a pack, and Mouse scope, get the entries and rows they always had.
+    let plain = PickerEntry.all(allowsDefault: true, allowsGesture: true)
+    let unknown = PickerEntry.all(allowsDefault: true, allowsGesture: true, app: "com.unknown.app")
+    #expect(unknown == plain)
+    #expect(PickerItem.visible(unknown, query: "", hapticsOpen: false, app: "com.unknown.app")
+            == PickerItem.visible(plain, query: "", hapticsOpen: false))
+    #expect(!plain.contains { $0.isPackAction })
+
+    // A pack's actions are not in a plain page's search, and its haptic group stays where it was.
+    #expect(!PickerItem.visible(plain, query: "brush", hapticsOpen: false).contains { if case .entry = $0 { true } else { false } })
+    let withPack = PickerEntry.all(allowsDefault: true, allowsGesture: true, app: "us.zoom.xos")
+    let items = PickerItem.visible(withPack, query: "", hapticsOpen: false, app: "us.zoom.xos")
+    let haptic = items.firstIndex(of: .hapticGroup(expanded: false))!
+    #expect(items[haptic + 1].id == "keys")
+    // Search keeps the section headers of a plain page.
+    #expect(PickerItem.visible(plain, query: "zoom", hapticsOpen: false).allSatisfy { $0.section == "Tabs and Zoom" })
+}
+
+@MainActor @Test func mouseScopeHintsAtAppsWhoseActionsMatch() {
+    let hint = PickerItem.visible([], query: "brush", hapticsOpen: false)
+    #expect(hint.contains {
+        if case .packHint(let text) = $0 { text.contains("Adobe Photoshop") && text.contains("Choose them on the app's page.") } else { false }
     })
+    // Not on an app's page, and not when something matched.
+    #expect(PickerItem.visible([], query: "brush", hapticsOpen: false, app: "us.zoom.xos").isEmpty)
+    #expect(PickerItem.visible(PickerEntry.all(allowsDefault: true, allowsGesture: true), query: "mute", hapticsOpen: false)
+        .allSatisfy { if case .packHint = $0 { false } else { true } })
+}
+
+@MainActor @Test func thePickerSearchesPackActionsWithTheCataloguesMatcher() {
+    let entries = PickerEntry.all(allowsDefault: true, allowsGesture: true, app: "us.zoom.xos")
+    func found(_ query: String) -> Set<String> {
+        Set(PickerItem.visible(entries, query: query, hapticsOpen: false, app: "us.zoom.xos").map(\.id)).intersection(["zoom.muteAudio"])
+    }
+    // The shortcut as words in any order, as a spec and as glyphs.
+    for query in ["command shift a", "shift cmd a", "shift+cmd+a", "⇧⌘A", "cmd+shift+a"] {
+        #expect(found(query) == ["zoom.muteAudio"], "\(query)")
+    }
+    // Keywords match whole words only.
+    #expect(found("talk") == ["zoom.muteAudio"])
+    #expect(found("tal").isEmpty)
+    #expect(found("microph") == ["zoom.muteAudio"])  // the label has it as a substring
+    // The label, category and app name, as anywhere.
+    #expect(found("unmute") == ["zoom.muteAudio"])
+    #expect(found("zoom") == ["zoom.muteAudio"])
+    // A search for what it does not hold finds none of the pack.
+    #expect(found("photoshop").isEmpty)
+    // Searching shows where the action lives.
+    let item = PickerItem.visible(entries, query: "talk", hapticsOpen: false, app: "us.zoom.xos").first
+    if case .entry(let entry)? = item { #expect(entry.detail == "Meeting") } else { Issue.record("no row") }
+}
+
+@MainActor @Test func aKeymapDependentRowSaysSoInSecondaryText() {
+    let entries = PickerEntry.all(allowsDefault: true, allowsGesture: true, app: "com.apple.FinalCut")
+    let blade = entries.first { $0.id == "finalcut.blade" }!
+    #expect(blade.note == "Depends on your keymap")
+    #expect(blade.shortcutText == "⌘B")
+    // Rows whose shortcut is the app's own fixed one say nothing.
+    #expect(PickerEntry.all(allowsDefault: true, allowsGesture: true, app: "us.zoom.xos").filter(\.isPackAction).allSatisfy { $0.note == nil })
+    // A bound row is ticked whichever way the shortcut is spelled.
+    #expect(blade.matches(.keys("cmd+b")))
 }
 
 @MainActor @Test func pickingPackActionWritesOrdinaryBinding() throws {
@@ -259,14 +320,10 @@ private func mouse(haptics: Bool?) -> Status.Device {
     #expect(spoken == "Mute or Unmute Microphone")
 }
 
-@MainActor @Test func layoutKeymapDependentHelpNote() {
-    // Final Cut Pro blade cut action has keymap note
-    let fcpTooltip = ActionButton.tooltip(for: .keys("cmd+b"), in: "com.apple.FinalCut")
-    #expect(fcpTooltip == "Depends on your keymap.")
-
-    // Standard pack action without keymap note has standard tooltip
-    let zoomTooltip = ActionButton.tooltip(for: .keys("cmd+shift+a"), in: "us.zoom.xos")
-    #expect(zoomTooltip == "Presses ⇧⌘A")
+@MainActor @Test func theAppPageTooltipKeepsTheShortcut() {
+    #expect(ActionButton.tooltip(for: .keys("cmd+b"), in: "com.apple.FinalCut") == "Presses ⌘B. Depends on your keymap.")
+    #expect(ActionButton.tooltip(for: .keys("cmd+shift+a"), in: "us.zoom.xos") == "Presses ⇧⌘A")
+    #expect(ActionButton.tooltip(for: .keys("cmd+b"), in: "com.unknown.app") == "Presses ⌘B")
 }
 
 @MainActor @Test func thumbWheelPackPairWritesOrdinaryBindingsAndRecognizesChoice() {
@@ -286,3 +343,104 @@ private func mouse(haptics: Bool?) -> Status.Device {
     #expect(resolved == choice)
 }
 
+
+private func populated() -> [String: Any] { [
+    "dpi": 1600,
+    "buttons": ["back": "mute", "forward": ["keys": "cmd+]"]],
+    "thumbWheel": ["action": "zoom", "step": 4],
+    "devices": ["mx-master-3s": ["name": "MX Master 3S", "buttons": ["middle": "mute"]]],
+    "apps": [
+        "com.other.app": ["buttons": ["back": "volumeUp"], "thumbWheel": ["action": "tabs"]],
+        "us.zoom.xos": ["buttons": ["forward": "nextTab"], "thumbWheel": ["reversed": true]],
+    ],
+] }
+
+private func json(_ tree: ConfigTree) -> NSDictionary {
+    (try? JSONSerialization.jsonObject(with: tree.data())) as? NSDictionary ?? [:]
+}
+
+@MainActor @Test func pickingAPackActionLeavesEveryOtherFieldUntouched() throws {
+    let entries = PickerEntry.all(allowsDefault: true, allowsGesture: true, app: "us.zoom.xos")
+    guard case .set(let action) = entries.first(where: { $0.id == "zoom.muteAudio" })!.kind else {
+        Issue.record("not a binding"); return
+    }
+    var tree = ConfigTree(populated())
+    let before = json(tree)
+    tree.bindInApp("us.zoom.xos", button: "back", to: action)
+
+    // One new key, an ordinary binding; take it away and the tree is what it was.
+    #expect(tree.string(["apps", "us.zoom.xos", "buttons", "back", "keys"]) == "cmd+shift+a")
+    var after = tree
+    after.set(nil, at: ["apps", "us.zoom.xos", "buttons", "back"])
+    #expect(json(after) == before)
+    #expect(!String(decoding: tree.data(), as: UTF8.self).contains("zoom.muteAudio"))
+}
+
+@MainActor @Test func aCatalogueChangeLeavesSavedBindingsAlone() throws {
+    func catalogue(payload: String) -> ActionPackCatalog {
+        let actions = (1...6).map { i in
+            ActionPackEntry(id: "app.a\(i)", bundleIDs: ["com.example.app"], label: "Action \(i)", category: "Test",
+                            payload: i == 1 ? payload : "cmd+\(i)", sourceURL: "https://example.com", verifiedDate: "2026-11-04")
+        }
+        return ActionPackCatalog(data: ActionCatalogData(packs: [ActionPack(id: "app", name: "App", bundleIDs: ["com.example.app"], actions: actions)]))
+    }
+    let old = catalogue(payload: "cmd+shift+a")
+    // The user picked Action 1 under the old catalogue.
+    var tree = ConfigTree(populated())
+    tree.bindInApp("com.example.app", button: "back", to: old.action(matching: .keys("cmd+shift+a"), in: "com.example.app")!.buttonAction)
+    let saved = tree.data()
+
+    // The update moves it. Nothing is written, and the saved shortcut is read back as it was: it no
+    // longer names the action, so Settings shows the shortcut as typed.
+    let updated = catalogue(payload: "cmd+opt+a")
+    #expect(tree.data() == saved)
+    #expect(tree.string(["apps", "com.example.app", "buttons", "back", "keys"]) == "cmd+shift+a")
+    #expect(updated.action(matching: .keys("cmd+shift+a"), in: "com.example.app") == nil)
+    #expect(updated.action(matching: .keys("cmd+opt+a"), in: "com.example.app")?.id == "app.a1")
+}
+
+@MainActor @Test func aPackPairSwapsWithTheDirectionsAndFollowsInheritance() throws {
+    let app = "com.apple.FinalCut"
+    let path = ["apps", app, "thumbWheel"]
+    let pairs = ActionPackCatalog.shared.resolvedThumbWheelPairs(for: app)
+    let zoom = try #require(pairs.first { $0.label == "Zoom Timeline" })
+    // Turning left zooms out: the pair's first action.
+    #expect(zoom.left == .keys("cmd+-") && zoom.right == .keys("cmd+="))
+    let choice = ThumbWheelChoice.packPair(id: zoom.id, label: zoom.label)
+
+    var tree = ConfigTree(populated())
+    let global = tree.thumbWheel(at: ["thumbWheel"])
+    #expect(tree.thumbWheelChoice(at: path, pairs: pairs) == .inherit)
+    tree.chooseThumbWheel(choice, at: path, base: global, pairs: pairs)
+    #expect(tree.thumbWheelChoice(at: path, pairs: pairs) == choice)
+    var state = tree.thumbWheel(at: path, base: global)
+    #expect(state.pair?.left == .keys("cmd+-") && state.pair?.right == .keys("cmd+="))
+    // The global zoom preset's step is not inherited into custom keys (the step key is cleared).
+    #expect(tree.string(path + ["left", "keys"]) == "cmd+-" && tree.string(path + ["right", "keys"]) == "cmd+=")
+
+    // Swap directions flips which way each does, without touching the pair, and the choice stays.
+    tree.setThumbWheelReversed(true, at: path)
+    state = tree.thumbWheel(at: path, base: global)
+    #expect(state.reversed && state.pair?.left == .keys("cmd+-") && state.pair?.right == .keys("cmd+="))
+    #expect(ConfigTree.thumbWheelKey(turning: "left", reversed: true) == "right")
+    #expect(tree.thumbWheelChoice(at: path, pairs: pairs) == choice)
+
+    // Same as Mouse Settings gives it back: the keys go, the other apps and the top level stay.
+    let others = json(tree)
+    tree.chooseThumbWheel(.inherit, at: path, base: global, pairs: pairs)
+    #expect(tree.thumbWheelChoice(at: path, pairs: pairs) == .inherit)
+    #expect(!tree.contains(path + ["left"]) && !tree.contains(path + ["right"]))
+    #expect((json(tree)["thumbWheel"] as? NSDictionary) == (others["thumbWheel"] as? NSDictionary))
+    let otherApp = { (tree: NSDictionary) in (tree["apps"] as? NSDictionary)?["com.other.app"] as? NSDictionary }
+    #expect(otherApp(json(tree)) == otherApp(others))
+    // A hand-edited pair in the other order is Custom, not the pack's.
+    tree.setThumbWheel("left", to: zoom.right, at: path)
+    tree.setThumbWheel("right", to: zoom.left, at: path)
+    #expect(tree.thumbWheelChoice(at: path, pairs: pairs) == .custom)
+}
+
+@MainActor @Test func theBrowserPacksOfferNoSwitchTabsPair() {
+    for app in ["com.apple.Safari", "com.google.Chrome", "com.microsoft.edgemac"] {
+        #expect(ActionPackCatalog.shared.pairs(for: app).isEmpty, "\(app)")
+    }
+}

@@ -462,22 +462,29 @@ even-odd paths, because `rsvg-convert` rasterises SVG masks in the PDF. The menu
 ## Extending
 
 - **Action pack.** Curated per-app actions live in declarative JSON at
-  `Sources/PureMouseSettingsUI/Resources/ActionPacks.json`, loaded on demand by the Settings helper
-  only (never the daemon or menu bar app). When adding or contributing a pack:
-  - Curate actions from the vendor's official macOS shortcut documentation. Record the official
-    `sourceURL` and the date checked (`verifiedDate` in `YYYY-MM-DD` format). Never invent shortcuts.
+  `Sources/PureMouseSettingsUI/Resources/ActionPacks.json`. `scripts/build-app.sh` copies it into the
+  Settings helper's `Contents/Resources` (as it does the silhouettes) and `verify-bundle.sh` checks
+  it is there and in neither the menu bar app nor the daemon; the helper loads it on first use from
+  `Bundle.main` (tests fall back to the source file). It is not a SwiftPM resource. When adding or
+  correcting a pack:
+  - Take every action from the vendor's own macOS shortcut documentation, and set `sourceURL` to
+    the page (https) that lists it and `verifiedDate` to the day you checked (`YYYY-MM-DD`). If the
+    vendor's page does not list a shortcut, leave the action out, whatever other sites say.
   - At least 6 actions per pack.
-  - Required fields for each action: stable unique `id`, `bundleIDs` (matching the pack's primary or
-    alias bundle IDs), `label` using action verbs only (no "toggle" per `docs/ui-language.md`),
-    `category`, valid shortcut `payload` (parses via `Shortcut.isValid`), `sourceURL`, and
-    `verifiedDate`.
-  - Optional fields: `keywords` (synonyms and search terms), `keymapNote` (e.g.
-    `"Depends on your keymap."` for layout/keymap-dependent shortcuts like in Final Cut Pro or
-    VS Code), `pairedOpposite` (ID of opposite action for thumb wheel) with `pairLabel` (e.g.
-    `"Brush Size"`).
-  - Validation test `ActionPackCatalogTests.swift` enforces that all IDs are globally unique, bundle
-    IDs are declared in the pack, payloads parse with the shortcut parser, each pack has at least 6
-    actions, and source URLs / verified dates are present.
+  - Required fields for each action: stable unique `id`, `bundleIDs` (declared by the pack), `label`
+    (a verb phrase, never "toggle", per [ui-language](ui-language.md)), `category`, a `payload`
+    that is a valid shortcut (`Shortcut.isValid`) or a named action, `sourceURL` and `verifiedDate`.
+  - Optional: `keywords` (whole words that find the action), `symbol` (an SF Symbol name; the picker
+    shows `app` without one), `keymapNote` (`"Depends on your keymap"` for a shortcut the person can
+    change in the app, as in Final Cut Pro and VS Code), and `pairedOpposite` with `pairLabel` for
+    the thumb wheel.
+  - A pair is two actions naming each other. **The pair's left member is the one listed first in the
+    pack**: put the action for turning left (the decrease, previous or zoom-out one) before its
+    opposite. `pairLabel` is the same on both.
+  - Skip pairs the built-in thumb wheel presets cover (Switch Tabs).
+  - `ActionPackCatalogTests` validates the file: unique IDs, declared bundle IDs, parsable payloads,
+    six actions a pack, https sources, ISO dates, pairs that name each other, and SF Symbols that
+    exist.
 - **Named button.** Keep `Config.Button` and the menu's `NamedButton` in step (names and CIDs), and
   add the control's display name to `ControlNames` (Kit).
 - **Action.** A case in `Action` and a name in `Action.named` (both in PureMouseKit), handled in

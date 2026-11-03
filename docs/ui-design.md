@@ -452,20 +452,21 @@ which is its click, or a table of triggers ([ADR 24](adr/0024-one-action-model.m
 - A trigger exists in the UI only once it is added (More Ways to Press), so a fresh install looks as
   it does today plus one device row in General › Status.
 - The picker stays one popover:
-  - On an app page, the app's pack actions appear directly under the top-three entries (Same as…,
-    Mouse Default, Do Nothing), grouped under `<App>'s Actions: <Category>`, before generic groups
-    (Desktop, Navigation, Media, Tabs and Zoom, Mouse, Haptic Feedback, Custom).
-  - Sections over six rows fold to five and "Show All (N)" (Custom folds after five); clicking
-    "Show All (N)" expands the section inline.
-  - Search matches everything: label, category, app name, curated keywords, and shortcut words
-    ("command shift a" or "cmd a" matches a ⌘⇧A action regardless of word order). While search is
-    active, folding is ignored (all matches shown) and results are flat (no section headers), ranked
-    app-first.
-  - In Mouse scope (`app == nil`), a search query matching only pack actions shows a single-line
-    hint at the bottom: `"Also in <App1>, <App2>. Choose them on the app's page."`
-  - Pack action rows show their trailing shortcut glyphs. For actions whose default shortcut
-    depends on user keymap or keyboard layout (Final Cut Pro, VS Code), the row's help tooltip says
-    `"Depends on your keymap."`.
+  - On an app page for an app with a pack, the app's actions follow the top entries (Same as…,
+    Mouse Default, Do Nothing) in a section named for the app ("Zoom"), before the generic groups.
+    Every other page, and an app without a pack, lists what it did before.
+  - The app's section over six rows folds to five and "Show All (N)"; the click expands it inline.
+    It starts open when the current binding is one of its folded actions.
+  - Search matches everything, keeping the sections and the haptic group as they are. An app's
+    actions also match their category (shown beside the label while searching), whole-word
+    keywords, and their shortcut as glyphs ("⇧⌘A"), a spec ("shift+cmd+a") or words in any order
+    ("command shift a"). Search ignores folding.
+  - In Mouse scope, a search that finds nothing but matches some apps' actions says so in one line:
+    "Also in Zoom and Adobe Photoshop. Choose them on the app's page."
+  - A pack action's row shows its shortcut at the trailing edge. One whose shortcut depends on the
+    person's keyboard layout or keymap (Final Cut Pro, VS Code) says "Depends on your keymap" in
+    secondary text under its label; the button's tooltip on the app page keeps the shortcut
+    ("Presses ⌘B. Depends on your keymap.").
   - No trigger strip, category strip, recents or favourites.
 - An editor inside the Sequence or Action Ring sheet swaps that sheet's content; it never opens a
   second sheet.
