@@ -123,7 +123,7 @@ Defaults removes `smoothScroll`, `scrollWheel` and these thumb wheel keys; Butto
 `thumbWheel` (`action`, `left`, `right`, `step` and `reversed`; not `inverted`) and `smoothScroll`
 can differ; the rest write to the mouse and stay global. An app's `reversed` defaults to the global
 one; Settings › Apps shows it as the **Swap directions** switch, which reads as Everywhere's until the app sets it
-("Set for this app.", with a **Use Everywhere Setting** link that removes the key).
+("Set for this app.", with a **Use Mouse Setting** link that removes the key).
 
 ```json
 "apps": {
@@ -147,7 +147,7 @@ that is not installed is fine. `puremouse app` prints the bundle IDs PureMouse s
 Settings › Apps lists the apps in `apps` and adds one from Applications or the running apps (it is
 written only once a setting is chosen). For each app it sets the buttons, the thumb wheel and an own
 scrolling `speed` and `smoothingMs` (both written when **Custom scrolling** is turned on, both
-removed when it is turned off; each says "Set for this app." and can be given back alone); **Same as Everywhere** removes the app's key, and removing the
+removed when it is turned off; each says "Set for this app." and can be given back alone); **Same as Mouse Settings** removes the app's key, and removing the
 last one removes the app. Browsers, Zoom, Teams, Word, PowerPoint, Preview and Excel get a suggested
 thumb wheel action. Keys it does not show, unknown ones included, stay as written.
 
@@ -223,7 +223,7 @@ the default; a remembered mouse that is no longer listed is All Mice.
 Each Mouse pane reads the value in effect (`resolved`) and writes in the chosen scope. A control the
 mouse has no value for looks exactly as it does under All Mice, with no mark; one it sets says "Set for
 this mouse." with a "Use All Mice Setting" link that removes it (`InheritedValue`, the same presentation
-an app uses with "Set for this app." and "Use Everywhere Setting"). A pop-up's first entry is "Same as All
+an app uses with "Set for this app." and "Use Mouse Setting"). A pop-up's first entry is "Same as All
 Mice (value)". Every control of a row, including a switch, a segmented control and a slider, is the one
 All Mice shows while the mouse leaves the value alone; VoiceOver reads it with its source ("On, same as
 All Mice"). The thumb wheel's rows follow the action in effect: a mouse that leaves Custom to All Mice shows
@@ -288,7 +288,7 @@ two names spell one control, the last in sorted order decides, as for any two bi
 or an app's button the same way: the last spelling is the one shown and edited, and giving the button
 back to the wider scope removes every spelling. The left and
 right buttons and an unknown button name keep their warnings. Settings writes it from a mouse's or an
-app's action picker (**Mouse Default**), beside **Same as All Mice** / **Same as Everywhere**, which
+app's action picker (**Mouse Default**), beside **Same as All Mice** / **Same as Mouse Settings**, which
 removes the key instead. Where the wider scope already is Mouse Default, the picker lists only
 **Same as …**, since the two would be the same. Choosing **Hold and Move** on a mouse or in an app that
 has Mouse Default, when the wider binding is a gesture, removes the key, so the mouse takes that

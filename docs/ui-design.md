@@ -39,16 +39,38 @@ answering a question people have, and a good default means most people never tou
   pop-up's last menu item, a tooltip and its accessibility hint rather than a line under it: a line
   costs 15 pt in a strip every segment shares, and Scrolling has 6 pt to spare. "Settings you don't
   change follow All Mice." is the menu's other note, said once. A pane under a chosen mouse
-  (and an app's sheet) marks changes, not inheritance (`InheritedValue`): a row that inherits looks
+  (and an app's page) marks changes, not inheritance (`InheritedValue`): a row that inherits looks
   exactly as it does under All Mice, with the same control, full contrast and its usual help caption;
   a row with its own value adds the line "Set for this mouse." ("Set for this app.") and an inline
-  link, "Use All Mice Setting" ("Use Everywhere Setting"), moves its help to the tooltip, and offers
+  link, "Use All Mice Setting" ("Use Mouse Setting"), moves its help to the tooltip, and offers
   the same command in its context menu and as a VoiceOver action. No row reserves a hidden slot, so
   every trailing control ends at the form's trailing edge and a slider track never moves between
   scopes. A mouse's pane is never taller than the same pane under All Mice, except by that one line
   on changed rows.
-- ⌘W closes it, and closing it quits the helper. Esc dismisses a sheet; Return takes the sheet's
-  default button.
+- **An app's page** (Apps; `AppPage`) replaces the list in the tab, and is built like the Mouse tab: a
+  fixed header strip over the segment's grouped form. The strip has **‹ Apps** at the leading edge
+  (the button, ⌘[ and Esc all go back to the list), the **Buttons | Scrolling** segments in the
+  middle, and the app's icon and name at the trailing edge (its bundle identifier is the tooltip).
+  There is no Pointer segment: Thumb Wheel is a group under Scrolling, after Custom scrolling.
+  Choosing a segment writes nothing, and each app opens on Buttons. The footer's leading edge
+  holds **Remove App…**, which asks first. The page marks changes as a mouse's panes do (model C,
+  `InheritedValue`), with the source "Mouse Settings": a row the app leaves alone shows the value
+  that applies, which is the mouse's own when the mouse has one and not the top level's, and is
+  "Varies by Mouse" when the known mice resolve the control differently (`AppModel.knownMice`,
+  `ConfigScope.resolved`; the pop-up's first entry then reads "Same as Mouse Settings (Varies by
+  Mouse)"). A row the app sets reads "Set for this app." with "Use Mouse Setting", which removes
+  only that app's key under `apps.<id>`; Mouse Default is a value of its own, distinct from
+  leaving the row alone. Turning Custom scrolling on starts from the first mouse's values. Each
+  Apps row names the areas its app changes in words ("Buttons, Scrolling", or "No custom
+  settings"), never by colour. "Settings for <app>…" in the status menu opens the same page.
+  An added app is not written until a setting is chosen (its row says so until Settings closes).
+  Names are looked up without icons (`AppIdentities`); an icon loads when its frame meets the scroll
+  view's visible bounds (`AppIcon`: a grouped form builds every row, so `onAppear` is not enough, and
+  macOS 14 lacks `onScrollVisibilityChange`), and Applications is never listed (adding goes through
+  an open panel or the running apps). Esc and Return still act on a sheet first. The default content is within 600 pt at one and two
+  mice; a long segment scrolls under the strip.
+- ⌘W closes it, and closing it quits the helper. Esc dismisses a sheet, and on an app's page goes
+  back to the Apps list; Return takes the sheet's default button.
 - Nothing is placed behind the toolbar or the tab bar: no backgrounds, materials or
   `NSVisualEffectView`. The scroll edge effect stays automatic.
 
@@ -60,7 +82,7 @@ answering a question people have, and a good default means most people never tou
   fewer, a fixed count, all text or all symbols), slider (minimum leading, end labels, live value),
   stepper, `ContentUnavailableView`. A pop-up's **Custom** entry may reveal the rows it needs.
 - **One pop-up look.** Every pop-up (an action row on Buttons, the thumb wheel's Action, an app's
-  "Same as Everywhere" rows) is drawn the same way (`PopUpLabel`): the value, then the up/down
+  "Same as Mouse Settings" rows) is drawn the same way (`PopUpLabel`): the value, then the up/down
   chevrons. A value left to the mouse (Mouse Default) is an ordinary enabled choice in primary
   text, and so is a value inherited from a wider scope: nothing is dimmed to say so. An empty state's next step is a
   bordered push button (Add App…), as in System Settings: a grouped form draws a pull-down in a
@@ -84,8 +106,8 @@ answering a question people have, and a good default means most people never tou
   around the scan. Its allow-list holds at most five lines, each a file, a source
   fragment and a reason, and an entry that no longer matches fails: today the About icon's
   artwork frame, the action picker popover's size (a `List` has none of its own), the slider's
-  width and its readout's minimum width, and the shortcut and command editors' width (also
-  popovers inside an app's sheet, so narrower than it). Other sheets share one width
+  width and its readout's minimum width, and the shortcut and command editors' width (small
+  sheets, narrower than the others). Other sheets share one width
   (`SettingsWindowController.sheetWidth`) and take their height from their content.
 - **Custom shapes are concentric.** Prefer a system container (form section, `GroupBox`). A custom
   rounded view, such as the device card, uses `ConcentricRectangle` (macOS 26+) so it follows the
@@ -111,8 +133,8 @@ Each level has one mechanism, and each label says what it reveals.
 - **Disclosure triangle** only for a control's own children (gesture directions, Exact value);
   at most one per row.
 - **⌥ alternates** only in the status menu, and each also has a home in Settings (see Status menu).
-- No sheet opens from a sheet; inside a sheet, use disclosures, and an editor that is a sheet
-  elsewhere (keyboard shortcut, shell command) opens as a popover anchored to its row.
+- No sheet opens from a sheet; inside a sheet, use disclosures. The editors (keyboard shortcut,
+  shell command) are always sheets, an app's page included: it is a page of the Apps tab, not a sheet.
 - Every advanced control has a safe default that the pane's Restore Defaults covers.
 - **Hide or dim.** Dim a row when a switch above turns its feature off. Hide rows that do not apply
   to the current mode or mouse. A control is hidden for the mouse only when the mice it describes (the chosen mouse; for All Mice
@@ -224,7 +246,7 @@ cost. Planned or built (epic #114):
   Speed"). One slider drag is one step.
 - **Settings for the app in use** (built). The status menu offers "Settings for <app>…" below
   Settings… for the frontmost app (not Finder, the Dock or any PureMouse bundle, nor one without a
-  bundle identifier), opening its sheet in Apps. `NSWorkspace.shared.frontmostApplication` is read
+  bundle identifier), opening its page in Apps. `NSWorkspace.shared.frontmostApplication` is read
   once as the menu opens, with no observer or timer; opening a status item's menu does not
   activate PureMouse, so it still names the app in use.
 - **Feel a haptic.** Choosing a haptic action in the picker plays it once on a mouse with haptics,
@@ -244,7 +266,7 @@ display-density DPI hints and live gesture highlighting (more text and motion th
 | Mouse › Buttons | One row per button with its action | Gesture directions (disclosure, collapsed, caption summarises them; choosing Hold and Move expands it); Other controls (disclosure); Advanced… sheet, only while some button anywhere is Hold and Move: gesture Distance and Repeat |
 | Mouse › Scrolling | Smooth scrolling, Feel, Speed; Main Wheel: Reverse direction, Wheel mode, SmartShift; Thumb Wheel: Action (Turn left/right when Custom); each when the mouse has it | Advanced… sheet, each row only when it applies: Acceleration, Glide, Hold Shift to scroll sideways (dimmed while smooth scrolling is off); Switches at (while SmartShift is on); thumb wheel Reverse direction (when it scrolls here or in some app), Swap directions and Turn distance (when it has actions), Speed (when it scrolls) |
 | Mouse › Pointer | Pointer Speed slider with its value; Presets summary row; both only when the mouse can adjust its speed (else one "Not supported by this mouse." row, unless a value is set) | Exact value (disclosure); Edit Presets… sheet (also opened from the menu) |
-| Apps | App list with summaries, Add App (bordered pull-down) in the footer, routing note; empty state with an Add App… button that opens the Applications panel | Each app opens in a sheet; inside it, gesture directions, other controls and more thumb wheel options are disclosures |
+| Apps | App list whose rows name the areas each app changes, Add App (bordered pull-down) in the footer, routing note; empty state with an Add App… button that opens the Applications panel | Each app opens as a page (‹ Apps, Buttons \| Scrolling); on it, gesture directions, other controls and more thumb wheel options are disclosures, and the editors are sheets |
 | About | Icon, name, version, Check for Updates, Check for updates automatically (switch), links, Support PureMouse | — |
 | Status menu | Device header, attention rows when active, Update to X.Y.Z… with Skip This Version under it (while a newer release is known), Smooth Scrolling, Pointer Speed, Start/Pause/Resume, Settings…, Settings for <app>… (the frontmost app, if any), Quit PureMouse | ⌥: detail line, Show Log in Finder, Hide Menu Bar Icon |
 

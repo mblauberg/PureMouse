@@ -37,9 +37,9 @@ one. This file covers how to work on it safely.
   Debug builds of the helper take `PUREMOUSE_DEV_PANE=<pane>` (a tab, `general`, `mouse`, `apps`,
   `about`, or a Mouse segment, `buttons`, `scrolling`, `pointer`), `PUREMOUSE_DEV_APPEARANCE`,
   `PUREMOUSE_DEV_PICKER=<button>`, `PUREMOUSE_DEV_SHORTCUT=<button>` (Mouse › Buttons, or with
-  `PUREMOUSE_DEV_APP` the app sheet's editor popover), `PUREMOUSE_DEV_MOUSE=<device key>|all` (chooses that mouse on Mouse, or All Mice;
+  `PUREMOUSE_DEV_APP` the editor sheet over the app's page), `PUREMOUSE_DEV_MOUSE=<device key>|all` (chooses that mouse on Mouse, or All Mice;
   `PUREMOUSE_DEV_OTHERS=1` opens Buttons' Other controls) and `PUREMOUSE_DEV_APP=<bundle id>` (Apps
-  tab; adds the app without writing and opens its sheet) and `PUREMOUSE_DEV_SHEET=<name>` (a
+  tab; adds the app without writing and opens its page, on `PUREMOUSE_DEV_APP_SEGMENT=buttons|scrolling`) and `PUREMOUSE_DEV_SHEET=<name>` (a
   sheet: `presets` on Mouse › Pointer, or `advanced` on the pane shown, `DevSheet`) for screenshots
   (`Sources/PureMouseSettingsUI/DevHooks.swift`), and `PUREMOUSE_DEV_CAPTURE=<file.png>` saves its
   own windows to that file and quits, which needs no Screen Recording permission, so it works over
@@ -256,18 +256,9 @@ one. This file covers how to work on it safely.
   binds it; with no report, those `NamedButton.listedByDefault` (not the MX Master 4's thumb panel)
   (`ButtonRows.named`). Haptic picker entries come from Kit's `HapticWaveform.allCases`; the menu
   only words them (`ActionCatalog.hapticLabel`).
-- The Apps pane writes only `apps.<id>` keys (`AppSettings.swift`): each control's own key, removed
-  for "Same as Everywhere" (an emptied app entry is pruned); an added app is not written until a
-  setting is chosen (its row says so until Settings closes). Each app opens in a sheet (`AppSheet`)
-  over the list; a value it leaves unset looks exactly as it does everywhere, and one it sets says "Set for
-  this app." with a "Use Everywhere Setting" link (`InheritedValue`, the one type for any inherited
-  value; the caption is for overrides only), and inside it the
-  shortcut and command editors are popovers (`EditorPresentation`, read by `ThumbWheelRows` and the
-  button rows), since no sheet opens from a sheet. Names are looked up without icons
-  (`AppIdentities`); an icon loads when its frame meets the scroll view's visible bounds (`AppIcon`;
-  a grouped form builds every row, so `onAppear` is not enough, and macOS 14 lacks
-  `onScrollVisibilityChange`), and Applications is never listed (adding goes through an
-  open panel or the running apps).
+- The Apps pane writes only `apps.<id>` keys (`AppSettings.swift`), removed for "Same as Mouse
+  Settings" (an emptied app entry is pruned). Each app opens as a page of the tab (`AppPage`); how it
+  looks, marks changes and loads icons is in docs/ui-design.md (Apps).
 - Settings has four tabs, General, Mouse, Apps and About (`SettingsTab.shown`, so a new tab is one
   entry). Mouse is a fixed header strip (segments, Find by Pressing… on Buttons, a leading slot for
   the mouse pop-up) over its Buttons, Scrolling and Pointer segments (`MouseTab`); it holds only
