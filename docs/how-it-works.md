@@ -408,14 +408,17 @@ how the daemon fills them:
   0x1001). They are kept across reloads.
 - The config file is watched as well as its directory, since editors that write in place leave the
   directory unchanged. A symlinked directory (a dotfiles setup) is watched at the folder it points
-  to, and so is the parent of the directory as written and of every link on the way (up to 8, each
-  folder once), so a link or its target swapped or replaced at any hop is followed. Every event
+  to, and so is the parent of the directory as written and of every link in the chain its name
+  leads through (up to 8, each folder once), so a link or its target swapped or replaced at any
+  hop is followed. Every event
   re-resolves the path and re-arms the watches (`ConfigWatcher.arm`); a change to a parent alone
   reloads only if the directory the path leads to changed. While the directory is absent
   (deleted, renamed away, a dangling link or never created) the nearest existing ancestor of where
   it leads is watched instead. The config in effect stays until the directory returns, and then it
-  reloads once; an absent directory is logged but does not set `config.error`. Only renaming a
-  real directory above those watched parents goes unnoticed: SIGHUP reloads. Only file-system
+  reloads once; an absent directory is logged but does not set `config.error`. Two changes go
+  unnoticed until SIGHUP reloads: renaming a real directory above those watched parents, and
+  swapping a link in the middle of a hop's target (`hop/current/config` where `current` is itself
+  a link), since only each hop's last component is followed. Only file-system
   sources are used, so idle costs nothing, and a watcher's descriptors close when it stops or is
   released.
 - A reload that fails leaves the previous config in effect and reports `config.error`

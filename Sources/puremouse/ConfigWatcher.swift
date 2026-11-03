@@ -115,7 +115,8 @@ final class ConfigWatcher {
         }
     }
 
-    /// `url` with a symlink as its last component followed, even to a place that does not exist,
+    /// `url` with a symlink as its last component followed, even to a place that does not exist
+    /// (a link in the middle of a target path is not followed; see how-it-works),
     /// and the folder holding each link followed (at most `maximumLinks`; a longer chain goes
     /// unfollowed past that, and SIGHUP reloads).
     private static func followingLinks(_ url: URL) -> (url: URL, linkParents: [URL]) {
