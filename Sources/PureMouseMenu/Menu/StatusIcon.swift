@@ -77,19 +77,38 @@ enum StatusIcon {
         return image
     }
 
-    /// A "/" from the bottom left to the top right (the badge sits at the bottom right): a gap cut
-    /// through the glyph with the line left standing in it, so it reads over the mouse's body.
+    /// The slash's stroke: a whole number of points, so it keeps its weight at 1x, with a gap of 1 pt
+    /// on each side cut through the glyph.
+    static let slashWidth: CGFloat = 2
+    static let slashGap: CGFloat = 1
+
+    /// The slash's ends in an 18 pt glyph, at whole or half points: from the bottom left to the top
+    /// right (the badge sits at the bottom right), on the line y = x + 2.5. That is as far up and left of
+    /// the glyph's centre as it takes to leave the cut at least 1 pt from the badge's ring (a circle of
+    /// radius 5 about (13.5, 4.5)): the distance from the ring's centre to the line is 8.1 pt, and the cut
+    /// reaches half the stroke plus the gap (2 pt) from the line, the ring 5 pt from its centre.
+    static func slashEnds(in size: NSSize) -> (NSPoint, NSPoint) {
+        func snap(_ value: CGFloat) -> CGFloat { (value * 2).rounded() / 2 }
+        func point(_ x: CGFloat, _ y: CGFloat) -> NSPoint {
+            NSPoint(x: snap(size.width * x / 18), y: snap(size.height * y / 18))
+        }
+        return (point(3.5, 6), point(13.5, 16))
+    }
+
+    /// A "/" through the glyph: a gap cut through it with the line left standing in it, so it reads
+    /// over the mouse's body.
     private static func slash(in size: NSSize, _ context: CGContext) {
+        let (start, end) = slashEnds(in: size)
         let line = NSBezierPath()
-        line.move(to: NSPoint(x: size.width * 0.2, y: size.height * 0.15))
-        line.line(to: NSPoint(x: size.width * 0.8, y: size.height * 0.85))
+        line.move(to: start)
+        line.line(to: end)
         line.lineCapStyle = .round
         context.setBlendMode(.clear)
-        line.lineWidth = 4
+        line.lineWidth = slashWidth + 2 * slashGap
         line.stroke()
         context.setBlendMode(.normal)
         NSColor.black.setStroke()
-        line.lineWidth = 1.5
+        line.lineWidth = slashWidth
         line.stroke()
     }
 

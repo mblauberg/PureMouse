@@ -93,10 +93,14 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     }
 
     private func perform(_ action: MenuAction) {
+        #if DEBUG
+        // The two-mice fixture has keys no real config should gain entries for.
+        if DevHooks.ignores(action) { return }
+        #endif
         switch action {
         case .openSettings(let pane): app.showSettings(ShowRequest(pane: pane))
         case .openAppSettings(let id): app.showSettings(ShowRequest(app: id))
-        case .editPresets: app.showSettings(ShowRequest(sheet: .presets))
+        case let .editPresets(device): app.showSettings(ShowRequest(sheet: .presets, device: device))
         case .openReleases: app.openReleases()
         case .openUpdate(let page): app.openUpdate(page)
         case .installUpdate: app.installUpdate()

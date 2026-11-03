@@ -38,7 +38,7 @@ struct PointerSpeedMenuTests {
 
     // MARK: Rows
 
-    @Test func twoMiceShowASectionEachWithTheirOwnPresetsAndOneEditRow() throws {
+    @Test func twoMiceShowASectionEachWithTheirOwnPresetsAndAnEditRow() throws {
         let state = Self.state([Self.master, Self.anywhere],
                                presets: [Self.masterKey: [800, 1600, 3200], Self.anywhereKey: [400, 800]])
         #expect(try dump(state) == """
@@ -46,12 +46,12 @@ struct PointerSpeedMenuTests {
             \(Format.dpi(800)) [-> setDeviceDPI(800, device: "\(Self.masterKey)")]
             \(Format.dpi(1600)) [on, -> setDeviceDPI(1600, device: "\(Self.masterKey)")]
             \(Format.dpi(3200)) [-> setDeviceDPI(3200, device: "\(Self.masterKey)")]
+            Edit Presets… [-> editPresets(device: Optional("\(Self.masterKey)"))]
             section MX Anywhere 3S
             \(Format.dpi(400)) [-> setDeviceDPI(400, device: "\(Self.anywhereKey)")]
             \(Format.dpi(800)) [-> setDeviceDPI(800, device: "\(Self.anywhereKey)")]
             Custom: \(Format.dpi(1000)) [on, disabled]
-            ---
-            Edit Presets… [-> editPresets]
+            Edit Presets… [-> editPresets(device: Optional("\(Self.anywhereKey)"))]
             """)
     }
 
@@ -71,10 +71,10 @@ struct PointerSpeedMenuTests {
         #expect(try dump(state) == """
             section MX Master 3S
             \(Format.dpi(1600)) [on, disabled]
+            Add Presets… [-> editPresets(device: Optional("\(Self.masterKey)"))]
             section MX Anywhere 3S
             \(Format.dpi(1000)) [on, disabled]
-            ---
-            Add Presets… [-> editPresets]
+            Add Presets… [-> editPresets(device: Optional("\(Self.anywhereKey)"))]
             """)
     }
 
@@ -91,13 +91,41 @@ struct PointerSpeedMenuTests {
         #expect(try dump(two).components(separatedBy: "section ").count == 3)
     }
 
-    @Test func aMouseWithNoKeyIsASectionThatWritesTheTopLevel() throws {
+    @Test func aMouseWithNoKeyShowsItsSpeedAndOffersNoPresets() throws {
         let keyless = Self.mouse("Old Mouse", key: nil, dpi: 800)
         let state = Self.state([Self.master, keyless], presets: [Self.masterKey: [1600]])
-        let text = try dump(state)
-        #expect(text.contains("section Old Mouse"))
-        #expect(text.contains("\(Format.dpi(800)) [on, -> setDPI(800)]"))
-        #expect(text.contains("\(Format.dpi(1600)) [on, -> setDeviceDPI(1600, device: \"\(Self.masterKey)\")]"))
+        #expect(try dump(state) == """
+            section MX Master 3S
+            \(Format.dpi(1600)) [on, -> setDeviceDPI(1600, device: "\(Self.masterKey)")]
+            Edit Presets… [-> editPresets(device: Optional("\(Self.masterKey)"))]
+            section Old Mouse
+            \(Format.dpi(800)) [on, disabled]
+            """)
+        // Nothing under it writes the top level, which would move the other mice.
+        #expect(!(try dump(state)).contains("setDPI"))
+        // With no speed to show it is left out.
+        let silent = Self.state([Self.master, Self.mouse("Old Mouse", key: nil, dpi: nil)], presets: [Self.masterKey: [1600]])
+        #expect(!(try dump(silent)).contains("Old Mouse"))
+    }
+
+    @Test func aMouseThatHasNoPointerSpeedDoesNotCountAndGetsNoPresets() throws {
+        var capabilities = Status.Device.Capabilities()
+        capabilities.dpi = false
+        var plain = Self.mouse("Trackball", key: "mb03500000000", dpi: nil)
+        plain.capabilities = capabilities
+        // Beside one mouse that has it: no sections, the rows of one mouse.
+        let one = Self.state([Self.master, plain], presets: [Self.masterKey: [1600]])
+        let rows = try dump(one)
+        #expect(!rows.contains("section") && !rows.contains("Trackball") && !rows.contains("mb035"))
+        #expect(rows.contains("-> setDPI(1600)"))
+        #expect(StatusText.accessibilityLabel(one, primary: Self.master).contains("2 mice connected"))
+        // Beside two that do: two sections.
+        let two = Self.state([Self.master, plain, Self.anywhere])
+        #expect(try dump(two).components(separatedBy: "section ").count == 3)
+        // Alone: the submenu is not offered.
+        let none = Self.state([plain])
+        #expect(try !Self.pointerItem(none).enabled)
+        #expect(try Self.pointerItem(Self.state([Self.master])).enabled)
     }
 
     // MARK: One mouse
@@ -128,15 +156,47 @@ struct PointerSpeedMenuTests {
             if case let .item(item) = row { return item.spoken }
             return nil
         }
-        #expect(spoken == ["1,600 DPI, MX Master 3S", "1,600 DPI, MX Anywhere 3S", "Custom: 1,000 DPI, MX Anywhere 3S"])
+        #expect(spoken == ["1,600 DPI, MX Master 3S", "Edit Presets for MX Master 3S",
+                           "1,600 DPI, MX Anywhere 3S", "Custom: 1,000 DPI, MX Anywhere 3S",
+                           "Edit Presets for MX Anywhere 3S"])
         #expect(StatusText.accessibilityLabel(state, primary: Self.master)
                 == "PureMouse, MX Master 3S, 2 mice connected")
+        // The count is of mice answering, not of models: two of one model are two mice.
+        let twins = Self.state([Self.master, Self.mouse("MX Master 3S", key: Self.masterKey, id: "twin")])
+        #expect(StatusText.accessibilityLabel(twins, primary: Self.master) == "PureMouse, MX Master 3S, 2 mice connected")
+        let asleep = Self.state([Self.master, Self.mouse("MX Anywhere 3S", key: Self.anywhereKey, online: false)])
+        #expect(StatusText.accessibilityLabel(asleep, primary: Self.master) == "PureMouse, MX Master 3S")
         // One mouse: nothing added, and no spoken title on its rows.
         let one = Self.state([Self.master], presets: [Self.masterKey: [1600]])
         #expect(StatusText.accessibilityLabel(one, primary: Self.master) == "PureMouse, MX Master 3S")
         #expect(try #require(Self.pointerItem(one).submenu).allSatisfy { row in
             if case let .item(item) = row { item.spoken == nil } else { true }
         })
+    }
+
+    @Test func editPresetsOpensTheScopeTheMenuShowed() throws {
+        func edits(_ state: MenuState) throws -> [String?] {
+            try #require(Self.pointerItem(state).submenu).compactMap { row -> String?? in
+                if case let .item(item) = row, case let .editPresets(device)? = item.action { return .some(device) }
+                return nil
+            }
+        }
+        // One mouse on the top level: All Mice. With its own entry: that mouse.
+        #expect(try edits(Self.state([Self.master])) == [nil])
+        #expect(try edits(Self.state([Self.master], scoped: [Self.masterKey])) == [Self.masterKey])
+        // Another mouse's entry does not move this one off the top level.
+        #expect(try edits(Self.state([Self.master], scoped: [Self.anywhereKey])) == [nil])
+        #expect(try edits(Self.state([Self.master, Self.anywhere])) == [Self.masterKey, Self.anywhereKey])
+    }
+
+    @Test func theTwoMiceFixtureIgnoresWhatWouldWrite() {
+        let on = ["PUREMOUSE_DEV_MICE": "2"]
+        #expect(DevHooks.ignores(.setDeviceDPI(800, device: Self.masterKey), environment: on))
+        #expect(DevHooks.ignores(.setDPI(800), environment: on))
+        #expect(DevHooks.ignores(.editPresets(device: nil), environment: on))
+        #expect(!DevHooks.ignores(.setPaused(true), environment: on))
+        #expect(!DevHooks.ignores(.setDPI(800), environment: [:]))
+        #expect(!DevHooks.ignores(.setDeviceDPI(800, device: Self.masterKey), environment: ["PUREMOUSE_DEV_MICE": "1"]))
     }
 
     // MARK: Writing

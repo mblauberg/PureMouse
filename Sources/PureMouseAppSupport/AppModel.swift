@@ -239,11 +239,13 @@ public final class AppModel {
     /// drop the cycled one.
     ///
     /// In a mouse's scope (`target`), the DPI is written under that mouse only, and only that mouse
-    /// is told. The status menu passes none, so it always sets the top level.
+    /// is told. The status menu passes a mouse's scope when it sets a speed for one mouse (two or
+    /// more mice, or a mouse whose own entry sets `dpi` or `dpiPresets`: `setPointerSpeed`), and
+    /// none otherwise, which sets the top level.
     public func setDPI(_ dpi: Int, debounce: Bool = false, in target: ScopeTarget = .allMice) {
         guard !readOnly else { return }
         let key = target.scope.deviceKey
-        let moved = devices.contains { $0.dpi != nil && $0.dpi != dpi && (key == nil || $0.model?.lowercased() == key) }
+        let moved = devices.contains { $0.dpi != nil && $0.dpi != dpi && (key == nil || $0.deviceKey == key) }
         if moved { wantedConfiguredDPI.insert(key) }
         set(dpi, at: ["dpi"], in: target, debounce: debounce)
         if !store.hasPendingChanges { flush() }  // nothing to write: ask now

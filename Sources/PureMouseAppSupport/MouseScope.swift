@@ -45,7 +45,7 @@ public enum MouseScope {
         var seen = Set<String>()
         var mice: [KnownMouse] = []
         for device in devices {
-            guard let key = device.model?.lowercased(), Config.isDeviceKey(key), seen.insert(key).inserted else { continue }
+            guard let key = device.deviceKey, seen.insert(key).inserted else { continue }
             mice.append(KnownMouse(key: key, name: device.name, reported: true))
         }
         let names = config.deviceEntryNames
@@ -58,10 +58,7 @@ public enum MouseScope {
     /// Some reported mouse has no usable device key, so it is not in `known` (nothing can be chosen
     /// for it) yet still counts as a mouse: under All Mice, one model's drawing would not describe it.
     public static func hasUnidentified(devices: [Status.Device]) -> Bool {
-        devices.contains { device in
-            guard let key = device.model?.lowercased() else { return true }
-            return !Config.isDeviceKey(key)
-        }
+        devices.contains { $0.deviceKey == nil }
     }
 
     /// The pop-up shows with two or more mice known, or with any `devices` entry in the config: a
@@ -84,11 +81,11 @@ public enum MouseScope {
                                 running: Bool, paused: Bool) -> [Status.Device] {
         guard running, !paused else { return [] }
         if let key = scope.deviceKey {
-            let mine = devices.filter { $0.model?.lowercased() == key }
+            let mine = devices.filter { $0.deviceKey == key }
             return mine.contains(where: \.online) ? mine.filter(\.online) : []
         }
         guard devices.allSatisfy(\.online) else { return [] }
-        let reported = Set(devices.compactMap { $0.model?.lowercased() })
+        let reported = Set(devices.compactMap(\.deviceKey))
         guard config.deviceEntries.keys.allSatisfy(reported.contains) else { return [] }
         return devices
     }
@@ -97,7 +94,16 @@ public enum MouseScope {
     /// with this key for one. Which controls the Buttons list offers follows from them.
     public static func described(devices: [Status.Device], scope: ConfigScope) -> [Status.Device] {
         guard let key = scope.deviceKey else { return devices }
-        return devices.filter { $0.model?.lowercased() == key }
+        return devices.filter { $0.deviceKey == key }
+    }
+}
+
+extension Status.Device {
+    /// The key of this mouse's `devices` entry, when it has a usable one: `model` folded to
+    /// lowercase and accepted by `Config.isDeviceKey`. Mice of one model share it.
+    public var deviceKey: String? {
+        guard let key = model?.lowercased(), Config.isDeviceKey(key) else { return nil }
+        return key
     }
 }
 

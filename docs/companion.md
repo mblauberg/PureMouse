@@ -169,7 +169,10 @@ All optional; nil members are left out of the JSON.
 | `reapply` | Int | A token: a new value is Apply Settings Again for every mouse that is not applied; `device` does not aim it |
 
 Settings sets `capture.device` and `device` to the mouse chosen on Mouse (none for All Mice). The
-status menu sets neither and writes the top-level `dpi`. A press reports the mouse's key in
+status menu sets `device` when it chooses a Pointer Speed for one mouse, which it writes under
+`devices.<key>.dpi`: with two or more mice online, or when that mouse's entry already sets `dpi` or
+`dpiPresets`. Otherwise it sets no `device` and writes the top-level `dpi`. It never sets
+`capture.device`. A press reports the mouse's key in
 `capture.model`, and Settings switches Mouse to that mouse's scope when it is one the pop-up lists.
 
 
@@ -245,7 +248,7 @@ Settings opens the same way from everywhere (`SettingsLauncher`): `show-settings
 `Companion.directory` is written with the pane to show (empty: the last one; `general`, `mouse`,
 `apps` or `about` for a tab, `buttons`, `scrolling` or `pointer` for Mouse on that segment; a dot and a
 sheet name opens a sheet over the pane, `pointer.presets` for Pointer's presets list, which the menu's
-Edit Presets… row asks for; `apps:` and a bundle identifier opens Apps on that app's page, which the menu's
+Edit Presets… rows ask for; an at sign and a device key after the sheet (`pointer.presets@mb03400000000`) opens Mouse in that mouse's scope, and with no key a presets sheet opens under All Mice; `apps:` and a bundle identifier opens Apps on that app's page, which the menu's
 "Settings for <app>…" row asks for, listing the app first if the config has none and writing nothing
 until a setting is chosen), the doorbell
 `io.github.mblauberg.puremouse.menu.show` is posted, and the helper is opened with `NSWorkspace`,

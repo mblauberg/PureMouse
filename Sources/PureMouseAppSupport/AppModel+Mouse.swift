@@ -37,6 +37,13 @@ extension AppModel {
         if let key { defaults.set(key, forKey: Self.mouseKey) } else { defaults.removeObject(forKey: Self.mouseKey) }
     }
 
+    /// Opens the scope a `ShowRequest` asks for: the mouse it names, or All Mice for a presets sheet
+    /// that names none (the menu showed the top level's presets). Anything else leaves the choice.
+    /// A mouse the pop-up does not list falls back to All Mice (`selectedMouse`).
+    public func select(for request: ShowRequest) {
+        if request.device != nil || request.sheet == .presets { selectMouse(request.device) }
+    }
+
     /// A control was pressed on a mouse (Find by Pressing): its settings are the ones to edit,
     /// when the pop-up offers the choice.
     func selectCapturedMouse(_ key: String?) {

@@ -67,7 +67,7 @@ struct MenuPlanTests {
               400 DPI [-> setDPI(400)]
               800 DPI [on, -> setDPI(800)]
               ---
-              Edit Presets… [-> editPresets]
+              Edit Presets… [-> editPresets(device: nil)]
             ---
             Start PureMouse [-> start]
             \(Self.footer)
@@ -166,7 +166,7 @@ struct MenuPlanTests {
               400 DPI [-> setDPI(400)]
               800 DPI [on, -> setDPI(800)]
               ---
-              Edit Presets… [-> editPresets]
+              Edit Presets… [-> editPresets(device: nil)]
             ---
             Pause PureMouse [-> setPaused(true)]
             \(Self.footer)
@@ -215,7 +215,7 @@ struct MenuPlanTests {
               400 DPI [-> setDPI(400)]
               800 DPI [-> setDPI(800)]
               ---
-              Edit Presets… [-> editPresets]
+              Edit Presets… [-> editPresets(device: nil)]
             ---
             Pause PureMouse [-> setPaused(true)]
             \(Self.footer)
@@ -385,12 +385,12 @@ struct MenuPlanTests {
             Pointer Speed
               \(Format.dpi(1600)) [on, disabled]
               ---
-              Add Presets… [-> editPresets]
+              Add Presets… [-> editPresets(device: nil)]
             """))
         state.currentDPI = nil
         #expect(lines(state).contains("""
             Pointer Speed
-              Add Presets… [-> editPresets]
+              Add Presets… [-> editPresets(device: nil)]
             """))
     }
 

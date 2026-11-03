@@ -112,8 +112,9 @@ enum MenuAction {
     case openSettings(SettingsPane?)
     /// Apps, on the sheet of the app with this bundle identifier.
     case openAppSettings(String)
-    /// Pointer's presets sheet.
-    case editPresets
+    /// Pointer's presets sheet, in the scope the menu showed: under the mouse with this key, else
+    /// All Mice.
+    case editPresets(device: String?)
     case openReleases
     /// The release page of a newer version.
     case openUpdate(URL)
@@ -201,7 +202,9 @@ enum MenuPlan {
         rows.append(.separator)
         rows.append(.item(MenuItem(title: "Smooth Scrolling", checked: state.smoothScrolling,
                                    enabled: running && !state.readOnly, action: .toggleSmoothScrolling)))
-        rows.append(.item(MenuItem(title: "Pointer Speed", enabled: running, submenu: pointerRows(state))))
+        // Disabled while every mouse answering reports it has no pointer speed to set.
+        let noneOffers = state.devices.contains(where: \.online) && onlineMice(state.devices).isEmpty
+        rows.append(.item(MenuItem(title: "Pointer Speed", enabled: running && !noneOffers, submenu: pointerRows(state))))
 
         // Start, Pause and Resume share one slot, so nothing below them moves between states.
         rows.append(.separator)
@@ -289,12 +292,13 @@ enum MenuPlan {
         .item(MenuItem(title: title, attention: true, action: action))
     }
 
-    /// The mice Pointer Speed sets, one per device key: those answering now, the first of each key
-    /// (mice of one model share their settings), and every mouse with no usable key.
+    /// The mice Pointer Speed sets, one per device key: those answering now that offer a pointer speed
+    /// (`Status.Device.offers`), the first of each key (mice of one model share their settings), and
+    /// every such mouse with no usable key. Only these count for sections.
     static func onlineMice(_ devices: [Status.Device]) -> [Status.Device] {
         var seen = Set<String>()
         return devices.filter { device in
-            guard device.online else { return false }
+            guard device.online, device.offers(\.dpi) else { return false }
             guard let key = device.deviceKey else { return true }
             return seen.insert(key).inserted
         }
@@ -305,16 +309,22 @@ enum MenuPlan {
         guard mice.count >= 2 else { return singleMouseRows(state, mouse: mice.first) }
         var rows: [MenuRow] = []
         for mouse in mice {
-            rows.append(.sectionHeader(mouse.name))
-            let key = mouse.deviceKey
-            rows += presetRows(key.flatMap { state.mousePresets[$0] } ?? state.dpiPresets, current: mouse.dpi,
-                               steps: mouse.dpiSteps, readOnly: state.readOnly, mouse: mouse.name) { dpi in
-                key.map { .setDeviceDPI(dpi, device: $0) } ?? .setDPI(dpi)
+            // A mouse with no key has no entry of its own to write: writing the top level would move
+            // the other mice, so it shows its speed and offers no presets.
+            guard let key = mouse.deviceKey else {
+                if let dpi = mouse.dpi {
+                    rows.append(.sectionHeader(mouse.name))
+                    let title = Format.dpi(dpi)
+                    rows.append(.item(MenuItem(title: title, checked: true, enabled: false, spoken: "\(title), \(mouse.name)")))
+                }
+                continue
             }
+            rows.append(.sectionHeader(mouse.name))
+            let presets = state.mousePresets[key] ?? state.dpiPresets
+            rows += presetRows(presets, current: mouse.dpi, steps: mouse.dpiSteps, readOnly: state.readOnly,
+                               mouse: mouse.name) { .setDeviceDPI($0, device: key) }
+            rows.append(editPresets(empty: presets.isEmpty, device: key, mouse: mouse.name))
         }
-        let empty = mice.allSatisfy { ($0.deviceKey.flatMap { state.mousePresets[$0] } ?? state.dpiPresets).isEmpty }
-        rows.append(.separator)
-        rows.append(editPresets(empty: empty))
         return rows
     }
 
@@ -329,12 +339,16 @@ enum MenuPlan {
             own.map { .setDeviceDPI(dpi, device: $0) } ?? .setDPI(dpi)
         }
         if !rows.isEmpty { rows.append(.separator) }
-        rows.append(editPresets(empty: presets.isEmpty))
+        rows.append(editPresets(empty: presets.isEmpty, device: own, mouse: nil))
         return rows
     }
 
-    private static func editPresets(empty: Bool) -> MenuRow {
-        .item(MenuItem(title: empty ? "Add Presets…" : "Edit Presets…", action: .editPresets))
+    /// One mouse's presets sheet, or (`device` nil) the top level's. `mouse`: the section's mouse, for
+    /// VoiceOver ("Edit Presets for MX Master 3S").
+    private static func editPresets(empty: Bool, device: String?, mouse: String?) -> MenuRow {
+        let title = empty ? "Add Presets…" : "Edit Presets…"
+        let spoken = mouse.map { "\(empty ? "Add Presets" : "Edit Presets") for \($0)" }
+        return .item(MenuItem(title: title, spoken: spoken, action: .editPresets(device: device)))
     }
 
     /// The presets, the one the DPI is on checked, and "Custom: N" when it is on none. `mouse`: a
@@ -355,14 +369,6 @@ enum MenuPlan {
             rows.append(.item(MenuItem(title: title, checked: true, enabled: false, spoken: spoken(title))))
         }
         return rows
-    }
-}
-
-extension Status.Device {
-    /// The key of this mouse's `devices` entry, when it has a usable one.
-    var deviceKey: String? {
-        guard let key = model?.lowercased(), Config.isDeviceKey(key) else { return nil }
-        return key
     }
 }
 
