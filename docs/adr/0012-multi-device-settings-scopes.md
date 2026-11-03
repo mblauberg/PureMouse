@@ -2,9 +2,23 @@
 
 ## Status
 
-Accepted. The `ConfigTree` half is built (`ConfigScope`, `resolved`, `isOverridden`, `set(_:at:in:)`,
-`deviceEntries`, and a parity test against `Config.forDevice`); the device menu and the per-row
-inheritance in the panes are not.
+Accepted and built. The `ConfigTree` half (`ConfigScope`, `resolved`, `isOverridden`,
+`set(_:at:in:)`, `deviceEntries`, and a parity test against `Config.forDevice`) came first; the
+pop-up (`MousePopUp`, `MouseScope`) and the per-row inheritance in the Buttons, Scrolling and
+Pointer panes (`InheritedValue`, as for apps) followed (#54). The Apps note sits in the pop-up's
+menu rather than under it, for the height budget, with one more note there: "Settings you don't
+change follow All Mice." A row that inherits looks as it does under All Mice; only a row with its
+own value is marked ("Set for this mouse." and a "Use All Mice Setting" link). A mouse can choose
+Mouse Default for a button All Mice binds: Kit reads the reserved `buttons` value `"default"` (not an
+action) as no binding, which a device entry or an app layers over the wider scope's binding, so the
+mouse's own behaviour applies there. That behaviour is what the daemon performs for the control
+(`Config.nativeBehaviour(of:)`): a native click for the wheel click, back and forward; the
+wheel-mode switch for the top button; DPI cycling for the DPI button. Controls with none (the
+gesture button, the thumb panel) are not offered Mouse Default on a mouse or in an app. The picker
+keeps "Same as All Mice" (removes the key) and Mouse Default (writes `"default"`) as separate
+choices, and hides Mouse Default where the wider scope already is it. Settings reads and writes
+button aliases as Kit does (the last name in sorted order), and giving a button back removes
+every alias.
 
 ## Context
 
@@ -29,3 +43,5 @@ known mouse), shown when two or more mice are known or a `devices` entry exists.
 
 - Single-mouse users see no change and no new keys.
 - Buttons, Scrolling and Pointer rows gain per-row inheritance logic.
+- A mouse keyed by product ID alone can get another key over Bolt than over Bluetooth once 0x0003
+  answers: documented, not aliased.

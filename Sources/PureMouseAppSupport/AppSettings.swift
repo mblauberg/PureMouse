@@ -57,7 +57,8 @@ extension ConfigTree {
 
     // MARK: Buttons
 
-    /// Binds a button in one app. `.standard` removes the app's key, so the global binding applies.
+    /// Binds a button in one app. `.standard` removes the app's key, so the global binding applies;
+    /// `.mouseDefault` writes `"default"`, so the button is native in the app whatever is global.
     /// `.gesture` keeps the app's gesture, or starts one whose click does what the button did
     /// there, so its object is never empty.
     public mutating func bindInApp(_ app: String, button: String, to binding: ButtonAction) {
@@ -67,14 +68,21 @@ extension ConfigTree {
             return
         }
         if case .gesture = self.binding(button, in: scope) { return }
+        // Mouse Default hides the global gesture; choosing Hold and Move gives it back whole.
+        if self.binding(button, in: scope) == .mouseDefault, self.binding(button) == .gesture {
+            bind(button, to: .standard, in: scope)
+            return
+        }
         let path = scope.prefix + ["buttons", buttonKey(button, in: scope)]
         let click: Any
-        if let own = self[path], own is String || own is [String: Any] {
+        if self.binding(button, in: scope) == .mouseDefault {
+            click = "none"  // native in this app: the gesture's click then does nothing
+        } else if let own = self[path], own is String || own is [String: Any] {
             click = own
         } else {
             let global = ["buttons", buttonKey(button)]
             switch self.binding(button) {
-            case .standard: click = "none"
+            case .standard, .mouseDefault: click = "none"
             case .gesture: click = self[global + ["click"]] ?? "none"
             default: click = self[global] ?? "none"
             }
@@ -86,18 +94,9 @@ extension ConfigTree {
     /// gesture's direction applies; the last one removes the app's binding (an empty gesture is
     /// not one). Anything else, "Do Nothing" included, is written as given.
     public mutating func bindInApp(_ app: String, button: String, direction: String, to binding: ButtonAction) {
-        let scope = Self.appScope(app)
-        let key = buttonKey(button, in: scope)
-        let path = scope.prefix + ["buttons", key]
-        switch binding {
-        case .standard:
-            let others = (self[path] as? [String: Any])?.keys.filter { $0 != direction } ?? []
-            set(nil, at: others.isEmpty ? path : path + [direction])
-        case .gesture:
-            break
-        default:
-            set(binding.json, at: path + [direction])
-        }
+        // The same rules as a mouse's: only `.standard` removes the key, and the last direction takes
+        // the whole binding with it.
+        bind(button, direction: direction, to: binding, in: Self.appScope(app))
     }
 
     // MARK: Scrolling
@@ -145,7 +144,12 @@ extension ConfigTree {
 
     /// A button as an app's sheet shows it. Reading it writes nothing.
     public func appButton(_ app: String, button: String) -> AppButton {
-        let scope = Self.appScope(app)
+        scopedButton(button, in: Self.appScope(app))
+    }
+
+    /// A button as a row shows it in an app or on a mouse: the scope's own binding over the top
+    /// level's, which applies while the scope leaves the button alone (`own` is `.standard`).
+    public func scopedButton(_ button: String, in scope: ConfigScope) -> AppButton {
         let own = binding(button, in: scope)
         let everywhere = binding(button)
         // A plain action of the app's own replaces a global gesture, so it has no directions.
@@ -190,6 +194,15 @@ public struct AppButton: Equatable, Sendable {
         public let name: String
         public let own: ButtonAction
         public let everywhere: ButtonAction?
+
+        /// The scope sets this direction itself, whether or not a wider gesture has one.
+        public var isOwn: Bool { own != .standard }
+
+        /// What applies while the scope leaves the direction out: the wider gesture's, else nothing.
+        public var inherited: ButtonAction {
+            guard let everywhere, everywhere != .standard else { return .named("none") }
+            return everywhere
+        }
     }
 
     public let own: ButtonAction
@@ -199,7 +212,7 @@ public struct AppButton: Equatable, Sendable {
     public let directions: [Direction]
 
     /// The app leaves the button to a gesture set everywhere: its directions show, collapsed and
-    /// dimmed, and editing one writes only that direction under the app
+    /// shown as for any inherited row, and editing one writes only that direction under the app
     /// (`ConfigTree.bindInApp(_:button:direction:to:)`).
     public var inheritsGesture: Bool { own == .standard && everywhere == .gesture }
 }

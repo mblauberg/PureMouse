@@ -40,7 +40,7 @@ launchctl kill HUP gui/$UID/io.github.mblauberg.puremouse
 | `scrollWheel.smartShiftThreshold` | 1–50 enables SmartShift's automatic free-spin; 255 disables it. Must be 1–255. Requires 0x2110 or 0x2111 |
 | `thumbWheel.inverted` | Invert the thumb wheel's scrolling: in hardware, or in software while PureMouse handles the wheel. Scrolling only: actions follow `reversed`. Global only |
 | `thumbWheel.action`, `left`, `right`, `step`, `reversed` | What turning the thumb wheel does, and which way ([below](#thumb-wheel)) |
-| `buttons` | Button → action or gesture, including play-only haptics ([below](#buttons-actions-and-gestures)). The left and right buttons cannot be bound |
+| `buttons` | Button → action or gesture, including play-only haptics, or `"default"` for no binding: the mouse's own behaviour ([below](#buttons-actions-and-gestures)). The left and right buttons cannot be bound |
 | `smoothScroll` | If present, PureMouse scrolls both wheels itself ([below](#smooth-scrolling)). If absent, or `enabled` is false, the wheels scroll normally |
 | `gesture.distanceMm` | How far the mouse moves before a gesture fires, in millimetres, 0.5–50. Default 4 |
 | `gesture.repeatIntervalMs` | Minimum gap between repeated gestures in one hold, 0–5000. Default 400 |
@@ -111,8 +111,8 @@ smoothing.
 
 Settings › Mouse › Scrolling › Thumb Wheel sets `action`, or **Custom** for `left` and `right` (also shown
 for a pair written by hand). Its Advanced… sheet has **Reverse direction** (`inverted`, while it
-scrolls here or in some app), **Swap directions** (`reversed`) and **Turn distance** (`step`) while
-it has actions, and **Speed** (`smoothScroll.horizontalSpeed`) while it scrolls. Custom's rows name
+scrolls here or in some app), **Swap directions** (`reversed`, a switch) and **Turn distance** (`step`) while
+the action in effect (the scope's own, else the wider scope's) is not scrolling, and **Speed** (`smoothScroll.horizontalSpeed`) while it scrolls. Custom's rows name
 the way the wheel turns, so with `reversed` the **Turn left** row sets `right`. Scrolling's Restore
 Defaults removes `smoothScroll`, `scrollWheel` and these thumb wheel keys; Buttons' removes
 `buttons` and `gesture`. Neither touches `apps`.
@@ -122,7 +122,8 @@ Defaults removes `smoothScroll`, `scrollWheel` and these thumb wheel keys; Butto
 `apps` maps an app's bundle ID to the settings that differ in that app. Only `buttons`,
 `thumbWheel` (`action`, `left`, `right`, `step` and `reversed`; not `inverted`) and `smoothScroll`
 can differ; the rest write to the mouse and stay global. An app's `reversed` defaults to the global
-one; Settings › Apps shows it as **Same as Everywhere**, **Normal** or **Swapped**.
+one; Settings › Apps shows it as the **Swap directions** switch, which reads as Everywhere's until the app sets it
+("Set for this app.", with a **Use Everywhere Setting** link that removes the key).
 
 ```json
 "apps": {
@@ -146,9 +147,12 @@ that is not installed is fine. `puremouse app` prints the bundle IDs PureMouse s
 Settings › Apps lists the apps in `apps` and adds one from Applications or the running apps (it is
 written only once a setting is chosen). For each app it sets the buttons, the thumb wheel and an own
 scrolling `speed` and `smoothingMs` (both written when **Custom scrolling** is turned on, both
-removed when it is turned off); **Same as Everywhere** removes the app's key, and removing the
+removed when it is turned off; each says "Set for this app." and can be given back alone); **Same as Everywhere** removes the app's key, and removing the
 last one removes the app. Browsers, Zoom, Teams, Word, PowerPoint, Preview and Excel get a suggested
 thumb wheel action. Keys it does not show, unknown ones included, stay as written.
+
+An app may set a button to `"default"`: while that app is frontmost the button does what the mouse
+does without PureMouse, even where the global settings bind it (see [Mouse Default](#buttons-actions-and-gestures)).
 
 A button bound only in some apps is still taken over everywhere. Elsewhere the wheel press, back
 and forward buttons click as usual; other controls do nothing. A button that is a gesture anywhere
@@ -189,7 +193,8 @@ direction), the `scrollWheel`, `thumbWheel`, `smoothScroll` and `gesture` keys i
 `dpiPresets` replaces the whole list. Precedence is the top level, then `devices.<key>`, then
 `apps.<bundle id>`: a mouse with an entry uses the entry over the top level, and the top-level
 `apps` over that. An app that binds `forward` overrides the entry's `forward` in that app, while
-the entry's `back` still applies there.
+the entry's `back` still applies there. An entry may set a button to `"default"` to leave it to the
+mouse where the top level binds it (see [Mouse Default](#buttons-actions-and-gestures)).
 
 What Settings writes under `devices` (`ConfigTree`, `ConfigScope.device`): only the keys a control sets
 under the mouse's own entry, and only the sections above; `apps`, `universalControl` and
@@ -197,13 +202,51 @@ under the mouse's own entry, and only the sections above; `apps`, `universalCont
 that spells the key in other case (`MB03400000000`) is edited in place and gets no lowercase twin;
 with several spellings, the last in sorted order is the one edited. The first value for a mouse
 creates its entry with a `name` (the mouse's name, else its key), written once. Putting a control
-back to "All Mice" removes its key there (for a gesture direction, its key in the gesture, and the
+back to "All Mice" removes its key there (Mouse Default is a value, not a removal: it writes
+`"default"` under the mouse's entry, and under All Mice it removes the key; for a gesture direction, its key in the gesture, and the
 whole binding with the last direction), and removing the last override removes the entry, so an entry
 with only a `name` is not kept (keys Settings does not know are kept, and keep the entry and its
 `name`). "Do Nothing" is a value, not a removal: on a mouse it hides the top level's action. A
 `smoothScroll` left empty stays, since an empty one means on. Only per-device sections are
 written: a section the decoder would skip is refused, though inside a section a key is written
 as given. A JSON `null` in an entry or at the top level reads as absent, as the decoder reads it.
+
+### Settings and per-mouse values
+
+Mouse shows a pop-up, All Mice then each known mouse, when two or more mice are known or the config
+has any `devices` entry (so a lone mouse that has an entry gets it too: the entry's values would
+otherwise shadow edits made for All Mice with nothing to show it). Known mice are the daemon's
+devices that have a key, one per key, then each `devices` entry no connected mouse has, named from
+its `name`, else "Unknown mouse <key>". The last choice is remembered for the user, and All Mice is
+the default; a remembered mouse that is no longer listed is All Mice.
+
+Each Mouse pane reads the value in effect (`resolved`) and writes in the chosen scope. A control the
+mouse has no value for looks exactly as it does under All Mice, with no mark; one it sets says "Set for
+this mouse." with a "Use All Mice Setting" link that removes it (`InheritedValue`, the same presentation
+an app uses with "Set for this app." and "Use Everywhere Setting"). A pop-up's first entry is "Same as All
+Mice (value)". Every control of a row, including a switch, a segmented control and a slider, is the one
+All Mice shows while the mouse leaves the value alone; VoiceOver reads it with its source ("On, same as
+All Mice"). The thumb wheel's rows follow the action in effect: a mouse that leaves Custom to All Mice shows
+Turn left and Turn right, and a mouse can set the turn distance or either direction alone, which then
+carries the "Set for this mouse." line. A gesture direction the mouse sets itself is marked the same way,
+whether or not All Mice has a gesture. A section's Restore Defaults removes that mouse's
+keys for the section, never its `name`. The Presets row of a mouse that uses All Mice's presets reads
+as All Mice's does (the list), and a mouse's own empty `dpiPresets: []` is kept, as it means
+no presets for that mouse. Giving back the mouse's Smooth scrolling removes the mouse's
+`enabled`, and with no top-level `smoothScroll` its whole `smoothScroll` (an empty one means on); the
+generic edit leaves an emptied one in place. A mouse's rows are hidden by what it reports: a capability
+reported `false` hides its rows, an omitted one is unknown and shows them, and a value the mouse itself
+sets keeps its row with "Not supported by this mouse." (a value only All Mice sets does not). For All Mice a section shows if
+any known mouse has the feature; while a mouse is not connected, or a `devices` entry names a mouse the
+daemon does not report, nothing is hidden, since that mouse may have it. With several spellings of one
+key (`MB…` and `mb…`) the last in sorted order is the entry, and giving back its last override leaves
+a name-only entry in its place, so the other spelling does not apply in its stead (Kit replaces an
+earlier entry whole). Reset All Settings, in General, resets every mouse and every app, not only the
+chosen mouse. Apps are the same for every mouse, so the Apps tab has no pop-up.
+
+A mouse that reports no 0x0003 identity is keyed by its product ID, which can differ between
+receivers and Bluetooth (`pb02c` over Bluetooth, an `m…` key over Bolt when the model ID is read).
+Settings treats them as two mice and does not alias them; copy the entry to share settings.
 
 A key that is neither form (a typo, or a mouse's name) matches no mouse: the log warns and the entry
 is skipped, though a bad value in it still fails the load. Keys that differ only in case warn, and
@@ -224,6 +267,32 @@ has a name. A binding the mouse lacks, or cannot hand to PureMouse, is skipped f
 
 The left and right buttons (0x0050 and 0x0051) cannot be bound, globally or per app. Their
 bindings are ignored with a warning; **Find by Pressing…** always leaves them clicking normally.
+
+**Mouse Default:** the string `"default"` in any `buttons` section (top level, `devices.<key>.buttons`,
+`apps.<id>.buttons`) means no binding: the button works as the mouse does without PureMouse. It is
+not an action, so it is not accepted where an action is (a gesture direction, the thumb wheel's
+`left` and `right`). On a mouse's entry it removes the top level's binding for that control, under
+whichever name spells it, so the mouse behaves as it does without PureMouse there while other mice
+keep the binding; in an app it does the same while that app is frontmost. The control is still taken
+over, and the daemon performs what the mouse itself would, from one table (`Config.nativeBehaviour(of:)`):
+the wheel click, back and forward post their ordinary click (0x52, 0x53, 0x56), the top button
+(0xC4) switches the wheel mode as `toggleScrollMode` does, and the DPI button (0xFD) cycles the pointer speed
+as `cycleDPI` does. Any other control (the gesture button, the thumb panel, a control Kit has no
+name for) has no behaviour of its own to hand back, so it does nothing, and Settings does not offer
+Mouse Default for it on a mouse or in an app. While a control is a gesture in some scope it is held
+with its pointer movement diverted; pressed where it resolves to something that is not a gesture,
+the pointer is freed for that press and diverted again on release. At the top level
+there is nothing to hide, so `"default"` is the same as leaving the button out. Within one section, if
+two names spell one control, the last in sorted order decides, as for any two bindings, and a
+`"default"` that wins removes every earlier name for the control. Settings reads and writes a mouse's
+or an app's button the same way: the last spelling is the one shown and edited, and giving the button
+back to the wider scope removes every spelling. The left and
+right buttons and an unknown button name keep their warnings. Settings writes it from a mouse's or an
+app's action picker (**Mouse Default**), beside **Same as All Mice** / **Same as Everywhere**, which
+removes the key instead. Where the wider scope already is Mouse Default, the picker lists only
+**Same as …**, since the two would be the same. Choosing **Hold and Move** on a mouse or in an app that
+has Mouse Default, when the wider binding is a gesture, removes the key, so the mouse takes that
+gesture whole (its click and directions), as **Same as …** does.
 
 **Actions:** `missionControl`, `appExpose`, `showDesktop`, `launchpad`, `spaceLeft`, `spaceRight`,
 `navigateBack`, `navigateForward`, `toggleScrollMode`, `cycleDPI`, `volumeUp`, `volumeDown`, `mute`,

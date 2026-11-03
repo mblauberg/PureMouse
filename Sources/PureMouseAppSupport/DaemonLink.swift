@@ -144,11 +144,15 @@ public final class DaemonLink {
         return true
     }
 
-    /// Asks the daemon to drop a DPI chosen by Cycle Pointer Speed, with a new token.
+    /// Asks the daemon to drop a DPI chosen by Cycle Pointer Speed, with a new token: on every
+    /// mouse, or only the one with this device key (`Control.device`).
     @discardableResult
-    public func requestConfiguredDPI() -> Bool {
+    public func requestConfiguredDPI(device: String? = nil) -> Bool {
         let token = newToken()
-        return writeControl { $0.useConfiguredDPI = token }
+        return writeControl {
+            $0.useConfiguredDPI = token
+            $0.device = device?.lowercased()
+        }
     }
 
     /// One read-change-replace of `control.json` under `control.json.lock`, then the doorbell:

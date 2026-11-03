@@ -116,25 +116,38 @@ final class MouseTab: NSViewController {
 /// It stays put between segments: same controls, same height.
 struct MouseHeader: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.settings) private var settings
     let selection: MouseSelection
 
     var body: some View {
-        ZStack {
-            HStack {
+        // The segments sit in the middle whichever sides are present: each side is a slot that
+        // stays in the layout when empty (its Spacer keeps it), and the two share what is left
+        // equally, so the pop-up gets the room beside them and cuts a long name with an ellipsis
+        // instead of overlapping. The stack's own spacing keeps them apart.
+        HStack {
+            HStack(spacing: 0) {
                 // The leading slot is the mouse pop-up's, with two or more mice (docs/ui-design.md).
-                Spacer()
-                if selection.segment == .buttons { findByPressing }
+                if model.showsMouseMenu { MousePopUp() }
+                Spacer(minLength: 0)
             }
+            .frame(maxWidth: .infinity)
             Picker("Mouse settings", selection: Binding(get: { selection.segment }, set: { model.clearCaptureOutcome(); selection.select($0) })) {
                 ForEach(MouseSegment.allCases, id: \.self) { Text($0.title).tag($0) }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
             .fixedSize()
+            HStack(spacing: 0) {
+                Spacer(minLength: 0)
+                if selection.segment == .buttons { findByPressing }
+            }
+            .frame(maxWidth: .infinity)
         }
         // In line with the grouped boxes below, whose form insets them by the same margin.
         .padding(.horizontal, 20)
         .padding(.top)
+        // The pop-up and its note come and go with the mice known, which changes the strip's height.
+        .onChange(of: model.showsMouseMenu) { settings?.refit() }
         .onChange(of: model.captureOutcome) { _, outcome in
             if let outcome { AccessibilityNotification.Announcement(outcome.message).post() }
         }
@@ -150,5 +163,41 @@ struct MouseHeader: View {
                 .disabled(!model.daemonRunning || model.paused || model.readOnly)
                 .help(model.daemonRunning ? "Press a mouse button to find its row" : "PureMouse is off")
         }
+    }
+}
+
+/// The pop-up that chooses which mouse the panes edit: All Mice, then each known mouse by name. The
+/// choice is remembered. The notes are the menu's last lines, the one explanation of how a mouse's
+/// rows work ("Settings you don't change follow All Mice.") and that Apps is global; the pop-up's
+/// tooltip carries the Apps note: a line under the pop-up would take 15 pt from a strip every segment
+/// shares, and Scrolling has 6 pt to spare (docs/ui-design.md, "Fit").
+struct MousePopUp: View {
+    @Environment(AppModel.self) private var model
+
+    static let appsNote = "Apps are the same for every mouse."
+    /// Said once, here: rows that match All Mice carry no mark of it.
+    static let followNote = "Settings you don't change follow All Mice."
+
+    private var closedText: String {
+        model.selectedMouse?.name ?? InheritedScope.allMice
+    }
+
+    var body: some View {
+        PopUpMenu(text: closedText, flexible: true) {
+            Picker("Mouse", selection: Binding<String?>(get: { model.selectedMouse?.key }, set: { model.selectMouse($0) })) {
+                Text(InheritedScope.allMice).tag(nil as String?)
+                Divider()
+                ForEach(model.knownMice) { Text($0.name).tag($0.key as String?) }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+            Divider()
+            Text(Self.followNote)
+            Text(Self.appsNote)
+        }
+        .help(Self.appsNote)
+        .accessibilityLabel("Choose mouse")
+        .accessibilityValue(model.selectedMouse?.name ?? InheritedScope.allMice)
+        .accessibilityHint("\(Self.followNote) \(Self.appsNote)")
     }
 }

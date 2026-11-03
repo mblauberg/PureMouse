@@ -6,8 +6,8 @@ import SwiftUI
 /// then its buttons, thumb wheel and scrolling. Settings apply live, so Done closes it; Remove…
 /// asks first. No sheet opens from it (docs/ui-design.md, Disclosure): the action picker and the
 /// shortcut and command editors are popovers (`EditorPresentation`), and gesture directions,
-/// other controls and more thumb wheel options are disclosures. A value the app leaves unset shows
-/// what applies everywhere, dimmed (`InheritedValue`).
+/// other controls and more thumb wheel options are disclosures. A value the app leaves unset looks
+/// as it does everywhere; one it sets says "Set for this app." (`InheritedValue`).
 struct AppSheet: View {
     @Environment(AppModel.self) private var model
     /// The app's key under `apps`.
@@ -141,7 +141,7 @@ struct AppSheet: View {
 
     private func title(_ button: String) -> String { NamedButton.title(forKey: button) }
 
-    /// What applies everywhere, for the dimmed value and "Same as Everywhere (…)". An unset
+    /// What applies everywhere, for the value a row shows and "Same as Everywhere (…)". An unset
     /// direction does nothing.
     private func everywhereLabel(_ action: ButtonAction, direction: Bool = false, spoken: Bool = false) -> String {
         let action = action == .standard && direction ? ButtonAction.named("none") : action
@@ -154,13 +154,14 @@ struct AppSheet: View {
         let target = bindingTarget(button)
         let everywhere = everywhereLabel(state.everywhere)
         let spokenEverywhere = everywhereLabel(state.everywhere, spoken: true)
-        let caption = ActionButton.inherited(state.own, everywhere: everywhere).caption
+        let note = ActionButton.inherited(state.own, everywhere: everywhere).note { apply(.standard, to: target) }
         if state.directions.isEmpty {
             LabeledContent {
                 actionButton(state.own, target: target, sameAsEverywhere: everywhere, spokenEverywhere: spokenEverywhere)
             } label: {
-                RowLabel(title(button), help: caption)
+                RowLabel(title(button), note: note)
             }
+            .overridable(note, help: nil)
             .padding(.leading, indented ? 16 : 0)
             .actionEditorPopover($editor, for: target, save: apply)
         } else {
@@ -171,25 +172,25 @@ struct AppSheet: View {
             LabeledContent {
                 actionButton(state.own, target: target, sameAsEverywhere: everywhere, spokenEverywhere: spokenEverywhere)
             } label: {
-                DisclosureLabel(title: title(button), help: caption, spokenTitle: "\(title(button)) directions",
+                DisclosureLabel(title: title(button), note: note, spokenTitle: "\(title(button)) directions",
                                 isExpanded: isExpanded)
             }
+            .overridable(note, help: nil)
             .padding(.leading, indented ? 16 : 0)
             .actionEditorPopover($editor, for: target, save: apply)
             if isExpanded.wrappedValue {
                 ForEach(state.directions, id: \.name) { direction in
                     let target = bindingTarget(button, direction: direction.name)
-                    // A direction the app leaves out follows the global gesture, if there is one;
-                    // else it does nothing.
-                    let inherited = direction.everywhere.map { everywhereLabel($0, direction: true) }
-                    let spokenInherited = direction.everywhere.map { everywhereLabel($0, direction: true, spoken: true) }
-                    let own = direction.own == .standard && inherited == nil ? .named("none") : direction.own
+                    // A direction the app leaves out follows the global gesture's, if it has one, else
+                    // does nothing; one it sets itself is marked either way.
+                    let note = ActionButton.inherited(direction, source: InheritedScope.everywhere).note { apply(.standard, to: target) }
                     LabeledContent {
-                        actionButton(own, target: target, sameAsEverywhere: inherited, spokenEverywhere: spokenInherited)
+                        actionButton(direction.own, target: target, sameAsEverywhere: direction.inherited.label,
+                                     spokenEverywhere: direction.inherited.spokenLabel)
                     } label: {
-                        RowLabel(Gesture.label(direction.name),
-                                 help: inherited.flatMap { ActionButton.inherited(own, everywhere: $0).caption })
+                        RowLabel(Gesture.label(direction.name), note: note, spokenTitle: target.title + spoken)
                     }
+                    .overridable(note, help: nil)
                     .padding(.leading, indented ? 38 : 22)
                     .actionEditorPopover($editor, for: target, save: apply)
                 }
@@ -203,7 +204,7 @@ struct AppSheet: View {
         let isDirection = target.direction != nil
         return ActionButton(
             action: action,
-            allowsDefault: false,
+            allowsDefault: !isDirection && PickerEntry.offersMouseDefault(for: target.button, inMouseOrApp: true, current: action),
             allowsGesture: !isDirection,
             isPresented: Binding(get: { presented == id }, set: { presented = $0 ? id : nil }),
             choose: { entry in choose(entry, for: target, current: action) },
@@ -240,6 +241,14 @@ struct AppSheet: View {
 
     // MARK: Scrolling
 
+    /// A value the app sets under `apps.<key>` stands against Everywhere's: marked while the app holds
+    /// it, and given back by removing the key (the last one turns Custom scrolling off).
+    private func appStanding(_ path: [String], _ config: ConfigTree) -> RowStanding {
+        RowStanding(source: InheritedScope.everywhere, isOwn: config.contains(path)) {
+            model.update { $0.set(nil, at: path) }
+        }
+    }
+
     private func scrolling(_ config: ConfigTree) -> some View {
         let custom = config.overridesScrolling(key)
         let speedPath = scope + ["smoothScroll", "speed"]
@@ -255,11 +264,13 @@ struct AppSheet: View {
             if custom {
                 ValueSlider(title: "Speed", spokenTitle: "Scrolling speed\(spoken)",
                             value: model.number(speedPath, default: globalSpeed, step: 0.05),
-                            range: 0.25...3, low: "Slow", high: "Fast", format: Format.multiplier)
+                            range: 0.25...3, low: "Slow", high: "Fast", format: Format.multiplier,
+                            standing: appStanding(speedPath, config))
                     .disclosedRow()
                 ValueSlider(title: "Glide", spokenTitle: "Glide\(spoken)", help: "0 scrolls instantly.",
                             value: model.number(glidePath, default: globalGlide, step: 25),
-                            range: 0...500, low: "Short", high: "Long", format: Format.milliseconds)
+                            range: 0...500, low: "Short", high: "Long", format: Format.milliseconds,
+                            standing: appStanding(glidePath, config))
                     .disabled(!config.scrollsSmoothly(key))
                     .disclosedRow()
             }

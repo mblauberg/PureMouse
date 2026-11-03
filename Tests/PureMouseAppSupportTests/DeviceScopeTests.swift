@@ -603,10 +603,11 @@ private struct TreeMaker {
         var out: [String: Any] = [:]
         for spellings in Self.spellings where chance(0.4) {
             for name in spellings where out.isEmpty || chance(0.7) || name == spellings[0] {
-                if chance(0.8) { out[name] = binding() }
+                // "default" (Mouse Default) is a value Kit reads in any of the sections.
+                if chance(0.8) { out[name] = chance(0.15) ? "default" : binding() }
             }
         }
-        for name in Self.unknownNames where chance(0.15) { out[name] = action() }
+        for name in Self.unknownNames where chance(0.15) { out[name] = chance(0.2) ? "default" : action() }
         return out
     }
 
@@ -838,6 +839,7 @@ private func expectResolvedMatchesKit(_ config: ConfigTree, _ key: String, _ dec
     var gesturesMerged = 0
     var cased = 0
     var nulls = 0
+    var defaults = 0
     for round in 0..<400 {
         let (config, keys) = maker.tree()
         let note = Comment(rawValue: "round \(round): \(String(decoding: config.data(), as: UTF8.self))")
@@ -845,6 +847,7 @@ private func expectResolvedMatchesKit(_ config: ConfigTree, _ key: String, _ dec
         let raw = (config[["devices"]] as? [String: Any]) ?? [:]
         cased += raw.keys.filter { $0 != $0.lowercased() }.count
         nulls += String(decoding: config.data(), as: UTF8.self).components(separatedBy: "null").count - 1
+        defaults += String(decoding: config.data(), as: UTF8.self).components(separatedBy: "\"default\"").count - 1
         for key in keys {
             devicesChecked += 1
             gesturesMerged += try expectResolvedMatchesKit(config, key, decoded, note)
@@ -855,6 +858,7 @@ private func expectResolvedMatchesKit(_ config: ConfigTree, _ key: String, _ dec
     #expect(gesturesMerged > 100)
     #expect(cased > 100)
     #expect(nulls > 400)
+    #expect(defaults > 100)
 }
 
 // MARK: isOverridden against a definition taken from Kit
@@ -1061,4 +1065,220 @@ private func kitSays(_ root: [String: Any], mouse key: String, sets path: [Strin
     #expect(edits > 600)
     #expect(created > 10)
     #expect(removedEntries > 5, "\(removedEntries)")
+}
+
+// MARK: The #51 review's two gaps
+
+@Test func removingDPIOnAMixedCaseTwinDoesNotLetTheOtherSpellingApply() throws {
+    let key = mouse
+    let config = try tree(#"{"devices": {"\#(key.uppercased())": {"dpi": 1600}, "\#(key)": {"dpi": 1200}}}"#)
+    // Kit: the last spelling in sorted order applies, and it replaces the earlier entry whole.
+    #expect(try decode(config).forDevice(key).dpi == 1200)
+    var edited = config
+    edited.set(nil, at: ["dpi"], in: device(key))
+    // Kit is the oracle: the other spelling's 1600 must not come back.
+    #expect(try decode(edited).forDevice(key).dpi != 1600)
+    #expect(try decode(edited).forDevice(key).dpi == (try decode(ConfigTree()).forDevice(key).dpi))
+    #expect(edited.resolvedInt(["dpi"], in: device(key)) == nil)
+    #expect(!edited.isOverridden(["dpi"], in: device(key)))
+    // The applying entry stays as a name-only shadow, so Settings and Kit agree.
+    #expect(edited.contains(["devices", key]))
+    // And with another key on the shadowed spelling, the same: none of its keys apply.
+    let richer = try tree(#"{"devices": {"\#(key.uppercased())": {"dpi": 1600, "scrollWheel": {"inverted": true}}, "\#(key)": {"dpi": 1200}}}"#)
+    var removed = richer
+    removed.set(nil, at: ["dpi"], in: device(key))
+    #expect(try decode(removed).forDevice(key).scrollWheel?.inverted == (try decode(ConfigTree()).forDevice(key).scrollWheel?.inverted))
+    #expect(removed.resolved(["scrollWheel"], in: device(key)) == nil)
+}
+
+@Test func aWholeSectionReadSkipsAKeyTheDeviceSetsToNull() throws {
+    let config = try tree(#"{"scrollWheel": {"inverted": true, "mode": "ratchet"}, "devices": {"\#(mouse)": {"scrollWheel": {"inverted": null, "smartShiftThreshold": 20}}}}"#)
+    let section = config.resolved(["scrollWheel"], in: device(mouse)) as? [String: Any]
+    // A null reads as absent (Kit decodes it as such), so the top level's value stays.
+    #expect(section?["inverted"] as? Bool == true)
+    #expect(section?["mode"] as? String == "ratchet")
+    #expect(section?["smartShiftThreshold"] as? Int == 20)
+    let kit = try decode(config).forDevice(mouse).scrollWheel
+    #expect(kit?.inverted == true && kit?.smartShiftThreshold == 20)
+    #expect(config.resolvedBool(["scrollWheel", "inverted"], in: device(mouse)) == true)
+    #expect(!config.isOverridden(["scrollWheel", "inverted"], in: device(mouse)))
+}
+
+@Test func theMixedCaseShadowSurvivesTheReplayOfARemovalOntoTheFile() throws {
+    let file = try tree(#"{"devices": {"\#(mouse.uppercased())": {"dpi": 1600}, "\#(mouse)": {"dpi": 1200}}}"#)
+    var edited = file
+    edited.set(nil, at: ["dpi"], in: device(mouse))
+    var saved = file
+    saved.apply(file.changes(to: edited))
+    #expect(try decode(saved).forDevice(mouse).dpi == (try decode(ConfigTree()).forDevice(mouse).dpi))
+    #expect(saved.resolvedInt(["dpi"], in: device(mouse)) == nil)
+}
+
+@Test func mouseDefaultOnAMouseWhileAllMiceBindsTheButtonIsWrittenAsDefault() throws {
+    // The oracle is `Config.forDevice`: Mouse Default on a mouse must resolve to no binding, so the
+    // daemon clicks natively there, while "Same as All Mice" (the key removed) inherits.
+    var config = try tree(#"{"buttons": {"back": "mute"}, "devices": {"\#(mouse)": {"name": "MX", "buttons": {"back": "launchpad"}}}}"#)
+    let d = device(mouse)
+    func action() throws -> Action? { if case .action(let a)? = try decode(config).forDevice(mouse).bindings[0x0053] { a } else { nil } }
+    #expect(try action() == Action.named["launchpad"])
+
+    config.bind("back", to: .mouseDefault, in: d)
+    #expect(config.string(["devices", mouse, "buttons", "back"]) == "default")
+    #expect(try decode(config).forDevice(mouse).bindings[0x0053] == nil)
+    #expect(try decode(config).forDevice(nil).bindings[0x0053] != nil)
+    #expect(config.binding("back", in: d) == .mouseDefault)
+    #expect(config.isOverridden(["buttons", "back"], in: d))
+    #expect(config.resolved(["buttons", "back"], in: d) == nil)
+    #expect(config.resolvedBinding("back", in: d) == .standard)
+    #expect(config.scopedButton("back", in: d).own == .mouseDefault)
+    #expect(config.scopedButton("back", in: d).directions.isEmpty)
+    #expect(config.binding("back") == .named("mute"))
+
+    // Same as All Mice removes the key, and the mouse follows All Mice again.
+    config.bind("back", to: .standard, in: d)
+    #expect(try action() == Action.named["mute"])
+    #expect(!config.isOverridden(["buttons", "back"], in: d))
+
+    // Under All Mice, Mouse Default is no key at all, never a "default" value.
+    config.bind("back", to: .mouseDefault)
+    #expect(!config.contains(["buttons", "back"]))
+    config.bind("forward", to: .mouseDefault)
+    #expect(!config.contains(["buttons", "forward"]))
+}
+
+@Test func mouseDefaultOnAMouseWorksWithAnotherSpellingAndAnUpperCaseEntry() throws {
+    var config = try tree(#"{"buttons": {"back": "mute"}, "devices": {"\#(mouse.uppercased())": {"name": "MX", "buttons": {"0x0053": "launchpad"}}}}"#)
+    let d = device(mouse)
+    config.bind("back", to: .mouseDefault, in: d)
+    #expect(config.string(["devices", mouse.uppercased(), "buttons", "0x0053"]) == "default")
+    #expect(!config.contains(["devices", mouse]))
+    #expect(try decode(config).forDevice(mouse).bindings[0x0053] == nil)
+    #expect(config.resolved(["buttons", "back"], in: d) == nil)
+    #expect((config.resolved(["buttons"], in: d) as? [String: Any])?.isEmpty == true)
+}
+
+@Test func mouseDefaultOnAMouseThenAGestureStartsWithAClickThatDoesNothing() throws {
+    var config = try tree(#"{"buttons": {"back": "mute"}}"#)
+    let d = device(mouse)
+    config.bind("back", to: .mouseDefault, in: d)
+    config.bind("back", to: .gesture, in: d)
+    #expect(config.string(["devices", mouse, "buttons", "back", "click"]) == "none")
+    let kit = try decode(config).forDevice(mouse)
+    guard case .gesture(let gesture)? = kit.bindings[0x0053] else { Issue.record("gesture"); return }
+    #expect(gesture.click == Action.none)
+}
+
+@Test func mouseDefaultOverAWiderGestureThenHoldAndMoveInheritsTheGestureWhole() throws {
+    // Writing {"click": "none"} would keep All Mice's directions but lose its click; removing the key
+    // gives the mouse the whole gesture, as Same as All Mice does.
+    let json = #"{"buttons": {"back": {"click": "mute", "up": "missionControl"}}}"#
+    var config = try tree(json)
+    let d = device(mouse)
+    config.bind("back", to: .mouseDefault, in: d)
+    #expect(try decode(config).forDevice(mouse).bindings[0x0053] == nil)
+    config.bind("back", to: .gesture, in: d)
+    #expect(!config.contains(["devices"]))
+    let kit = try #require(try kitGesture(config, mouse, cid: 0x0053))
+    #expect(kit.click == Action.named["mute"] && kit.up == Action.named["missionControl"])
+    #expect(config.binding("back", in: d) == .standard)
+
+    var app = try tree(json)
+    app.bindInApp("com.example.x", button: "back", to: .mouseDefault)
+    app.bindInApp("com.example.x", button: "back", to: .gesture)
+    #expect(!app.hasApp("com.example.x"))
+}
+
+// MARK: Several spellings of one button
+
+/// The mouse's binding for a control as Kit resolves it: an action's name, "gesture", or nil.
+private func kitBinding(_ config: ConfigTree, _ cid: UInt16 = 0x0053, app: String? = nil) throws -> String? {
+    let decoded = try decode(config)
+    let binding = if let app { decoded.forDevice(mouse).settings(forApp: app)?.bindings[cid] } else { decoded.forDevice(mouse).bindings[cid] }
+    switch binding {
+    case .action(let action)?: return Action.named.first { $0.value == action }?.key
+    case .gesture?: return "gesture"
+    case nil: return nil
+    }
+}
+
+@Test func aMouseWithTwoSpellingsOfAButtonIsReadAsKitReadsIt() throws {
+    // Sorted, "0x0053" comes before "53": the last decides, and it says Mouse Default.
+    let d = device(mouse)
+    let config = try tree(#"{"buttons": {"back": "mute"}, "devices": {"\#(mouse)": {"buttons": {"53": "default", "0x0053": "launchpad"}}}}"#)
+    #expect(try kitBinding(config) == nil)
+    #expect(config.binding("back", in: d) == .mouseDefault)
+    #expect(config.resolvedBinding("back", in: d) == .standard)
+    #expect(config.scopedButton("back", in: d).own == .mouseDefault)
+    // The other order: the binding is last.
+    let bound = try tree(#"{"buttons": {"back": "mute"}, "devices": {"\#(mouse)": {"buttons": {"back": "launchpad", "0x0053": "default"}}}}"#)
+    #expect(try kitBinding(bound) == "launchpad")
+    #expect(bound.binding("back", in: d) == .named("launchpad"))
+}
+
+@Test func givingAButtonBackRemovesEverySpellingSoTheWiderBindingApplies() throws {
+    let d = device(mouse)
+    for buttons in [#"{"back": "default", "0x0053": "launchpad"}"#, #"{"53": "default", "0x0053": "launchpad"}"#,
+                    #"{"0x0053": "launchpad", "back": "showDesktop", "0x53": "default"}"#] {
+        var config = try tree(#"{"buttons": {"back": "mute"}, "devices": {"\#(mouse)": {"name": "MX", "buttons": \#(buttons)}}}"#)
+        config.bind("back", to: .standard, in: d)
+        #expect(try kitBinding(config) == "mute", "\(buttons)")
+        #expect(!config.contains(["devices"]), "\(buttons)")
+    }
+}
+
+@Test func aButtonChosenOnAMouseWithTwoSpellingsLandsWhereKitReadsIt() throws {
+    let d = device(mouse)
+    var config = try tree(#"{"buttons": {"back": "mute"}, "devices": {"\#(mouse)": {"name": "MX", "buttons": {"53": "default", "0x0053": "launchpad"}}}}"#)
+    config.bind("back", to: .named("showDesktop"), in: d)
+    #expect(try kitBinding(config) == "showDesktop")
+    #expect(config.binding("back", in: d) == .named("showDesktop"))
+    config.bind("back", to: .mouseDefault, in: d)
+    #expect(try kitBinding(config) == nil)
+    #expect(config.binding("back", in: d) == .mouseDefault)
+}
+
+@Test func aGestureOnAMouseWithTwoSpellingsIsEditedAndRemovedAsKitReadsIt() throws {
+    let d = device(mouse)
+    var config = try tree(#"{"devices": {"\#(mouse)": {"name": "MX", "buttons": {"0x0053": {"up": "mute"}, "back": {"down": "launchpad"}}}}}"#)
+    // Kit keeps "back" (last in sorted order); Settings reads its directions, not the hex key's.
+    #expect(config.gestureBinding("back", "down", in: d) == .named("launchpad"))
+    #expect(config.gestureBinding("back", "up", in: d) == .standard)
+    let before = try #require(try kitGesture(config, mouse, cid: 0x0053))
+    #expect(before.down == Action.named["launchpad"] && before.up == Action.none)
+    config.bind("back", direction: "down", to: .standard, in: d)
+    // The last direction of the binding Kit reads: every spelling goes with it.
+    #expect(!config.contains(["devices"]))
+    #expect(try kitBinding(config) == nil)
+}
+
+@Test func anAppWithTwoSpellingsOfAButtonIsReadAndGivenBackAsKitReadsIt() throws {
+    let app = ConfigTree.appScope("com.example.x")
+    var config = try tree(#"{"buttons": {"back": "mute"}, "apps": {"com.example.x": {"buttons": {"back": "default", "0x0053": "launchpad"}}}}"#)
+    #expect(config.binding("back", in: app) == .mouseDefault)
+    let settings = try #require(try decode(config).settings(forApp: "com.example.x"))
+    #expect(settings.bindings[0x0053] == nil && settings.buttons.contains(0x0053))
+    config.bindInApp("com.example.x", button: "back", to: .standard)
+    #expect(!config.hasApp("com.example.x"))
+}
+
+@Test func mouseDefaultInAnAppIsTheAppsOwnValueAndReadsAsSet() throws {
+    var config = try tree(#"{"buttons": {"back": "mute"}}"#)
+    let app = ConfigTree.appScope("com.example.x")
+    config.bindInApp("com.example.x", button: "back", to: .mouseDefault)
+    #expect(config.string(["apps", "com.example.x", "buttons", "back"]) == "default")
+    #expect(config.binding("back", in: app) == .mouseDefault)
+    #expect(config.isOverridden(["buttons", "back"], in: app))
+    #expect(config.appButton("com.example.x", button: "back").own == .mouseDefault)
+    #expect(config.appSummary("com.example.x") == "1 button changed")
+    // Kit: native in the app while the global scope binds the button.
+    let decoded = try decode(config)
+    let settings = try #require(decoded.settings(forApp: "com.example.x"))
+    #expect(settings.bindings[0x0053] == nil && settings.buttons.contains(0x0053))
+    #expect(decoded.global.bindings[0x0053] != nil)
+    // A gesture there starts with a click that does nothing, not "default".
+    config.bindInApp("com.example.x", button: "back", to: .gesture)
+    #expect(config.string(["apps", "com.example.x", "buttons", "back", "click"]) == "none")
+    config.bindInApp("com.example.x", button: "back", to: .mouseDefault)
+    config.bindInApp("com.example.x", button: "back", to: .standard)
+    #expect(!config.hasApp("com.example.x"))
 }

@@ -11,6 +11,8 @@ import PureMouseAppSupport
 /// `PUREMOUSE_DEV_SHORTCUT=<button>` opens that button's shortcut editor popover.
 /// `PUREMOUSE_DEV_SHEET=<name>` opens a sheet: `presets` (Mouse › Pointer) through a `ShowRequest`,
 /// or a sheet on the pane shown (`DevSheet`).
+/// `PUREMOUSE_DEV_MOUSE=<device key>` edits that mouse's settings, as the Mouse pop-up would
+/// (`SettingsWindowController.init`); `PUREMOUSE_DEV_OTHERS=1` opens Buttons' "Other controls".
 /// `PUREMOUSE_DEV_CAPTURE=<file.png>` saves the windows to that file and quits (`DevCapture`).
 /// `PUREMOUSE_DEV_AX_DUMP=1` prints every control's accessibility role, label and size for each
 /// tab and segment, or for what the hooks above open, and quits (`DevAXDump`).

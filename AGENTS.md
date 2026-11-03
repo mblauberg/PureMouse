@@ -37,7 +37,8 @@ one. This file covers how to work on it safely.
   Debug builds of the helper take `PUREMOUSE_DEV_PANE=<pane>` (a tab, `general`, `mouse`, `apps`,
   `about`, or a Mouse segment, `buttons`, `scrolling`, `pointer`), `PUREMOUSE_DEV_APPEARANCE`,
   `PUREMOUSE_DEV_PICKER=<button>`, `PUREMOUSE_DEV_SHORTCUT=<button>` (Mouse › Buttons, or with
-  `PUREMOUSE_DEV_APP` the app sheet's editor popover), `PUREMOUSE_DEV_APP=<bundle id>` (Apps
+  `PUREMOUSE_DEV_APP` the app sheet's editor popover), `PUREMOUSE_DEV_MOUSE=<device key>|all` (chooses that mouse on Mouse, or All Mice;
+  `PUREMOUSE_DEV_OTHERS=1` opens Buttons' Other controls) and `PUREMOUSE_DEV_APP=<bundle id>` (Apps
   tab; adds the app without writing and opens its sheet) and `PUREMOUSE_DEV_SHEET=<name>` (a
   sheet: `presets` on Mouse › Pointer, or `advanced` on the pane shown, `DevSheet`) for screenshots
   (`Sources/PureMouseSettingsUI/DevHooks.swift`), and `PUREMOUSE_DEV_CAPTURE=<file.png>` saves its
@@ -258,8 +259,9 @@ one. This file covers how to work on it safely.
 - The Apps pane writes only `apps.<id>` keys (`AppSettings.swift`): each control's own key, removed
   for "Same as Everywhere" (an emptied app entry is pruned); an added app is not written until a
   setting is chosen (its row says so until Settings closes). Each app opens in a sheet (`AppSheet`)
-  over the list; a value it leaves unset shows what applies everywhere, dimmed, with "Same as
-  Everywhere" (`InheritedValue`, the one presentation for any inherited value), and inside it the
+  over the list; a value it leaves unset looks exactly as it does everywhere, and one it sets says "Set for
+  this app." with a "Use Everywhere Setting" link (`InheritedValue`, the one type for any inherited
+  value; the caption is for overrides only), and inside it the
   shortcut and command editors are popovers (`EditorPresentation`, read by `ThumbWheelRows` and the
   button rows), since no sheet opens from a sheet. Names are looked up without icons
   (`AppIdentities`); an icon loads when its frame meets the scroll view's visible bounds (`AppIcon`;
@@ -277,9 +279,31 @@ one. This file covers how to work on it safely.
   `preferredContentSize` without telling the tab controller, so `SettingsTabs.refit()` copies it
   across (through `MouseTab.fit()`, which adds the strip). Advanced settings sit behind a pane's
   footer (`PaneFooter`: Restore Defaults, Advanced…) in an `AdvancedSheet`, which never opens
-  another sheet. A control the mouse lacks is hidden per control from the primary mouse's
-  reported capabilities (`ControlAvailability`; unknown or no mouse shows it, a value already set
-  keeps it with a caption), and Scrolling's rows from `ScrollingLayout`.
+  another sheet. A control the mouse lacks is hidden per control from the mice's
+  reported capabilities (`ControlAvailability`, over `MouseScope.deciding`: the chosen mouse, or for
+  All Mice every known mouse once all are connected; unknown or no mouse shows it, a value already
+  set keeps it with a caption), and Scrolling's rows from `ScrollingLayout`.
+- The Mouse tab's pop-up (`MousePopUp`, `AppModel.knownMice`, `MouseScope`) chooses the scope the
+  panes edit (`AppModel.scope`, `scopeTarget`, remembered per user in defaults; All Mice is the
+  default and the only scope without the pop-up). Panes read `resolved` and write through
+  `model.update(in: model.scopeTarget)`; a row uses its normal control in every scope. A row the mouse
+  sets itself gets an `InheritedOverride` note from `InheritedValue.note` (`RowLabel`/`DisclosureLabel`
+  `note:`, `.overridable`): the caption "Set for this mouse." with an inline "Use All Mice Setting"
+  link, the same command in its context menu and as a VoiceOver action, and its help in a tooltip.
+  A row that inherits shows no mark, no dimming and no hidden trailing slot (`InheritedReset` is
+  gone: a slider track never moves between scopes). Pop-ups keep "Same as All Mice (x)" as their
+  first entry. The one explanation, "Settings you don't change follow All Mice.", sits in the
+  mouse pop-up's menu (`MousePopUp.followNote`). `ScopeEditing.swift` holds the per-section helpers (`removeOverrides`,
+  `restore…Defaults(in:)`, smooth scrolling, feel, presets). A mouse's or an app's button row chooses
+  Mouse Default as its own value, `"default"` (`Config.Binding.nativeValue`, `ButtonAction.mouseDefault`),
+  beside "Same as …", which removes the key; under All Mice it removes the key. It is offered on a mouse or
+  in an app only for controls in `Config.nativeBehaviour(of:)`, the one table the daemon also performs
+  from; `buttonKey`/`removeButton` (`ConfigKeys.swift`) follow Kit's alias rule. Rows are `RowStanding`
+  (`InheritedValue.swift`): the note, the link and the spoken ", same as All Mice" come from one answer. Reset All and the status menu stay
+  global (`setDPI` without a target writes the top level); Settings' Pointer pane passes the mouse,
+  and Find by Pressing and "use configured DPI" carry its key (`Control.device`,
+  `Control.capture.device`), a press selecting that mouse's scope. Do not read `primaryDevice` in a
+  pane: `devices(in:)`, `liveDevice(in:)` and `primaryDevice(in:)` take the scope.
 - Settings notices (config error, unsaved change, status too new, PureMouse off, paused, Logi
   Options+, Accessibility on the panes that need it) come from `BannerPlan.items`, in that order.
   A pane shows only the first as its banner, with "N more notices" opening General, whose Status
@@ -337,7 +361,10 @@ one. This file covers how to work on it safely.
   `Config.AppSettings`); only `buttons`, `thumbWheel` (including `reversed`, not `inverted`) and
   `smoothScroll` are per-app. The app is looked up only when some app sets that section (`Session.appButtons`,
   `appThumbWheel`, `appProfiles`): the frontmost app at each press of a control some app names
-  (`AppSettings.buttons`), the app under the pointer when a
+  (`AppSettings.buttons`; an app's `"default"` (`Config.Binding.nativeValue`) is in it with no entry in
+  `bindings`, so that press gets `nil`, which performs the mouse's own behaviour (`Config.nativeBehaviour(of:)`:
+  a native click, the wheel-mode switch or DPI cycling), and frees the pointer for that press if the control
+  is a gesture elsewhere (`Session.pointerFree`)), the app under the pointer when a
   scroll burst (`ScrollEngine.profileForBurst`) or thumb-wheel movement starts. `ForegroundApp`
   does the lookups, AppKit-free and on demand; the Universal Control work reuses it. Every control
   bound in any scope is diverted; pressed where nothing binds it, the wheel press, back and

@@ -16,17 +16,24 @@ struct PickerEntry: Identifiable, Equatable {
     var symbol: String?
 
     /// The picker's entries, in order. Gesture directions get neither Mouse Default nor Hold and
-    /// Move. In an app, `inherited` (what applies elsewhere, and where from) adds the entry that
-    /// removes the app's own binding, worded by its source. `haptics`: whether to list the haptic waveforms (`ControlAvailability`).
+    /// Move. On a mouse or in an app, `inherited` (what applies elsewhere, and where from) adds the
+    /// entry that removes the own binding, worded by its source, and Mouse Default then writes
+    /// `"default"` as the scope's own value; but not while the wider scope already is Mouse Default
+    /// (that is "Same as …" then), unless it is `current`. `haptics`: whether to list the haptic
+    /// waveforms (`ControlAvailability`).
     static func all(allowsDefault: Bool, allowsGesture: Bool, inherited: InheritedValue<String>? = nil,
-                    haptics: Bool = true) -> [PickerEntry] {
+                    haptics: Bool = true, current: ButtonAction = .standard) -> [PickerEntry] {
         var entries: [PickerEntry] = []
         if let inherited {
             entries.append(PickerEntry(id: "inherit", label: inherited.entry, detail: "(\(inherited.inherited))", group: nil,
                                        kind: .set(.standard), symbol: "globe"))
         }
-        if allowsDefault {
-            entries.append(PickerEntry(id: "default", label: ButtonAction.standard.label, group: nil, kind: .set(.standard)))
+        let widerIsDefault = inherited?.inherited == ButtonAction.standard.label
+        if allowsDefault, !widerIsDefault || current == .mouseDefault {
+            // Where something wider applies, Mouse Default is a value of its own ("default") and
+            // "Same as …" above is the entry that removes the key; at the top level they are one.
+            entries.append(PickerEntry(id: "default", label: ButtonAction.standard.label, group: nil,
+                                       kind: .set(inherited == nil ? .standard : .mouseDefault)))
         }
         entries.append(PickerEntry(id: "none", label: "Do Nothing", group: nil, kind: .set(.named("none")),
                                    symbol: ActionCatalog.symbol(for: "none")))
@@ -54,6 +61,16 @@ struct PickerEntry: Identifiable, Equatable {
     }
 
     var isHaptic: Bool { group == ActionCatalog.hapticGroup }
+
+    /// Whether a mouse or an app may choose Mouse Default for the button `key`: only where the mouse
+    /// has a behaviour of its own to hand back (`Config.nativeBehaviour(of:)`). Under All Mice the
+    /// choice is just an unbound button, so it is always there; `current` keeps a hand-edited
+    /// "default" on another control in view.
+    static func offersMouseDefault(for key: String, inMouseOrApp: Bool, current: ButtonAction = .standard) -> Bool {
+        guard inMouseOrApp else { return true }
+        if current == .mouseDefault { return true }
+        return NamedButton.cid(forKey: key).flatMap(Config.nativeBehaviour(of:)) != nil
+    }
 
     func matches(_ action: ButtonAction) -> Bool {
         switch (kind, action) {
@@ -364,8 +381,7 @@ struct SearchField: NSViewRepresentable {
 }
 
 /// The button showing a binding, drawn as the form's own pop-up menus are (natural width,
-/// trailing, the system chevrons; Mouse Default in primary like any other choice, only an app's
-/// inherited value dimmed). It opens the searchable
+/// trailing, the system chevrons; every choice in primary, an inherited one too). It opens the searchable
 /// picker, which a `Picker` cannot hold.
 struct ActionButton: View {
     @Environment(AppModel.self) private var model
@@ -375,18 +391,27 @@ struct ActionButton: View {
     @Binding var isPresented: Bool
     let choose: (PickerEntry) -> Void
     var accessibilityName: String
-    /// In an app: what applies elsewhere, which `.standard` shows dimmed (`InheritedValue`).
+    /// In an app or on a mouse: what applies elsewhere, which `.standard` shows (`InheritedValue`).
     var sameAsEverywhere: String?
     /// `sameAsEverywhere` as VoiceOver says it (a shortcut in words); the label itself when nil.
     var spokenEverywhere: String?
+    /// The wider scope `sameAsEverywhere` comes from: Everywhere for an app, All Mice for a mouse.
+    var source = InheritedScope.everywhere
+    /// The scope whose mice decide whether the haptic waveforms are listed.
+    var scope = ConfigScope.global
     @State private var openedFromKeyboard = false
 
-    /// An app's binding as its row shows it: `.standard` leaves it to `everywhere`.
-    static func inherited(_ action: ButtonAction, everywhere: String) -> InheritedValue<String> {
-        InheritedValue(own: action == .standard ? nil : action.label, inherited: everywhere, source: InheritedScope.everywhere)
+    /// A scope's binding as its row shows it: `.standard` leaves it to `everywhere`.
+    static func inherited(_ action: ButtonAction, everywhere: String, source: String = InheritedScope.everywhere) -> InheritedValue<String> {
+        InheritedValue(own: action == .standard ? nil : action.label, inherited: everywhere, source: source)
     }
 
-    private var inherited: InheritedValue<String>? { sameAsEverywhere.map { Self.inherited(action, everywhere: $0) } }
+    /// A gesture direction as its row shows it: the scope's own, else the wider gesture's (or nothing).
+    static func inherited(_ direction: AppButton.Direction, source: String) -> InheritedValue<String> {
+        inherited(direction.own, everywhere: direction.inherited.label, source: source)
+    }
+
+    private var inherited: InheritedValue<String>? { sameAsEverywhere.map { Self.inherited(action, everywhere: $0, source: source) } }
 
     /// Longer labels (a command) are shortened in the middle to this many characters.
     static let labelLimit = 32
@@ -395,16 +420,17 @@ struct ActionButton: View {
 
     /// What VoiceOver reads as the value: a shortcut in words ("Shift Command 4"), not glyphs, and
     /// an inherited one with its source ("Mission Control, same as Everywhere").
-    static func spokenValue(for action: ButtonAction, everywhere: String?, spokenEverywhere: String?) -> String {
+    static func spokenValue(for action: ButtonAction, everywhere: String?, spokenEverywhere: String?,
+                            source: String = InheritedScope.everywhere) -> String {
         guard let everywhere else { return action.spokenLabel }
         let own = action == .standard ? nil : action.spokenLabel
-        return InheritedValue(own: own, inherited: spokenEverywhere ?? everywhere, source: InheritedScope.everywhere).spoken
+        return InheritedValue(own: own, inherited: spokenEverywhere ?? everywhere, source: source).spoken
     }
 
     /// The haptic waveforms, unless the mouse is known to have no motor; a bound one still shows.
-    private var offersHaptics: Bool { Self.offersHaptics(for: action, devices: model.capabilityDevices) }
+    private var offersHaptics: Bool { Self.offersHaptics(for: action, devices: model.capabilityDevices(in: scope)) }
 
-    /// Whether the picker lists the haptic waveforms for `devices` (`AppModel.capabilityDevices`):
+    /// Whether the picker lists the haptic waveforms for `devices` (`AppModel.capabilityDevices(in:)`):
     /// unless one is known to lack the motor, or when `action` is a waveform already bound.
     static func offersHaptics(for action: ButtonAction, devices: [Status.Device]) -> Bool {
         let bound = if case .haptic = action { true } else { false }
@@ -416,17 +442,17 @@ struct ActionButton: View {
             openedFromKeyboard = NSApp.currentEvent?.type == .keyDown
             isPresented = true
         } label: {
-            PopUpLabel(text: Self.shortened(label), style: inherited?.style ?? .primary)
+            PopUpLabel(text: Self.shortened(label))
         }
         .fixedSize()
         .help(Self.tooltip(for: action))
         .accessibilityLabel(accessibilityName)
-        .accessibilityValue(Self.spokenValue(for: action, everywhere: sameAsEverywhere, spokenEverywhere: spokenEverywhere))
+        .accessibilityValue(Self.spokenValue(for: action, everywhere: sameAsEverywhere, spokenEverywhere: spokenEverywhere, source: source))
         .accessibilityHint("Opens the list of actions")
         .popover(isPresented: $isPresented, arrowEdge: .bottom) {
             ActionPicker(current: action,
                          entries: PickerEntry.all(allowsDefault: allowsDefault, allowsGesture: allowsGesture,
-                                                  inherited: inherited, haptics: offersHaptics),
+                                                  inherited: inherited, haptics: offersHaptics, current: action),
                          focusSearch: openedFromKeyboard) { entry in
                 isPresented = false
                 choose(entry)

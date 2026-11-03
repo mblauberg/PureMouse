@@ -211,7 +211,7 @@ private struct GeneralAdvancedSheet: View {
                 .confirmationDialog("Reset all settings?", isPresented: $confirmingReset) {
                     Button("Reset All Settings") { model.resetAll() }
                 } message: {
-                    Text("Buttons, scrolling and pointer settings return to the mouse's defaults. The current config file is saved as \(model.backupName), replacing any earlier backup. Open at login and the menu bar icon don't change.")
+                    Text("This resets every mouse and every app, not only the mouse chosen on Mouse. Buttons, scrolling and pointer settings return to the mouse's defaults. The current config file is saved as \(model.backupName), replacing any earlier backup. Open at login and the menu bar icon don't change.")
                 }
         }
     }

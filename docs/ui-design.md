@@ -32,6 +32,21 @@ answering a question people have, and a good default means most people never tou
   tab. The window title is the tab's name. Minimise and zoom are dimmed; the window has no resize
   handle and sizes to the pane, never taller than the screen.
 - It reopens on the last tab and segment (`SettingsSelection`) and remembers its position.
+- Mouse's header strip has a leading slot for the mouse pop-up (`MousePopUp`: All Mice, then each
+  known mouse), shown with two or more mice known or any `devices` entry. Its closed text is the
+  mouse's name, truncated at the tail by the width the strip leaves it (one line, never over the
+  centred segments). The Apps note ("Apps are the same for every mouse.") is the
+  pop-up's last menu item, a tooltip and its accessibility hint rather than a line under it: a line
+  costs 15 pt in a strip every segment shares, and Scrolling has 6 pt to spare. "Settings you don't
+  change follow All Mice." is the menu's other note, said once. A pane under a chosen mouse
+  (and an app's sheet) marks changes, not inheritance (`InheritedValue`): a row that inherits looks
+  exactly as it does under All Mice, with the same control, full contrast and its usual help caption;
+  a row with its own value adds the line "Set for this mouse." ("Set for this app.") and an inline
+  link, "Use All Mice Setting" ("Use Everywhere Setting"), moves its help to the tooltip, and offers
+  the same command in its context menu and as a VoiceOver action. No row reserves a hidden slot, so
+  every trailing control ends at the form's trailing edge and a slider track never moves between
+  scopes. A mouse's pane is never taller than the same pane under All Mice, except by that one line
+  on changed rows.
 - ⌘W closes it, and closing it quits the helper. Esc dismisses a sheet; Return takes the sheet's
   default button.
 - Nothing is placed behind the toolbar or the tab bar: no backgrounds, materials or
@@ -47,7 +62,7 @@ answering a question people have, and a good default means most people never tou
 - **One pop-up look.** Every pop-up (an action row on Buttons, the thumb wheel's Action, an app's
   "Same as Everywhere" rows) is drawn the same way (`PopUpLabel`): the value, then the up/down
   chevrons. A value left to the mouse (Mouse Default) is an ordinary enabled choice in primary
-  text; only a value an app inherits from Everywhere is dimmed. An empty state's next step is a
+  text, and so is a value inherited from a wider scope: nothing is dimmed to say so. An empty state's next step is a
   bordered push button (Add App…), as in System Settings: a grouped form draws a pull-down in a
   row borderless.
 - **Let the system draw.** No explicit font sizes, control widths or heights, literal corner radii,
@@ -100,8 +115,9 @@ Each level has one mechanism, and each label says what it reveals.
   elsewhere (keyboard shortcut, shell command) opens as a popover anchored to its row.
 - Every advanced control has a safe default that the pane's Restore Defaults covers.
 - **Hide or dim.** Dim a row when a switch above turns its feature off. Hide rows that do not apply
-  to the current mode or mouse. A control is hidden for the mouse only when the primary mouse,
-  online with PureMouse running, reports every capability it needs as false; unknown counts as
+  to the current mode or mouse. A control is hidden for the mouse only when the mice it describes (the chosen mouse; for All Mice
+  every known mouse, once all are connected), online with PureMouse running, report every capability
+  it needs as false (`MouseScope.deciding`); unknown counts as
   available, and with no mouse known every control shows. A control the config already sets stays,
   captioned "Not supported by this mouse." (`ControlAvailability`: Scrolling's rows from
   `ScrollingLayout`, Pointer's from `PointerLayout`, an app's thumb wheel and the picker's
@@ -167,7 +183,8 @@ Each level has one mechanism, and each label says what it reveals.
   reachable by Tab and by Full Keyboard Access, has a distinct accessibility label, and is at
   least 20 × 20 pt. Tooltips are under 75 characters and never repeat the control's name.
 - **Fit.** Each default view fits within 600 pt of content height at the 600 pt window width,
-  with one-mouse and two-mouse fixtures. A fresh install shows no advanced content.
+  with one-mouse and two-mouse fixtures (and with a mouse chosen). A fresh install shows no advanced
+  content.
 - **Test matrix** for a UI change: light and dark; Increase Contrast; Reduce Transparency; the
   Liquid Glass slider at both ends (clear and tinted); Reduce Motion; Show Borders; Full Keyboard
   Access; VoiceOver on every symbol-only control. Fix legibility with system settings, never by

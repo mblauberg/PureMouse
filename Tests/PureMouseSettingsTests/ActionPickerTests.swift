@@ -1,3 +1,4 @@
+import Foundation
 import PureMouseAppSupport
 import PureMouseKit
 import Testing
@@ -11,6 +12,83 @@ import Testing
     #expect(entries.first?.detail == "(Mission Control)")
     #expect(entries.first?.matches(.standard) == true)
     #expect(!entries.contains { $0.id == "default" })
+}
+
+// MARK: Mouse Default beside "Same as …"
+
+private func entry(_ id: String, _ entries: [PickerEntry]) -> PickerEntry? { entries.first { $0.id == id } }
+
+@MainActor @Test func aMouseOrAppPickerOffersMouseDefaultAsAValueOfItsOwnBesideSameAsEverywhere() {
+    let inherited = ActionButton.inherited(.standard, everywhere: "Mute", source: InheritedScope.allMice)
+    let entries = PickerEntry.all(allowsDefault: true, allowsGesture: true, inherited: inherited)
+    let same = entry("inherit", entries)
+    let native = entry("default", entries)
+    #expect(same?.label == "Same as All Mice" && same?.detail == "(Mute)")
+    #expect(native?.label == "Mouse Default")
+    // Two choices that write different things: one removes the key, the other writes "default".
+    #expect(same?.kind == .set(.standard) && native?.kind == .set(.mouseDefault))
+    #expect(same?.matches(.standard) == true && same?.matches(.mouseDefault) == false)
+    #expect(native?.matches(.mouseDefault) == true && native?.matches(.standard) == false)
+    // Under All Mice there is nothing to inherit: Mouse Default is the removed key.
+    #expect(entry("default", PickerEntry.all(allowsDefault: true, allowsGesture: true))?.kind == .set(.standard))
+    // A gesture direction offers neither.
+    #expect(entry("default", PickerEntry.all(allowsDefault: false, allowsGesture: false, inherited: inherited)) == nil)
+}
+
+@MainActor @Test func aRowWhoseOwnValueIsMouseDefaultShowsItAndSaysItIsSet() {
+    let mouse = ActionButton.inherited(.mouseDefault, everywhere: "Mute", source: InheritedScope.allMice)
+    #expect(mouse.effective == "Mouse Default" && mouse.caption == "Set for this mouse.")
+    let app = ActionButton.inherited(.mouseDefault, everywhere: "Mute")
+    #expect(app.effective == "Mouse Default" && app.caption == "Set for this app.")
+    #expect(ActionButton.spokenValue(for: .mouseDefault, everywhere: "Mute", spokenEverywhere: nil) == "Mouse Default")
+    #expect(ActionButton.inherited(.standard, everywhere: "Mute").caption == nil)
+}
+
+@MainActor @Test func theMouseButtonsPaneWritesTheChoiceItOffers() throws {
+    // ButtonsPane applies a picked entry with `bind(_:to:in:)` in the mouse's scope.
+    let mouse = try #require(ConfigScope.device("mb03400000000"))
+    var tree = ConfigTree(["buttons": ["back": "mute"]])
+    let entries = PickerEntry.all(allowsDefault: true, allowsGesture: true,
+                                  inherited: ActionButton.inherited(.standard, everywhere: "Mute", source: InheritedScope.allMice))
+    guard case .set(let native) = entry("default", entries)?.kind, case .set(let same) = entry("inherit", entries)?.kind else {
+        Issue.record("entries"); return
+    }
+    tree.bind("back", to: native, in: mouse)
+    #expect(tree.string(["devices", "mb03400000000", "buttons", "back"]) == "default")
+    tree.bind("back", to: same, in: mouse)
+    #expect(!tree.contains(["devices"]))
+    #expect(tree.string(["buttons", "back"]) == "mute")
+    // Under All Mice, Mouse Default removes the key.
+    guard case .set(let global)? = entry("default", PickerEntry.all(allowsDefault: true, allowsGesture: true))?.kind else {
+        Issue.record("global"); return
+    }
+    tree.bind("back", to: global)
+    #expect(!tree.contains(["buttons", "back"]))
+}
+
+@MainActor @Test func theAppSheetWritesTheChoiceItOffers() throws {
+    // AppSheet applies a picked entry with `bindInApp(_:button:to:)`.
+    var tree = ConfigTree(["buttons": ["back": "mute"]])
+    let entries = PickerEntry.all(allowsDefault: true, allowsGesture: true,
+                                  inherited: ActionButton.inherited(.standard, everywhere: "Mute"))
+    guard case .set(let native) = entry("default", entries)?.kind, case .set(let same) = entry("inherit", entries)?.kind else {
+        Issue.record("entries"); return
+    }
+    tree.bindInApp("com.example.x", button: "back", to: native)
+    #expect(tree.string(["apps", "com.example.x", "buttons", "back"]) == "default")
+    tree.bindInApp("com.example.x", button: "back", to: same)
+    #expect(!tree.hasApp("com.example.x"))
+}
+
+@Test func bothPanesOfferMouseDefaultOnAButtonRowAndNotOnADirection() throws {
+    let ui = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appending(path: "Sources/PureMouseSettingsUI")
+    for file in ["ButtonsPane.swift", "AppSheet.swift"] {
+        let text = try String(contentsOf: ui.appending(path: file), encoding: .utf8)
+        // The button rows ask the one rule (`PickerEntry.offersMouseDefault`, tested by control in OverrideRowTests).
+        #expect(text.contains("allowsDefault: !isDirection && PickerEntry.offersMouseDefault("), "\(file)")
+        #expect(!text.contains("allowsDefault: false"), "\(file)")
+    }
 }
 
 @Test func thePickerListsEveryHapticWaveformInWords() {

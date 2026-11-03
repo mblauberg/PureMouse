@@ -12,23 +12,49 @@ struct RowLabel: View {
     var mouseDefault = false
     /// A control the mouse lacks, kept because its value is set: says so after the help.
     var availability = ControlAvailability.available
+    /// The scope has its own value: "Set for this mouse." and its button take the help's place, on
+    /// the same line (`View.overridable(_:help:)` makes the help the row's tooltip).
+    var note: InheritedOverride?
+    /// What VoiceOver calls the row in the note's button, where the title alone is ambiguous
+    /// (the same direction under two buttons).
+    var spokenTitle: String?
+    /// The help stays under the title beside a note: it says something the control can't (Feel's
+    /// "Custom. Adjust in Advanced." when no preset is selected).
+    var keepsHelp = false
 
     init(_ title: String, help: String? = nil, mouseDefault: Bool = false,
-         availability: ControlAvailability = .available) {
+         availability: ControlAvailability = .available, note: InheritedOverride? = nil, spokenTitle: String? = nil,
+         keepsHelp: Bool = false) {
+        self.keepsHelp = keepsHelp
+        self.spokenTitle = spokenTitle
         self.title = title
         self.help = help
         self.mouseDefault = mouseDefault
         self.availability = availability
+        self.note = note
     }
 
     static let mouseDefaultCaption = "Using the mouse's own setting."
 
+    /// The caption sentences that apply. One stands as written; two or more run together as
+    /// separate sentences, each with its full stop, so a help without one and "Not supported by
+    /// this mouse." do not merge.
+    static func caption(_ sentences: [String?]) -> String? {
+        let parts = sentences.compactMap { $0?.trimmingCharacters(in: .whitespaces).nilIfEmpty }
+        guard parts.count > 1 else { return parts.first }
+        let ends: Set<Character> = [".", "!", "?", "…"]
+        return parts.map { part in part.last.map { ends.contains($0) } == true ? part : part + "." }.joined(separator: " ")
+    }
+
+    /// The caption under the title. A changed row's help is its tooltip, so it is not here (unless `keepsHelp`).
+    var captionText: String? {
+        Self.caption([note == nil || keepsHelp ? help : nil, mouseDefault ? Self.mouseDefaultCaption : nil, availability.caption])
+    }
+
     var body: some View {
         Text(title)
-        let parts = [help, mouseDefault ? Self.mouseDefaultCaption : nil, availability.caption]
-        if let caption = parts.compactMap({ $0 }).joined(separator: " ").nilIfEmpty {
-            Text(caption)
-        }
+        if let captionText { Text(captionText) }
+        if let note { OverrideLine(note: note, subject: spokenTitle ?? title) }
     }
 }
 
@@ -37,13 +63,13 @@ struct RowLabel: View {
 /// action rows on Buttons, Scrolling and an app's sheet read alike.
 struct PopUpLabel: View {
     let text: String
-    var style: HierarchicalShapeStyle = .primary
 
     var body: some View {
         HStack(spacing: 4) {
+            // Primary, as the form's own pop-ups draw the value (a `LabeledContent` makes it secondary).
             Text(text)
                 .lineLimit(1)
-                .foregroundStyle(style)
+                .foregroundStyle(.primary)
             Image(systemName: "chevron.up.chevron.down")
                 .imageScale(.small)
                 .foregroundStyle(.secondary)
@@ -57,18 +83,19 @@ struct PopUpLabel: View {
 /// in a grouped form can draw as a borderless pull-down with a circled chevron instead.
 struct PopUpMenu<Content: View>: View {
     let text: String
-    var style: HierarchicalShapeStyle = .primary
+    /// Takes the width it is given and cuts its text with an ellipsis, rather than its own width.
+    var flexible = false
     @ViewBuilder var content: Content
 
     var body: some View {
-        Menu {
+        let menu = Menu {
             content
         } label: {
-            PopUpLabel(text: text, style: style)
+            PopUpLabel(text: text)
         }
         .menuStyle(.button)
         .menuIndicator(.hidden)
-        .fixedSize()
+        if flexible { menu } else { menu.fixedSize() }
     }
 }
 
@@ -92,12 +119,15 @@ struct ValueSlider: View {
     var availability = ControlAvailability.available
     /// The key is absent and the mouse keeps its own setting (`RowLabel.mouseDefault`).
     var mouseDefault = false
+    /// On a mouse or in an app: whether the value is its own rather than the wider scope's.
+    var standing = RowStanding.none
+    private var note: InheritedOverride? { standing.note }
 
     var body: some View {
         LabeledContent {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 EndLabeledSlider(title: spokenTitle ?? title, value: $value, range: range, low: low, high: high)
-                    .accessibilityValue(format(value))
+                    .accessibilityValue(standing.spoken(format(value)))
                     .frame(width: 200)
                 // The readout takes the room of the widest value it can show, hidden, so the
                 // slider does not shift as the digits change, and at least one shared width, so
@@ -113,8 +143,10 @@ struct ValueSlider: View {
                 .accessibilityHidden(true)
             }
         } label: {
-            RowLabel(title, help: help, mouseDefault: mouseDefault, availability: availability)
+            RowLabel(title, help: help, mouseDefault: mouseDefault, availability: availability, note: note,
+                     spokenTitle: spokenTitle)
         }
+        .overridable(note, help: help)
     }
 }
 
@@ -151,6 +183,24 @@ struct EndLabeledSlider: View {
 }
 
 extension AppModel {
+    /// A binding to a numeric key as it applies in `target`'s scope, showing `fallback` when absent.
+    /// Writes are debounced and land in that scope only.
+    func number(_ path: [String], default fallback: Double, step: Double, in target: ScopeTarget) -> Binding<Double> {
+        Binding {
+            self.config.number(path, in: target.scope, default: fallback)
+        } set: {
+            self.set(Format.snap($0, step: step), at: path, in: target, debounce: true)
+        }
+    }
+
+    /// Where a row for `paths` stands in `target`'s scope: on a mouse, own while it holds any of them
+    /// (`reset` gives them back to All Mice); nothing wider for All Mice.
+    func standing(of paths: [[String]], in target: ScopeTarget) -> RowStanding {
+        RowStanding.of(paths, in: config, scope: target.scope) { [self] in
+            update(in: target) { $0.removeOverrides(paths, in: target.scope) }
+        }
+    }
+
     /// A binding to a numeric config key, showing `fallback` when absent. Writes are debounced.
     func number(_ path: [String], default fallback: Double, step: Double) -> Binding<Double> {
         Binding {
@@ -258,33 +308,39 @@ extension AdvancedSheet where Leading == EmptyView {
 struct DisclosureLabel: View {
     let title: String
     var help: String?
+    /// The scope has its own value: its caption line follows the help (`RowLabel.note`).
+    var note: InheritedOverride?
     /// What VoiceOver calls the disclosure where the title alone names another control in the row
     /// (a gesture button's action pop-up).
     var spokenTitle: String?
     @Binding var isExpanded: Bool
 
     var body: some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() }
-        } label: {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Image(systemName: "chevron.right")
-                    .imageScale(.small)
-                    .fontWeight(.bold)
-                    .foregroundStyle(.secondary)
-                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                    if let help { Text(help).font(.subheadline).foregroundStyle(.secondary) }
+        // The note's button sits beside the disclosure button, not inside it: a button can't hold one.
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() }
+            } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Image(systemName: "chevron.right")
+                        .imageScale(.small)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                        if let help, note == nil { Text(help).font(.subheadline).foregroundStyle(.secondary) }
+                    }
                 }
+                // A line of text is 16 pt tall; the padding takes the hit target to the 20 pt minimum.
+                .padding(.vertical, 2)
+                .contentShape(Rectangle())
             }
-            // A line of text is 16 pt tall; the padding takes the hit target to the 20 pt minimum.
-            .padding(.vertical, 2)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .accessibilityLabel(spokenTitle ?? title)
+            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+            if let note { OverrideLine(note: note, subject: spokenTitle ?? title).disclosedRow() }
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(spokenTitle ?? title)
-        .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
     }
 }
 

@@ -104,7 +104,8 @@ extension ConfigTree {
             guard !Config.reservedControls.contains(cid) else { return false }
             binding = Self.binding(for: cid, in: buttons)?.value
         } else {
-            binding = buttons[name].flatMap { $0 is NSNull ? nil : $0 }
+            // A name Kit has no control for cannot be set to Mouse Default: it is skipped either way.
+            binding = buttons[name].flatMap { $0 is NSNull || Self.isNative($0) ? nil : $0 }
         }
         guard let binding else { return false }
         guard path.count >= 3 else { return true }
@@ -146,15 +147,42 @@ extension ConfigTree {
         let target = entry + path
         if value == nil {
             guard contains(target) else { return true }
-            set(nil, at: target)
-            if let rest = self[entry] as? [String: Any], rest.keys.allSatisfy({ $0 == "name" }) {
-                set(nil, at: entry)
-            }
+            removeKeepingShadow(at: target, entry: entry, name: name)
         } else {
-            if !(self[entry] is [String: Any]) { set(name ?? key, at: entry + ["name"]) }
+            if !(self[entry] is [String: Any]) { set(name ?? entryName ?? key, at: entry + ["name"]) }
             set(value, at: target)
         }
         return true
+    }
+
+    /// Whether `entry` is the spelling the decoder keeps while the file spells the same mouse
+    /// another way too (the last in sorted order): it then shadows the others.
+    func shadowsOtherSpellings(_ entry: [String]) -> Bool {
+        guard entry.count == 2, entry[0] == "devices" else { return false }
+        let spellings = (self[["devices"]] as? [String: Any] ?? [:]).keys.filter { $0.lowercased() == entry[1].lowercased() }
+        return spellings.count > 1 && spellings.max() == entry[1]
+    }
+
+    /// Removes the key at `target` inside the device entry `entry`. An entry emptied by it, or left
+    /// holding only its `name`, goes, unless it shadows another spelling of the key: Kit then keeps
+    /// this entry whole, and removing it would let the other spelling apply with every key it holds,
+    /// so a name-only entry stays in its place.
+    mutating func removeKeepingShadow(at target: [String], entry: [String], name: String? = nil) {
+        let shadows = shadowsOtherSpellings(entry)
+        set(nil, at: target)
+        if shadows, self[entry] == nil { set(name ?? entryName ?? entry[1].lowercased(), at: entry + ["name"]) }
+        pruneIfNameOnly(entry)
+    }
+
+    /// Removes a device entry that holds only its `name`, as a name says nothing without an override.
+    /// Not when the file spells the key another way too and this is the spelling the decoder keeps
+    /// (the last in sorted order): the entry then shadows the others, and removing it would let one
+    /// of them apply, with every key it holds.
+    mutating func pruneIfNameOnly(_ entry: [String]) {
+        guard entry.count == 2, entry[0] == "devices", let rest = self[entry] as? [String: Any],
+              rest.keys.allSatisfy({ $0 == "name" }) else { return }
+        if shadowsOtherSpellings(entry) { return }
+        set(nil, at: entry)
     }
 
     // MARK: Helpers
@@ -189,6 +217,11 @@ extension ConfigTree {
             node = next
         }
         return node is NSNull ? nil : node
+    }
+
+    /// Whether `value` is `"default"` (`Config.Binding.nativeValue`): no binding, the mouse's own.
+    private static func isNative(_ value: Any?) -> Bool {
+        (value as? String) == Config.Binding.nativeValue
     }
 
     /// What a gesture object looks like to the decoder: some keys, all of them directions.
@@ -246,7 +279,9 @@ extension ConfigTree {
             guard !Config.reservedControls.contains(cid) else { return nil }
             let base = global.flatMap { Self.binding(for: cid, in: $0) }?.value
             if let top = own.flatMap({ Self.binding(for: cid, in: $0) })?.value {
-                if let top = Self.isGestureShape(top), let base = Self.isGestureShape(base) {
+                if Self.isNative(top) {
+                    binding = nil  // Mouse Default: the top level's binding is cleared
+                } else if let top = Self.isGestureShape(top), let base = Self.isGestureShape(base) {
                     binding = base.merging(top) { base, top in top is NSNull ? base : top }
                 } else {
                     binding = top
@@ -254,8 +289,9 @@ extension ConfigTree {
             } else {
                 binding = base
             }
+            if Self.isNative(binding) { binding = nil }  // "default" at the top level is no binding
         } else {
-            binding = [own?[name], global?[name]].compactMap { $0 }.first { !($0 is NSNull) }
+            binding = [own?[name], global?[name]].compactMap { $0 }.first { !($0 is NSNull) && !Self.isNative($0) }
         }
         guard let binding = Self.normalised(binding) else { return nil }
         guard rest.count > 1 else { return binding }

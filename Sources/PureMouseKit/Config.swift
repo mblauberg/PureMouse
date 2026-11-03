@@ -109,27 +109,49 @@ public struct Config: Decodable, Sendable {
 
     /// Adds the bindings `c` names to `buttons` and `bindings`. A name for a control that `buttons`
     /// held before replaces the earlier name and binding, and a gesture keeps the directions it
-    /// leaves out. Names within `c` do not layer on each other; if two name one control, the last
-    /// in sorted order binds it and all of them stay in `buttons`.
+    /// leaves out. `"default"` (`Binding.nativeValue`) binds nothing: it removes the binding and
+    /// every name `buttons` held for that control, which is how a device entry leaves a button
+    /// the top level binds to the mouse's own behaviour; at the top level there is nothing to
+    /// remove, so it is the same as leaving the name out. Names within `c` do not layer on each
+    /// other; if two name one control, the last in sorted order decides it. When that is a binding,
+    /// the names of the bindings before it stay in `buttons` too; when it is `"default"`, none of
+    /// them does, and the control has no binding.
     private mutating func decodeButtons(_ c: KeyedDecodingContainer<AnyKey>) throws {
         let before = bindings
         let earlier = Set(buttons.keys)
         var named: [String: Binding] = [:]
         var bound: [UInt16: Binding] = [:]
+        var cleared: Set<UInt16> = []
         var unknown: Set<String> = Set(unknownButtons)
         for name in c.allKeys.sorted(by: { $0.stringValue < $1.stringValue }) {
             let cid = Button.cid(for: name.stringValue)
-            let binding = try Binding.decode(c, forKey: name, base: cid.flatMap { before[$0] })
+            let isNative = Binding.isNative(c, forKey: name)
+            let binding = isNative ? nil : try Binding.decode(c, forKey: name, base: cid.flatMap { before[$0] })
             if let cid, Self.reservedControls.contains(cid) {
                 warnings.append(Self.reservedWarning("buttons.\(name.stringValue)"))
                 continue
             }
-            named[name.stringValue] = binding
-            if let cid { bound[cid] = binding } else { unknown.insert(name.stringValue) }
+            guard let cid else {
+                if let binding { named[name.stringValue] = binding }
+                unknown.insert(name.stringValue)
+                continue
+            }
+            if let binding {
+                named[name.stringValue] = binding
+                bound[cid] = binding
+                cleared.remove(cid)
+            } else {
+                for other in named.keys where Button.cid(for: other) == cid { named[other] = nil }
+                bound[cid] = nil
+                cleared.insert(cid)
+            }
         }
-        for name in earlier where Button.cid(for: name).map({ bound[$0] != nil }) == true { buttons[name] = nil }
+        for name in earlier where Button.cid(for: name).map({ bound[$0] != nil || cleared.contains($0) }) == true {
+            buttons[name] = nil
+        }
         buttons.merge(named) { _, new in new }
         bindings.merge(bound) { _, new in new }
+        for cid in cleared { bindings[cid] = nil }
         unknownButtons = unknown.sorted()
     }
 
@@ -353,6 +375,16 @@ public struct Config: Decodable, Sendable {
             }
         }
 
+        /// The reserved `buttons` value, the JSON string `"default"`, for no binding: the mouse's own
+        /// behaviour. It is not an `Action`. On a device or an app it hides what the wider scope
+        /// binds; at the top level it is the same as leaving the button out.
+        public static let nativeValue = "default"
+
+        /// Whether the value at `key` is `nativeValue`.
+        static func isNative(_ c: KeyedDecodingContainer<AnyKey>, forKey key: AnyKey) -> Bool {
+            (try? c.decode(String.self, forKey: key)) == nativeValue
+        }
+
         /// The binding at `key`; a gesture takes the directions it leaves out from `base`, when
         /// that is a gesture too.
         static func decode(_ c: KeyedDecodingContainer<AnyKey>, forKey key: AnyKey, base: Binding?) throws -> Binding {
@@ -398,6 +430,29 @@ public struct Config: Decodable, Sendable {
             if let button = Button(rawValue: name) { return button.cid }
             let hex = name.lowercased().hasPrefix("0x") ? String(name.dropFirst(2)) : name
             return UInt16(hex, radix: 16)
+        }
+    }
+
+    /// What a control does without PureMouse, for the controls the daemon can reproduce: Mouse
+    /// Default (`Binding.nativeValue`, or no binding where a press reaches the daemon anyway) does
+    /// this, and Settings offers Mouse Default on a mouse or in an app only for these. Every other
+    /// control has no behaviour of its own to give back.
+    public enum NativeBehaviour: Equatable, Sendable {
+        /// The ordinary mouse button, by its macOS number (middle 2, back 3, forward 4).
+        case click(button: Int)
+        /// What the mouse's own button does, as this action does it.
+        case action(Action)
+    }
+
+    /// The native behaviour of the control `cid`, or nil when it has none the daemon can reproduce.
+    public static func nativeBehaviour(of cid: UInt16) -> NativeBehaviour? {
+        switch cid {
+        case 0x0052: .click(button: 2)               // wheel press
+        case 0x0053: .click(button: 3)               // back
+        case 0x0056: .click(button: 4)               // forward
+        case 0x00C4: .action(.toggleScrollMode)      // mode shift: the wheel's ratchet / free spin
+        case 0x00FD: .action(.cycleDPI)              // DPI button
+        default: nil
         }
     }
 

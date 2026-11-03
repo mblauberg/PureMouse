@@ -4,14 +4,10 @@ import PureMouseKit
 /// The ordinary mouse-button click a diverted button stands for, for a button bound in some apps
 /// but not everywhere: elsewhere it still clicks as it does without PureMouse.
 enum NativeButton {
-    /// macOS button numbers: wheel press 2, back 3, forward 4. Other controls have no click.
+    /// macOS button numbers (`Config.nativeBehaviour`): wheel press 2, back 3, forward 4. Other
+    /// controls have no click.
     static func number(for cid: UInt16) -> Int64? {
-        switch cid {
-        case 0x0052: 2
-        case 0x0053: 3
-        case 0x0056: 4
-        default: nil
-        }
+        if case .click(let button)? = Config.nativeBehaviour(of: cid) { Int64(button) } else { nil }
     }
 
     /// Posts the button's press or release at the pointer. Returns false for a control without

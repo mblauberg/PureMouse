@@ -52,6 +52,10 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
         // Titled before the first pane loads, so "Untitled" never shows.
         window.title = saved.tab.title
         tabs.open(.tab(saved.tab))
+        #if DEBUG
+        // For screenshots: edit this mouse's settings (`PUREMOUSE_DEV_MOUSE=<device key>`).
+        if let key = ProcessInfo.processInfo.environment["PUREMOUSE_DEV_MOUSE"] { model.selectMouse(key) }
+        #endif
     }
 
     @available(*, unavailable)
@@ -70,7 +74,8 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
         case .about: return host(AboutPane())
         case .mouse:
             let mouse = MouseTab(segment: tabs.segment) { selection in
-                let header = NSHostingView(rootView: MouseHeader(selection: selection).frame(width: width).environment(model))
+                let header = NSHostingView(rootView: MouseHeader(selection: selection).frame(width: width).environment(model)
+                    .environment(\.settings, context))
                 header.sizingOptions = [.intrinsicContentSize]
                 return header
             } make: { segment in

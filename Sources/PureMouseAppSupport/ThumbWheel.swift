@@ -3,9 +3,10 @@ import PureMouseKit
 
 /// What the thumb wheel's pop-up offers, read from and written to `thumbWheel.action`, `left`,
 /// `right` and `step` (docs/configuration.md, "Thumb wheel"); `reversed` has its own row. The same keys under
-/// `apps.<id>.thumbWheel` apply on top of the global ones, so an app also has `inherit`.
+/// `apps.<id>.thumbWheel` and `devices.<key>.thumbWheel` apply on top of the global ones, so an app
+/// or a mouse also has `inherit`.
 public enum ThumbWheelChoice: Hashable, Identifiable, Sendable {
-    /// Per app only: the app sets none of `action`, `left` and `right`.
+    /// Per app or per mouse only: it sets none of `action`, `left` and `right`.
     case inherit
     case scroll
     /// One of Kit's `Config.ThumbWheel.presets` by its config name.
@@ -124,12 +125,15 @@ extension ButtonAction {
         case .keys(let spec): ["keys": spec]
         case .run(let command): ["run": command]
         case .haptic(let waveform): ["haptic": waveform]
-        case .standard, .gesture: "none"
+        case .standard, .mouseDefault, .gesture: "none"
         }
     }
 }
 
 extension ConfigTree {
+    /// Whether `path` is an app's or a mouse's, which may leave a key to the top level.
+    static func leavesToWiderScope(_ path: [String]) -> Bool { path.first == "apps" || path.first == "devices" }
+
     /// The thumb wheel state the keys at `path` resolve to, on top of `base`.
     public func thumbWheel(at path: [String], base: ThumbWheelState = .initial) -> ThumbWheelState {
         base.applying(self[path] as? [String: Any])
@@ -144,33 +148,50 @@ extension ConfigTree {
     }
 
     public func thumbWheelChoice(at path: [String]) -> ThumbWheelChoice {
-        ThumbWheelChoice.read(self[path] as? [String: Any], inApp: path.first == "apps")
+        ThumbWheelChoice.read(self[path] as? [String: Any], inApp: Self.leavesToWiderScope(path))
+    }
+
+    /// Writes (or, for nil, removes) one thumb-wheel key at `path + [key]`. In a mouse's entry a
+    /// removal keeps the shadow another spelling of its key needs (`removeKeepingShadow`).
+    public mutating func setThumbWheelKey(_ value: Any?, _ key: String, at path: [String]) {
+        put(value, at: path + [key])
+    }
+
+    private mutating func put(_ value: Any?, at path: [String]) {
+        if value == nil, path.count > 2, path[0] == "devices" {
+            guard contains(path) else { return }
+            removeKeepingShadow(at: path, entry: Array(path.prefix(2)))
+        } else {
+            set(value, at: path)
+        }
     }
 
     /// Writes a choice from the pop-up. A preset sets `action` and drops the step, so it brings
     /// its own; Custom writes the current pair as `left` and `right`, so the wheel does the same
     /// until one is changed, and keeps the step it had.
     public mutating func chooseThumbWheel(_ choice: ThumbWheelChoice, at path: [String], base: ThumbWheelState = .initial) {
-        let inApp = path.first == "apps"
+        let inApp = Self.leavesToWiderScope(path)
         switch choice {
         case .inherit:
-            for key in ThumbWheelChoice.keys { set(nil, at: path + [key]) }
+            for key in ThumbWheelChoice.keys { put(nil, at: path + [key]) }
         case .scroll:
-            set(inApp ? "scroll" : nil, at: path + ["action"])
-            for key in ["left", "right", "step"] { set(nil, at: path + [key]) }
+            put(inApp ? "scroll" : nil, at: path + ["action"])
+            for key in ["left", "right", "step"] { put(nil, at: path + [key]) }
         case .preset(let name):
-            set(name, at: path + ["action"])
-            for key in ["left", "right", "step"] { set(nil, at: path + [key]) }
+            put(name, at: path + ["action"])
+            for key in ["left", "right", "step"] { put(nil, at: path + [key]) }
         case .custom:
             guard thumbWheelChoice(at: path) != .custom else { return }
             let current = thumbWheel(at: path, base: base)
             let pair = current.pair ?? .init(left: .named("none"), right: .named("none"))
-            set(nil, at: path + ["action"])
-            set(nil, at: path + ["step"])
-            set(pair.left.json, at: path + ["left"])
-            set(pair.right.json, at: path + ["right"])
+            // The pair first: removing `action` while it is the entry's only key would prune a
+            // mouse's entry, and its own `name` with it.
+            put(pair.left.json, at: path + ["left"])
+            put(pair.right.json, at: path + ["right"])
+            put(nil, at: path + ["action"])
+            put(nil, at: path + ["step"])
             if thumbWheel(at: path, base: base).step != current.step {
-                set(current.step, at: path + ["step"])
+                put(current.step, at: path + ["step"])
             }
         }
     }
@@ -183,8 +204,8 @@ extension ConfigTree {
     /// Sets `reversed`. Globally false is the default, so it removes the key; in an app nil
     /// removes it (Same as Everywhere) and false is kept, overriding a reversed global.
     public mutating func setThumbWheelReversed(_ reversed: Bool?, at path: [String]) {
-        let inApp = path.first == "apps"
-        set(inApp ? reversed : (reversed == true ? true : nil), at: path + ["reversed"])
+        let inApp = Self.leavesToWiderScope(path)
+        put(inApp ? reversed : (reversed == true ? true : nil), at: path + ["reversed"])
     }
 
     /// The config key that holds what turning the wheel one way ("left" or "right") does.
@@ -192,8 +213,8 @@ extension ConfigTree {
         reversed ? (direction == "left" ? "right" : "left") : direction
     }
 
-    /// Sets what turning one way does ("left" or "right").
-    public mutating func setThumbWheel(_ direction: String, to action: ButtonAction, at path: [String]) {
-        set(action.json, at: path + [direction])
+    /// Sets what turning one way does ("left" or "right"); nil gives the key back to the wider scope.
+    public mutating func setThumbWheel(_ direction: String, to action: ButtonAction?, at path: [String]) {
+        put(action?.json, at: path + [direction])
     }
 }

@@ -6,29 +6,31 @@ import Testing
 // The Apps tab and its app sheet: the inherited-value presentation, and, read from the sources,
 // the words docs/ui-language.md retires and that no sheet opens from the app sheet.
 
-@Test func anUnsetValueShowsWhatAppliesDimmedWithItsSource() {
+@Test func anUnsetValueLooksAsItDoesEverywhereAndAnOwnOneSaysSo() {
     let unset = InheritedValue<String>(own: nil, inherited: "Mission Control", source: "Everywhere")
     #expect(unset.isInherited)
     #expect(unset.effective == "Mission Control")
-    #expect(unset.caption == "Same as Everywhere")
+    #expect(unset.caption == nil)
     #expect(unset.entry == "Same as Everywhere")
     #expect(unset.spoken == "Mission Control, same as Everywhere")
 
     let own = InheritedValue(own: "Mute", inherited: "Mission Control", source: "Everywhere")
     #expect(!own.isInherited)
     #expect(own.effective == "Mute")
-    #expect(own.caption == nil)
+    #expect(own.caption == "Set for this app.")
+    #expect(own.resetTitle == "Use Everywhere Setting")
     #expect(own.spoken == "Mute")
 
     // The source word is the caller's: a mouse inherits from all mice.
-    #expect(InheritedValue(own: nil as Int?, inherited: 1600, source: "All Mice").caption == "Same as All Mice")
+    #expect(InheritedValue(own: nil as Int?, inherited: 1600, source: "All Mice").caption == nil)
+    #expect(InheritedValue(own: 1200, inherited: 1600, source: "All Mice").caption == "Set for this mouse.")
 }
 
 @MainActor @Test func anAppsButtonRowShowsTheActionEverywhereUntilItSetsOne() {
     let unset = ActionButton.inherited(.standard, everywhere: "Mission Control")
-    #expect(unset.effective == "Mission Control" && unset.caption == "Same as Everywhere")
+    #expect(unset.effective == "Mission Control" && unset.caption == nil)
     let set = ActionButton.inherited(.named("missionControl"), everywhere: "Default")
-    #expect(set.effective == ButtonAction.named("missionControl").label && set.caption == nil)
+    #expect(set.effective == ButtonAction.named("missionControl").label && set.caption == "Set for this app.")
     // The picker keeps the entry that removes the app's own binding.
     let entry = PickerEntry.all(allowsDefault: false, allowsGesture: true, inherited: ActionButton.inherited(.standard, everywhere: "Mission Control")).first
     #expect(entry?.label == "Same as Everywhere" && entry?.detail == "(Mission Control)")

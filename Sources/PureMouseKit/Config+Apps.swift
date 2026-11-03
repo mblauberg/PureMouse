@@ -12,7 +12,8 @@ extension Config {
         public var bindings: [UInt16: Binding]
         public var thumbWheel: ThumbWheel
         public var smoothScroll: SmoothScroll?
-        /// The controls the app's `buttons` names; every other binding is the global one.
+        /// The controls the app's `buttons` names, `"default"` ones included (no entry in `bindings`:
+        /// native while the app is frontmost); every other binding is the global one.
         public var buttons: Set<UInt16> = []
         /// Which sections the app sets, so the daemon looks the app up only where it matters.
         public var setsButtons = false
@@ -56,11 +57,13 @@ extension Config {
                         warnings.append("apps.\(id).buttons: unknown button '\(name.stringValue)'")
                         continue
                     }
-                    let binding = try Binding.decode(buttons, forKey: name, base: base.bindings[cid])
+                    let native = Binding.isNative(buttons, forKey: name)
+                    let binding = native ? nil : try Binding.decode(buttons, forKey: name, base: base.bindings[cid])
                     guard !Self.reservedControls.contains(cid) else {
                         warnings.append(Self.reservedWarning("apps.\(id).buttons.\(name.stringValue)"))
                         continue
                     }
+                    // `"default"` names the control with no binding: the app's presses click natively.
                     app.bindings[cid] = binding
                     app.buttons.insert(cid)
                 }

@@ -59,6 +59,8 @@ final class Session {
 
     /// Buttons down, the gesture held and native clicks posted (`HeldButtons`).
     var held = HeldButtons()
+    /// Controls pressed now whose raw pointer motion is off for the press (`setPointerFree`).
+    var pointerFree: Set<UInt16> = []
     /// The thumb wheel settings of the current movement and its step counter.
     var thumbSettings = Config.ThumbWheel()
     var thumbStepper = ThumbStepper(threshold: 1)
