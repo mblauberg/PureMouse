@@ -11,9 +11,11 @@ shown, and a part of the drawing should lead to the setting it stands for.
 
 ## Decision
 
-Three family templates are drawn, each in a light and a dark SVG compiled to PDF by the existing
-`rsvg-convert` step and bundled with the Settings helper (`assets/silhouettes`): the MX Master
-shape (`mx`), the MX Anywhere's (`compact-anywhere`) and the Signature M750's (`compact-m750`).
+Four family templates are drawn, each in a light and a dark SVG compiled to PDF by the existing
+`rsvg-convert` step and bundled with the Settings helper (`assets/silhouettes`): the MX Master 3
+and 3S (`mx`), the MX Master 4 (`mx4`), the MX Anywhere's (`compact-anywhere`) and the Signature
+M750's (`compact-m750`). The 4 is the 3S's shape with a small gesture key on the wing, just ahead
+of Forward and Back; the same generator draws both.
 Parts are not drawn into the PDF as markers. Each family has typed Swift data, `DeviceArt.geometry`:
 a **hit region** per part (a polygon that partitions the drawing, so a point is in at most one) and
 the part's own **outline**, which hover and selection fill. Both are in the art's 100 x 124 units.
@@ -26,7 +28,8 @@ date.
 
 A mouse is matched by its device key, never its name: the nonzero 16-bit product IDs in the key
 are compared with each model's IDs (`DeviceArt.models`). Which control a part stands for is per
-model (the MX Master 4's thumb rest is its haptic panel, the 3 and 3S's the gesture button). A
+model (the MX Master 4's thumb rest is its haptic panel and its gesture button, 0x00C3, is a key of
+its own ahead of Forward and Back; the 3 and 3S's gesture button is the thumb rest). A
 mouse with no listed model, and every other form (MX Vertical, Lift, MX Ergo, G series, the 2S),
 gets no drawing and no card. The capability map ([ADR 4](0004-device-identity-and-companion-contract.md))
 still says which settings apply.
