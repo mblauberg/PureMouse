@@ -67,7 +67,11 @@ struct PresetsSheet: View {
     private func row(_ preset: Int, checked: Bool) -> some View {
         HStack {
             TextField("Preset", value: Binding(get: { drafts[preset] ?? preset },
-                                               set: { drafts[preset] = $0 }),
+                                               set: {
+                                                   drafts[preset] = $0
+                                                   // Focus already left the row: no Return follows to commit it.
+                                                   if focused != preset { commit(preset) }
+                                               }),
                       format: .number.grouping(.automatic))
                 .textFieldStyle(.plain)
                 // A plain field's line is 16 pt; padding gives it the 20 pt minimum target.
