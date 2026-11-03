@@ -64,7 +64,10 @@ Safety and the live machine:
   mouse.
 - Nothing may be persisted on the mouse or receiver: they must work normally without PureMouse.
   Never write a persistent diversion, haptic strength, enable flags or configuration, or onboard
-  profiles (0x8100).
+  profiles (0x8100). The one exception is pairing or unpairing a device on a Unifying or Bolt
+  receiver, started by the person in Settings and confirmed in an alert, never stored, replayed or
+  offered as an action ([ADR 23](docs/adr/0023-receiver-pairing-is-the-one-persistent-write.md);
+  not built yet).
 - The primary clicks 0x0050 and 0x0051 are never bound or diverted
   ([ADR 8](docs/adr/0008-primary-buttons-reserved.md)).
 - Over SSH nobody can answer a Gatekeeper dialog or grant permissions: leave those to whoever is at

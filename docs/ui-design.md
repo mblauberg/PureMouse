@@ -145,7 +145,14 @@ Each level has one mechanism, and each label says what it reveals.
   PureMouse from the Finder opens Settings, and Show in menu bar there brings the icon back.
 - Order: device header, attention rows (only while active), then the most used items, Settings…,
   "Settings for <app>…" (for the app in use, when there is one), Quit PureMouse. Separators between
-  groups; submenus only for presets, one level deep.
+  groups; submenus only for presets and Easy-Switch, one level deep. Easy-Switch (planned, #155) is
+  shown only for a mouse that reports host switching: one row holds both the status (a checkmark
+  on this Mac) and the command, where flat "Switch to Computer N" items would add rows for an
+  occasional task. With two or more mice it stays one submenu, with a section header per mouse.
+- **Quiet when applied** (planned, #155). The menu reports a problem, not that all is well. The
+  header's second line reads "Applying settings…" or "Settings not applied" only while that is
+  true, with an Apply Settings Again attention row only while not applied. The time of the last
+  apply ("Settings applied at 09:14") is on the ⌥ detail line.
 - Unavailable **commands** are disabled, not hidden; **status** rows that do not apply are hidden.
 - **Symbols.** None by default. macOS 27 shows menu icons only for key items: the device header is
   the one key item, set with `preferredImageVisibility = .visible` on macOS 27. Within a group, all
@@ -255,6 +262,74 @@ Not adopted: a 3D or photographic mouse map with glowing callouts (the device ca
 line art with plain markers, #56); an acceleration curve editor (macOS owns acceleration, so it
 would duplicate System Settings); a floating per-app indicator (it polls and covers content);
 display-density DPI hints and live gesture highlighting (more text and motion than they earn).
+
+## Planned structure (#155)
+
+The agreed target for epic #155 (with #153 and #154), not built. Each slice moves its part into the
+rules above when it ships, and this section shrinks as it does. The decisions are
+[ADR 23](adr/0023-receiver-pairing-is-the-one-persistent-write.md) (receiver pairing) and
+[ADR 24](adr/0024-one-action-model.md) (the action model); the words are in
+[UI language](ui-language.md#planned-155).
+
+Four tabs stay (General, Mouse, Apps, About), with no Rings, Macros, Packs, Automation or Devices
+tab and no new Mouse segment. What does something is an action in the one picker.
+
+```
+Menu bar icon (NSMenu)
+├─ Device header: second line "Bolt · 80%" | "Applying settings…" | "Settings not applied" | "Off in <App>"
+├─ Attention rows, only while true: Apply Settings Again · Allow… · Update to X.Y.Z…
+├─ Smooth Scrolling · Pointer Speed ▸ · Easy-Switch ▸ (only if the mouse reports it) · Pause PureMouse
+├─ Settings…  ·  Settings for <frontmost app>…  ·  Quit PureMouse
+└─ ⌥: detail line (adds "Settings applied at 09:14") · Reload Config · Show Log in Finder · Hide Menu Bar Icon
+
+Settings
+├─ General: Status (PureMouse; one row per device with (i) → About This Mouse sheet; a receiver row
+│            with (i) → Receiver sheet: Pair a Mouse…, Unpair…, last slice) · Open at login ·
+│            Show in menu bar · Low battery notifications · Permissions ·
+│            Advanced…: Universal Control, Config file [Open] [Export Settings…] [Import Settings…],
+│            Log, Reset All Settings…
+├─ Mouse [Buttons | Scrolling | Pointer]
+│   ├─ Buttons: one row per button, its pop-up the click; Double-click and Hold as child rows once
+│   │           added; Other controls; Advanced…: Ignore repeated clicks, Hold and Move
+│   ├─ Scrolling: Advanced… gains Modifier Keys (Shift, Option, Command, Control) in place of
+│   │             "Hold Shift to scroll sideways"
+│   └─ Pointer: unchanged
+├─ Apps: list ("Buttons, Scrolling" or "Off") → app page: Use PureMouse in this app (switch; dims the
+│        rest) · Suggested banner · Buttons, the app's actions first · Scrolling, with Modifier Keys
+│        collapsed · Remove App…
+└─ About: unchanged
+```
+
+| Feature | Home |
+|---|---|
+| Recovery you can see | Menu header line, attention row, General notice; only while not applied |
+| Click, Double-click, Hold | The button row and its child rows; More Ways to Press at the foot of the row's picker |
+| Button plus scroll | Hold → Hold and Scroll, using the thumb wheel's pairs |
+| Modifier plus scroll | Scrolling › Advanced…; collapsed on an app's Scrolling |
+| Ignore repeated clicks | Buttons › Advanced…, per mouse; milliseconds stay in config |
+| Off in this app | The app page's first row |
+| Easy-Switch | Status in About This Mouse and the menu; Switch to Computer N in the picker |
+| About This Mouse | General › Status, the mouse row's (i) |
+| Drag Lock, Precise Pointer | Picker › Mouse: commands, not settings |
+| Per-app actions (#154) | The app page's picker, the app's own section first |
+| Sequence, Action Ring and new action types (#153) | Picker › Custom, one sheet each |
+| Export, Import | General › Advanced…, beside Open Config File, and the File menu |
+| Receiver pairing | The receiver row's (i), and No Mouse Found when a receiver is present |
+| App Intents | Shortcuts and Spotlight; no Settings UI |
+
+**Action model.** When I click, double-click or hold a control (in an app), do an action, each
+trigger inheriting on its own from All Mice to the mouse to the app. A binding is a bare action,
+which is its click, or a table of triggers ([ADR 24](adr/0024-one-action-model.md)).
+
+- **A button's pop-up always shows its click action.** The gesture button reads "Mission Control",
+  with Hold and Move as its Hold row. There is no "Several Actions" value.
+- A trigger exists in the UI only once it is added (More Ways to Press), so a fresh install looks as
+  it does today plus one device row in General › Status.
+- The picker stays one popover: the app's actions first on an app page, sections over six rows fold
+  to five and "Show All (N)", search matches everything, and it shows only what the mouse reports.
+  No trigger strip, category strip, recents or favourites.
+- An editor inside the Sequence or Action Ring sheet swaps that sheet's content; it never opens a
+  second sheet.
 
 ## Implementation
 

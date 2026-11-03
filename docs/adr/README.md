@@ -25,7 +25,7 @@ Consequences. Keep each to about 40 lines.
 | [12](0012-multi-device-settings-scopes.md) | Accepted | Multi-device Settings: path-prefix scopes with per-leaf fallback |
 | [13](0013-silhouettes.md) | Accepted, not built | Silhouettes as bundled vector PDFs plus a Swift callout table |
 | [14](0014-signing-identity-is-configuration.md) | Accepted (notarisation built, not yet run with real credentials) | Signing identity is configuration; hardened runtime always |
-| [15](0015-protected-release-workflow.md) | Accepted, not built | Releases are built by a protected GitHub Actions workflow |
+| [15](0015-protected-release-workflow.md) | Accepted | Releases are built by a protected GitHub Actions workflow |
 | [16](0016-daemon-owns-its-log.md) | Accepted | The daemon owns its log file |
 | [17](0017-github-releases-is-the-changelog.md) | Accepted | GitHub Releases is the changelog |
 | [18](0018-login-service-seam.md) | Proposed | Start at login behind a `LoginService` seam |
@@ -33,3 +33,5 @@ Consequences. Keep each to about 40 lines.
 | [20](0020-linked-sdk-and-deployment-target.md) | Accepted | App builds record the active SDK separately from the macOS 14 deployment target |
 | [21](0021-scheduled-update-check.md) | Accepted | A daily update check in the menu bar app, after asking once; the daemon stays network-free |
 | [22](0022-update-trust-is-the-signing-requirement.md) | Accepted | Updates install from the menu, trusted by the running app's own code-signing requirement; no Sparkle |
+| [23](0023-receiver-pairing-is-the-one-persistent-write.md) | Accepted, not built | Receiver pairing is the one persistent write; a protocol spike gates it |
+| [24](0024-one-action-model.md) | Accepted, not built | One action model: triggers per control, actions as values |
