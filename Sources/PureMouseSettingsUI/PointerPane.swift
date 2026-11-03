@@ -48,8 +48,7 @@ struct PointerPane: View {
                                 low: reported ? Format.number(steps.first ?? 0) : "",
                                 high: reported ? Format.number(steps.last ?? 0) : "",
                                 format: { _ in reading.readout(live: live, configured: configured) },
-                                availability: layout.availability, mouseDefault: estimate && scope.deviceKey == nil,
-                                inheritance: speed)
+                                availability: layout.availability, mouseDefault: estimate, note: speed)
                         // A sensor with a single setting has nothing to slide between.
                         .disabled(steps.count < 2)
                     LabeledContent {} label: {
@@ -73,14 +72,12 @@ struct PointerPane: View {
                         .disclosedRow()
                     }
                     LabeledContent {
-                        HStack(spacing: 10) {
-                            Button("Edit Presets…") { settings?.sheet = .presets }
-                            if let presetsRow { InheritedReset(row: presetsRow) }
-                        }
+                        Button("Edit Presets…") { settings?.sheet = .presets }
                     } label: {
-                        RowLabel("Presets", help: presetsRow?.caption ?? DPIPresets.summary(presets),
-                                 availability: layout.availability)
+                        RowLabel("Presets", help: DPIPresets.summary(presets), availability: layout.availability,
+                                 note: presetsRow)
                     }
+                    .overridable(presetsRow, help: DPIPresets.summary(presets))
                 } else {
                     // Nothing else on the pane applies, so say why it is bare.
                     LabeledContent {} label: {

@@ -6,7 +6,10 @@ Accepted and built. The `ConfigTree` half (`ConfigScope`, `resolved`, `isOverrid
 `set(_:at:in:)`, `deviceEntries`, and a parity test against `Config.forDevice`) came first; the
 pop-up (`MousePopUp`, `MouseScope`) and the per-row inheritance in the Buttons, Scrolling and
 Pointer panes (`InheritedValue`, as for apps) followed (#54). The Apps note sits in the pop-up's
-menu rather than under it, for the height budget.
+menu rather than under it, for the height budget, with one more note there: "Settings you don't
+change follow All Mice." A row that inherits looks as it does under All Mice; only a row with its
+own value is marked ("Set for this mouse." and a "Use All Mice Setting" link). A mouse cannot yet
+choose Mouse Default for a button All Mice binds: a device entry has no native-click value in Kit.
 
 ## Context
 

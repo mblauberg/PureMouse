@@ -12,20 +12,24 @@ struct RowLabel: View {
     var mouseDefault = false
     /// A control the mouse lacks, kept because its value is set: says so after the help.
     var availability = ControlAvailability.available
+    /// The scope has its own value: "Set for this mouse." and its button take the help's place, on
+    /// the same line (`View.overridable(_:help:)` makes the help the row's tooltip).
+    var note: InheritedOverride?
 
     init(_ title: String, help: String? = nil, mouseDefault: Bool = false,
-         availability: ControlAvailability = .available) {
+         availability: ControlAvailability = .available, note: InheritedOverride? = nil) {
         self.title = title
         self.help = help
         self.mouseDefault = mouseDefault
         self.availability = availability
+        self.note = note
     }
 
     static let mouseDefaultCaption = "Using the mouse's own setting."
 
-    /// The caption sentences that apply. One stands as written ("Same as All Mice" has no full
-    /// stop); two or more run together as separate sentences, each with its full stop, so "Same as
-    /// All Mice" and "Not supported by this mouse." do not merge.
+    /// The caption sentences that apply. One stands as written; two or more run together as
+    /// separate sentences, each with its full stop, so a help without one and "Not supported by
+    /// this mouse." do not merge.
     static func caption(_ sentences: [String?]) -> String? {
         let parts = sentences.compactMap { $0?.trimmingCharacters(in: .whitespaces).nilIfEmpty }
         guard parts.count > 1 else { return parts.first }
@@ -33,11 +37,15 @@ struct RowLabel: View {
         return parts.map { part in part.last.map { ends.contains($0) } == true ? part : part + "." }.joined(separator: " ")
     }
 
+    /// The caption under the title. A changed row's help is its tooltip, so it is not here.
+    var captionText: String? {
+        Self.caption([note == nil ? help : nil, mouseDefault ? Self.mouseDefaultCaption : nil, availability.caption])
+    }
+
     var body: some View {
         Text(title)
-        if let caption = Self.caption([help, mouseDefault ? Self.mouseDefaultCaption : nil, availability.caption]) {
-            Text(caption)
-        }
+        if let captionText { Text(captionText) }
+        if let note { OverrideLine(note: note) }
     }
 }
 
@@ -46,13 +54,11 @@ struct RowLabel: View {
 /// action rows on Buttons, Scrolling and an app's sheet read alike.
 struct PopUpLabel: View {
     let text: String
-    var style: HierarchicalShapeStyle = .primary
 
     var body: some View {
         HStack(spacing: 4) {
             Text(text)
                 .lineLimit(1)
-                .foregroundStyle(style)
             Image(systemName: "chevron.up.chevron.down")
                 .imageScale(.small)
                 .foregroundStyle(.secondary)
@@ -66,7 +72,6 @@ struct PopUpLabel: View {
 /// in a grouped form can draw as a borderless pull-down with a circled chevron instead.
 struct PopUpMenu<Content: View>: View {
     let text: String
-    var style: HierarchicalShapeStyle = .primary
     /// Takes the width it is given and cuts its text with an ellipsis, rather than its own width.
     var flexible = false
     @ViewBuilder var content: Content
@@ -75,7 +80,7 @@ struct PopUpMenu<Content: View>: View {
         let menu = Menu {
             content
         } label: {
-            PopUpLabel(text: text, style: style)
+            PopUpLabel(text: text)
         }
         .menuStyle(.button)
         .menuIndicator(.hidden)
@@ -103,8 +108,8 @@ struct ValueSlider: View {
     var availability = ControlAvailability.available
     /// The key is absent and the mouse keeps its own setting (`RowLabel.mouseDefault`).
     var mouseDefault = false
-    /// On a mouse: whether the value is its own or All Mice's (`InheritedRow`).
-    var inheritance: InheritedRow?
+    /// On a mouse: set when the value is its own rather than All Mice's (`InheritedValue.note`).
+    var note: InheritedOverride?
 
     var body: some View {
         LabeledContent {
@@ -122,13 +127,13 @@ struct ValueSlider: View {
                 }
                 .frame(minWidth: 56, alignment: .trailing)
                 .monospacedDigit()
-                .foregroundStyle(inheritance?.style ?? .secondary)
+                .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
-                if let inheritance { InheritedReset(row: inheritance) }
             }
         } label: {
-            RowLabel(title, help: inheritance?.caption ?? help, mouseDefault: mouseDefault, availability: availability)
+            RowLabel(title, help: help, mouseDefault: mouseDefault, availability: availability, note: note)
         }
+        .overridable(note, help: help)
     }
 }
 
@@ -175,24 +180,14 @@ extension AppModel {
         }
     }
 
-    /// How a row for `paths` stands on a mouse: its own value or All Mice's, and the action that
-    /// gives it back. nil for All Mice, which has no wider scope.
-    func inheritance(of paths: [[String]], in target: ScopeTarget) -> InheritedRow? {
+    /// What a row for `paths` shows on a mouse that has its own value for any of them: the caption
+    /// and the action that gives them back. nil while it follows All Mice, and for All Mice, which
+    /// has no wider scope.
+    func inheritance(of paths: [[String]], in target: ScopeTarget) -> InheritedOverride? {
         guard target.scope.deviceKey != nil else { return nil }
-        return InheritedRow(source: InheritedScope.allMice,
-                            isOverridden: paths.contains { config.isOverridden($0, in: target.scope) },
-                            reset: { [self] in update(in: target) { $0.removeOverrides(paths, in: target.scope) } })
-    }
-
-    /// A pop-up row's value on a mouse: its own if it sets one, else All Mice's, else `fallback`.
-    func inheritedBool(_ path: [String], in target: ScopeTarget, default fallback: Bool) -> InheritedValue<Bool> {
-        InheritedValue(own: config.isOverridden(path, in: target.scope) ? config.resolvedBool(path, in: target.scope) : nil,
-                       inherited: config.bool(path) ?? fallback, source: InheritedScope.allMice)
-    }
-
-    func inheritedString(_ path: [String], in target: ScopeTarget, default fallback: String) -> InheritedValue<String> {
-        InheritedValue(own: config.isOverridden(path, in: target.scope) ? config.resolved(path, in: target.scope) as? String : nil,
-                       inherited: config.string(path) ?? fallback, source: InheritedScope.allMice)
+        let own = paths.contains { config.isOverridden($0, in: target.scope) }
+        return InheritedValue<Bool>(own: own ? true : nil, inherited: false, source: InheritedScope.allMice)
+            .note { [self] in update(in: target) { $0.removeOverrides(paths, in: target.scope) } }
     }
 
     /// A binding to a numeric config key, showing `fallback` when absent. Writes are debounced.
@@ -302,33 +297,39 @@ extension AdvancedSheet where Leading == EmptyView {
 struct DisclosureLabel: View {
     let title: String
     var help: String?
+    /// The scope has its own value: its caption line follows the help (`RowLabel.note`).
+    var note: InheritedOverride?
     /// What VoiceOver calls the disclosure where the title alone names another control in the row
     /// (a gesture button's action pop-up).
     var spokenTitle: String?
     @Binding var isExpanded: Bool
 
     var body: some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() }
-        } label: {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Image(systemName: "chevron.right")
-                    .imageScale(.small)
-                    .fontWeight(.bold)
-                    .foregroundStyle(.secondary)
-                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                    if let help { Text(help).font(.subheadline).foregroundStyle(.secondary) }
+        // The note's button sits beside the disclosure button, not inside it: a button can't hold one.
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() }
+            } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Image(systemName: "chevron.right")
+                        .imageScale(.small)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                        if let help, note == nil { Text(help).font(.subheadline).foregroundStyle(.secondary) }
+                    }
                 }
+                // A line of text is 16 pt tall; the padding takes the hit target to the 20 pt minimum.
+                .padding(.vertical, 2)
+                .contentShape(Rectangle())
             }
-            // A line of text is 16 pt tall; the padding takes the hit target to the 20 pt minimum.
-            .padding(.vertical, 2)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .accessibilityLabel(spokenTitle ?? title)
+            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+            if let note { OverrideLine(note: note).disclosedRow() }
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(spokenTitle ?? title)
-        .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
     }
 }
 

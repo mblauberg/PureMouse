@@ -1,40 +1,56 @@
 import PureMouseAppSupport
 import SwiftUI
 
-/// The names of the scopes a setting may be left to, and how a row says it follows one
-/// (docs/ui-language.md, "App scope"): the one place the words live.
+/// The names of the scopes a setting may be left to, and how a row says it has its own value
+/// (docs/ui-language.md, "A value left to a wider scope"): the one place the words live.
 enum InheritedScope {
     static let everywhere = "Everywhere"
     static let allMice = "All Mice"
 
-    /// "Same as Everywhere": a row's caption and a picker's entry.
+    /// "Same as Everywhere": a pop-up's first entry, which removes the own value.
     static func sameAs(_ source: String) -> String { "Same as \(source)" }
 
     /// "Use All Mice Setting": the action that removes a row's own value.
     static func use(_ source: String) -> String { "Use \(source) Setting" }
+
+    /// Who the value belongs to: "this mouse" under All Mice, "this app" under Everywhere.
+    static func owner(of source: String) -> String { source == allMice ? "this mouse" : "this app" }
+
+    /// "Set for this mouse.": a changed row's caption.
+    static func setFor(_ source: String) -> String { "Set for \(owner(of: source))." }
 }
 
 /// A setting one scope may leave to a wider one: an app to everywhere, a mouse to all mice. One
-/// presentation for every such row (docs/ui-language.md, "A value left to a wider scope"):
-/// - left unset, the row shows the value in effect in `.secondary`, with the caption "Same as
-///   <source>" under its title;
-/// - set, it shows its own value in primary text, with no caption.
-/// Its picker keeps "Same as <source> (<value>)" as the entry that removes the own value.
+/// type for every such row (docs/ui-language.md, "A value left to a wider scope"); it marks
+/// changes, not inheritance:
+/// - left unset, the row looks as it does in the wider scope: the same control, full contrast,
+///   its usual caption;
+/// - set, its caption reads "Set for this mouse." ("Set for this app.") with a "Use All Mice
+///   Setting" button that removes the own value (`InheritedOverride`), also in the row's context
+///   menu and as a VoiceOver action; the row's usual caption moves to its tooltip.
+/// A pop-up keeps "Same as <source> (<value>)" as its first entry.
 struct InheritedValue<Value> {
     /// The scope's own value; nil when it leaves the setting to `source`.
     var own: Value?
     /// What applies when `own` is nil.
     var inherited: Value
-    /// The wider scope, as the caption names it: "Everywhere", "All Mice".
+    /// The wider scope, as the words name it: "Everywhere", "All Mice".
     var source: String
 
     var isInherited: Bool { own == nil }
     var effective: Value { own ?? inherited }
-    /// The row's caption: "Same as Everywhere" while inherited, else none.
-    var caption: String? { isInherited ? InheritedScope.sameAs(source) : nil }
-    /// The picker entry that removes the own value, without the value it keeps.
+    /// The row's caption: "Set for this mouse." while the scope has its own value, else none.
+    var caption: String? { isInherited ? nil : InheritedScope.setFor(source) }
+    /// The pop-up entry that removes the own value, without the value it keeps.
     var entry: String { InheritedScope.sameAs(source) }
-    var style: HierarchicalShapeStyle { isInherited ? .secondary : .primary }
+    /// The command that removes the own value.
+    var resetTitle: String { InheritedScope.use(source) }
+
+    /// What a row shows and offers while the scope has its own value; nil while it inherits.
+    /// `reset` removes the own value.
+    func note(reset: @escaping () -> Void) -> InheritedOverride? {
+        isInherited ? nil : InheritedOverride(source: source, reset: reset)
+    }
 }
 
 extension InheritedValue: Equatable where Value: Equatable {}
@@ -45,11 +61,73 @@ extension InheritedValue where Value == String {
     var spoken: String { isInherited ? "\(effective), same as \(source)" : effective }
 }
 
-/// A pop-up for an `InheritedValue`: closed, it shows the value in effect, dimmed while inherited;
-/// open, its first entry is "Same as <source> (<value>)", which removes the own value. A `Picker`
-/// can't do this alone: its closed pop-up shows the chosen entry's own text, so it would read
-/// "Same as Everywhere (…)" instead of the value. So a `Menu` shows the value and holds an inline
-/// `Picker`, which keeps the checkmarks.
+/// A row whose scope has its own value: the caption "Set for this mouse." with its button, the
+/// same command in the context menu and as a VoiceOver action, and the row's help as a tooltip
+/// (`View.overridable(_:help:)`). Made by `InheritedValue.note(reset:)`.
+struct InheritedOverride {
+    let source: String
+    /// Removes the own value.
+    let reset: () -> Void
+
+    var caption: String { InheritedScope.setFor(source) }
+    var resetTitle: String { InheritedScope.use(source) }
+
+    /// The tooltips are under 75 characters (docs/ui-language.md): `help` as far as whole
+    /// sentences fit, else shortened in the middle.
+    static func tooltip(for help: String?) -> String {
+        guard let help = help?.trimmingCharacters(in: .whitespaces), !help.isEmpty else { return "" }
+        guard help.count > ActionButton.tooltipLimit else { return help }
+        var text = ""
+        for sentence in help.split(separator: ". ", omittingEmptySubsequences: true) {
+            let next = text.isEmpty ? String(sentence) : text + ". " + sentence
+            let ended = next.hasSuffix(".") ? next : next + "."
+            guard ended.count <= ActionButton.tooltipLimit else { break }
+            text = ended
+        }
+        if !text.isEmpty { return text }
+        let half = (ActionButton.tooltipLimit - 1) / 2
+        return help.prefix(half) + "…" + help.suffix(ActionButton.tooltipLimit - 1 - half)
+    }
+}
+
+/// The caption line of a changed row: "Set for this mouse." and, on the same line, the button that
+/// gives the setting back.
+struct OverrideLine: View {
+    let note: InheritedOverride
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(note.caption)
+                .foregroundStyle(.secondary)
+            Button(note.resetTitle) { note.reset() }
+                .buttonStyle(.link)
+        }
+        .font(.subheadline)
+    }
+}
+
+extension View {
+    /// A row of a setting a wider scope can supply. While `note` is set, the row's `help` is its
+    /// tooltip (its caption is `OverrideLine`) and the command that removes the own value is in its
+    /// context menu and a VoiceOver action. The modifiers stay on the row in either state, so
+    /// the control keeps its identity as its value goes from inherited to own mid-drag.
+    func overridable(_ note: InheritedOverride?, help: String?) -> some View {
+        self
+            .help(note == nil ? "" : InheritedOverride.tooltip(for: help))
+            .contextMenu {
+                if let note { Button(note.resetTitle) { note.reset() } }
+            }
+            .accessibilityActions {
+                if let note { Button(note.resetTitle) { note.reset() } }
+            }
+    }
+}
+
+/// A pop-up for an `InheritedValue`: closed, it shows the value in effect; open, its first entry
+/// is "Same as <source> (<value>)", which removes the own value. A `Picker` can't do this alone:
+/// its closed pop-up shows the chosen entry's own text, so it would read "Same as Everywhere (…)"
+/// instead of the value. So a `Menu` shows the value and holds an inline `Picker`, which keeps
+/// the checkmarks.
 struct InheritedPicker<Value: Hashable>: View {
     /// The accessibility label.
     let title: String
@@ -60,7 +138,7 @@ struct InheritedPicker<Value: Hashable>: View {
     let choose: (Value?) -> Void
 
     var body: some View {
-        PopUpMenu(text: label(value.effective), style: value.style) {
+        PopUpMenu(text: label(value.effective)) {
             Picker(title, selection: Binding(get: { value.own }, set: { choose($0) })) {
                 Text("\(value.entry) (\(label(value.inherited)))").tag(nil as Value?)
                 Divider()
@@ -72,60 +150,5 @@ struct InheritedPicker<Value: Hashable>: View {
         .accessibilityLabel(title)
         .accessibilityValue(InheritedValue(own: value.own.map(label), inherited: label(value.inherited),
                                            source: value.source).spoken)
-    }
-}
-
-/// The inheritance of a row that is not a pop-up (a slider, the Presets row): its words and dimming
-/// come from the same `InheritedValue` as every other, and `reset` removes the own value, "Use All
-/// Mice Setting" (`InheritedReset`).
-struct InheritedRow {
-    let source: String
-    let isOverridden: Bool
-    let reset: () -> Void
-
-    private var value: InheritedValue<Bool> { InheritedValue(own: isOverridden ? true : nil, inherited: false, source: source) }
-    var caption: String? { value.caption }
-    var style: HierarchicalShapeStyle { value.style }
-    var resetTitle: String { InheritedScope.use(source) }
-}
-
-/// The button at the trailing edge of a row that has its own value: it gives the setting back to
-/// the wider scope. It keeps its place, hidden, while the row inherits, so the row does not shift.
-struct InheritedReset: View {
-    let row: InheritedRow
-
-    var body: some View {
-        Button { row.reset() } label: {
-            // A circled symbol at title3 with this padding makes a 21 pt target, as in the presets sheet.
-            Image(systemName: "arrow.uturn.backward.circle").font(.title3).padding(3).contentShape(Rectangle())
-        }
-        .buttonStyle(.borderless)
-        .help(row.resetTitle)
-        .accessibilityLabel(row.resetTitle)
-        .opacity(row.isOverridden ? 1 : 0)
-        .disabled(!row.isOverridden)
-        .accessibilityHidden(!row.isOverridden)
-    }
-}
-
-/// A row with a pop-up for a setting a mouse may leave to All Mice (`InheritedPicker`): its caption
-/// says "Same as All Mice" while it does, in place of the help line.
-struct InheritedChoiceRow<Value: Hashable>: View {
-    let title: String
-    var help: String?
-    /// What VoiceOver calls the pop-up where the title alone is ambiguous.
-    var spokenTitle: String?
-    let value: InheritedValue<Value>
-    let options: [Value]
-    let text: (Value) -> String
-    var availability = ControlAvailability.available
-    let choose: (Value?) -> Void
-
-    var body: some View {
-        LabeledContent {
-            InheritedPicker(title: spokenTitle ?? title, value: value, options: options, label: text, choose: choose)
-        } label: {
-            RowLabel(title, help: value.caption ?? help, availability: availability)
-        }
     }
 }

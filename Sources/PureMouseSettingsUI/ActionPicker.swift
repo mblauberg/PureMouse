@@ -364,8 +364,7 @@ struct SearchField: NSViewRepresentable {
 }
 
 /// The button showing a binding, drawn as the form's own pop-up menus are (natural width,
-/// trailing, the system chevrons; Mouse Default in primary like any other choice, only an app's
-/// inherited value dimmed). It opens the searchable
+/// trailing, the system chevrons; every choice in primary, an inherited one too). It opens the searchable
 /// picker, which a `Picker` cannot hold.
 struct ActionButton: View {
     @Environment(AppModel.self) private var model
@@ -375,7 +374,7 @@ struct ActionButton: View {
     @Binding var isPresented: Bool
     let choose: (PickerEntry) -> Void
     var accessibilityName: String
-    /// In an app: what applies elsewhere, which `.standard` shows dimmed (`InheritedValue`).
+    /// In an app or on a mouse: what applies elsewhere, which `.standard` shows (`InheritedValue`).
     var sameAsEverywhere: String?
     /// `sameAsEverywhere` as VoiceOver says it (a shortcut in words); the label itself when nil.
     var spokenEverywhere: String?
@@ -421,7 +420,7 @@ struct ActionButton: View {
             openedFromKeyboard = NSApp.currentEvent?.type == .keyDown
             isPresented = true
         } label: {
-            PopUpLabel(text: Self.shortened(label), style: inherited?.style ?? .primary)
+            PopUpLabel(text: Self.shortened(label))
         }
         .fixedSize()
         .help(Self.tooltip(for: action))

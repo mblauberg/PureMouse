@@ -167,13 +167,16 @@ struct MouseHeader: View {
 }
 
 /// The pop-up that chooses which mouse the panes edit: All Mice, then each known mouse by name. The
-/// choice is remembered. The note that Apps is global is the menu's last line, and the pop-up's
-/// tooltip: a line under the pop-up would take 15 pt from a strip every segment shares, and
-/// Scrolling has 6 pt to spare (docs/ui-design.md, "Fit").
+/// choice is remembered. The notes are the menu's last lines, the one explanation of how a mouse's
+/// rows work ("Settings you don't change follow All Mice.") and that Apps is global; the pop-up's
+/// tooltip carries the Apps note: a line under the pop-up would take 15 pt from a strip every segment
+/// shares, and Scrolling has 6 pt to spare (docs/ui-design.md, "Fit").
 struct MousePopUp: View {
     @Environment(AppModel.self) private var model
 
     static let appsNote = "Apps are the same for every mouse."
+    /// Said once, here: rows that match All Mice carry no mark of it.
+    static let followNote = "Settings you don't change follow All Mice."
 
     private var closedText: String {
         model.selectedMouse?.name ?? InheritedScope.allMice
@@ -189,11 +192,12 @@ struct MousePopUp: View {
             .pickerStyle(.inline)
             .labelsHidden()
             Divider()
+            Text(Self.followNote)
             Text(Self.appsNote)
         }
         .help(Self.appsNote)
         .accessibilityLabel("Mouse")
         .accessibilityValue(model.selectedMouse?.name ?? InheritedScope.allMice)
-        .accessibilityHint(Self.appsNote)
+        .accessibilityHint("\(Self.followNote) \(Self.appsNote)")
     }
 }

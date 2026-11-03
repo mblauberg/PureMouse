@@ -38,13 +38,9 @@ struct PresetsSheet: View {
                     if presets.count >= DPIPresets.limit {
                         Text("Up to \(DPIPresets.limit) presets.")
                     }
-                    if let inheritance = model.inheritance(of: [["dpiPresets"]], in: model.scopeTarget) {
+                    if let note = model.inheritance(of: [["dpiPresets"]], in: model.scopeTarget) {
                         Spacer()
-                        if inheritance.isOverridden {
-                            Button(inheritance.resetTitle) { inheritance.reset() }
-                        } else {
-                            Text(inheritance.caption ?? "")
-                        }
+                        OverrideLine(note: note)
                     }
                 }
                 // Borderless, as under System Settings' lists: a section footer draws bordered

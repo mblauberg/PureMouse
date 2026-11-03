@@ -126,31 +126,37 @@ struct ButtonsPane: View {
         if isMouse { mouseRow(key, indented: indented) } else { globalRow(key, indented: indented) }
     }
 
-    /// A button on a mouse: its own binding, or "Same as All Mice" with the one that applies
-    /// dimmed (`InheritedValue`, as in an app's sheet).
+    /// A button on a mouse: the binding that applies, shown as in All Mice; with its own, the row
+    /// says "Set for this mouse." (`InheritedValue`, as in an app's sheet).
     @ViewBuilder
     private func mouseRow(_ key: String, indented: Bool) -> some View {
         let state = model.config.scopedButton(key, in: scope)
         let everywhere = state.everywhere.label
         let spokenEverywhere = state.everywhere.spokenLabel
-        let caption = ActionButton.inherited(state.own, everywhere: everywhere, source: InheritedScope.allMice).caption
+        let target = BindingTarget(button: key)
+        let note = ActionButton.inherited(state.own, everywhere: everywhere, source: InheritedScope.allMice)
+            .note { apply(.standard, to: target) }
         if state.directions.isEmpty {
+            let help = caption(key)
             LabeledContent {
-                actionButton(state.own, target: BindingTarget(button: key), sameAsEverywhere: everywhere, spokenEverywhere: spokenEverywhere)
+                actionButton(state.own, target: target, sameAsEverywhere: everywhere, spokenEverywhere: spokenEverywhere)
             } label: {
-                RowLabel(NamedButton.title(forKey: key), help: caption ?? self.caption(key))
+                RowLabel(NamedButton.title(forKey: key), help: help, note: note)
             }
+            .overridable(note, help: help)
             .padding(.leading, indented ? 16 : 0)
             .listRowBackground(rowFill(key))
         } else {
             let isExpanded = Binding(get: { expanded.contains(key) },
                                      set: { if $0 { expanded.insert(key) } else { expanded.remove(key) } })
+            let help = model.config.gestureSummary(key, in: scope)
             LabeledContent {
-                actionButton(state.own, target: BindingTarget(button: key), sameAsEverywhere: everywhere, spokenEverywhere: spokenEverywhere)
+                actionButton(state.own, target: target, sameAsEverywhere: everywhere, spokenEverywhere: spokenEverywhere)
             } label: {
-                DisclosureLabel(title: NamedButton.title(forKey: key), help: caption,
+                DisclosureLabel(title: NamedButton.title(forKey: key), help: help, note: note,
                                 spokenTitle: "\(NamedButton.title(forKey: key)) directions", isExpanded: isExpanded)
             }
+            .overridable(note, help: help)
             .padding(.leading, indented ? 16 : 0)
             .listRowBackground(rowFill(key))
             if isExpanded.wrappedValue {
@@ -162,13 +168,16 @@ struct ButtonsPane: View {
                     // else it does nothing.
                     let inherited = direction.everywhere.map { ($0 == .standard ? ButtonAction.named("none") : $0) }
                     let own = direction.own == .standard && inherited == nil ? .named("none") : direction.own
-                    LabeledContent {
-                        actionButton(own, target: BindingTarget(button: key, direction: direction.name),
-                                     sameAsEverywhere: inherited?.label, spokenEverywhere: inherited?.spokenLabel)
-                    } label: {
-                        RowLabel(Gesture.label(direction.name),
-                                 help: inherited.flatMap { ActionButton.inherited(own, everywhere: $0.label, source: InheritedScope.allMice).caption })
+                    let target = BindingTarget(button: key, direction: direction.name)
+                    let note = inherited.flatMap {
+                        ActionButton.inherited(own, everywhere: $0.label, source: InheritedScope.allMice).note { apply(.standard, to: target) }
                     }
+                    LabeledContent {
+                        actionButton(own, target: target, sameAsEverywhere: inherited?.label, spokenEverywhere: inherited?.spokenLabel)
+                    } label: {
+                        RowLabel(Gesture.label(direction.name), note: note)
+                    }
+                    .overridable(note, help: nil)
                     .padding(.leading, indented ? 38 : 22)
                 }
             }
@@ -224,7 +233,8 @@ struct ButtonsPane: View {
         let inherits = sameAsEverywhere != nil
         return ActionButton(
             action: isDirection && action == .standard ? .named("none") : action,
-            // A mouse's rows take "Same as All Mice" in its place.
+            // A mouse's rows take "Same as All Mice" in its place: Kit has no value for "native on this
+            // mouse while All Mice binds the button" (see DeviceScopeTests).
             allowsDefault: !isDirection && !inherits,
             allowsGesture: !isDirection,
             isPresented: Binding(get: { presented == id }, set: { presented = $0 ? id : nil }),
@@ -276,11 +286,11 @@ private struct ButtonsAdvancedSheet: View {
                 ValueSlider(title: "Distance", help: "How far to move while holding before a direction fires.",
                             value: model.number(["gesture", "distanceMm"], default: 4, step: 0.5, in: target),
                             range: 2...12, low: "Short", high: "Long", format: Format.millimetres,
-                            inheritance: model.inheritance(of: [["gesture", "distanceMm"]], in: target))
+                            note: model.inheritance(of: [["gesture", "distanceMm"]], in: target))
                 ValueSlider(title: "Repeat", help: "Keep moving to repeat, such as across several Spaces.",
                             value: model.number(["gesture", "repeatIntervalMs"], default: 400, step: 50, in: target),
                             range: 150...1000, low: "Fast", high: "Slow", format: Format.milliseconds,
-                            inheritance: model.inheritance(of: [["gesture", "repeatIntervalMs"]], in: target))
+                            note: model.inheritance(of: [["gesture", "repeatIntervalMs"]], in: target))
             }
             .disabled(model.readOnly)
         }

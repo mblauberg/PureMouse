@@ -204,7 +204,7 @@ public struct AppButton: Equatable, Sendable {
     public let directions: [Direction]
 
     /// The app leaves the button to a gesture set everywhere: its directions show, collapsed and
-    /// dimmed, and editing one writes only that direction under the app
+    /// shown as for any inherited row, and editing one writes only that direction under the app
     /// (`ConfigTree.bindInApp(_:button:direction:to:)`).
     public var inheritsGesture: Bool { own == .standard && everywhere == .gesture }
 }

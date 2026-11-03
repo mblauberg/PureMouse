@@ -215,9 +215,10 @@ its `name`, else "Unknown mouse <key>". The last choice is remembered for the us
 the default; a remembered mouse that is no longer listed is All Mice.
 
 Each Mouse pane reads the value in effect (`resolved`) and writes in the chosen scope. A control the
-mouse has no value for shows what All Mice sets, dimmed, with the caption "Same as All Mice"
-(`InheritedValue`, the same presentation an app uses for "Same as Everywhere"); one it sets shows its
-own value, and "Use All Mice Setting" removes it. A section's Restore Defaults removes that mouse's
+mouse has no value for looks exactly as it does under All Mice, with no mark; one it sets says "Set for
+this mouse." with a "Use All Mice Setting" link that removes it (`InheritedValue`, the same presentation
+an app uses with "Set for this app." and "Use Everywhere Setting"). A pop-up's first entry is "Same as All
+Mice (value)". A section's Restore Defaults removes that mouse's
 keys for the section, never its `name`. The Presets row of a mouse that uses All Mice's presets reads
 "Same as All Mice" in place of the list, and a mouse's own empty `dpiPresets: []` is kept, as it means
 no presets for that mouse. The mouse's Smooth scrolling "Same as All Mice" removes the mouse's

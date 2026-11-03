@@ -37,10 +37,16 @@ answering a question people have, and a good default means most people never tou
   mouse's name, truncated at the tail by the width the strip leaves it (one line, never over the
   centred segments). The Apps note ("Apps are the same for every mouse.") is the
   pop-up's last menu item, a tooltip and its accessibility hint rather than a line under it: a line
-  costs 15 pt in a strip every segment shares, and Scrolling has 6 pt to spare. A pane under a
-  chosen mouse shows an inherited row as `InheritedValue` does for an app: the value in effect,
-  dimmed, captioned "Same as All Mice", with "Use All Mice Setting" at the row's trailing edge when
-  it has its own.
+  costs 15 pt in a strip every segment shares, and Scrolling has 6 pt to spare. "Settings you don't
+  change follow All Mice." is the menu's other note, said once. A pane under a chosen mouse
+  (and an app's sheet) marks changes, not inheritance (`InheritedValue`): a row that inherits looks
+  exactly as it does under All Mice, with the same control, full contrast and its usual help caption;
+  a row with its own value adds the line "Set for this mouse." ("Set for this app.") and an inline
+  link, "Use All Mice Setting" ("Use Everywhere Setting"), moves its help to the tooltip, and offers
+  the same command in its context menu and as a VoiceOver action. No row reserves a hidden slot, so
+  every trailing control ends at the form's trailing edge and a slider track never moves between
+  scopes. A mouse's pane is never taller than the same pane under All Mice, except by that one line
+  on changed rows.
 - ⌘W closes it, and closing it quits the helper. Esc dismisses a sheet; Return takes the sheet's
   default button.
 - Nothing is placed behind the toolbar or the tab bar: no backgrounds, materials or
@@ -56,7 +62,7 @@ answering a question people have, and a good default means most people never tou
 - **One pop-up look.** Every pop-up (an action row on Buttons, the thumb wheel's Action, an app's
   "Same as Everywhere" rows) is drawn the same way (`PopUpLabel`): the value, then the up/down
   chevrons. A value left to the mouse (Mouse Default) is an ordinary enabled choice in primary
-  text; only a value an app inherits from Everywhere is dimmed. An empty state's next step is a
+  text, and so is a value inherited from a wider scope: nothing is dimmed to say so. An empty state's next step is a
   bordered push button (Add App…), as in System Settings: a grouped form draws a pull-down in a
   row borderless.
 - **Let the system draw.** No explicit font sizes, control widths or heights, literal corner radii,

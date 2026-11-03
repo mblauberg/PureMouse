@@ -247,8 +247,9 @@ one. This file covers how to work on it safely.
 - The Apps pane writes only `apps.<id>` keys (`AppSettings.swift`): each control's own key, removed
   for "Same as Everywhere" (an emptied app entry is pruned); an added app is not written until a
   setting is chosen (its row says so until Settings closes). Each app opens in a sheet (`AppSheet`)
-  over the list; a value it leaves unset shows what applies everywhere, dimmed, with "Same as
-  Everywhere" (`InheritedValue`, the one presentation for any inherited value), and inside it the
+  over the list; a value it leaves unset looks exactly as it does everywhere, and one it sets says "Set for
+  this app." with a "Use Everywhere Setting" link (`InheritedValue`, the one type for any inherited
+  value; the caption is for overrides only), and inside it the
   shortcut and command editors are popovers (`EditorPresentation`, read by `ThumbWheelRows` and the
   button rows), since no sheet opens from a sheet. Names are looked up without icons
   (`AppIdentities`); an icon loads when its frame meets the scroll view's visible bounds (`AppIcon`;
@@ -273,10 +274,17 @@ one. This file covers how to work on it safely.
 - The Mouse tab's pop-up (`MousePopUp`, `AppModel.knownMice`, `MouseScope`) chooses the scope the
   panes edit (`AppModel.scope`, `scopeTarget`, remembered per user in defaults; All Mice is the
   default and the only scope without the pop-up). Panes read `resolved` and write through
-  `model.update(in: model.scopeTarget)`; a control with no value of its own is an `InheritedValue`
-  with source "All Mice" (`InheritedRow`, `InheritedChoiceRow`, `InheritedReset`; never a second
-  presentation), and `ScopeEditing.swift` holds the per-section helpers (`removeOverrides`,
-  `restore…Defaults(in:)`, smooth scrolling, feel, presets). Reset All and the status menu stay
+  `model.update(in: model.scopeTarget)`; a row uses its normal control in every scope. A row the mouse
+  sets itself gets an `InheritedOverride` note from `InheritedValue.note` (`RowLabel`/`DisclosureLabel`
+  `note:`, `.overridable`): the caption "Set for this mouse." with an inline "Use All Mice Setting"
+  link, the same command in its context menu and as a VoiceOver action, and its help in a tooltip.
+  A row that inherits shows no mark, no dimming and no hidden trailing slot (`InheritedReset` is
+  gone: a slider track never moves between scopes). Pop-ups keep "Same as All Mice (x)" as their
+  first entry. The one explanation, "Settings you don't change follow All Mice.", sits in the
+  mouse pop-up's menu (`MousePopUp.followNote`). `ScopeEditing.swift` holds the per-section helpers (`removeOverrides`,
+  `restore…Defaults(in:)`, smooth scrolling, feel, presets). A mouse's button rows cannot yet choose
+  Mouse Default as their own value while All Mice binds the button: Kit has no native-click value
+  for a device entry (`DeviceScopeTests`). Reset All and the status menu stay
   global (`setDPI` without a target writes the top level); Settings' Pointer pane passes the mouse,
   and Find by Pressing and "use configured DPI" carry its key (`Control.device`,
   `Control.capture.device`), a press selecting that mouse's scope. Do not read `primaryDevice` in a

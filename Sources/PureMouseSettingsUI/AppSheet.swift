@@ -6,8 +6,8 @@ import SwiftUI
 /// then its buttons, thumb wheel and scrolling. Settings apply live, so Done closes it; Remove…
 /// asks first. No sheet opens from it (docs/ui-design.md, Disclosure): the action picker and the
 /// shortcut and command editors are popovers (`EditorPresentation`), and gesture directions,
-/// other controls and more thumb wheel options are disclosures. A value the app leaves unset shows
-/// what applies everywhere, dimmed (`InheritedValue`).
+/// other controls and more thumb wheel options are disclosures. A value the app leaves unset looks
+/// as it does everywhere; one it sets says "Set for this app." (`InheritedValue`).
 struct AppSheet: View {
     @Environment(AppModel.self) private var model
     /// The app's key under `apps`.
@@ -141,7 +141,7 @@ struct AppSheet: View {
 
     private func title(_ button: String) -> String { NamedButton.title(forKey: button) }
 
-    /// What applies everywhere, for the dimmed value and "Same as Everywhere (…)". An unset
+    /// What applies everywhere, for the value a row shows and "Same as Everywhere (…)". An unset
     /// direction does nothing.
     private func everywhereLabel(_ action: ButtonAction, direction: Bool = false, spoken: Bool = false) -> String {
         let action = action == .standard && direction ? ButtonAction.named("none") : action
@@ -154,13 +154,14 @@ struct AppSheet: View {
         let target = bindingTarget(button)
         let everywhere = everywhereLabel(state.everywhere)
         let spokenEverywhere = everywhereLabel(state.everywhere, spoken: true)
-        let caption = ActionButton.inherited(state.own, everywhere: everywhere).caption
+        let note = ActionButton.inherited(state.own, everywhere: everywhere).note { apply(.standard, to: target) }
         if state.directions.isEmpty {
             LabeledContent {
                 actionButton(state.own, target: target, sameAsEverywhere: everywhere, spokenEverywhere: spokenEverywhere)
             } label: {
-                RowLabel(title(button), help: caption)
+                RowLabel(title(button), note: note)
             }
+            .overridable(note, help: nil)
             .padding(.leading, indented ? 16 : 0)
             .actionEditorPopover($editor, for: target, save: apply)
         } else {
@@ -171,9 +172,10 @@ struct AppSheet: View {
             LabeledContent {
                 actionButton(state.own, target: target, sameAsEverywhere: everywhere, spokenEverywhere: spokenEverywhere)
             } label: {
-                DisclosureLabel(title: title(button), help: caption, spokenTitle: "\(title(button)) directions",
+                DisclosureLabel(title: title(button), note: note, spokenTitle: "\(title(button)) directions",
                                 isExpanded: isExpanded)
             }
+            .overridable(note, help: nil)
             .padding(.leading, indented ? 16 : 0)
             .actionEditorPopover($editor, for: target, save: apply)
             if isExpanded.wrappedValue {
@@ -184,12 +186,13 @@ struct AppSheet: View {
                     let inherited = direction.everywhere.map { everywhereLabel($0, direction: true) }
                     let spokenInherited = direction.everywhere.map { everywhereLabel($0, direction: true, spoken: true) }
                     let own = direction.own == .standard && inherited == nil ? .named("none") : direction.own
+                    let note = inherited.flatMap { ActionButton.inherited(own, everywhere: $0).note { apply(.standard, to: target) } }
                     LabeledContent {
                         actionButton(own, target: target, sameAsEverywhere: inherited, spokenEverywhere: spokenInherited)
                     } label: {
-                        RowLabel(Gesture.label(direction.name),
-                                 help: inherited.flatMap { ActionButton.inherited(own, everywhere: $0).caption })
+                        RowLabel(Gesture.label(direction.name), note: note)
                     }
+                    .overridable(note, help: nil)
                     .padding(.leading, indented ? 38 : 22)
                     .actionEditorPopover($editor, for: target, save: apply)
                 }

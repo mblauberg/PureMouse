@@ -1109,3 +1109,17 @@ private func kitSays(_ root: [String: Any], mouse key: String, sets path: [Strin
     #expect(try decode(saved).forDevice(mouse).dpi == (try decode(ConfigTree()).forDevice(mouse).dpi))
     #expect(saved.resolvedInt(["dpi"], in: device(mouse)) == nil)
 }
+
+@Test func mouseDefaultOnAMouseWhileAllMiceBindsTheButtonCannotYetBeWritten() throws {
+    // The oracle for "Mouse Default as a mouse's own value" is `Config.forDevice`: the button must
+    // resolve to no binding, so the daemon clicks natively. Kit has no spelling for that: a device
+    // entry layers on the top level, so a key written under the mouse is a binding, and the only
+    // way to leave it unbound is to remove the key, which hands the button back to All Mice.
+    // `.standard` therefore means "Same as All Mice" here. When Kit gains a native-click value
+    // (#54 follow-up), flip these expectations and let ButtonsPane offer Mouse Default.
+    var config = try tree(#"{"buttons": {"back": "mute"}, "devices": {"\#(mouse)": {"name": "MX", "buttons": {"back": "launchpad"}}}}"#)
+    func action() throws -> Action? { if case .action(let a)? = try decode(config).forDevice(mouse).bindings[0x0053] { a } else { nil } }
+    #expect(try action() == Action.named["launchpad"])
+    config.bind("back", to: .standard, in: device(mouse))
+    #expect(try action() == Action.named["mute"])
+}
