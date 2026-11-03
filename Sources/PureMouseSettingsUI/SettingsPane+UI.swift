@@ -37,5 +37,4 @@ extension Links {
     static let repository = URL(string: "https://github.com/mblauberg/PureMouse")!
     static let licence = URL(string: "https://github.com/mblauberg/PureMouse/blob/main/LICENSE")!
     static let sponsors = URL(string: "https://github.com/sponsors/mblauberg")!
-    static let logiOptions = URL(string: "https://github.com/mblauberg/PureMouse/blob/main/docs/troubleshooting.md#logi-options")!
 }

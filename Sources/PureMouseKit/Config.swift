@@ -1,7 +1,10 @@
 import Foundation
 
-/// User configuration, read from `~/.config/puremouse/config.json`. Every field is optional;
-/// omitted settings are left as the device has them. Numbers outside their ranges fail the load
+/// User configuration, read from `~/.config/puremouse/config.json`. Every field is optional: a
+/// setting the file leaves out takes its value from the default set (`defaultSetJSON`), and the
+/// few the default set leaves unset (DPI, wheel direction, wheel mode and SmartShift) are left as
+/// the device has them. No file is the same as `{}`: the default set. Numbers outside their
+/// ranges fail the load
 /// (a reload then keeps the previous config) rather than overflowing later, mid-session.
 ///
 /// Shared by the daemon and the menu bar app, which validates with this decoder before writing
@@ -46,10 +49,16 @@ public struct Config: Decodable, Sendable {
         try self.init(decoder.container(keyedBy: AnyKey.self))
     }
 
+    /// The default set, then the file on top of it (`decodeFile`).
+    init(_ c: KeyedDecodingContainer<AnyKey>) throws {
+        self = Self.defaults
+        try decodeFile(c)
+    }
+
     /// The top level, then `apps` decoded against it, then each `devices` entry. `decodeSections`
     /// is the one layering point: a device entry decodes its sections on top of the top level's
     /// (`Config+Devices.swift`).
-    init(_ c: KeyedDecodingContainer<AnyKey>) throws {
+    mutating func decodeFile(_ c: KeyedDecodingContainer<AnyKey>) throws {
         try decodeSections(c)
         if let section = try c.nestedContainerIfPresent(forKey: AnyKey("universalControl")) {
             universalControl = try UniversalControl(section, base: universalControl)
@@ -110,9 +119,8 @@ public struct Config: Decodable, Sendable {
     /// Adds the bindings `c` names to `buttons` and `bindings`. A name for a control that `buttons`
     /// held before replaces the earlier name and binding, and a gesture keeps the directions it
     /// leaves out. `"default"` (`Binding.nativeValue`) binds nothing: it removes the binding and
-    /// every name `buttons` held for that control, which is how a device entry leaves a button
-    /// the top level binds to the mouse's own behaviour; at the top level there is nothing to
-    /// remove, so it is the same as leaving the name out. Names within `c` do not layer on each
+    /// every name `buttons` held for that control, which is how the top level, a device entry or an
+    /// app leaves a button that a wider scope, or the default set, binds to the mouse's own behaviour. Names within `c` do not layer on each
     /// other; if two name one control, the last in sorted order decides it. When that is a binding,
     /// the names of the bindings before it stay in `buttons` too; when it is `"default"`, none of
     /// them does, and the control has no binding.
@@ -376,8 +384,8 @@ public struct Config: Decodable, Sendable {
         }
 
         /// The reserved `buttons` value, the JSON string `"default"`, for no binding: the mouse's own
-        /// behaviour. It is not an `Action`. On a device or an app it hides what the wider scope
-        /// binds; at the top level it is the same as leaving the button out.
+        /// behaviour. It is not an `Action`. It hides what the wider scope binds, and at the top level
+        /// what the default set binds (back, forward and the gesture button).
         public static let nativeValue = "default"
 
         /// Whether the value at `key` is `nativeValue`.
@@ -464,8 +472,46 @@ public struct Config: Decodable, Sendable {
         try JSONDecoder().decode(Config.self, from: Data(contentsOf: url))
     }
 
-    /// No settings: devices are left exactly as they are.
-    public static let empty = try! JSONDecoder().decode(Config.self, from: Data("{}".utf8))
+    /// The default set, decoded once from `defaultSetJSON`.
+    public static let defaults: Config = {
+        do {
+            return try JSONDecoder().decode(DefaultSet.self, from: Data(defaultSetJSON.utf8)).config
+        } catch {
+            preconditionFailure("The default set does not decode: \(error)")
+        }
+    }()
+
+    /// The one definition of what a new install does. A missing file, `{}`, Reset All Settings and
+    /// each pane's Restore Defaults all give it (docs/configuration.md, "Defaults"). It holds the
+    /// settings a key left out would not give: smooth scrolling on at Balanced, and back, forward
+    /// and the gesture button bound. The rest is what a key left out already means: the thumb wheel
+    /// scrolls, not reversed (`ThumbWheel`), Universal Control hand-off is on (`UniversalControl`),
+    /// Mouse Default on the wheel press and the top button, and DPI, wheel direction, wheel mode and
+    /// SmartShift left as the mouse has them. Settings lays its tree over the same text
+    /// (`ConfigTree.defaults`), so the two cannot differ.
+    public static let defaultSetJSON = """
+        {
+          "smoothScroll": {"enabled": true, "speed": 1, "acceleration": 1, "smoothingMs": 125},
+          "buttons": {
+            "back": "navigateBack",
+            "forward": "navigateForward",
+            "gesture": {
+              "click": "missionControl", "up": "missionControl", "down": "appExpose",
+              "left": "spaceLeft", "right": "spaceRight"
+            }
+          }
+        }
+        """
+
+    /// Decodes `defaultSetJSON` without layering it on itself.
+    private struct DefaultSet: Decodable {
+        let config: Config
+        init(from decoder: Decoder) throws {
+            var config = Config()
+            try config.decodeFile(decoder.container(keyedBy: AnyKey.self))
+            self.config = config
+        }
+    }
 }
 
 extension KeyedDecodingContainer {

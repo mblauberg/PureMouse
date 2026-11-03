@@ -24,6 +24,10 @@ dirty freed malloc memory. An earlier target of 10 MB is below that floor.
   or five times, at most 11 MB, and the helper itself at most 37 MB with its window open. Its cold
   start, from the menu being asked to the window on screen, is budgeted at the median plus half,
   rounded up to 100 ms (800 ms).
+- With the icon hidden the menu app stays resident without a status item (#145), so it keeps the
+  battery alerts and update checks: the `hidden` scenarios, from the higher of two sets of 5 runs,
+  at most 10 MB fresh, 9 after 200 doorbells (the last a low battery), 9 after the helper quits and
+  10 after an update check.
 - `MallocSpaceEfficient=1` is set for the menu app (launchd environment and `LSEnvironment`) and the
   Settings helper (`LSEnvironment`). The gate was the baseline build against the branch build, 5
   runs each: 14.08 MB after three opens against 19.86 (0.71 times, the rule is at most 0.75), and

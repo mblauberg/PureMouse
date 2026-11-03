@@ -18,7 +18,7 @@ upgrades.
 
 ## Decision
 
-`LoginItem` keeps its policy (daemon before menu, menu removed last, the hidden-menu marker, the
+`LoginItem` keeps its policy (daemon before menu, menu removed last, the hidden-menu marker, which keeps the menu agent and drops only its icon, the
 caller's own agent left running) and talks to a `LoginService`. Launch agents implement it. An
 `SMAppService.agent` implementation is chosen when the running binary has a Team ID and the bundled
 plists exist, if the spike passes; otherwise launch agents stay for Developer ID builds too. The CLI

@@ -122,17 +122,13 @@ extension ConfigTree {
     }
 
     /// Whether the app's scrolling glides: its own `smoothScroll.enabled`, else the global one's.
-    /// A `smoothScroll` in the app turns it on where there is none globally (Kit's `decodeApps`).
     public func scrollsSmoothly(_ app: String) -> Bool {
-        let own = Self.appScope(app).prefix + ["smoothScroll"]
-        if let enabled = bool(own + ["enabled"]) { return enabled }
-        if contains(["smoothScroll"]) { return smoothScrollEnabled }
-        return contains(own)
+        bool(Self.appScope(app).prefix + ["smoothScroll", "enabled"]) ?? smoothScrollEnabled
     }
 
     /// The caption under "Custom scrolling": what the app's scrolling does. Off, it follows
-    /// Scrolling; on, it says whether the glide applies, since an app's `smoothScroll` turns smooth
-    /// scrolling on where there is none globally (`scrollsSmoothly`).
+    /// Scrolling; on, it says whether the glide applies, since an app can turn smooth scrolling on
+    /// where Scrolling has it off (`scrollsSmoothly`).
     public func customScrollingCaption(_ app: String) -> String {
         if !overridesScrolling(app) { return "Uses Scrolling's speed and glide." }
         if !scrollsSmoothly(app) { return "Smooth scrolling is off, so this app scrolls at this speed without the glide." }

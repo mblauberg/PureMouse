@@ -27,7 +27,7 @@ struct SessionCaptureTests {
             let index = try #require(fake.controls.firstIndex { $0.cid == cid })
             fake.controls[index].info[4] = 0x20
         }
-        var config = try SessionHarness.config(#"{"buttons":{"0x0050":"none"},"apps":{"com.example":{"buttons":{"0x51":"none"}}}}"#)
+        var config = try SessionHarness.config(#"{"buttons":{"0x0050":"none","back":"default","forward":"default","gesture":"default"},"apps":{"com.example":{"buttons":{"0x51":"none"}}}}"#)
         // Bypass the decoder to prove the daemon's independent exclusion of bound controls.
         config.apps["com.example"]?.bindings[0x50] = .action(.none)
         let h = try await SessionHarness(fake, config: config, inheriting: .init(fresh: true))

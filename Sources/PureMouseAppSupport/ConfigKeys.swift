@@ -3,17 +3,13 @@ import PureMouseKit
 
 /// Config settings with meaning beyond one key.
 extension ConfigTree {
-    /// Smooth scrolling is on when `smoothScroll` is present and `smoothScroll.enabled` is not false.
+    /// Smooth scrolling is on unless `smoothScroll.enabled` is false: the default set has it on.
     public var smoothScrollEnabled: Bool {
-        get { contains(["smoothScroll"]) && bool(["smoothScroll", "enabled"]) != false }
+        get { bool(["smoothScroll", "enabled"]) != false }
         set {
-            if newValue {
-                if !contains(["smoothScroll"]) { set([String: Any](), at: ["smoothScroll"]) }
-                set(nil, at: ["smoothScroll", "enabled"])
-            } else if contains(["smoothScroll"]) {
-                // Keeps the tuning, so turning it back on restores the same feel.
-                set(false, at: ["smoothScroll", "enabled"])
-            }
+            // Off keeps the tuning, so turning it back on restores the same feel. On removes the
+            // key, since on is the default.
+            set(newValue ? nil : false, at: ["smoothScroll", "enabled"])
         }
     }
 
@@ -38,7 +34,7 @@ extension ConfigTree {
     public var feelSelection: Feel? { feel == .custom ? nil : feel }
 
     /// Restore Defaults on Mouse › Buttons: every button, its directions, and the gesture distance
-    /// and repeat. App settings stay.
+    /// and repeat, back to the default set (`layered()`). App settings stay.
     public mutating func restoreButtonDefaults() {
         set(nil, at: ["buttons"])
         set(nil, at: ["gesture"])
@@ -55,7 +51,6 @@ extension ConfigTree {
 
     public mutating func apply(_ feel: Feel) {
         guard let values = feel.values else { return }
-        if !contains(["smoothScroll"]) { set([String: Any](), at: ["smoothScroll"]) }
         set(values.acceleration, at: ["smoothScroll", "acceleration"])
         set(values.smoothingMs, at: ["smoothScroll", "smoothingMs"])
     }
@@ -89,7 +84,7 @@ extension ConfigTree {
 
     /// The binding `scope` itself sets for a button (`.standard` when it sets none), not what
     /// applies there: for that, `resolved(["buttons", button], in:)`.
-    /// `"default"` at the top level is the same as no key, so it reads as `.standard` there.
+    /// `"default"` at the top level reads as `.standard` there: both are Mouse Default.
     public func binding(_ button: String, in scope: ConfigScope = .global) -> ButtonAction {
         let action = ButtonAction(json: self[entryPrefix(for: scope) + ["buttons", buttonKey(button, in: scope)]])
         return action == .mouseDefault && scope == .global ? .standard : action
@@ -106,6 +101,11 @@ extension ConfigTree {
     public mutating func bind(_ button: String, to binding: ButtonAction, in scope: ConfigScope = .global) {
         if binding == .standard || (binding == .mouseDefault && scope == .global) {
             removeButton(button, in: scope)
+            // At the top level, Mouse Default over a control the default set binds is a value of
+            // its own: with no key the default set's binding applies.
+            if scope == .global, Self.defaultBinding(for: button) != nil {
+                set(Config.Binding.nativeValue, at: ["buttons", button])
+            }
             return
         }
         let button = buttonKey(button, in: scope)
@@ -140,8 +140,9 @@ extension ConfigTree {
         }
     }
 
-    /// Binds one direction of a gesture button. At the top level a missing direction does nothing,
-    /// so "Do Nothing" removes the key, unless it is the last one. In a device (or app) a missing
+    /// Binds one direction of a gesture button. At the top level a missing direction does nothing
+    /// (or, on the gesture button, does what the default set says), so "Do Nothing" removes the key
+    /// unless it is the last one, and is written as `"none"` where the default set sets the direction. In a device (or app) a missing
     /// direction takes the top level's, so "Do Nothing" is written as given, and only `.standard`
     /// removes the key, and the whole binding with its last direction (an empty gesture is not one).
     public mutating func bind(_ button: String, direction: String, to binding: ButtonAction, in scope: ConfigScope = .global) {
@@ -152,17 +153,26 @@ extension ConfigTree {
         case .standard:
             let others = own?.keys.filter { $0 != direction } ?? []
             if scope == .global {
-                set(others.isEmpty ? "none" : nil, at: path, in: scope)
+                set(others.isEmpty || defaultsSet(direction, of: button) ? "none" : nil, at: path, in: scope)
             } else if own != nil {
                 if others.isEmpty { removeButton(button, in: scope) } else { set(nil, at: path, in: scope) }
             }
         case .named("none") where scope == .global:
-            set((own?.keys.filter { $0 != direction } ?? []).isEmpty ? "none" : nil, at: path, in: scope)
+            set((own?.keys.filter { $0 != direction } ?? []).isEmpty || defaultsSet(direction, of: button) ? "none" : nil,
+                at: path, in: scope)
         case .named(let name): set(name, at: path, in: scope)
         case .keys(let spec): set(["keys": spec], at: path, in: scope)
         case .run(let command): set(["run": command], at: path, in: scope)
         case .haptic(let waveform): set(["haptic": waveform], at: path, in: scope)
         case .gesture, .mouseDefault: break
         }
+    }
+
+    /// Whether the default set gives `direction` of the gesture on `button` an action, so that
+    /// leaving it out would not do nothing.
+    private func defaultsSet(_ direction: String, of button: String) -> Bool {
+        guard let gesture = Self.defaultBinding(for: button) as? [String: Any],
+              let action = gesture[direction] as? String else { return false }
+        return action != "none"
     }
 }

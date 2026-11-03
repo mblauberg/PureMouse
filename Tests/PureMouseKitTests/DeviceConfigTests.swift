@@ -47,7 +47,7 @@ import Testing
         // Native there: no binding at all, and no name left behind for the control.
         #expect(device.bindings[0x53] == nil && device.bindings[0x56] == nil)
         #expect(action(device.bindings[0x52]) == .mute)
-        #expect(device.buttons.keys.sorted() == ["middle"])
+        #expect(device.buttons.keys.sorted() == ["gesture", "middle"])  // the gesture is the default set's
         #expect(device.unknownButtons.isEmpty && c.warnings.isEmpty)
         // The top level and other mice keep the binding.
         #expect(action(c.bindings[0x53]) == .navigateBack)
@@ -73,13 +73,17 @@ import Testing
         #expect(g.right == .spaceRight)
     }
 
-    @Test func defaultAtTheTopLevelIsTheSameAsLeavingTheButtonOut() throws {
+    @Test func defaultAtTheTopLevelRemovesTheDefaultSetsBindingAndNothingElse() throws {
         let withDefault = try config(#"{"buttons": {"back": "default", "0x00c4": "default", "middle": "mute"}}"#)
-        let without = try config(#"{"buttons": {"middle": "mute"}}"#)
-        #expect(withDefault.bindings.mapValues(String.init(describing:)) == without.bindings.mapValues(String.init(describing:)))
-        #expect(withDefault.buttons.keys.sorted() == without.buttons.keys.sorted())
-        #expect(withDefault.boundControls == without.boundControls)
+        // Back is bound by the default set, so Mouse Default there removes it; the top button binds
+        // nothing, so the same value there is the same as leaving it out.
+        #expect(withDefault.bindings[0x53] == nil && withDefault.bindings[0xC4] == nil)
+        #expect(action(withDefault.bindings[0x52]) == .mute && action(withDefault.bindings[0x56]) == .navigateForward)
+        #expect(withDefault.buttons.keys.sorted() == ["forward", "gesture", "middle"])
+        #expect(withDefault.boundControls == [0x52, 0x56, 0xC3])
         #expect(withDefault.unknownButtons.isEmpty && withDefault.warnings.isEmpty)
+        let without = try config(#"{"buttons": {"middle": "mute"}}"#)
+        #expect(action(without.bindings[0x53]) == .navigateBack)
     }
 
     @Test func defaultKeepsTheReservedAndUnknownWarnings() throws {
@@ -119,7 +123,7 @@ import Testing
              "devices": {"\#(Self.m)": {"buttons": {"0x0053": "launchpad", "back": "default"}}}}
             """#)
         let device = c.forDevice(Self.m)
-        #expect(device.bindings[0x53] == nil && device.buttons.isEmpty)
+        #expect(device.bindings[0x53] == nil && device.buttons.keys.sorted() == ["forward", "gesture"])
         let reverse = try config(#"""
             {"buttons": {"back": "mute"},
              "devices": {"\#(Self.m)": {"buttons": {"0x0053": "default", "back": "launchpad"}}}}
@@ -243,11 +247,11 @@ import Testing
         let c = try config(#"""
             {"buttons": {"back": "none"},
              "devices": {"\#(Self.m)": {"smoothScroll": {}}},
-             "apps": {"com.example.x": {"buttons": {"forward": "none"}}}}
+             "apps": {"com.example.x": {"buttons": {"middle": "none"}}}}
             """#)
         // The device's own global scope, the only one with smooth scrolling, and its copy of the app.
         #expect(c.everyScope.contains { $0.smoothScroll != nil })
-        #expect(c.everyScope.filter { $0.bindings[0x56] != nil }.count == 2)
-        #expect(Config.empty.everyScope.count == 1)
+        #expect(c.everyScope.filter { $0.bindings[0x52] != nil }.count == 2)
+        #expect(Config.defaults.everyScope.count == 1)
     }
 }

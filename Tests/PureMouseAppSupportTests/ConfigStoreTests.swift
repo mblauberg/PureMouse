@@ -131,7 +131,7 @@ private func loadedStore(_ sandbox: Sandbox, clock: Clock? = nil) -> ConfigStore
     store.set(1600, at: ["dpi"], debounce: true)
     store.resetAll()
     #expect(try sandbox.tree().root.isEmpty)
-    #expect(store.config.root.isEmpty)
+    #expect(store.config.root as NSDictionary == ConfigTree.defaults.root as NSDictionary)
     #expect(!store.hasPendingChanges)
     #expect(manual.pending.isEmpty)
 }
@@ -139,7 +139,7 @@ private func loadedStore(_ sandbox: Sandbox, clock: Clock? = nil) -> ConfigStore
 @MainActor @Test func aMissingFileIsEveryDefaultAndAnEditCreatesIt() throws {
     let sandbox = try Sandbox()
     let store = loadedStore(sandbox)
-    #expect(store.config.root.isEmpty && !store.readOnly)
+    #expect(store.config.root as NSDictionary == ConfigTree.defaults.root as NSDictionary && !store.readOnly)
     store.set(1600, at: ["dpi"])
     #expect(try sandbox.tree().int(["dpi"]) == 1600)
 }

@@ -43,7 +43,7 @@ import Testing
         let layered = try decode("{}", on: base)
         #expect(layered.dpi == 1600 && layered.dpiPresets == [800, 1600] && layered.scrollWheel?.smartShiftThreshold == 20)
         #expect(layered.thumbWheel?.step == 4 && layered.smoothScroll?.speed == 2 && layered.gesture.distanceMm == 8)
-        #expect(!layered.universalControl.handOff && layered.buttons.count == 3 && layered.unknownButtons.isEmpty)
+        #expect(!layered.universalControl.handOff && layered.buttons.count == 4 && layered.unknownButtons.isEmpty)
     }
 
     @Test func presentKeysLayerOnTheBase() throws {
@@ -73,7 +73,7 @@ import Testing
         #expect(base.apps.count == 1 && base.unknownButtons == ["zz"])
         let layered = try decode(#"{"dpi": 800}"#, on: base)
         #expect(layered.apps.isEmpty && layered.warnings.isEmpty && layered.unknownButtons.isEmpty)
-        #expect(layered.smoothScroll?.speed == 2 && layered.buttons.count == 1)
+        #expect(layered.smoothScroll?.speed == 2 && layered.buttons["zz"] != nil)
     }
 
     @Test func appsInTheLayerInheritTheLayeredGlobals() throws {
@@ -86,7 +86,7 @@ import Testing
         // The base's speed and the layer's smoothing both reach the app, not the defaults.
         #expect(app.smoothScroll?.speed == 2 && app.smoothScroll?.smoothingMs == 300 && app.smoothScroll?.enabled == false)
         #expect(app.thumbWheel.mode == .actions(left: .volumeDown, right: .volumeUp))
-        #expect(Set(app.bindings.keys) == [0x52, 0x53, 0x56])
+        #expect(Set(app.bindings.keys) == [0x52, 0x53, 0x56, 0xC3])  // the default set binds the gesture button
         #expect(layered.warnings.isEmpty)
     }
 

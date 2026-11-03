@@ -61,10 +61,13 @@ extension AppModel {
     /// has reported any (the default list shows).
     public func reportedControlIDs(in scope: ConfigScope) -> [UInt16] { devices(in: scope).flatMap(\.controls).map(\.cid) }
 
-    /// The config keys under `buttons` that make a control listed: the top level's, and the mouse's
-    /// own in its scope.
+    /// The config keys under `buttons` that make a control listed: the top level's and the mouse's
+    /// own in its scope. A binding the default set gives is no reason to list a control a mouse
+    /// lacks, so the top level counts only what differs from it.
     public func boundButtonKeys(in scope: ConfigScope) -> [String] {
-        let prefixes = scope == .global ? [[]] : [[], config.prefix(of: scope)]
-        return prefixes.flatMap { prefix in (config[prefix + ["buttons"]] as? [String: Any]).map { Array($0.keys) } ?? [] }
+        let global = (config[["buttons"]] as? [String: Any] ?? [:]).keys.filter { config.holdsBeyondDefaults(["buttons", $0]) }
+        guard scope != .global else { return Array(global) }
+        let own = (config[config.prefix(of: scope) + ["buttons"]] as? [String: Any]).map { Array($0.keys) } ?? []
+        return Array(global) + own
     }
 }

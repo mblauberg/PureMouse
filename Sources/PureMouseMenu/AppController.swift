@@ -71,18 +71,23 @@ enum InstallSource: Equatable {
 }
 
 /// The app delegate: owns the model and the status item. Settings is an app of its own
-/// (`SettingsLauncher`), so this process never holds a window.
+/// (`SettingsLauncher`), so this process never holds a window. With Show in menu bar off, the
+/// launchd-run process stays without a status item (windowless): low-battery notifications and
+/// the update check go on (docs/ui-design.md, "Show in menu bar").
 @MainActor
 final class AppController: NSObject, NSApplicationDelegate {
     let model: AppModel
-    /// Whether this run shows its icon: notifications run only then. A hidden-icon run gets no
-    /// notification callbacks, so it neither announces nor consumes a band (`BatteryAlertStore`),
-    /// and never asks for permission.
+    /// Whether this run shows its status item (Show in menu bar).
     private let iconShown: Bool
+    /// Whether this run is the resident menu process (launchd's, shown or not): only it announces
+    /// and consumes bands (`BatteryAlertStore`), asks for notification permission and checks for
+    /// updates. A copy started by hand without an icon opens Settings and ends with it; it gets no
+    /// notification callbacks, so it neither announces nor consumes a band.
+    private let resident: Bool
     private let requestPermission: @MainActor () -> Void
     private var statusMenu: StatusMenu?
     private var lowBatteryNotificationsOn: Bool
-    /// The daily update check and its reminders; runs only while the icon is shown.
+    /// The daily update check and its reminders; runs in the resident process, icon or not.
     let updates: UpdateReminders
     private let askAboutUpdates: @MainActor () -> Bool
     private var questionSettled = false
@@ -110,19 +115,32 @@ final class AppController: NSObject, NSApplicationDelegate {
     /// Quit, Hide or a termination has been asked for: an install that finishes now is not followed
     /// by a relaunch.
     private var leaving = false
+    /// Hide is under way: its install cleanup and the command run first. Unlike `leaving` this
+    /// ends, since the process stays, and installs are accepted again afterwards.
+    private var hiding = false
+    /// Runs `menu off` and reports whether it worked (replaced in tests).
+    private let menuOff: (@escaping @MainActor (Bool) -> Void) -> Void
     private var requestWatch: UpdatePreferences.Watch?
 
     /// The defaults are the live app; a test passes a sandbox and spies for what reaches the
     /// notification centre.
     init(locations: Locations = .live,
          iconShown: Bool = Locations.live.showsInMenuBar,
+         resident: Bool? = nil,
          announce: @escaping AppModel.Announce = Notifier.post,
          withdraw: @escaping AppModel.Withdraw = Notifier.removeDelivered,
          requestPermission: @escaping @MainActor () -> Void = { Task { await Notifier.requestIfNeeded() } },
-         updates setup: UpdateSetup = .live) {
-        model = AppModel(locations: locations, alert: Alerts.show,
-                         notifications: iconShown ? (announce, withdraw) : nil)
+         updates setup: UpdateSetup = .live,
+         menuOff: ((@escaping @MainActor (Bool) -> Void) -> Void)? = nil) {
+        let resident = resident ?? (iconShown || Locations.launchedByLaunchd)
+        let appModel = AppModel(locations: locations, alert: Alerts.show,
+                                notifications: resident ? (announce, withdraw) : nil)
+        model = appModel
+        self.menuOff = menuOff ?? { done in
+            appModel.perform(.menuOff, then: { done(true) }, otherwise: { done(false) })
+        }
         self.iconShown = iconShown
+        self.resident = resident
         self.requestPermission = requestPermission
         lowBatteryNotificationsOn = model.lowBatteryNotificationsOn
         updates = UpdateReminders(preferences: setup.preferences, current: setup.current, fetcher: setup.fetcher,
@@ -155,12 +173,12 @@ final class AppController: NSObject, NSApplicationDelegate {
         if iconShown { statusMenu = StatusMenu(model: model, app: self) }
         startUpdates()
         // Opened by hand, or asked for Settings while starting (`puremouse` opened from the Finder
-        // restarts this agent, then opens it), or with no icon to show: open Settings. With no
-        // icon there is nothing left to do once it is open.
+        // restarts this agent, then opens it): open Settings. A copy that is not resident has
+        // nothing left to do once it is open.
         let request = ShowRequest.consume()
-        if !Locations.launchedByLaunchd || statusMenu == nil || request != nil {
+        if !Locations.launchedByLaunchd || !resident || request != nil {
             showSettings(request) { [weak self] in
-                if self?.statusMenu == nil { NSApp.terminate(nil) }
+                if self?.resident != true { NSApp.terminate(nil) }
             }
         }
         #if DEBUG || DEVHOOKS
@@ -196,7 +214,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         // macOS asks per app, and this app posts the notifications: when the switch is turned on
         // in Settings (another app), ask for permission here.
         let on = model.lowBatteryNotificationsOn
-        if iconShown, NotificationPermission.shouldRequest(wasOn: lowBatteryNotificationsOn, isOn: on) {
+        if resident, NotificationPermission.shouldRequest(wasOn: lowBatteryNotificationsOn, isOn: on) {
             requestPermission()
         }
         lowBatteryNotificationsOn = on
@@ -206,12 +224,12 @@ final class AppController: NSObject, NSApplicationDelegate {
     // MARK: Updates
 
     /// Counts this launch, starts the schedule if automatic checks are on, and asks the question if
-    /// it is due. A run without the icon does none of it: it ends when Settings closes.
+    /// it is due. A copy that is not resident does none of it: it ends when Settings closes.
     func startUpdates() {
-        // About asks for installs through the preferences, which a hidden-icon run hears as well.
+        // About asks for installs through the preferences, which a windowless run hears as well.
         preferences.installStatus = nil
         requestWatch = UpdatePreferences.Watch(preferences.defaults, .installRequest) { [weak self] in self?.installRequested() }
-        guard iconShown else { return }
+        guard resident else { return }
         updates.noteLaunch()
         updates.start()
         askAboutUpdatesIfDue()
@@ -223,9 +241,9 @@ final class AppController: NSObject, NSApplicationDelegate {
     /// saying it stopped), and judges the permissions on that one. An alert, not a notification,
     /// since it needs an answer; the reminders that follow take no focus.
     private func askAboutUpdatesIfDue() {
-        guard iconShown, !questionSettled, updates.questionDue, model.status != nil, model.daemonRunning else { return }
+        guard resident, !questionSettled, updates.questionDue, model.status != nil, model.daemonRunning else { return }
         questionSettled = true
-        let permissionsSetUp = !model.accessibilityMissing && !(model.inputMonitoringMissing && model.hasBluetoothDevice)
+        let permissionsSetUp = !model.accessibilityMissing && !model.inputMonitoringNeeded
         guard permissionsSetUp else { return }
         // Not inside the callback that noticed it: a modal alert there would run the rest of it nested.
         Task { updates.setAutomatic(askAboutUpdates()) }
@@ -257,12 +275,12 @@ final class AppController: NSObject, NSApplicationDelegate {
     /// replaced without a password opens the release page. One install at a time, the installer
     /// being reserved from the confirmation on; none once quitting has begun.
     func startInstall(_ offer: UpdateOffer, from source: InstallSource) {
-        guard installTask == nil, !confirming, !leaving else { return }
+        guard installTask == nil, !confirming, !leaving, !hiding else { return }
         confirming = true
         let confirmed = confirmUpdate(offer)
         confirming = false
         // Quit or Hide may have been chosen while the alert was up; nothing starts after that.
-        guard confirmed, !leaving, installTask == nil else { return }
+        guard confirmed, !leaving, !hiding, installTask == nil else { return }
         installingTitle = offer.installingTitle
         installState = .installing
         let release = UpdateCheck.Release(version: offer.version, page: offer.page)
@@ -284,7 +302,7 @@ final class AppController: NSObject, NSApplicationDelegate {
             // The app on disk is the new one, and the menu stops offering it.
             installState = .installed
             model.flush()
-            guard !leaving else { return }
+            guard !leaving, !hiding else { return }
             var result = Relaunch.failed
             if let installedApp { result = await relaunch(installedApp, source) }
             switch result {
@@ -305,8 +323,8 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     /// Runs `work` once no install is under way: one that is gets cancelled, and `work` follows its
     /// cleanup (the image detached, the download deleted), since what comes next ends this process.
-    func afterInstallEnds(_ work: @escaping @MainActor () -> Void) {
-        leaving = true
+    func afterInstallEnds(leaving ends: Bool = true, _ work: @escaping @MainActor () -> Void) {
+        if ends { leaving = true }
         guard let task = installTask else { return work() }
         task.cancel()
         Task {
@@ -342,15 +360,21 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Hide Menu Bar Icon: removes the menu app's login agent, which ends this app; the daemon
-    /// keeps running.
+    /// Hide Menu Bar Icon: `menu off` remembers it and registers this agent, and this process takes
+    /// its status item away and goes on without one (low-battery notifications and the update
+    /// check keep working). It is not restarted: that would end the caller.
     func hideMenuBarIcon() {
-        afterInstallEnds { [self] in
+        // The process stays, so Hide only holds installs back while it cleans up and runs.
+        guard !hiding else { return }
+        hiding = true
+        afterInstallEnds(leaving: false) { [self] in
             model.flush()
-            model.perform(.menuOff) { [self] in
-                statusMenu?.remove()
-                statusMenu = nil
-                NSApp.terminate(nil)
+            menuOff { [self] worked in
+                if worked {
+                    statusMenu?.remove()
+                    statusMenu = nil
+                }
+                hiding = false
             }
         }
     }
@@ -362,6 +386,11 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     func openPrivacy(_ pane: PrivacyPane) {
         NSWorkspace.shared.open(pane.url)
+    }
+
+    /// Asks Logi Options+ to quit; the daemon looks again when it has (`LogiOptionsQuit`).
+    func quitLogiOptions() {
+        LogiOptionsQuit.shared.ask { [model] in model.askDaemonToRecheck() }
     }
 
     func openReleases() {

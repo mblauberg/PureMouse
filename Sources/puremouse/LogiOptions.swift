@@ -1,7 +1,8 @@
 import Darwin
 
 /// Logi Options+ diverts the same buttons and wheels and rewrites the same settings, so with
-/// both running the mouse flips between them. PureMouse cannot stop it; it only says so in the log.
+/// both running the mouse flips between them. PureMouse cannot stop it; the daemon says so in the log
+/// and the status (`Daemon.recheckLogiOptions`), and the app offers to ask Logi Options+ to quit.
 enum LogiOptions {
     /// Executable-name prefixes of its agent, updater, app and plugin service. Matched
     /// case-insensitively; `proc_name` truncates long names, so prefixes rather than whole names.
@@ -29,12 +30,5 @@ enum LogiOptions {
             if isLogiOptions(processName: name) { names.insert(name) }
         }
         return names.sorted()
-    }
-
-    static func warnIfRunning() {
-        let names = running()
-        guard !names.isEmpty else { return }
-        Log.error("Logi Options+ is running (\(names.joined(separator: ", "))) and will fight PureMouse over the mouse; "
-                  + "quit it or uninstall it with Logitech's uninstaller")
     }
 }

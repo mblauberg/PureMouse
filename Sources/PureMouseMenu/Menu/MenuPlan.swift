@@ -16,6 +16,8 @@ struct MenuState {
     var accessibilityMissing = false
     var inputMonitoringMissing = false
     var hasBluetoothDevice = false
+    /// Bluetooth mice seen but not usable until Input Monitoring is allowed, by name.
+    var waitingForInputMonitoring: [String] = []
     var configError = false
     var logiOptionsRunning = false
     var smoothScrolling = true
@@ -114,6 +116,10 @@ enum MenuAction {
     case installUpdate
     case skipUpdate
     case openPrivacy(PrivacyPane)
+    /// Asks Logi Options+ to quit (`LogiOptionsAction.quit`).
+    case quitLogiOptions
+    /// Opens Login Items in System Settings, where its login item is removed.
+    case openLoginItems
     case toggleSmoothScrolling
     case setDPI(Int)
     case start
@@ -149,6 +155,7 @@ struct MenuItem {
 
 enum MenuPlan {
     static let offSubtitle = "The mouse works as it does without PureMouse"
+    static let waitingSubtitle = "Bluetooth · Waiting for Input Monitoring"
 
     /// The rows in order. `option`: ⌥ was held as the menu opened, which adds Reload Config and
     /// Show Log in Finder (the headers' and Hide Menu Bar Icon's alternates are always there).
@@ -159,11 +166,14 @@ enum MenuPlan {
         if !running {
             rows += header(title: "PureMouse Is Off", subtitle: offSubtitle)
         } else {
-            if state.devices.isEmpty {
+            if state.devices.isEmpty, state.waitingForInputMonitoring.isEmpty {
                 // While paused the daemon drops its sessions, so it reports no devices.
                 rows += state.paused
                     ? header(title: "PureMouse Is Paused", subtitle: offSubtitle)
                     : header(title: "No Mouse Connected", subtitle: "Turn on your mouse or check the receiver")
+            }
+            for name in state.waitingForInputMonitoring {
+                rows += header(title: name, subtitle: waitingSubtitle)
             }
             for device in state.devices {
                 let prefix = Standby(paused: state.paused, away: state.away).map { "\($0.title) · " } ?? ""
@@ -217,11 +227,15 @@ enum MenuPlan {
         if state.accessibilityMissing {
             rows.append(attention("Allow Accessibility Access", .openPrivacy(.accessibility)))
         }
-        if state.inputMonitoringMissing, state.hasBluetoothDevice {
+        if state.inputMonitoringMissing, state.hasBluetoothDevice || !state.waitingForInputMonitoring.isEmpty {
             rows.append(attention("Allow Input Monitoring", .openPrivacy(.inputMonitoring)))
         }
         if state.configError { rows.append(attention("Fix Config File…", .openSettings(.tab(.general)))) }
-        if state.logiOptionsRunning { rows.append(attention("Logi Options+ Is Running…", .openSettings(.tab(.general)))) }
+        if state.logiOptionsRunning {
+            // Quit carries the warning; the login item is its follow-up, so a plain row under it.
+            rows.append(attention(LogiOptionsAction.quit.title, .quitLogiOptions))
+            rows.append(.item(MenuItem(title: LogiOptionsAction.openLoginItems.title, action: .openLoginItems)))
+        }
         return rows
     }
 
@@ -283,7 +297,8 @@ extension MenuState {
         self.init(daemonRunning: model.daemonRunning, paused: model.paused, away: model.status?.away == true,
                   statusTooNew: model.statusTooNew, version: model.status?.version ?? "dev", devices: model.devices,
                   accessibilityMissing: model.accessibilityMissing, inputMonitoringMissing: model.inputMonitoringMissing,
-                  hasBluetoothDevice: model.hasBluetoothDevice, configError: model.configError != nil,
+                  hasBluetoothDevice: model.hasBluetoothDevice,
+                  waitingForInputMonitoring: model.waitingForInputMonitoring.map(\.name), configError: model.configError != nil,
                   logiOptionsRunning: model.logiOptionsRunning, smoothScrolling: model.config.smoothScrollEnabled,
                   readOnly: model.readOnly, dpiPresets: model.config.dpiPresets,
                   // The mouse's own value first: a Cycle Pointer Speed press changes it, not the config.

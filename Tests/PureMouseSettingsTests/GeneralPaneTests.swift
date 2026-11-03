@@ -19,10 +19,22 @@ import Testing
         for file in Self.files {
             let text = try Self.source(file)
             for retired in ["Open Settings…", "PureMouse isn't running", "Not Allowed", "Open Login Items…", "Open Config\"",
-                            "Restore Last Working", "Unknown While Off"] {
+                            "Restore Last Working", "Unknown While Off", "Needs the menu bar icon"] {
                 #expect(!text.contains(retired), "\(file) says \(retired)")
             }
         }
+    }
+
+    /// Hiding the icon keeps the menu process running without a status item, so the low battery
+    /// switch is never disabled by it, and the update switch has no such dependency either.
+    @Test func hidingTheIconDisablesNothing() throws {
+        let general = try Self.source("GeneralPane.swift")
+        let row = try #require(general.range(of: "private var lowBatteryRow").map { String(general[$0.lowerBound...]) })
+        let body = String(row.prefix(1200))
+        #expect(!body.contains("showsInMenuBar"), "the low battery row follows the icon")
+        #expect(!body.contains(".disabled(needsIcon)"))
+        let about = try Self.source("AboutPane.swift")
+        #expect(!about.contains("showsInMenuBar"))
     }
 
     @Test func theBannerSetsNoColourTint() throws {

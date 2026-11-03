@@ -108,7 +108,7 @@ struct SessionNotchedWheelTests {
         #expect(h.fake.lowResWheelDiverted)
         let inherited = h.session.inheritance
         h.session.close()
-        let replacement = h.replacement(config: .empty, inheriting: inherited)
+        let replacement = h.replacement(config: SessionHarness.nothing, inheriting: inherited)
         defer { replacement.close() }
         try await replacement.apply()
         #expect(!h.fake.lowResWheelDiverted)
@@ -120,7 +120,7 @@ struct SessionNotchedWheelTests {
         try await h.session.apply()
         let inherited = h.session.inheritance
         h.session.close()
-        let replacement = h.replacement(config: .empty, inheriting: inherited)
+        let replacement = h.replacement(config: SessionHarness.nothing, inheriting: inherited)
         defer { replacement.close() }
         await replacement.restore()  // quitting between the reload and its first apply
         #expect(!h.fake.lowResWheelDiverted)
@@ -149,7 +149,7 @@ struct SessionNotchedWheelTests {
         let m750 = FakeDevice.m750
         _ = try await h.adopt(m750)
         #expect(m750.lowResWheelDiverted)
-        try h.reload("{}")
+        try h.reload(SessionHarness.nothingJSON)
         _ = try await h.settled(m750)
         try await eventually { !m750.lowResWheelDiverted }
     }
@@ -185,7 +185,7 @@ struct SessionNotchedWheelTests {
     @Test func aWheelLeftDivertedByAPreviousProcessIsHandedBackOnce() async throws {
         let fake = FakeDevice.m750
         fake.responses[.init(0x2130, 0)] = [0x01]
-        let h = try await SessionHarness(fake, config: .empty)
+        let h = try await SessionHarness(fake, config: SessionHarness.nothing)
         defer { h.close() }
         try await h.session.apply()
         #expect(!fake.lowResWheelDiverted && wheelWrites(fake) == [[0x00]])
@@ -248,7 +248,7 @@ struct SessionNotchedWheelTests {
     @Test func aWheelLeftDivertedWhoseFirstClearFailsStaysOwedUntilConfirmedNative() async throws {
         let fake = startingDiverted()
         fake.failures[.init(0x2130, 1)] = .timeout
-        let h = try await SessionHarness(fake, config: .empty)
+        let h = try await SessionHarness(fake, config: SessionHarness.nothing)
         defer { h.close() }
         let controls = h.session.divertedControls.count
         #expect(!h.session.wheelsMayBeDiverted && h.session.restoreSteps == controls)  // control: nothing owed yet
@@ -263,7 +263,7 @@ struct SessionNotchedWheelTests {
     @Test func aWheelLeftDivertedWhoseFirstClearFailsIsHandedBackOnQuit() async throws {
         let fake = startingDiverted()
         fake.failures[.init(0x2130, 1)] = .timeout
-        let h = try await SessionHarness(fake, config: .empty)
+        let h = try await SessionHarness(fake, config: SessionHarness.nothing)
         defer { h.close() }
         await #expect(throws: (any Error).self) { try await h.session.apply() }
         fake.failures[.init(0x2130, 1)] = nil
@@ -274,7 +274,7 @@ struct SessionNotchedWheelTests {
     @Test func aClearTheMouseAcknowledgesButDoesNotTakeIsNotConfirmedNative() async throws {
         let fake = startingDiverted()
         fake.ignoresLowResWheelWrites = true
-        let h = try await SessionHarness(fake, config: .empty)
+        let h = try await SessionHarness(fake, config: SessionHarness.nothing)
         defer { h.close() }
         await #expect(throws: (any Error).self) { try await h.session.apply() }
         #expect(fake.lowResWheelDiverted && h.session.wheelsMayBeDiverted)
@@ -282,7 +282,7 @@ struct SessionNotchedWheelTests {
 
     @Test func aClearThatTakesConfirmsNativeAtOnce() async throws {
         let fake = startingDiverted()
-        let h = try await SessionHarness(fake, config: .empty)
+        let h = try await SessionHarness(fake, config: SessionHarness.nothing)
         defer { h.close() }
         try await h.session.apply()
         #expect(!fake.lowResWheelDiverted && !h.session.wheelsMayBeDiverted)

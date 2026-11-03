@@ -8,7 +8,7 @@ struct PointerPane: View {
     @State private var exactValue = false
     @State private var reading = DPIReading()
 
-    static let restoreMessage = "Pointer speed and presets return to the mouse's defaults."
+    static let restoreMessage = "Pointer speed and presets return to PureMouse's defaults."
 
     /// What Restore Defaults says for one mouse: its own values go, and it follows All Mice.
     static func restoreMessage(for mouse: String) -> String {

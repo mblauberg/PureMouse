@@ -85,7 +85,12 @@ struct SessionPermissionTests {
     @Test func aDeniedSessionSaysWhatItLeavesNativeOnce() async throws {
         let log = CapturedLog()
         try await Log.$testOutput.withValue(.lines { log.append($0) }) {
-            let h = try await applied(#"{"buttons": {"back": "navigateBack", "middle": "cycleDPI"}}"#)
+            // The default set's own bindings are set aside (forward, the gesture, smooth scrolling) so
+            // the line is about the two buttons named here.
+            let h = try await applied(#"""
+                {"smoothScroll": {"enabled": false},
+                 "buttons": {"back": "navigateBack", "middle": "cycleDPI", "forward": "default", "gesture": "default"}}
+                """#)
             defer { h.close() }
             try await h.session.apply()
         }

@@ -1,10 +1,31 @@
 import Foundation
+import HIDPP
+import HIDPPTesting
 import PureMouseKit
 import Testing
 @testable import puremouse
 
 @MainActor
 struct DaemonTests {
+    /// A new install has no config file, and that means the default set: not an error, and the
+    /// file is not created. Removing the file later returns to the defaults the same way.
+    @Test func aMissingConfigFileIsTheDefaultSetNotAnError() throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "puremouse-none-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let daemon = Daemon(configURL: url, environment: SessionEnvironment(canPostEvents: true))
+        #expect(daemon.status(running: true).config.error == nil)
+        daemon.reload()
+        #expect(daemon.status(running: true).config.error == nil)
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+
+        try Data("{".utf8).write(to: url)
+        daemon.reload()
+        #expect(daemon.status(running: true).config.error != nil)
+        try FileManager.default.removeItem(at: url)
+        daemon.reload()
+        #expect(daemon.status(running: true).config.error == nil)
+    }
+
     @Test func legacyPingIsIgnoredAndSilenceRetried() {
         #expect(Daemon.adoption(for: .hidpp10) == .notAMouse)
         #expect(Daemon.adoption(for: .noAnswer) == .noAnswer)
@@ -48,12 +69,131 @@ struct DaemonTests {
         #expect(Permissions.needed(postsEvents: true, bluetooth: true, hidOpenFailed: false) == .all)
     }
 
+    /// A Bluetooth mouse the daemon has seen but cannot ask anything without Input Monitoring is in
+    /// the status as waiting for it, and the daemon says it needs that permission. Once allowed,
+    /// nothing waits.
+    @Test func aBluetoothMouseWithoutInputMonitoringIsListedAsWaitingForIt() throws {
+        let h = try DaemonHarness("{}", permissions: .accessibility)
+        defer { h.close() }
+        #expect(h.daemon.status(running: true).waiting.isEmpty)
+        let mouse = FakeDevice.mxMaster3S
+        _ = h.daemon.listen(mouse.transport, index: mouse.index)
+        let status = h.daemon.status(running: true)
+        #expect(status.waiting.map(\.name) == [mouse.transport.product])
+        #expect(status.permissions.inputMonitoring == false)
+        #expect(h.daemon.missingPermissions == .inputMonitoring)
+        // Not while PureMouse is quitting: the final status lists nothing.
+        #expect(h.daemon.status(running: false).waiting.isEmpty)
+
+        let allowed = try DaemonHarness("{}", permissions: .all)
+        defer { allowed.close() }
+        let other = FakeDevice.mxMaster3S
+        _ = allowed.daemon.listen(other.transport, index: other.index)
+        #expect(allowed.daemon.status(running: true).waiting.isEmpty)
+        #expect(allowed.daemon.missingPermissions.isEmpty)
+    }
+
+    /// Logi Options+ is looked up again as the daemon reloads (as it does at wake, on a control
+    /// change and at each permission check), so the status follows it starting and stopping.
+    @Test func theStatusFollowsLogiOptionsStartingAndStoppingAtTheNextRecheck() throws {
+        final class Processes: @unchecked Sendable { var names: [String] = [] }
+        let processes = Processes()
+        let h = try DaemonHarness("{}", logiOptions: { processes.names })
+        defer { h.close() }
+        h.daemon.recheckLogiOptions()
+        #expect(!h.daemon.status(running: true).logiOptionsRunning)
+
+        processes.names = ["logioptionsplus_agent"]
+        #expect(!h.daemon.status(running: true).logiOptionsRunning, "nothing looks until a moment comes")
+        h.daemon.reload()
+        #expect(h.daemon.status(running: true).logiOptionsRunning)
+
+        processes.names = []
+        h.daemon.reload()
+        #expect(!h.daemon.status(running: true).logiOptionsRunning)
+    }
+
+    /// The first look is at start, so a status written then already says so.
+    @Test func logiOptionsAlreadyRunningIsInTheFirstStatus() throws {
+        let h = try DaemonHarness("{}", logiOptions: { ["logioptionsplus_agent"] })
+        defer { h.close() }
+        h.daemon.recheckLogiOptions()
+        #expect(h.daemon.status(running: true).logiOptionsRunning)
+    }
+
+    /// A keyboard on Bluetooth is not worth asking Input Monitoring for.
+    @Test func aBluetoothKeyboardNeitherWaitsNorNeedsInputMonitoring() throws {
+        #expect(Daemon.mayBeMouse(product: "MX Master 3S"))
+        #expect(Daemon.mayBeMouse(product: "M750"))
+        #expect(!Daemon.mayBeMouse(product: "MX Keys S"))
+        #expect(!Daemon.mayBeMouse(product: "Logitech Keyboard K380"))
+        let h = try DaemonHarness("{}", permissions: .accessibility)
+        defer { h.close() }
+        let keyboard = FakeTransport(product: "MX Keys")
+        _ = h.daemon.listen(keyboard, index: directDeviceIndex)
+        #expect(h.daemon.status(running: true).waiting.isEmpty)
+        #expect(h.daemon.missingPermissions.isEmpty)
+    }
+
+    /// What the descriptor declares decides before the name does: a keyboard with a model-only or
+    /// unknown name is not a mouse, and a mouse with a keyboard word in its name is.
+    @Test func theDeclaredUsagesDecideBeforeTheName() {
+        let mouse = [HIDUsagePair(page: 1, usage: 2), HIDUsagePair(page: 0xFF43, usage: 0x202)]
+        let pointer = [HIDUsagePair(page: 1, usage: 1)]
+        let keyboard = [HIDUsagePair(page: 1, usage: 6), HIDUsagePair(page: 0xFF43, usage: 0x202)]
+        let keypad = [HIDUsagePair(page: 1, usage: 7)]
+        let comboMouseAndKeyboard = keyboard + mouse
+        let vendorOnly = [HIDUsagePair(page: 0xFF43, usage: 0x202)]
+        for name in ["MX Master 3S", "K860", "MX Mech", "?", "Logitech Keyboard K380", ""] {
+            #expect(Daemon.mayBeMouse(product: name, usages: mouse), "mouse usages: \(name)")
+            #expect(Daemon.mayBeMouse(product: name, usages: pointer), "pointer usages: \(name)")
+            #expect(Daemon.mayBeMouse(product: name, usages: comboMouseAndKeyboard), "a pointing device with keys: \(name)")
+            #expect(!Daemon.mayBeMouse(product: name, usages: keyboard), "keyboard usages: \(name)")
+            #expect(!Daemon.mayBeMouse(product: name, usages: keypad), "keypad usages: \(name)")
+        }
+        // Unknown usages fall back to the name: a model-only or unknown name passes.
+        #expect(Daemon.mayBeMouse(product: "MX Master 3S", usages: vendorOnly))
+        #expect(Daemon.mayBeMouse(product: "?", usages: []))
+        #expect(!Daemon.mayBeMouse(product: "MX Keys S", usages: vendorOnly))
+        #expect(!Daemon.mayBeMouse(product: "MX Keys S", usages: []))
+    }
+
+    @Test func aBluetoothKeyboardWithAModelOnlyNameDoesNotWait() throws {
+        let h = try DaemonHarness("{}", permissions: .accessibility)
+        defer { h.close() }
+        let keyboard = FakeTransport(product: "K860")
+        keyboard.usagePairs = [HIDUsagePair(page: 1, usage: 6)]
+        _ = h.daemon.listen(keyboard, index: directDeviceIndex)
+        #expect(h.daemon.status(running: true).waiting.isEmpty)
+        #expect(h.daemon.missingPermissions.isEmpty)
+        let mouse = FakeTransport(product: "M750")
+        mouse.usagePairs = [HIDUsagePair(page: 1, usage: 2)]
+        _ = h.daemon.listen(mouse, index: directDeviceIndex)
+        #expect(h.daemon.missingPermissions == .inputMonitoring || h.daemon.missingPermissions.contains(.inputMonitoring))
+    }
+
+    /// With a receiver mouse only, the daemon asks for Accessibility and never for Input
+    /// Monitoring, which only Bluetooth needs.
+    @Test func aReceiverMouseAsksForAccessibilityOnly() async throws {
+        let h = try DaemonHarness("{}", permissions: [])
+        defer { h.close() }
+        let m750 = FakeDevice.m750
+        m750.onReceiver(slot: 2)
+        _ = h.daemon.listen(m750.transport, index: m750.index)
+        #expect(h.daemon.missingPermissions == .accessibility)
+        #expect(h.daemon.status(running: true).waiting.isEmpty)
+    }
+
     func config(_ json: String) throws -> Config { try SessionHarness.config(json) }
 
     /// Accessibility is needed when any device entry, not only the top level, posts events.
     @Test func aDeviceEntryThatPostsEventsNeedsAccessibility() throws {
-        #expect(!Daemon.postsEvents(.empty))
-        #expect(!Daemon.postsEvents(try config(#"{"devices": {"pb02c": {"dpi": 800}}}"#)))
+        #expect(!Daemon.postsEvents(SessionHarness.nothing))
+        #expect(!Daemon.postsEvents(try config("""
+            {"smoothScroll": {"enabled": false}, "buttons": {"back": "default", "forward": "default", "gesture": "default"},
+             "devices": {"pb02c": {"dpi": 800}}}
+            """)))
+        #expect(Daemon.postsEvents(.defaults))
         #expect(Daemon.postsEvents(try config(#"{"devices": {"pb02c": {"smoothScroll": {}}}}"#)))
         #expect(Daemon.postsEvents(try config(#"{"devices": {"pb02c": {"buttons": {"back": "none"}}}}"#)))
         #expect(Daemon.postsEvents(try config(#"{"devices": {"pb02c": {"thumbWheel": {"action": "tabs"}}}}"#)))

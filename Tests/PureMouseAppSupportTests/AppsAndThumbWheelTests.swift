@@ -307,8 +307,8 @@ private func resolved(_ wheel: Config.ThumbWheel) -> Resolved {
     #expect(try tree(#"{"smoothScroll": {}}"#).scrollsSmoothly("a.b"))
     #expect(try !tree(#"{"smoothScroll": {"enabled": false}}"#).scrollsSmoothly("a.b"))
     #expect(try tree(#"{"smoothScroll": {"enabled": false}, "apps": {"a.b": {"smoothScroll": {"enabled": true}}}}"#).scrollsSmoothly("a.b"))
-    // No smoothScroll anywhere: off, until the app has one of its own.
-    #expect(try !tree(#"{}"#).scrollsSmoothly("a.b"))
+    // Nothing set: on, as in the default set.
+    #expect(try tree(#"{}"#).scrollsSmoothly("a.b"))
     #expect(try tree(#"{"apps": {"a.b": {"smoothScroll": {"speed": 2}}}}"#).scrollsSmoothly("a.b"))
     let config = try tree(#"{"smoothScroll": {"enabled": false}, "apps": {"a.b": {"smoothScroll": {"speed": 2}}}}"#)
     #expect(!config.scrollsSmoothly("a.b"))
@@ -341,8 +341,8 @@ private func resolved(_ wheel: Config.ThumbWheel) -> Resolved {
     // On, smooth scrolling as everywhere.
     #expect(try tree(#"{"smoothScroll": {}, "apps": {"a.b": {"smoothScroll": {"speed": 2}}}}"#).customScrollingCaption("a.b")
         == "Smooth scrolling is on, as set in Scrolling.")
-    // On, and smooth scrolling is on nowhere else: the app's smoothScroll turns it on there.
-    let only = try tree(#"{"apps": {"a.b": {"smoothScroll": {"speed": 2}}}}"#)
+    // On, and Scrolling has smooth scrolling off: the app turns it on for itself.
+    let only = try tree(#"{"smoothScroll": {"enabled": false}, "apps": {"a.b": {"smoothScroll": {"speed": 2, "enabled": true}}}}"#)
     #expect(only.customScrollingCaption("a.b") == "Smooth scrolling is on in this app only.")
     // On, but smooth scrolling is off: no glide.
     #expect(try tree(#"{"smoothScroll": {"enabled": false}, "apps": {"a.b": {"smoothScroll": {"speed": 2}}}}"#)
@@ -370,7 +370,7 @@ private func resolved(_ wheel: Config.ThumbWheel) -> Resolved {
     #expect(resolvedGesture.click == .missionControl)
     #expect(resolvedGesture.up == .appExpose)
     #expect(resolvedGesture.left == .spaceLeft)
-    #expect(resolvedGesture.down == .none && resolvedGesture.right == .none)
+    #expect(resolvedGesture.down == .appExpose && resolvedGesture.right == .spaceRight)  // the default set's
     // The app's own gesture now: the other directions still show what applies everywhere.
     let own = edited.appButton("a.b", button: "gesture")
     #expect(own.own == .gesture && !own.inheritsGesture)

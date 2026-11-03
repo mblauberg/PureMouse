@@ -71,7 +71,11 @@ public struct Locations: Sendable {
     /// file, and `menu on` removes it (docs/companion.md, "Daemon decisions"). A development build
     /// always shows its icon.
     public var showsInMenuBar: Bool {
-        daemonOverridden || daemon == nil || !FileManager.default.fileExists(atPath: menuHidden.path)
+        #if DEBUG || DEVHOOKS
+        // The footprint rig measures the windowless run (scripts/measure-menu.sh, "hidden").
+        if ProcessInfo.processInfo.environment["PUREMOUSE_DEV_HIDDEN"] == "1" { return false }
+        #endif
+        return daemonOverridden || daemon == nil || !FileManager.default.fileExists(atPath: menuHidden.path)
     }
 
     /// launchd started this process (at login, or `puremouse register`/`menu on`), rather than the

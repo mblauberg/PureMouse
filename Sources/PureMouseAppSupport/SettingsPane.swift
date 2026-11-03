@@ -95,4 +95,6 @@ public enum PrivacyPane: String, Sendable {
 /// Pages both apps open. Settings' own are `PureMouseSettingsUI`'s extension.
 public enum Links {
     public static let releases = URL(string: "https://github.com/mblauberg/PureMouse/releases")!
+    /// System Settings › Bluetooth, where a mouse is turned on and paired.
+    public static let bluetoothSettings = URL(string: "x-apple.systempreferences:com.apple.BluetoothSettings")!
 }

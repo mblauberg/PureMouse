@@ -53,9 +53,8 @@ CI builds with Xcode 26 (Swift 6.3); a local Xcode 27 (Swift 6.4) can pass what 
 
 Safety and the live machine:
 
-- The user's live config is `~/.config/puremouse/config.json`; keep `config.example.json` in step
-  with it (its test checks shape, not values). Never edit the live config to test: run a dev daemon
-  against a copy.
+- The user's live config is `~/.config/puremouse/config.json`. Never edit the live config to test:
+  run a dev daemon against a copy.
 - Running `.build/debug/PureMouseMenu` or `PureMouseSettings` without `PUREMOUSE_CONFIG`,
   `PUREMOUSE_DAEMON` and `PUREMOUSE_COMPANION_DIR` set edits the live config and drives the
   installed agent. Set all three first.
