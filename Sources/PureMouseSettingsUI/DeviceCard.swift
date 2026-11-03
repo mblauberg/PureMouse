@@ -93,11 +93,11 @@ struct DeviceCardPlan: Equatable {
         DeviceArt.part(at: point, in: family, among: Set(targets.map(\.part)))
     }
 
-    /// The mouse the card shows: the one chosen, else the only one known when there is no pop-up.
-    /// With two or more mice and All Mice, no one drawing is right.
-    static func mouse(selected: KnownMouse?, known: [KnownMouse], offersChoice: Bool) -> KnownMouse? {
+    /// The mouse the card shows: the one chosen, else the only mouse known (one device key, even
+    /// when a pop-up offers All Mice). With two or more mice and All Mice no one drawing is right.
+    static func mouse(selected: KnownMouse?, known: [KnownMouse]) -> KnownMouse? {
         if let selected { return selected }
-        return !offersChoice && known.count == 1 ? known.first : nil
+        return known.count == 1 ? known.first : nil
     }
 
     // MARK: Words
@@ -132,22 +132,22 @@ struct DeviceCardPlan: Equatable {
         }
     }
 
-    /// What the caption slot says: the part under the pointer, else the selected button's, else how
-    /// to use the card.
+    /// What the caption slot says, as a sentence: the part under the pointer, else the selected
+    /// button's, else how to use the card.
     func caption(hovered: DeviceArt.Part?, selected: NamedButton?, actions: [NamedButton: ActionText]) -> String {
-        let part = hovered ?? selected.flatMap { part(for: $0) }
-        guard let part, let target = target(part) else { return Self.hint }
-        switch (model.binds[part], target.destinations) {
+        let current = hovered ?? selected.flatMap { self.part(for: $0) }
+        guard let current, let target = target(current) else { return Self.hint }
+        switch (model.binds[current], target.destinations) {
         case (.button(let button)?, _):
-            return "\(Self.buttonName(button)): \(actions[button]?.shown ?? button.label)"
+            return "The \(Self.buttonName(button)) is set to \(actions[button]?.shown ?? button.label)."
         case (.mainWheel?, let destinations) where destinations.count > 1:
-            return "Main wheel: wheel click or scrolling settings"
+            return "Choose the wheel click or the main wheel's scrolling settings."
         case (.mainWheel(let click)?, let destinations) where destinations == [.row(click)]:
-            return "Wheel click: \(actions[click]?.shown ?? click.label)"
+            return "The \(click.label.lowercased()) is set to \(actions[click]?.shown ?? click.label)."
         case (.mainWheel?, _):
-            return "Main wheel: scrolling settings"
+            return "Click to open the main wheel's scrolling settings."
         default:
-            return "Thumb wheel: scrolling settings"
+            return "Click to open the thumb wheel's scrolling settings."
         }
     }
 }
@@ -162,6 +162,10 @@ final class CardSelection {
 
     func select(_ button: NamedButton?) { self.button = button }
 
+    /// Find by Pressing found the control `key`: its part takes the state a click gives it, so the
+    /// drawing and the row say the same thing. A control the drawing has no part for clears it.
+    func found(_ key: String) { button = NamedButton(rawValue: key) }
+
     /// Notes which mouse the card shows; another one clears the selection.
     func follow(mouse key: String?) {
         guard key != mouse else { return }
@@ -171,7 +175,8 @@ final class CardSelection {
 }
 
 /// How a Buttons row is marked. A grouped form draws no `listRowBackground` (#133), so the mark is
-/// drawn in the row's own content: a fill in the accent colour, and the title in it too.
+/// drawn in the row's own content, behind it: a row-high band in the accent tint, which Find by
+/// Pressing's match makes stronger and outlines. The title stays primary, for contrast.
 enum RowMark: Equatable {
     case none
     /// The row of the card's selected button.
@@ -187,12 +192,13 @@ enum RowMark: Equatable {
     var fillOpacity: Double {
         switch self {
         case .none: 0
-        case .selected: 0.14
-        case .found: 0.28
+        case .selected: 0.18
+        case .found: 0.30
         }
     }
 
-    var tintsTitle: Bool { self != .none }
+    /// A 1 pt accent stroke, for the found row.
+    var outlined: Bool { self == .found }
 }
 
 extension View {
@@ -202,18 +208,24 @@ extension View {
 
 private struct MarkedRow: ViewModifier {
     let mark: RowMark
-    /// How far the fill reaches past the row's content, to the form's edge.
-    private static let bleed: CGFloat = 8
+    /// How far the band reaches past the row's content: to the form's edge, and to the row's
+    /// height (the form pads each row's content above and below).
+    private static let bleed = EdgeInsets(top: 10, leading: 8, bottom: 10, trailing: 8)
+    private static let corner = RectangleCornerRadii(topLeading: 8, bottomLeading: 8, bottomTrailing: 8, topTrailing: 8)
 
+    /// The band is a shape behind the content in a stack (the scan keeps `.background` out of Settings).
     func body(content: Content) -> some View {
-        content.overlay {
+        ZStack {
             if mark != .none {
-                Capsule()
-                    .fill(.tint.opacity(mark.fillOpacity))
-                    .padding(.horizontal, -Self.bleed)
+                let band = UnevenRoundedRectangle(cornerRadii: Self.corner)
+                band.fill(.tint.opacity(mark.fillOpacity))
+                    .overlay { if mark.outlined { band.strokeBorder(.tint, lineWidth: 1) } }
+                    .padding(EdgeInsets(top: -Self.bleed.top, leading: -Self.bleed.leading,
+                                        bottom: -Self.bleed.bottom, trailing: -Self.bleed.trailing))
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
+            content
         }
     }
 }
@@ -247,30 +259,37 @@ struct DeviceCard: View {
     let activate: (CardDestination) -> Void
 
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.deviceArtImages) private var images
     @State private var hovered: DeviceArt.Part?
 
     /// The drawing's size on the card, as a multiple of its 100 x 124 pt page.
     static let scale: CGFloat = 1.5
+    /// The name and caption's width, fixed so the group does not shift as the caption changes.
+    private static let textWidth: CGFloat = 240
+    private static let gap: CGFloat = 24
+    /// The width of a hovered or selected part's outline, so a small part reads in either appearance.
+    private static let outlineWidth: CGFloat = 1.5
 
     private var size: CGSize { CGSize(width: DeviceArt.size.width * Self.scale, height: DeviceArt.size.height * Self.scale) }
     private var fit: CGAffineTransform { CGAffineTransform(scaleX: Self.scale, y: Self.scale) }
     private var geometry: [DeviceArt.Part: DeviceArt.Geometry] { DeviceArt.geometry[plan.family] ?? [:] }
 
+    /// The drawing and the name, as one group in the middle of the card.
     var body: some View {
-        HStack(spacing: 20) {
+        HStack(spacing: Self.gap) {
             art
             VStack(alignment: .leading, spacing: 4) {
                 Text(name)
-                    .font(.headline)
+                    .font(.title3.weight(.semibold))
+                    .lineLimit(1)
                 Text(plan.caption(hovered: hovered, selected: selected, actions: actions))
                     .foregroundStyle(.secondary)
                     .lineLimit(2, reservesSpace: true)
                     .accessibilityHidden(true)
             }
-            Spacer(minLength: 0)
+            .frame(width: Self.textWidth, alignment: .leading)
         }
+        .frame(maxWidth: .infinity)
         .accessibilityElement(children: .contain)
         #if DEBUG
         .onAppear {
@@ -293,17 +312,27 @@ struct DeviceCard: View {
             ForEach(plan.targets) { target in control(target) }
         }
         .frame(width: size.width, height: size.height)
+        // One hover over the whole drawing, hit-tested against the parts' cells (they partition it).
+        .onContinuousHover { phase in
+            let part: DeviceArt.Part? = switch phase {
+            case .active(let point): plan.part(at: CGPoint(x: point.x / Self.scale, y: point.y / Self.scale))
+            case .ended: nil
+            }
+            if part != hovered { hovered = part }
+        }
     }
 
-    /// The part's own outline filled with the accent colour (the system's tint).
+    /// The part's own outline filled with the accent colour (the system's tint) and edged in it.
     @ViewBuilder
     private func shape(of target: DeviceCardPlan.Target?, opacity: Double) -> some View {
         if let target, let outline = geometry[target.part]?.outline {
-            Path(outline.path).applying(fit)
-                .fill(.tint.opacity(opacity))
-                .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: hovered)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
+            let path = Path(outline.path).applying(fit)
+            ZStack {
+                path.fill(.tint.opacity(opacity))
+                path.stroke(.tint, lineWidth: Self.outlineWidth)
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
         }
     }
 
@@ -332,34 +361,22 @@ struct DeviceCard: View {
                         .buttonStyle(.plain)
                 }
             }
-            .onHover { inside in
-                if inside {
-                    hovered = target.part
-                } else if hovered == target.part {
-                    hovered = nil
-                }
-            }
             .position(x: frame.midX, y: frame.midY)
             .accessibilityLabel(plan.accessibilityLabel(of: target, actions: actions))
             .accessibilityHint(plan.accessibilityHint(of: target))
             .accessibilityAddTraits(isSelected(target) ? .isSelected : [])
-            .modifier(DestinationActions(destinations: target.destinations.count > 1 ? target.destinations : [], activate: activate))
+            // A part with several destinations offers each as an action as well as in its menu.
+            .accessibilityActions {
+                if target.destinations.count > 1 {
+                    ForEach(target.destinations, id: \.self) { destination in
+                        Button(destination.menuTitle) { activate(destination) }
+                    }
+                }
+            }
         }
     }
 
     private func isSelected(_ target: DeviceCardPlan.Target) -> Bool {
         selected.map { target.destinations.contains(.row($0)) } ?? false
-    }
-}
-
-/// A part with several destinations offers each as a VoiceOver action as well as in its menu.
-private struct DestinationActions: ViewModifier {
-    let destinations: [CardDestination]
-    let activate: (CardDestination) -> Void
-
-    func body(content: Content) -> some View {
-        destinations.reduce(AnyView(content)) { view, destination in
-            AnyView(view.accessibilityAction(named: destination.menuTitle) { activate(destination) })
-        }
     }
 }

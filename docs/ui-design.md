@@ -232,34 +232,50 @@ Each level has one mechanism, and each label says what it reveals.
 ## Device card
 
 On Mouse > Buttons, a mouse with a drawing ([ADR 13](adr/0013-silhouettes.md)) shows a card above
-the rows: the drawing, the mouse's name and a caption line. Nothing else shows it: not Scrolling,
-Pointer, All Mice, a mouse of no listed model, the 2S, MX Vertical, Lift, MX Ergo or a G series.
+the rows: the drawing and, beside it, the mouse's name in `.title3` semibold and a caption, the two
+centred on the card as one group. Nothing else shows it: not Scrolling or Pointer, and not a mouse
+with no listed model. A trackball (MX Ergo), a vertical mouse (MX Vertical, Lift), the 2S, a G
+series mouse and any unknown product get no card and keep every row in the list (#56).
 
+- **Which mouse.** The chosen mouse; with All Mice, the only mouse known (one device key), even
+  when a pop-up is offered; otherwise, with two or more mice under All Mice, no card.
 - **Parts.** Each part of the drawing is an accessible button with its own label ("Back button,
-  Mouse Default") and a hint. A click on a button's part selects its row: the row scrolls into
-  view and is marked, and a capture, or opening a row's picker, selects it too. The thumb wheel
-  has no button, so it opens Scrolling > Thumb Wheel. The main wheel has two things to open, so it
-  is a two-item menu, Wheel Click and Scrolling Settings; VoiceOver gets both as actions.
+  set to Mouse Default") and a hint. A click on a button's part selects its row: the row scrolls
+  into view and is marked, and a capture, or opening a row's picker, selects it too. The thumb
+  wheel has no button, so it opens Scrolling > Thumb Wheel. The main wheel has two things to open,
+  so it is a two-item menu, Wheel Click and Scrolling Settings; VoiceOver gets both as actions.
 - **Arriving.** A part that leaves the page goes through `MouseSelection.select`, then scrolls to
-  its section, outlines it for about a second and a half (not at all under Reduce Motion, which
-  also skips the fade) and moves VoiceOver there. The selection clears when Buttons is left or
-  another mouse is chosen.
-- **States.** Hover is the accent colour at 0.6 opacity and selection is the solid accent colour,
-  each filling the part's outline; neither moves anything. The caption slot is fixed at two lines,
-  so hovering never changes the card's height, and it names the part and what a click does.
+  its section, outlines it for about a second and a half and moves VoiceOver there. Under Reduce
+  Motion the outline still shows for the same time: it appears and goes without the fade. Each
+  arrival has its own timeout, so an earlier one cannot clear a later one's outline
+  (`ArrivalOutlineState`). The selection clears when Buttons is left or another mouse is chosen.
+- **States.** One continuous hover over the drawing finds the part under the pointer from its hit
+  cells, which partition the art. Hover fills the part's outline with the accent colour at 0.6
+  opacity and selection fills it solid; each is edged in the accent colour, so a small part reads
+  in both appearances. Neither moves anything. The caption slot is fixed at two lines, so
+  hovering never changes the card's height. A caption is a full sentence ("The Back button is set
+  to Mouse Default.", "Click to open the thumb wheel's scrolling settings.").
+- **Find by Pressing.** A press that finds a row marks the row and lights its part on the drawing
+  in the state a click on the part gives, with the caption to match.
 - **Marking a row (#133).** A grouped `Form` ignores `listRowBackground`, so a row is marked in
-  its own content: a tinted capsule behind it and its title in the accent colour. The selected row
-  is a light tint and Find by Pressing's match is stronger, for a few seconds. The mark must be
-  visible in both appearances.
+  its own content: a row-high rounded band behind it (a shape in a stack, since the scan keeps
+  `.background` out of Settings) in the accent tint, 18 % for the selected row and 30 % with a 1 pt
+  accent stroke for Find by Pressing's match, which stays a few seconds. The title stays primary,
+  for contrast. The mark must be visible in both appearances.
 - **Size.** The art is drawn at 1.5x (150 x 186 pt); every part's cell is at least 20 x 20 pt
   there. The Buttons pane must stay within 600 pt of content with the card (check the capture:
   PNG height / 2 - 88).
+- **Other controls.** The disclosure lists the controls Kit names beyond the named buttons (the
+  DPI button) and any control the config binds. A control with no name is not listed on its own: a
+  hex ID is no button anyone can find. One the config binds, or Find by Pressing just found, gets
+  a row titled "Button N" (N its control ID in decimal), never "Control 0x0100".
 - **Scan.** No size or colour literals (`UIChromeScanTests`): frames come from constants, colours
   from `.tint` and the semantic styles. A closure that calls a method is written `{ select($0) }`
   (Swift 6.3), and a macOS 27 API sits in `#if compiler(>=6.4)`.
 - **Hooks (debug).** `PUREMOUSE_DEV_HOVER=<part>`, `PUREMOUSE_DEV_BUTTON=<button>` and
   `PUREMOUSE_DEV_FOUND=<button>` on Buttons; `PUREMOUSE_DEV_ARRIVAL=thumbWheel|mainWheel` (with
   `PUREMOUSE_DEV_ARRIVAL_HOLD=1` to keep the outline) on Scrolling.
+- **Art.** Regenerate the drawings and the hit geometry with `scripts/make-silhouettes.sh`.
 
 ## Support, About and the icon
 
@@ -374,7 +390,7 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
 |---|---|---|
 | General | Status (PureMouse running/paused/off, Start or Stop, active notices), Open at login, Show in menu bar, Low battery notification, Permissions | Advanced… sheet: Work with Universal Control, Config file, Log, Reset All Settings… |
 | Mouse header | Buttons, Scrolling, Pointer segments; mouse pop-up with two or more mice; Find by Pressing… and the device card on Buttons | — |
-| Mouse › Buttons | One row per button with its action | Gesture directions (disclosure, collapsed, caption summarises them; choosing Hold and Move expands it); Other controls (disclosure); Advanced… sheet, only while some button anywhere is Hold and Move: gesture Distance and Repeat |
+| Mouse › Buttons | One row per button with its action | Gesture directions (disclosure, collapsed, caption summarises them; choosing Hold and Move expands it); Other controls (disclosure: named controls and bound ones, see Device card); Advanced… sheet, only while some button anywhere is Hold and Move: gesture Distance and Repeat |
 | Mouse › Scrolling | Smooth scrolling, Feel, Speed; Main Wheel: Reverse direction, Wheel mode, SmartShift; Thumb Wheel: Action (Turn left/right when Custom); each when the mouse has it | Advanced… sheet, each row only when it applies: Acceleration, Glide, Hold Shift to scroll sideways (dimmed while smooth scrolling is off); Switches at (while SmartShift is on); thumb wheel Reverse direction (when it scrolls here or in some app), Swap directions and Turn distance (when it has actions), Speed (when it scrolls) |
 | Mouse › Pointer | Pointer Speed slider with its value; Presets summary row; both only when the mouse can adjust its speed (else one "Not supported by this mouse." row, unless a value is set) | Exact value (disclosure); Edit Presets… sheet (also opened from the menu) |
 | Apps | App list whose rows name the areas each app changes, Add App (bordered pull-down) in the footer, routing note; empty state with an Add App… button that opens the Applications panel | Each app opens as a page (‹ Apps, Buttons \| Scrolling); on it, gesture directions, other controls and more thumb wheel options are disclosures, and the editors are sheets |

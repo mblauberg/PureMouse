@@ -63,6 +63,19 @@ private let allButtons = Set(NamedButton.allCases)
         for key in keys { #expect(DeviceArt.model(forKey: key) == nil, "\(key ?? "nil")") }
     }
 
+    @Test func aTrackballAVerticalAndAnUnknownMouseGetNoCardAndKeepTheirRows() {
+        // #56: no card is shown for them, and their controls stay in the list.
+        let ergo = "p406f", vertical = "pb020", lift = "pb031", g305 = "p4074", unknown = "m999900000000"
+        for key in [ergo, vertical, lift, g305, unknown] {
+            #expect(DeviceArt.model(forKey: key) == nil, Comment(rawValue: key))
+            let mouse = KnownMouse(key: key, name: "Any", reported: true)
+            #expect(DeviceCardPlan.mouse(selected: mouse, known: [mouse]) == mouse, "the mouse is still the one chosen")
+        }
+        // Whatever the card does, the list is the mouse's own controls.
+        let reported: Set<UInt16> = [0x52, 0x53, 0x56, 0xC3]
+        #expect(ButtonRows.named(deviceCIDs: reported, configKeys: []) == [.back, .forward, .middle, .gesture])
+    }
+
     @Test func productIDsAreReadFromTheKeyOnly() {
         #expect(DeviceArt.productIDs(inKey: mx3sReceiver) == [0xB034, 0x4091])
         #expect(DeviceArt.productIDs(inKey: "pb042") == [0xB042])
@@ -222,14 +235,13 @@ private let allButtons = Set(NamedButton.allCases)
 
     // MARK: Which mouse
 
-    @Test func theCardIsForTheChosenMouseOrALoneOne() {
+    @Test func theCardIsForTheChosenMouseOrTheSoleKnownOne() {
         let a = KnownMouse(key: mx3s, name: "MX Master 3S", reported: true)
         let b = KnownMouse(key: m750, name: "Signature M750", reported: true)
-        #expect(DeviceCardPlan.mouse(selected: a, known: [a, b], offersChoice: true) == a)
-        #expect(DeviceCardPlan.mouse(selected: nil, known: [a, b], offersChoice: true) == nil, "All Mice has no card")
-        #expect(DeviceCardPlan.mouse(selected: nil, known: [a], offersChoice: false) == a, "one mouse, no pop-up")
-        #expect(DeviceCardPlan.mouse(selected: nil, known: [a], offersChoice: true) == nil, "All Mice, chosen on purpose")
-        #expect(DeviceCardPlan.mouse(selected: nil, known: [], offersChoice: false) == nil)
+        #expect(DeviceCardPlan.mouse(selected: a, known: [a, b]) == a)
+        #expect(DeviceCardPlan.mouse(selected: nil, known: [a, b]) == nil, "All Mice with two models has no card")
+        #expect(DeviceCardPlan.mouse(selected: nil, known: [a]) == a, "All Mice with one model shows it")
+        #expect(DeviceCardPlan.mouse(selected: nil, known: []) == nil)
     }
 
     // MARK: Words
@@ -249,17 +261,35 @@ private let allButtons = Set(NamedButton.allCases)
         #expect(plan.accessibilityLabel(of: plan.target(.middle)!, actions: actions) == "Main wheel")
     }
 
-    @Test func theCaptionNamesThePartAndItsAction() {
+    @Test func theCaptionIsASentenceAboutThePartAndItsAction() {
         let plan = plan(mx3s)
         func caption(_ hovered: DeviceArt.Part?, _ selected: NamedButton? = nil) -> String {
             plan.caption(hovered: hovered, selected: selected, actions: actions)
         }
-        #expect(caption(.back) == "Back button: Back")
-        #expect(caption(.thumbWheel) == "Thumb wheel: scrolling settings")
-        #expect(caption(.middle) == "Main wheel: wheel click or scrolling settings")
+        #expect(caption(.back) == "The Back button is set to Back.")
+        #expect(caption(.thumbWheel) == "Click to open the thumb wheel's scrolling settings.")
+        #expect(caption(.middle) == "Choose the wheel click or the main wheel's scrolling settings.")
         #expect(caption(nil) == DeviceCardPlan.hint)
-        #expect(caption(nil, .gesture) == "Gesture button: Gesture", "no hover: the selected part")
-        #expect(caption(.back, .gesture) == "Back button: Back", "the part under the pointer wins")
+        #expect(caption(nil, .gesture) == "The Gesture button is set to Gesture.", "no hover: the selected part")
+        #expect(caption(.back, .gesture) == "The Back button is set to Back.", "the part under the pointer wins")
+        let wheelOnly = DeviceCardPlan(model: DeviceArt.model(forKey: mx3s)!, listed: allButtons,
+                                       mainWheelSettings: false, thumbWheelSettings: true)
+        #expect(wheelOnly.caption(hovered: .middle, selected: nil, actions: actions) == "The wheel click is set to Mouse Default.")
+    }
+
+    @Test func everyCaptionIsAFullSentenceThatFitsTwoLines() {
+        for key in [mx3s, mx4, anywhere3s, m750] {
+            let plan = plan(key, listed: allButtons)
+            var captions = [DeviceCardPlan.hint]
+            for target in plan.targets {
+                captions.append(plan.caption(hovered: target.part, selected: nil, actions: [:]))
+            }
+            for caption in captions {
+                #expect(caption.first?.isUppercase == true, Comment(rawValue: caption))
+                #expect(caption.hasSuffix("."), Comment(rawValue: caption))
+                #expect(caption.count <= 64, Comment(rawValue: caption))
+            }
+        }
     }
 }
 
@@ -275,12 +305,12 @@ private let allButtons = Set(NamedButton.allCases)
         #expect(RowMark.of("0x00fd", selected: .back, found: "0x00fd") == .found, "a row without a name is found too")
     }
 
-    @Test func aMarkedRowIsDrawnInTheAccentColourNotJustFilled() {
+    @Test func aMarkedRowIsATintedBandAndOnlyTheFoundOneIsOutlined() {
         #expect(RowMark.none.fillOpacity == 0)
-        #expect(RowMark.selected.fillOpacity > 0)
-        #expect(RowMark.found.fillOpacity > RowMark.selected.fillOpacity)
-        #expect(RowMark.none.tintsTitle == false)
-        #expect(RowMark.selected.tintsTitle && RowMark.found.tintsTitle)
+        #expect(RowMark.selected.fillOpacity == 0.18)
+        #expect(RowMark.found.fillOpacity == 0.30)
+        #expect(RowMark.none.outlined == false && RowMark.selected.outlined == false)
+        #expect(RowMark.found.outlined)
     }
 
     @Test func buttonsPaneDoesNotRelyOnARowBackground() throws {
@@ -303,6 +333,16 @@ private let allButtons = Set(NamedButton.allCases)
         #expect(card.button == .forward)
         card.select(nil)
         #expect(card.button == nil)
+    }
+
+    @Test func aPressFoundOnTheMouseLightsItsPartAndAControlWithNoPartClearsIt() {
+        let card = CardSelection()
+        card.found("forward")
+        #expect(card.button == .forward, "the part's drawing takes the state a click gives it")
+        card.found("0x00c5")
+        #expect(card.button == nil, "a control the drawing has no part for")
+        card.found("thumbPanel")
+        #expect(card.button == .thumbPanel)
     }
 
     @Test func changingTheMouseClearsTheSelectionButSeeingItAgainDoesNot() {
@@ -447,5 +487,37 @@ private let allButtons = Set(NamedButton.allCases)
         let host = NSHostingView(rootView: card)
         _ = host.fittingSize
         #expect(loads == 1)
+    }
+}
+
+// MARK: The arrival outline
+
+@Suite struct ArrivalOutlineTests {
+    @Test func anOutlineEndsWithItsOwnTimeout() {
+        var outline = ArrivalOutlineState()
+        let first = outline.begin(.thumbWheel)
+        #expect(outline.section == .thumbWheel)
+        outline.expire(first)
+        #expect(outline.section == nil)
+    }
+
+    @Test func anEarlierTimeoutDoesNotClearALaterArrival() {
+        var outline = ArrivalOutlineState()
+        let first = outline.begin(.thumbWheel)
+        let second = outline.begin(.mainWheel)
+        outline.expire(first)
+        #expect(outline.section == .mainWheel, "the first arrival's timeout fires during the second's outline")
+        outline.expire(second)
+        #expect(outline.section == nil)
+    }
+
+    @Test func theSameSectionArrivedAtAgainKeepsItsOutlineForAFullTime() {
+        var outline = ArrivalOutlineState()
+        let first = outline.begin(.mainWheel)
+        let second = outline.begin(.mainWheel)
+        outline.expire(first)
+        #expect(outline.section == .mainWheel)
+        outline.expire(second)
+        #expect(outline.section == nil)
     }
 }
