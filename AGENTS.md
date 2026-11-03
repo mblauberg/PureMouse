@@ -38,7 +38,7 @@ one. This file covers how to work on it safely.
   `about`, or a Mouse segment, `buttons`, `scrolling`, `pointer`), `PUREMOUSE_DEV_APPEARANCE`,
   `PUREMOUSE_DEV_PICKER=<button>`, `PUREMOUSE_DEV_SHORTCUT=<button>` (Mouse › Buttons, or with
   `PUREMOUSE_DEV_APP` the app sheet's editor popover), `PUREMOUSE_DEV_MOUSE=<device key>|all` (chooses that mouse on Mouse, or All Mice;
-  `PUREMOUSE_DEV_OTHERS=1` opens Buttons' Other controls) and `PUREMOUSE_DEV_APP=<bundle id>` (Apps
+  `PUREMOUSE_DEV_OTHERS=1` opens Buttons' Other controls; `PUREMOUSE_DEV_HOVER`, `_BUTTON`, `_FOUND` and `_ARRIVAL` show the device card's states, docs/ui-design.md) and `PUREMOUSE_DEV_APP=<bundle id>` (Apps
   tab; adds the app without writing and opens its sheet) and `PUREMOUSE_DEV_SHEET=<name>` (a
   sheet: `presets` on Mouse › Pointer, or `advanced` on the pane shown, `DevSheet`) for screenshots
   (`Sources/PureMouseSettingsUI/DevHooks.swift`), and `PUREMOUSE_DEV_CAPTURE=<file.png>` saves its
@@ -318,6 +318,9 @@ one. This file covers how to work on it safely.
   them outside its allow-list (five entries at most, each with a reason, a stale one fails);
   docs/ui-design.md, "Forms and controls", lists the patterns. A shortcut binding's accessibility
   value is `Shortcut.spoken`, a tooltip is under 75 characters, and each control has its own label.
+- The device card on Mouse > Buttons (`DeviceCard`, `DeviceArt`; docs/ui-design.md, "Device card",
+  ADR 13): models are keyed by device key, parts open settings through `MouseSelection.select`,
+  and the drawings' PDFs are bundled in the Settings helper only. A new model is data in `DeviceArt.models`.
 - Settings shows no focus ring until the keyboard is used: windows, panes, the action picker and
   the shortcut sheet open with nothing focused (the picker's search takes the first keystroke).
   Check with keyboard navigation (`AppleKeyboardUIMode`) both on and off.

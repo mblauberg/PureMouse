@@ -202,6 +202,38 @@ Each level has one mechanism, and each label says what it reveals.
   the macOS 27 SDK (`scripts/verify-bundle.sh` checks the SDK), since the system restyles at run
   time.
 
+## Device card
+
+On Mouse > Buttons, a mouse with a drawing ([ADR 13](adr/0013-silhouettes.md)) shows a card above
+the rows: the drawing, the mouse's name and a caption line. Nothing else shows it: not Scrolling,
+Pointer, All Mice, a mouse of no listed model, the 2S, MX Vertical, Lift, MX Ergo or a G series.
+
+- **Parts.** Each part of the drawing is an accessible button with its own label ("Back button,
+  Mouse Default") and a hint. A click on a button's part selects its row: the row scrolls into
+  view and is marked, and a capture, or opening a row's picker, selects it too. The thumb wheel
+  has no button, so it opens Scrolling > Thumb Wheel. The main wheel has two things to open, so it
+  is a two-item menu, Wheel Click and Scrolling Settings; VoiceOver gets both as actions.
+- **Arriving.** A part that leaves the page goes through `MouseSelection.select`, then scrolls to
+  its section, outlines it for about a second and a half (not at all under Reduce Motion, which
+  also skips the fade) and moves VoiceOver there. The selection clears when Buttons is left or
+  another mouse is chosen.
+- **States.** Hover is the accent colour at 0.6 opacity and selection is the solid accent colour,
+  each filling the part's outline; neither moves anything. The caption slot is fixed at two lines,
+  so hovering never changes the card's height, and it names the part and what a click does.
+- **Marking a row (#133).** A grouped `Form` ignores `listRowBackground`, so a row is marked in
+  its own content: a tinted capsule behind it and its title in the accent colour. The selected row
+  is a light tint and Find by Pressing's match is stronger, for a few seconds. The mark must be
+  visible in both appearances.
+- **Size.** The art is drawn at 1.5x (150 x 186 pt); every part's cell is at least 20 x 20 pt
+  there. The Buttons pane must stay within 600 pt of content with the card (check the capture:
+  PNG height / 2 - 88).
+- **Scan.** No size or colour literals (`UIChromeScanTests`): frames come from constants, colours
+  from `.tint` and the semantic styles. A closure that calls a method is written `{ select($0) }`
+  (Swift 6.3), and a macOS 27 API sits in `#if compiler(>=6.4)`.
+- **Hooks (debug).** `PUREMOUSE_DEV_HOVER=<part>`, `PUREMOUSE_DEV_BUTTON=<button>` and
+  `PUREMOUSE_DEV_FOUND=<button>` on Buttons; `PUREMOUSE_DEV_ARRIVAL=thumbWheel|mainWheel` (with
+  `PUREMOUSE_DEV_ARRIVAL_HOLD=1` to keep the outline) on Scrolling.
+
 ## Support, About and the icon
 
 - About shows the icon, name, version, Check for Updates with the **Check for updates
@@ -231,7 +263,7 @@ cost. Planned or built (epic #114):
   as Trackpad's Click slider does.
 
 Not adopted: a 3D or photographic mouse map with glowing callouts (the device card stays original
-line art with plain markers, #56); an acceleration curve editor (macOS owns acceleration, so it
+art, with no markers or callouts, #56); an acceleration curve editor (macOS owns acceleration, so it
 would duplicate System Settings); a floating per-app indicator (it polls and covers content);
 display-density DPI hints and live gesture highlighting (more text and motion than they earn).
 
