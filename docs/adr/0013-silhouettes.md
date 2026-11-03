@@ -17,8 +17,12 @@ shape (`mx`), the MX Anywhere's (`compact-anywhere`) and the Signature M750's (`
 Parts are not drawn into the PDF as markers. Each family has typed Swift data, `DeviceArt.geometry`:
 a **hit region** per part (a polygon that partitions the drawing, so a point is in at most one) and
 the part's own **outline**, which hover and selection fill. Both are in the art's 100 x 124 units.
-The data is generated from the artist's `regions.json` and committed as Swift; the generators stay
-out of the repo.
+The art and the data come from one source: `assets/silhouettes/source` (Python 3, standard library
+only) draws the SVGs and writes `assets/silhouettes/regions.json`, and `scripts/make-silhouettes.sh`
+runs it, compiles the PDFs with `rsvg-convert` (as `make-icon.sh` does) and generates
+`DeviceArtGeometry.swift` from the regions. The outputs are committed, so building needs neither
+tool. A rerun reproduces the SVGs, regions and Swift exactly; only the PDFs differ, by a creation
+date.
 
 A mouse is matched by its device key, never its name: the nonzero 16-bit product IDs in the key
 are compared with each model's IDs (`DeviceArt.models`). Which control a part stands for is per
