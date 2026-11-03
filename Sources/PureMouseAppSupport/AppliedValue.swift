@@ -65,6 +65,31 @@ extension ConfigTree {
         })
     }
 
+    /// The thumb wheel's keys (`left`, `right`, `step`, `reversed`) that come out different on the
+    /// mice, which an app that leaves them alone says "Varies by Mouse" for. With `ownPath` (the
+    /// app's `thumbWheel`), its own keys are applied on each mouse's state first, as the daemon
+    /// layers them: a value the app sets agrees everywhere, and an action it picks brings its own
+    /// step. `left` and `right` are the keys as written, so they also vary when only the swap differs.
+    public func thumbWheelKeysVarying(inheriting scopes: [ConfigScope], ownPath: [String]? = nil) -> Set<String> {
+        let states = (scopes.isEmpty ? [.global] : scopes).map { scope in
+            let mouse = thumbWheel(in: scope)
+            return ownPath.map { thumbWheel(at: $0, base: mouse) } ?? mouse
+        }
+        func pick(_ key: String, _ pair: ThumbWheelState.Pair?) -> ButtonAction {
+            pair.map { key == "left" ? $0.left : $0.right } ?? .named("none")
+        }
+        var keys: Set<String> = []
+        for key in ["left", "right"] where Applied(states.map { pick(key, $0.pair) }).varies { keys.insert(key) }
+        if Applied(states.map(\.step)).varies { keys.insert("step") }
+        if Applied(states.map(\.reversed)).varies {
+            keys.insert("reversed")
+            // Swapped on one mouse and not on another, a way of turning does one thing on one and the
+            // other thing on the other, unless both ways do the same.
+            if states.contains(where: { $0.pair.map { $0.left != $0.right } ?? false }) { keys.formUnion(["left", "right"]) }
+        }
+        return keys
+    }
+
     /// A number as it applies on each of the mice, as one value or several.
     public func appliedNumber(_ path: [String], inheriting scopes: [ConfigScope], default fallback: Double) -> Applied<Double> {
         Applied((scopes.isEmpty ? [.global] : scopes).map { number(path, in: $0, default: fallback) })

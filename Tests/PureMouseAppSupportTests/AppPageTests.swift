@@ -258,6 +258,55 @@ private func changed(_ before: ConfigTree, _ after: ConfigTree) -> Set<String> {
         #expect(kinds.thumbWheelVaries(inheriting: mice))
     }
 
+    @Test func theTurnDistanceAndSwapDirectionsVaryWhileTheMiceDiffer() throws {
+        let config = try tree("""
+            {"devices": {"\(mx)": {"name": "MX", "thumbWheel": {"left": "zoomOut", "right": "zoomIn", "step": 3, "reversed": true}},
+                         "\(m750)": {"name": "M750", "thumbWheel": {"left": "zoomOut", "right": "zoomIn", "step": 6}}}}
+            """)
+        let mice = [mouse(mx), mouse(m750)]
+        // The keys' actions agree; the step and the swap do not, and with one mouse swapped each way
+        // of turning does a different thing on the two.
+        #expect(config.thumbWheelKeysVarying(inheriting: mice) == ["step", "reversed", "left", "right"])
+        #expect(config.thumbWheelState(inheriting: mice).values.map(\.step) == [3, 6])
+        // Mice that agree on everything have none; one mouse never varies.
+        let same = try tree("""
+            {"thumbWheel": {"action": "zoom"}, "devices": {"\(mx)": {"name": "MX"}, "\(m750)": {"name": "M750"}}}
+            """)
+        #expect(same.thumbWheelKeysVarying(inheriting: mice).isEmpty)
+        #expect(config.thumbWheelKeysVarying(inheriting: [mouse(mx)]).isEmpty)
+        // Swapped on one only, but both ways doing the same: only the swap and the step vary.
+        let alike = try tree("""
+            {"devices": {"\(mx)": {"name": "MX", "thumbWheel": {"left": "mute", "right": "mute", "reversed": true}},
+                         "\(m750)": {"name": "M750", "thumbWheel": {"left": "mute", "right": "mute"}}}}
+            """)
+        #expect(alike.thumbWheelKeysVarying(inheriting: mice) == ["reversed"])
+        // Different actions are the left and right keys.
+        let actions = try tree("""
+            {"devices": {"\(mx)": {"name": "MX", "thumbWheel": {"left": "zoomOut", "right": "zoomIn"}},
+                         "\(m750)": {"name": "M750", "thumbWheel": {"left": "mute", "right": "zoomIn"}}}}
+            """)
+        #expect(actions.thumbWheelKeysVarying(inheriting: mice) == ["left"])
+    }
+
+    @Test func anAppsOwnThumbWheelKeysAreAppliedOnEachMouseBeforeComparing() throws {
+        let base = """
+            "devices": {"\(mx)": {"name": "MX", "thumbWheel": {"left": "mute", "right": "zoomIn", "step": 3}},
+                        "\(m750)": {"name": "M750", "thumbWheel": {"left": "mute", "right": "zoomIn", "step": 6, "reversed": true}}}
+            """
+        let mice = [mouse(mx), mouse(m750)]
+        let own = ["apps", "a.b", "thumbWheel"]
+        // Left to the mice, the step and the swap vary.
+        let alone = try tree("{\(base)}")
+        #expect(alone.thumbWheelKeysVarying(inheriting: mice, ownPath: own) == ["step", "reversed", "left", "right"])
+        // An action the app picks brings its own step to both, so only the swap (and with it each way of turning) varies; its own swap ends that too.
+        let picked = try tree(#"{\#(base), "apps": {"a.b": {"thumbWheel": {"action": "tabs"}}}}"#)
+        #expect(picked.thumbWheelKeysVarying(inheriting: mice, ownPath: own) == ["reversed", "left", "right"])
+        let swapped = try tree(#"{\#(base), "apps": {"a.b": {"thumbWheel": {"action": "tabs", "reversed": false}}}}"#)
+        #expect(swapped.thumbWheelKeysVarying(inheriting: mice, ownPath: own).isEmpty)
+        let step = try tree(#"{\#(base), "apps": {"a.b": {"thumbWheel": {"step": 9, "reversed": true}}}}"#)
+        #expect(step.thumbWheelKeysVarying(inheriting: mice, ownPath: own) == [])
+    }
+
     @Test func aResetSpeedVariesWhileTheMiceDiffer() throws {
         let config = try tree("""
             {"devices": {"\(mx)": {"name": "MX", "smoothScroll": {"speed": 2}},

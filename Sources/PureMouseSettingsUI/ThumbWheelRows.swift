@@ -70,9 +70,10 @@ struct ThumbWheelRows: View {
     /// In an app: the mice it may run with have different choices (`inherited` is the first one's),
     /// so the Action row says "Varies by Mouse" while the app leaves it alone.
     var inheritedVaries = false
-    /// In an app: the keys (`left`, `right`, as written) the mice set to different actions, which
-    /// those rows say "Varies by Mouse" for while the app leaves them alone.
-    var inheritedVariesDirections: Set<String> = []
+    /// In an app: the keys (`left`, `right`, `step`, `reversed`, as written) the mice resolve to
+    /// different values, which those rows say "Varies by Mouse" for while the app leaves them alone
+    /// (`ConfigTree.thumbWheelKeysVarying`). Mice that both choose Custom may still set different actions.
+    var inheritedVariesKeys: Set<String> = []
     /// The scope `inherited` is from: Mouse Settings for an app, All Mice for a mouse.
     var source = InheritedScope.mouseSettings
     /// The mouse the rows edit (`path` is its `thumbWheel`), or `.global` for the top level and an app.
@@ -121,6 +122,10 @@ struct ThumbWheelRows: View {
             } else if !Self.advancedRows(model.config, path: path, base: base).isEmpty {
                 // On an app's page, the rest is a disclosure (docs/ui-design.md, Disclosure).
                 DisclosureLabel(title: "More thumb wheel options", isExpanded: $showMore)
+                    #if DEBUG
+                    // For screenshots: PUREMOUSE_DEV_MORE=1 opens it.
+                    .onAppear { if ProcessInfo.processInfo.environment["PUREMOUSE_DEV_MORE"] != nil { showMore = true } }
+                    #endif
                 if showMore { advancedRows.disclosedRow() }
             }
         }
@@ -217,14 +222,18 @@ struct ThumbWheelRows: View {
         .accessibilityValue(standing.spoken(effective ? "On" : "Off"))
     }
 
-    /// The turn distance: the wheel's own `step`, or the one the action in effect brings.
+    /// The turn distance: the wheel's own `step`, or the one the action in effect brings. In an app
+    /// that leaves it to mice that differ, the number says "Varies by Mouse" (the stepper still starts
+    /// from the first mouse's).
     private func turnDistance(_ state: ThumbWheelState) -> some View {
         let standing = presentation.standing(of: "step") { edit { $0.setThumbWheelKey(nil, "step", at: path) } }
         let note = standing.note
         let help = "How far to turn before the action repeats."
+        let value = inheritedVariesKeys.contains("step") && !presentation.owns("step")
+            ? Applied<Int>.variesLabel : "\(state.step)"
         return LabeledContent {
             HStack(spacing: 8) {
-                Text("\(state.step)")
+                Text(value)
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
@@ -233,7 +242,7 @@ struct ThumbWheelRows: View {
                                        set: { new in edit(debounce: true) { $0.setThumbWheelKey(new, "step", at: path) } }),
                         in: 1...36)
                     .labelsHidden()
-                    .accessibilityValue(standing.spoken("\(state.step)"))
+                    .accessibilityValue(standing.spoken(value))
             }
         } label: {
             RowLabel("Turn distance", help: help, availability: advancedAvailability, note: note,
@@ -242,20 +251,35 @@ struct ThumbWheelRows: View {
         .overridable(note, help: help)
     }
 
-    /// Swap directions: a switch, whose row says so when a mouse or an app sets it itself.
+    /// Swap directions: a switch, whose row says so when a mouse or an app sets it itself. In an app
+    /// that leaves it to mice that differ there is no one position to show, so it is an On/Off
+    /// pop-up saying "Varies by Mouse" until the app sets it (then the switch).
     @ViewBuilder private func swapDirections(_ state: ThumbWheelState) -> some View {
         let path = path
         let help = "Swaps what turning left and right does."
         let standing = presentation.standing(of: "reversed") { edit { $0.setThumbWheelReversed(nil, at: path) } }
         let note = standing.note
-        Toggle(isOn: Binding(get: { state.reversed },
-                             set: { on in edit { $0.setThumbWheelReversed(on, at: path) } })) {
-            RowLabel("Swap directions", help: help, availability: advancedAvailability, note: note,
-                     spokenTitle: "Swap thumb wheel directions\(spokenSuffix)")
+        let title = "Swap thumb wheel directions\(spokenSuffix)"
+        if inheritedVariesKeys.contains("reversed") && !presentation.owns("reversed") {
+            LabeledContent {
+                InheritedPicker(title: title, value: InheritedValue(own: nil as Bool?, inherited: false, source: source),
+                                options: [true, false], label: { $0 ? "On" : "Off" },
+                                inheritedText: Applied<Bool>.variesLabel) { new in
+                    edit { $0.setThumbWheelReversed(new, at: path) }
+                }
+            } label: {
+                RowLabel("Swap directions", help: help, availability: advancedAvailability, note: note, spokenTitle: title)
+            }
+            .overridable(note, help: help)
+        } else {
+            Toggle(isOn: Binding(get: { state.reversed },
+                                 set: { on in edit { $0.setThumbWheelReversed(on, at: path) } })) {
+                RowLabel("Swap directions", help: help, availability: advancedAvailability, note: note, spokenTitle: title)
+            }
+            .overridable(note, help: help)
+            .accessibilityLabel(title)
+            .accessibilityValue(standing.spoken(state.reversed ? "On" : "Off"))
         }
-        .overridable(note, help: help)
-        .accessibilityLabel("Swap thumb wheel directions\(spokenSuffix)")
-        .accessibilityValue(standing.spoken(state.reversed ? "On" : "Off"))
     }
 
     private func help(_ choice: ThumbWheelChoice, reversed: Bool) -> String {
@@ -283,7 +307,7 @@ struct ThumbWheelRows: View {
                                    label: "turning the thumb wheel \(direction)", appName: appName)
         let spokenName = "Thumb wheel, \(title.lowercased())\(spokenSuffix)"
         let inherits = inherited != nil
-        let value = presentation.direction(key, varies: inheritedVariesDirections.contains(key))
+        let value = presentation.direction(key, varies: inheritedVariesKeys.contains(key))
         let note = inherits ? value.note { apply(.standard, to: target) } : nil
         return LabeledContent {
             ActionButton(action: inherits && value.isInherited ? .standard : action,
@@ -291,7 +315,7 @@ struct ThumbWheelRows: View {
                          isPresented: Binding(get: { presented == direction }, set: { presented = $0 ? direction : nil }),
                          choose: { entry in choose(entry, for: target, current: action) },
                          accessibilityName: spokenName,
-                         sameAsEverywhere: inherits ? value.inherited : nil,
+                         sameAsInherited: inherits ? value.inherited : nil,
                          source: source)
         } label: {
             RowLabel(title, note: note, spokenTitle: spokenName)

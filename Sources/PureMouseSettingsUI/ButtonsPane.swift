@@ -205,16 +205,16 @@ struct ButtonsPane: View {
     @ViewBuilder
     private func mouseRow(_ key: String, indented: Bool) -> some View {
         let state = model.config.scopedButton(key, in: scope)
-        let everywhere = state.everywhere.label
-        let spokenEverywhere = state.everywhere.spokenLabel
+        let inheritedLabel = state.everywhere.label
+        let inheritedSpoken = state.everywhere.spokenLabel
         let target = BindingTarget(button: key)
         let mark = RowMark.of(key, selected: card?.button, found: highlighted)
-        let note = ActionButton.inherited(state.own, everywhere: everywhere, source: InheritedScope.allMice)
+        let note = ActionButton.inherited(state.own, inheriting: inheritedLabel, source: InheritedScope.allMice)
             .note { apply(.standard, to: target) }
         if state.directions.isEmpty {
             let help = caption(key)
             LabeledContent {
-                actionButton(state.own, target: target, sameAsEverywhere: everywhere, spokenEverywhere: spokenEverywhere)
+                actionButton(state.own, target: target, sameAsInherited: inheritedLabel, spokenInherited: inheritedSpoken)
             } label: {
                 RowLabel(NamedButton.title(forKey: key), help: help, note: note)
             }
@@ -227,7 +227,7 @@ struct ButtonsPane: View {
                                      set: { if $0 { expanded.insert(key) } else { expanded.remove(key) } })
             let help = model.config.gestureSummary(key, in: scope)
             LabeledContent {
-                actionButton(state.own, target: target, sameAsEverywhere: everywhere, spokenEverywhere: spokenEverywhere)
+                actionButton(state.own, target: target, sameAsInherited: inheritedLabel, spokenInherited: inheritedSpoken)
             } label: {
                 DisclosureLabel(title: NamedButton.title(forKey: key), help: help, note: note,
                                 spokenTitle: "\(NamedButton.title(forKey: key)) directions", isExpanded: isExpanded)
@@ -246,8 +246,8 @@ struct ButtonsPane: View {
                     let target = BindingTarget(button: key, direction: direction.name)
                     let note = ActionButton.inherited(direction, source: InheritedScope.allMice).note { apply(.standard, to: target) }
                     LabeledContent {
-                        actionButton(direction.own, target: target, sameAsEverywhere: direction.inherited.label,
-                                     spokenEverywhere: direction.inherited.spokenLabel)
+                        actionButton(direction.own, target: target, sameAsInherited: direction.inherited.label,
+                                     spokenInherited: direction.inherited.spokenLabel)
                     } label: {
                         RowLabel(Gesture.label(direction.name), note: note, spokenTitle: target.title)
                     }
@@ -298,11 +298,11 @@ struct ButtonsPane: View {
         }
     }
 
-    private func actionButton(_ action: ButtonAction, target: BindingTarget, sameAsEverywhere: String? = nil,
-                              spokenEverywhere: String? = nil) -> some View {
+    private func actionButton(_ action: ButtonAction, target: BindingTarget, sameAsInherited: String? = nil,
+                              spokenInherited: String? = nil) -> some View {
         let id = target.direction.map { "\(target.button).\($0)" } ?? target.button
         let isDirection = target.direction != nil
-        let inherits = sameAsEverywhere != nil
+        let inherits = sameAsInherited != nil
         return ActionButton(
             action: isDirection && action == .standard && !inherits ? .named("none") : action,
             // On a mouse, Mouse Default is its own value ("default") beside "Same as All Mice".
@@ -314,8 +314,8 @@ struct ButtonsPane: View {
             }),
             choose: { entry in choose(entry, for: target, current: action) },
             accessibilityName: target.title + (inherits && model.selectedMouse != nil ? ", \(model.selectedMouse?.name ?? "")" : ""),
-            sameAsEverywhere: sameAsEverywhere,
-            spokenEverywhere: spokenEverywhere,
+            sameAsInherited: sameAsInherited,
+            spokenInherited: spokenInherited,
             source: InheritedScope.allMice,
             scope: scope)
     }

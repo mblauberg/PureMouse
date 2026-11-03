@@ -6,7 +6,7 @@ import Testing
 // The Apps tab and an app's page: the inherited-value presentation, and, read from the sources,
 // the words docs/ui-language.md retires, how the page opens and closes, and that the editors are sheets.
 
-@Test func anUnsetValueLooksAsItDoesEverywhereAndAnOwnOneSaysSo() {
+@Test func anUnsetValueLooksAsTheWiderScopeHasItAndAnOwnOneSaysSo() {
     let unset = InheritedValue<String>(own: nil, inherited: "Mission Control", source: "Mouse Settings")
     #expect(unset.isInherited)
     #expect(unset.effective == "Mission Control")
@@ -26,13 +26,13 @@ import Testing
     #expect(InheritedValue(own: 1200, inherited: 1600, source: "All Mice").caption == "Set for this mouse.")
 }
 
-@MainActor @Test func anAppsButtonRowShowsTheActionEverywhereUntilItSetsOne() {
-    let unset = ActionButton.inherited(.standard, everywhere: "Mission Control")
+@MainActor @Test func anAppsButtonRowShowsTheInheritedActionUntilItSetsOne() {
+    let unset = ActionButton.inherited(.standard, inheriting: "Mission Control")
     #expect(unset.effective == "Mission Control" && unset.caption == nil)
-    let set = ActionButton.inherited(.named("missionControl"), everywhere: "Default")
+    let set = ActionButton.inherited(.named("missionControl"), inheriting: "Default")
     #expect(set.effective == ButtonAction.named("missionControl").label && set.caption == "Set for this app.")
     // The picker keeps the entry that removes the app's own binding.
-    let entry = PickerEntry.all(allowsDefault: false, allowsGesture: true, inherited: ActionButton.inherited(.standard, everywhere: "Mission Control")).first
+    let entry = PickerEntry.all(allowsDefault: false, allowsGesture: true, inherited: ActionButton.inherited(.standard, inheriting: "Mission Control")).first
     #expect(entry?.label == "Same as Mouse Settings" && entry?.detail == "(Mission Control)")
 }
 
@@ -51,7 +51,7 @@ import Testing
     #expect(unset.effective == "Varies by Mouse")
     #expect("\(unset.entry) (\(unset.inherited))" == "Same as Mouse Settings (Varies by Mouse)")
     #expect(unset.spoken == "Varies by Mouse, same as Mouse Settings")
-    let wheel = ActionButton.inherited(.standard, everywhere: "Varies by Mouse")
+    let wheel = ActionButton.inherited(.standard, inheriting: "Varies by Mouse")
     #expect(wheel.effective == "Varies by Mouse" && wheel.caption == nil)
     let entry = PickerEntry.all(allowsDefault: true, allowsGesture: true, inherited: wheel).first
     #expect(entry?.label == "Same as Mouse Settings" && entry?.detail == "(Varies by Mouse)")
@@ -121,8 +121,43 @@ import Testing
     @Test func theSlidersAndDirectionsSayWhenTheMiceDiffer() throws {
         let page = try Self.source("PureMouseSettingsUI/AppPage.swift")
         #expect(page.contains("variesText: speedVaries") && page.contains("variesText: glideVaries"))
-        #expect(page.contains("inheritedVariesDirections: variesDirections"))
+        #expect(page.contains("inheritedVariesKeys: config.thumbWheelKeysVarying(inheriting: mice, ownPath: scope + [\"thumbWheel\"])"))
         #expect(page.contains("config.thumbWheelVaries(inheriting: mice)"))
+        // Turn distance and Swap directions say it too, while the app leaves them to the mice.
+        let rows = try Self.source("PureMouseSettingsUI/ThumbWheelRows.swift")
+        #expect(rows.contains(#"inheritedVariesKeys.contains("step")"#) && rows.contains(#"inheritedVariesKeys.contains("reversed")"#))
+    }
+
+    // The header is a view of its own above the form, as the Mouse tab's strip is above its pane, so
+    // no scroll-edge line is drawn under it and the form starts where the Mouse page's does.
+    @Test func theHeaderIsItsOwnViewAboveTheForm() throws {
+        let page = try Self.source("PureMouseSettingsUI/AppPage.swift")
+        #expect(!page.contains("safeAreaInset"))
+        let body = try #require(page.range(of: "var body: some View {"))
+        let rest = page[body.upperBound...]
+        let header = try #require(rest.range(of: "AppPageHeader("))
+        let form = try #require(rest.range(of: "PaneForm {"))
+        #expect(header.lowerBound < form.lowerBound)
+        // The form's cap leaves room for the header, from the pane's limit, not the screen's.
+        #expect(page.contains("paneMaxHeight") && !page.contains("LazyPane.fitted"))
+    }
+
+    // A `Menu` takes its label apart into a title and an image and draws the image first, so a pop-up
+    // whose label is a stack (value, then chevrons) read chevrons-first on every pop-up that is a
+    // `Menu`. `PopUpLabel` is one `Text` with the chevrons set in it, and every pop-up uses it.
+    @Test func everyPopUpDrawsItsValueBeforeTheChevronsThroughOneLabel() throws {
+        let components = try Self.source("PureMouseSettingsUI/Components.swift")
+        let label = try #require(components.range(of: "struct PopUpLabel: View {"))
+        let end = try #require(components.range(of: "struct PopUpMenu", range: label.upperBound..<components.endIndex))
+        let body = components[label.upperBound..<end.lowerBound]
+        #expect(body.contains(#"Text(Image(systemName: "chevron.up.chevron.down"))"#))
+        #expect(!body.contains("HStack") && !body.contains("VStack"))
+        #expect(components.contains("PopUpLabel(text: text)"))
+        #expect(try Self.source("PureMouseSettingsUI/ActionPicker.swift").contains("PopUpLabel(text:"))
+        // The thumb wheel's Action row is a pop-up of this kind, with or without a wider scope.
+        let rows = try Self.source("PureMouseSettingsUI/ThumbWheelRows.swift")
+        #expect(rows.contains("InheritedPicker(") && rows.contains("PopUpMenu(text: choice.label)"))
+        #expect(try Self.source("PureMouseSettingsUI/InheritedValue.swift").contains("PopUpMenu(text:"))
     }
 
     // Criterion 2: Buttons and Scrolling, no Pointer; Thumb Wheel under Scrolling.

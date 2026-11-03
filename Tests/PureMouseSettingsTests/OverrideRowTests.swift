@@ -156,12 +156,12 @@ private func mouse() throws -> ConfigScope { try #require(ConfigScope.device(mou
 }
 
 @MainActor @Test func theMouseDefaultEntryIsHiddenWhereTheWiderScopeAlreadyIsMouseDefault() {
-    let wideDefault = ActionButton.inherited(.standard, everywhere: ButtonAction.standard.label, source: InheritedScope.allMice)
+    let wideDefault = ActionButton.inherited(.standard, inheriting: ButtonAction.standard.label, source: InheritedScope.allMice)
     let entries = PickerEntry.all(allowsDefault: true, allowsGesture: true, inherited: wideDefault)
     #expect(entries.first?.label == "Same as All Mice" && entries.first?.detail == "(Mouse Default)")
     #expect(!entries.contains { $0.id == "default" })
     // Where the wider scope binds something, both stay: they write different things.
-    let wideMute = ActionButton.inherited(.standard, everywhere: "Mute", source: InheritedScope.allMice)
+    let wideMute = ActionButton.inherited(.standard, inheriting: "Mute", source: InheritedScope.allMice)
     #expect(PickerEntry.all(allowsDefault: true, allowsGesture: true, inherited: wideMute).contains { $0.id == "default" })
     // A "default" the scope already holds keeps its entry, so the row shows what is chosen.
     #expect(PickerEntry.all(allowsDefault: true, allowsGesture: true, inherited: wideDefault, current: .mouseDefault)

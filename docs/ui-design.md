@@ -384,8 +384,10 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
   tab (`AppPage`, in place of the list; see An app's page above), whose editors are sheets
   (`EditorPresentation`, read by `ThumbWheelRows` and the button rows). The value an unset control
   shows is the one the known mice resolve (`Applied`, over `AppModel.appInheritedScopes`), or
-  "Varies by Mouse". The page's form is capped to the screen under its header
-  (`AppPage.maxFormHeight`), so it scrolls with the header in view. Names are looked up without
+  "Varies by Mouse", for the thumb wheel's Turn distance and Swap directions too (`ConfigTree.thumbWheelKeysVarying`; Swap
+  directions is an On/Off pop-up while it varies). The header is a view of its own above the form, as
+  the Mouse tab's strip is (no scroll-edge line under it), and the form is capped to what the pane's
+  limit (`paneMaxHeight`) leaves below it, so it scrolls with the header in view. Names are looked up without
   icons (`AppIdentities`); an icon loads when its frame meets the scroll view's visible bounds
   (`AppIcon`): a grouped form builds every row, so `onAppear` is not enough, and macOS 14 lacks
   `onScrollVisibilityChange`. Applications is never listed; adding goes through an open panel or

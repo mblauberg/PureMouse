@@ -65,16 +65,17 @@ struct PopUpLabel: View {
     let text: String
 
     var body: some View {
-        HStack(spacing: 4) {
-            // Primary, as the form's own pop-ups draw the value (a `LabeledContent` makes it secondary).
-            Text(text)
-                .lineLimit(1)
-                .foregroundStyle(.primary)
-            Image(systemName: "chevron.up.chevron.down")
-                .imageScale(.small)
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-        }
+        // One `Text` with the chevrons set in it, not a stack: a `Menu` takes a label apart into
+        // title and image and draws the image first, which put the chevrons before the value on every
+        // pop-up that is a `Menu` (`PopUpMenu`). Primary for the value, as the form's own pop-ups
+        // draw it (a `LabeledContent` makes it secondary). Cut in the middle when it is too long, so
+        // the chevrons stay.
+        (Text(text).foregroundStyle(.primary)
+            + Text(" ")
+            + Text(Image(systemName: "chevron.up.chevron.down")).font(.footnote).foregroundStyle(.secondary))
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .accessibilityLabel(text)
     }
 }
 
