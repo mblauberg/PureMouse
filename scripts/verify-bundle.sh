@@ -101,12 +101,19 @@ for component in $components; do
     fi
 done
 
-# Only the Settings helper draws device art (build-app.sh copies the silhouettes there): the menu bar
-# app and the daemon's own resources must hold none.
+# Only the Settings helper draws device art (build-app.sh copies the silhouettes there) and holds
+# the action packs catalogue: the menu bar app and the daemon's own resources must hold none.
+settings_resources="$(component_path $app "$(settings_component)")/Contents/Resources"
+if [[ ! -f $settings_resources/ActionPacks.json ]]; then
+    fail "${settings_resources#$app/}/ActionPacks.json: missing action packs catalogue in Settings helper"
+fi
+
 for resources in "$(component_path $app "$(menu_component)")" $app/Contents/Resources; do
     [[ -d $resources ]] || continue
     stray=$(find $resources -path '*silhouettes*' -name '*.pdf' -print -quit)
     [[ -z $stray ]] || fail "${stray#$app/}: device art belongs to the Settings helper alone"
+    stray_pack=$(find $resources -name 'ActionPacks.json' -print -quit)
+    [[ -z $stray_pack ]] || fail "${stray_pack#$app/}: action packs catalogue belongs to the Settings helper alone"
 done
 
 (( failed == 0 )) || exit 1

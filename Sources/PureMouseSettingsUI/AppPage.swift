@@ -76,12 +76,18 @@ struct AppPage: View {
         .onChange(of: headerHeight) { settings?.refit() }
         #if DEBUG
         .onAppear {
-            // With PUREMOUSE_DEV_APP: PUREMOUSE_DEV_OTHERS=1 opens "Other controls", and
-            // PUREMOUSE_DEV_SHORTCUT opens a button's shortcut editor sheet over the page.
+            // With PUREMOUSE_DEV_APP: PUREMOUSE_DEV_OTHERS=1 opens "Other controls",
+            // PUREMOUSE_DEV_SHORTCUT opens a button's shortcut editor sheet over the page, and
+            // PUREMOUSE_DEV_PICKER opens a button's action picker popover.
             if ProcessInfo.processInfo.environment["PUREMOUSE_DEV_OTHERS"] != nil { showOthers = true }
             if let button = ProcessInfo.processInfo.environment["PUREMOUSE_DEV_SHORTCUT"] {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     editor = SheetRequest(kind: .shortcut, target: bindingTarget(button), initial: "cmd+w")
+                }
+            }
+            if let button = ProcessInfo.processInfo.environment["PUREMOUSE_DEV_PICKER"] {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    presented = button
                 }
             }
         }
@@ -189,7 +195,8 @@ struct AppPage: View {
             choose: { entry in choose(entry, for: target, current: action) },
             accessibilityName: target.title + spoken,
             sameAsInherited: sameAs,
-            spokenInherited: spokenSameAs)
+            spokenInherited: spokenSameAs,
+            app: key)
     }
 
     private func choose(_ entry: PickerEntry, for target: BindingTarget, current: ButtonAction) {

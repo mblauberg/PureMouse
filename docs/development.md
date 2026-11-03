@@ -142,7 +142,7 @@ the full list. The ones used most:
 | `PUREMOUSE_DEV_SUBMENU=pointer` | The menu shows Pointer Speed's rows as the menu itself, to capture the submenu without hovering (with `PUREMOUSE_DEV_MENU=1`, and `PUREMOUSE_DEV_MICE=2` for the sections) |
 | `PUREMOUSE_DEV_ICON=<directory>` | Writes the menu bar icon's running, paused, off, attention and paused-attention states as `<state>@1x.png` and `<state>@2x.png` and exits, before reading a config or a status (`DevHooks.writeIcons`) |
 | `PUREMOUSE_DEV_PANE=<pane>` | Opens a tab (`general`, `mouse`, `apps`, `about`) or a Mouse segment (`buttons`, `scrolling`, `pointer`) |
-| `PUREMOUSE_DEV_PICKER=<button>` | A button's action picker on Mouse › Buttons only |
+| `PUREMOUSE_DEV_PICKER=<button>` | A button's action picker on Mouse › Buttons; with `PUREMOUSE_DEV_APP`, on the app's Buttons page |
 | `PUREMOUSE_DEV_SHORTCUT=<button>` | A button's shortcut sheet on Mouse › Buttons; with `PUREMOUSE_DEV_APP`, that button's shortcut editor sheet over the app's page (`AppPage.body`) |
 | `PUREMOUSE_DEV_SHORTCUT_TEXT=1` | With `PUREMOUSE_DEV_SHORTCUT`, opens the shortcut sheet with its "Enter as Text…" text field already shown (`ShortcutSheet`) |
 | `PUREMOUSE_DEV_MOUSE=<device key>\|all` | Chooses that mouse on Mouse, or All Mice; `PUREMOUSE_DEV_OTHERS=1` opens Buttons' Other controls; `PUREMOUSE_DEV_MORE=1` opens an app page's More thumb wheel options |
@@ -464,6 +464,30 @@ even-odd paths, because `rsvg-convert` rasterises SVG masks in the PDF. The menu
 
 ## Extending
 
+- **Action pack.** Curated per-app actions live in declarative JSON at
+  `Sources/PureMouseSettingsUI/Resources/ActionPacks.json`. `scripts/build-app.sh` copies it into the
+  Settings helper's `Contents/Resources` (as it does the silhouettes) and `verify-bundle.sh` checks
+  it is there and in neither the menu bar app nor the daemon; the helper loads it on first use from
+  `Bundle.main` (tests fall back to the source file). It is not a SwiftPM resource. When adding or
+  correcting a pack:
+  - Take every action from the vendor's own macOS shortcut documentation, and set `sourceURL` to
+    the page (https) that lists it and `verifiedDate` to the day you checked (`YYYY-MM-DD`). If the
+    vendor's page does not list a shortcut, leave the action out, whatever other sites say.
+  - At least 6 actions per pack.
+  - Required fields for each action: stable unique `id`, `bundleIDs` (declared by the pack), `label`
+    (a verb phrase, never "toggle", per [ui-language](ui-language.md)), `category`, a `payload`
+    that is a valid shortcut (`Shortcut.isValid`) or a named action, `sourceURL` and `verifiedDate`.
+  - Optional: `keywords` (whole words that find the action), `symbol` (an SF Symbol name; the picker
+    shows `app` without one), `keymapNote` (`"Depends on your keymap"` for a shortcut the person can
+    change in the app, as in Final Cut Pro and VS Code), and `pairedOpposite` with `pairLabel` for
+    the thumb wheel.
+  - A pair is two actions naming each other. **The pair's left member is the one listed first in the
+    pack**: put the action for turning left (the decrease, previous or zoom-out one) before its
+    opposite. `pairLabel` is the same on both.
+  - Skip pairs the built-in thumb wheel presets cover (Switch Tabs).
+  - `ActionPackCatalogTests` validates the file: unique IDs, declared bundle IDs, parsable payloads,
+    six actions a pack, https sources, ISO dates, pairs that name each other, and SF Symbols that
+    exist.
 - **Named button.** Keep `Config.Button` and the menu's `NamedButton` in step (names and CIDs), and
   add the control's display name to `ControlNames` (Kit).
 - **Action.** A case in `Action` and a name in `Action.named` (both in PureMouseKit), handled in

@@ -75,10 +75,12 @@ else
 fi
 
 assemble_bundle $bin $app $version $build
-# The device silhouettes (assets/silhouettes, from make-silhouettes.sh) are the Settings helper's
-# alone: the menu bar app and the daemon draw no art, and verify-bundle.sh checks they have none.
+# The device silhouettes (assets/silhouettes, from make-silhouettes.sh) and action packs catalogue
+# (Sources/PureMouseSettingsUI/Resources/ActionPacks.json) are the Settings helper's alone: the menu
+# bar app and the daemon draw no art and need no catalogue, and verify-bundle.sh checks they have none.
 settings_resources="$(component_path $app "$(settings_component)")/Contents/Resources"
 mkdir -p $settings_resources/silhouettes
 cp assets/silhouettes/*.pdf $settings_resources/silhouettes/
+cp Sources/PureMouseSettingsUI/Resources/ActionPacks.json $settings_resources/
 scripts/sign-bundle.sh $app --identity "$identity" $timestamp
 echo "built $app ($version, build $build, $(lipo -archs $app/Contents/MacOS/puremouse), signed by $identity)"
