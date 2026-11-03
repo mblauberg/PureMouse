@@ -64,6 +64,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         let option = NSEvent.modifierFlags.contains(.option)
         var state = MenuState(model: model)
         state.update = app.updates.offer
+        state.installing = app.installState
         // Read once, as the menu opens: choosing the menu does not activate PureMouse, so this is
         // still the app the person was using. No observer, no timer.
         let front = NSWorkspace.shared.frontmostApplication
@@ -79,6 +80,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         case .editPresets: app.showSettings(ShowRequest(sheet: .presets))
         case .openReleases: app.openReleases()
         case .openUpdate(let page): app.openUpdate(page)
+        case .installUpdate: app.installUpdate()
         case .skipUpdate: app.skipUpdate()
         case .openPrivacy(let pane): app.openPrivacy(pane)
         case .quitLogiOptions: app.quitLogiOptions()

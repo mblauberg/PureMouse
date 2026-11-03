@@ -50,6 +50,14 @@ public struct Locations: Sendable {
                                        home: FileManager.default.homeDirectoryForCurrentUser,
                                        bundle: Bundle.main.bundleURL)
 
+    /// The installed `PureMouse.app` this process belongs to (the daemon's `Contents/MacOS` and up),
+    /// which an update replaces. nil for a development run or a bare binary.
+    public var installedApp: URL? {
+        guard !daemonOverridden, let daemon else { return nil }
+        let app = daemon.standardizedFileURL.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        return app.pathExtension == "app" ? app : nil
+    }
+
     /// Written by the daemon: `Status`.
     public var status: URL { companion.appending(path: "status.json") }
     /// Written by the menu bar app and the Settings helper: `Control`.

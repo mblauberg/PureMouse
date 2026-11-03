@@ -256,7 +256,11 @@ the request, and waits up to 2 s for the helper to remove the file (`ShowRequest
 it). If it is still there, the request is written again and `open` is tried once more, unless Quit
 PureMouse left a `settings-quit` stamp meanwhile: a new request would clear it and bring Settings back,
 so nothing more is done. If the build has no helper, or it will not open, the old alert is shown
-instead; registration has already happened by then. The menu app itself opens Settings when it was
+instead; registration has already happened by then. An update (ADR 22) starts the new copy as
+`register --relaunch [--settings=<pane>]` instead: `register`, then `openSettings` on that pane (empty:
+the last one) only when `--settings` is given (best effort: the old menu app waits up to 3 s for the
+old helper to exit first, so a helper seen to exit in that time cannot read the request and then quit; one that is still there after it can, and Quit or Hide during the wait starts nothing), and the Finder launch's
+failure alert if registering fails (the old menu app is gone by then and `open` only says it launched). The menu app itself opens Settings when it was
 opened by hand rather than by launchd (a copy that is neither launchd's nor showing an icon quits
 once Settings is open), when it finds a fresh stamp at launch, and when it is reopened
 (`applicationShouldHandleReopen`). It keeps a single instance: a second launch opens Settings and

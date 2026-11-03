@@ -39,7 +39,7 @@ pressed. The daemon has none, and must not.
   (clicking it opens the release page), and the menu shows **Update to X.Y.Z…** and **Skip This
   Version** until the running version is at least X.Y.Z. Skipping hides both for exactly that version (the last 16 skipped are kept); a version is notified once (the last 16 notified are kept), so a release that goes 0.6.0, 0.7.0, 0.6.0 is not announced twice. Any notification for a version that is not on offer (replaced, skipped, installed, or higher than a rolled-back release) is taken down at each check, skip, switch-off and launch. A newer release's reminder replaces the earlier one, turning the
   check off takes it down, and only a release page under `github.com/mblauberg/PureMouse/releases` is accepted from the response.
-  Nothing is downloaded or installed, and no window takes focus (the question is the one alert).
+  The reminder downloads and installs nothing, and no window takes focus (the question is the one alert); choosing the row is ADR 22's.
 - **Stored** in the menu app's preferences, listed in [Privacy](../privacy.md): the answer, launch
   count, last request, ETag, latest release, skipped versions and notified versions (the last 16 of each). Settings writes
   the answer there and the menu app hears it (key-value observing), as it hears the notification answer.
@@ -66,4 +66,4 @@ pressed. The daemon has none, and must not.
 - The user agent and IP address reach GitHub once a day; the ETag sent back is GitHub's own.
 - A build whose version is not a release number (`dev`, the rig's) counts every release as newer,
   as the on-demand check does.
-- Installing is still manual. Downloading and installing belong to the Developer ID work (#26).
+- Installing was left manual here; [ADR 22](0022-update-trust-is-the-signing-requirement.md) adds it (#128), still only when the person chooses the menu row.

@@ -90,7 +90,7 @@ struct MenuPlanTests {
                                    page: try #require(URL(string: "https://github.com/mblauberg/PureMouse/releases/tag/v0.6.0")))
         #expect(lines(state).contains("""
             v0.3.0
-            Update to 0.6.0… [-> openUpdate(https://github.com/mblauberg/PureMouse/releases/tag/v0.6.0)]
+            Update to 0.6.0… [-> installUpdate]
             Skip This Version [-> skipUpdate]
             ---
             Smooth Scrolling
@@ -101,6 +101,46 @@ struct MenuPlanTests {
         #expect(!lines(state).contains("Update to"))
     }
 
+    @Test func whileUpdatingTheRowIsDisabledAndSaysSo() throws {
+        var state = Self.running()
+        state.update = UpdateOffer(version: try #require(UpdateCheck.Version("0.6.0")), page: try #require(URL(string: "https://example.com/r")))
+        state.installing = .installing
+        #expect(lines(state).contains("""
+            Updating to 0.6.0… [disabled]
+            Skip This Version [-> skipUpdate]
+            """))
+        #expect(!lines(state).contains("installUpdate"))
+    }
+
+    @Test func aRefusedUpdateGivesItsReasonTheReleasePageAndAnotherTry() throws {
+        var state = Self.running()
+        let page = try #require(URL(string: "https://example.com/r"))
+        state.update = UpdateOffer(version: try #require(UpdateCheck.Version("0.6.0")), page: page)
+        state.installing = .failed(reason: "The download doesn't match its checksum", retry: true)
+        #expect(lines(state).contains("""
+            The download doesn't match its checksum [disabled]
+            Update to 0.6.0… [-> installUpdate]
+            View Release [-> openUpdate(https://example.com/r)]
+            Skip This Version [-> skipUpdate]
+            """))
+        // A copy that cannot be replaced is not offered a second try that would end the same way.
+        state.installing = .failed(reason: "Can't update: this copy needs an administrator", retry: false)
+        #expect(lines(state).contains("""
+            Can't update: this copy needs an administrator [disabled]
+            View Release [-> openUpdate(https://example.com/r)]
+            Skip This Version [-> skipUpdate]
+            """))
+        #expect(!state.needsAttention)
+    }
+
+    @Test func onceTheNewAppIsOnDiskTheUpdateRowsAreGone() {
+        var state = Self.running()
+        state.update = UpdateOffer(version: UpdateCheck.Version("0.6.0")!, page: URL(string: "https://example.com/r")!)
+        state.installing = .installed
+        let text = lines(state)
+        #expect(!text.contains("Update to") && !text.contains("Skip This Version") && !text.contains("View Release"))
+    }
+
     @Test func theUpdateRowsComeAfterTheWarningsAndLeaveTheStatusFormatRowAlone() throws {
         var state = Self.running()
         state.statusTooNew = true
@@ -109,7 +149,7 @@ struct MenuPlanTests {
         #expect(lines(state).contains("""
             Update PureMouse [attention, -> openReleases]
             Allow Accessibility Access [attention, -> openPrivacy(PureMouseAppSupport.PrivacyPane.accessibility)]
-            Update to 1.0… [-> openUpdate(https://example.com/r)]
+            Update to 1.0… [-> installUpdate]
             Skip This Version [-> skipUpdate]
             """))
     }

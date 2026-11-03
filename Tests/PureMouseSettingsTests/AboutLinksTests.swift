@@ -73,7 +73,7 @@ import Testing
         let toggle = try #require(about.range(of: #"Toggle("Check for updates automatically""#)).lowerBound
         let outcome = try #require(about.range(of: "switch outcome")).lowerBound
         #expect(button < toggle && toggle < outcome)
-        #expect(about.contains("The network is used only to check for updates."))
+        #expect(about.contains("The network is used only to check for and download updates."))
     }
 }
 
@@ -122,6 +122,48 @@ private final class RecordingScheduler: UpdateScheduling {
         let about = AutomaticUpdates(preferences: nil)
         about.set(true)
         #expect(!about.isOn)
+    }
+
+    @MainActor @Test func updateAndRelaunchIsARequestToTheMenuAppAndTheHelperInstallsNothing() {
+        let preferences = UpdatePreferences(UserDefaults(suiteName: "pm-about-\(UUID().uuidString)")!)
+        var yielded = 0
+        let request = InstallRequest(preferences: preferences, menuIsRunning: { true }, yieldFocus: { yielded += 1 })
+        let release = UpdateCheck.Release(version: UpdateCheck.Version("0.6.0")!,
+                                          page: URL(string: "https://github.com/mblauberg/PureMouse/releases/tag/v0.6.0")!)
+        #expect(request.isOffered)
+        request.ask(for: release)
+        #expect(preferences.installRequest == release && yielded == 1)
+    }
+
+    @MainActor @Test func theButtonIsOfferedOnlyWhereTheMenuAppCanHearIt() {
+        let preferences = UpdatePreferences(UserDefaults(suiteName: "pm-about-\(UUID().uuidString)")!)
+        let release = UpdateCheck.Release(version: UpdateCheck.Version("0.6.0")!, page: URL(string: "https://example.com")!)
+        let hidden = InstallRequest(preferences: preferences, menuIsRunning: { false }, yieldFocus: {})
+        #expect(!hidden.isOffered)
+        hidden.ask(for: release)
+        #expect(preferences.installRequest == nil)
+        let none = InstallRequest(preferences: nil, menuIsRunning: { true }, yieldFocus: {})
+        #expect(!none.isOffered)
+        none.ask(for: release)
+    }
+
+    @MainActor @Test func aSecondRequestWhileOneIsUnderWayIsNotSent() {
+        let preferences = UpdatePreferences(UserDefaults(suiteName: "pm-about-\(UUID().uuidString)")!)
+        preferences.installStatus = "Updating to 0.6.0…"
+        let request = InstallRequest(preferences: preferences, menuIsRunning: { true }, yieldFocus: {})
+        #expect(request.inProgress)
+        request.ask(for: UpdateCheck.Release(version: UpdateCheck.Version("0.7.0")!, page: URL(string: "https://example.com")!))
+        #expect(preferences.installRequest == nil && preferences.installStatus == "Updating to 0.6.0…")
+    }
+
+    @MainActor @Test func aFailureStaysAskableAgainAndTheOldReasonIsClearedWithTheNextRequest() {
+        let preferences = UpdatePreferences(UserDefaults(suiteName: "pm-about-\(UUID().uuidString)")!)
+        preferences.installStatus = "The download doesn't match its checksum"
+        let request = InstallRequest(preferences: preferences, menuIsRunning: { true }, yieldFocus: {})
+        #expect(!request.inProgress)
+        let release = UpdateCheck.Release(version: UpdateCheck.Version("0.6.0")!, page: URL(string: "https://example.com")!)
+        request.ask(for: release)
+        #expect(preferences.installStatus == nil && preferences.installRequest == release)
     }
 
     final class Requests: @unchecked Sendable { var count = 0 }
