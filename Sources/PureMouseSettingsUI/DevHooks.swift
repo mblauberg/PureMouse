@@ -53,5 +53,7 @@ public enum DevHooks {
 enum DevSheet: String {
     /// The pane's Advanced… sheet (General, Mouse › Buttons, Mouse › Scrolling).
     case advanced
+    /// About This Mouse, for the first mouse in General › Status.
+    case aboutMouse
 }
 #endif

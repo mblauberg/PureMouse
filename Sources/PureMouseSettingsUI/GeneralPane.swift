@@ -20,10 +20,20 @@ struct GeneralPane: View {
         BannerPlan.items(for: BannerPlan.State(model: model, needsAccessibility: true)).filter { $0 != .off }
     }
 
+    /// The mice the daemon knows, only while it runs: a status file outlives it.
+    private var devices: [Status.Device] { DeviceRow.shown(model.devices, daemonRunning: model.daemonRunning) }
+
     var body: some View {
         PaneForm {
             Section("Status") {
                 runningRow
+                ForEach(Array(devices.enumerated()), id: \.element.id) { index, device in
+                    #if DEBUG
+                    DeviceRow(device: device, opensAtAppear: index == 0 && DevHooks.sheet(on: "general") == .aboutMouse)
+                    #else
+                    DeviceRow(device: device)
+                    #endif
+                }
                 ForEach(notices, id: \.self) { NoticeRow(notice: $0) }
             }
 
@@ -72,6 +82,7 @@ struct GeneralPane: View {
         // Rows come and go with the answers, after the window was sized.
         .onChange(of: openAtLogin.needsApproval) { settings?.refit() }
         .onChange(of: notices) { settings?.refit() }
+        .onChange(of: devices.map(\.id)) { settings?.refit() }
         .sheet(isPresented: $showingAdvanced) {
             GeneralAdvancedSheet().environment(model)
         }
