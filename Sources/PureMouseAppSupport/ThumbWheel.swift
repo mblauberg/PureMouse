@@ -11,6 +11,8 @@ public enum ThumbWheelChoice: Hashable, Identifiable, Sendable {
     case scroll
     /// One of Kit's `Config.ThumbWheel.presets` by its config name.
     case preset(String)
+    /// A pair of opposite pack actions for an app.
+    case packPair(id: String, label: String)
     /// `left` or `right` set by hand (or an `action` this app does not know).
     case custom
 
@@ -22,6 +24,16 @@ public enum ThumbWheelChoice: Hashable, Identifiable, Sendable {
     /// The pop-up's choices after "Same as Mouse Settings".
     public static let menu: [ThumbWheelChoice] = [.scroll] + presetOrder.map(ThumbWheelChoice.preset) + [.custom]
 
+    /// The pop-up's choices including any pack pairs for an app.
+    public static func menu(for pairs: [(id: String, label: String)]) -> [ThumbWheelChoice] {
+        var items: [ThumbWheelChoice] = [.scroll] + presetOrder.map(ThumbWheelChoice.preset)
+        for pair in pairs {
+            items.append(.packPair(id: pair.id, label: pair.label))
+        }
+        items.append(.custom)
+        return items
+    }
+
     public var label: String {
         switch self {
         case .inherit: "Same as Mouse Settings"
@@ -31,6 +43,7 @@ public enum ThumbWheelChoice: Hashable, Identifiable, Sendable {
         case .preset("tabs"): "Switch Tabs"
         case .preset("spaces"): "Switch Spaces"
         case .preset(let name): name
+        case .packPair(_, let label): label
         case .custom: "Custom"
         }
     }
@@ -40,9 +53,16 @@ public enum ThumbWheelChoice: Hashable, Identifiable, Sendable {
     public static let keys = ["action", "left", "right", "step"]
 
     /// The choice the keys in `object` make. Outside an app no key means the default, scrolling.
-    static func read(_ object: [String: Any]?, inApp: Bool) -> ThumbWheelChoice {
+    static func read(_ object: [String: Any]?, inApp: Bool, pairs: [(id: String, label: String, left: ButtonAction, right: ButtonAction)] = []) -> ThumbWheelChoice {
         let object = object ?? [:]
-        if object["left"] != nil || object["right"] != nil { return .custom }
+        let left = object["left"].map(ButtonAction.init(json:))
+        let right = object["right"].map(ButtonAction.init(json:))
+        if left != nil || right != nil {
+            if let left, let right, let match = pairs.first(where: { $0.left == left && $0.right == right }) {
+                return .packPair(id: match.id, label: match.label)
+            }
+            return .custom
+        }
         switch object["action"] {
         case nil: return inApp ? .inherit : .scroll
         case "scroll" as String: return .scroll
@@ -147,8 +167,11 @@ extension ConfigTree {
         return apps.keys.contains { thumbWheel(at: ["apps", $0, "thumbWheel"], base: global).scrolls }
     }
 
-    public func thumbWheelChoice(at path: [String]) -> ThumbWheelChoice {
-        ThumbWheelChoice.read(self[path] as? [String: Any], inApp: Self.leavesToWiderScope(path))
+    public func thumbWheelChoice(
+        at path: [String],
+        pairs: [(id: String, label: String, left: ButtonAction, right: ButtonAction)] = []
+    ) -> ThumbWheelChoice {
+        ThumbWheelChoice.read(self[path] as? [String: Any], inApp: Self.leavesToWiderScope(path), pairs: pairs)
     }
 
     /// Writes (or, for nil, removes) one thumb-wheel key at `path + [key]`. In a mouse's entry a
@@ -169,7 +192,12 @@ extension ConfigTree {
     /// Writes a choice from the pop-up. A preset sets `action` and drops the step, so it brings
     /// its own; Custom writes the current pair as `left` and `right`, so the wheel does the same
     /// until one is changed, and keeps the step it had.
-    public mutating func chooseThumbWheel(_ choice: ThumbWheelChoice, at path: [String], base: ThumbWheelState = .initial) {
+    public mutating func chooseThumbWheel(
+        _ choice: ThumbWheelChoice,
+        at path: [String],
+        base: ThumbWheelState = .initial,
+        pairs: [(id: String, label: String, left: ButtonAction, right: ButtonAction)] = []
+    ) {
         let inApp = Self.leavesToWiderScope(path)
         switch choice {
         case .inherit:
@@ -180,8 +208,15 @@ extension ConfigTree {
         case .preset(let name):
             put(name, at: path + ["action"])
             for key in ["left", "right", "step"] { put(nil, at: path + [key]) }
+        case .packPair(let id, _):
+            if let pair = pairs.first(where: { $0.id == id }) {
+                put(pair.left.json, at: path + ["left"])
+                put(pair.right.json, at: path + ["right"])
+                put(nil, at: path + ["action"])
+                put(nil, at: path + ["step"])
+            }
         case .custom:
-            guard thumbWheelChoice(at: path) != .custom else { return }
+            guard thumbWheelChoice(at: path, pairs: pairs) != .custom else { return }
             let current = thumbWheel(at: path, base: base)
             let pair = current.pair ?? .init(left: .named("none"), right: .named("none"))
             // The pair first: removing `action` while it is the entry's only key would prune a

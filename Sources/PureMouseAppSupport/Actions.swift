@@ -77,11 +77,11 @@ public enum ActionCatalog {
 
     public static let groups: [Group] = [
         Group(title: "Desktop", names: ["missionControl", "appExpose", "showDesktop", "launchpad"]),
-        Group(title: "Spaces and Navigation", names: ["spaceLeft", "spaceRight", "navigateBack", "navigateForward"]),
-        Group(title: "Mouse", names: ["middleClick", "toggleScrollMode", "cycleDPI"]),
+        Group(title: "Navigation", names: ["spaceLeft", "spaceRight", "navigateBack", "navigateForward"]),
         Group(title: "Media", names: ["playPause", "nextTrack", "previousTrack", "volumeUp", "volumeDown", "mute"]),
-        Group(title: "Display", names: ["brightnessUp", "brightnessDown"]),
         Group(title: "Tabs and Zoom", names: ["nextTab", "previousTab", "zoomIn", "zoomOut"]),
+        Group(title: "Mouse", names: ["middleClick", "toggleScrollMode", "cycleDPI"]),
+        Group(title: "Display", names: ["brightnessUp", "brightnessDown"]),
     ]
 
     public static func label(for name: String) -> String {
