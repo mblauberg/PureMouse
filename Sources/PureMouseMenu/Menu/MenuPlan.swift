@@ -23,6 +23,11 @@ struct MenuState {
     var smoothScrolling = true
     var readOnly = false
     var dpiPresets: [Int] = []
+    /// Each mouse's resolved preset list by device key (its own entry over the top level).
+    var mousePresets: [String: [Int]] = [:]
+    /// The keys whose own `devices` entry sets `dpi` or `dpiPresets`: choosing a speed for such a
+    /// mouse writes its entry, since the top level would not reach it.
+    var dpiScoped: Set<String> = []
     /// The mouse's own DPI, else the configured one.
     var currentDPI: Int?
     /// The live mouse's sensor steps (empty when unknown).
@@ -109,8 +114,9 @@ enum MenuAction {
     case openSettings(SettingsPane?)
     /// Apps, on the sheet of the app with this bundle identifier.
     case openAppSettings(String)
-    /// Pointer's presets sheet.
-    case editPresets
+    /// Pointer's presets sheet, in the scope the menu showed: under the mouse with this key, else
+    /// All Mice.
+    case editPresets(device: String?)
     case openReleases
     /// The release page of a newer version.
     case openUpdate(URL)
@@ -123,7 +129,10 @@ enum MenuAction {
     /// Opens Login Items in System Settings, where its login item is removed.
     case openLoginItems
     case toggleSmoothScrolling
+    /// Pointer Speed on the top level (every mouse).
     case setDPI(Int)
+    /// Pointer Speed under `devices.<device>`, for that mouse only.
+    case setDeviceDPI(Int, device: String)
     case start
     case setPaused(Bool)
     case reloadConfig
@@ -139,6 +148,8 @@ enum MenuRow {
     /// alternate (⌥) adds the detail line.
     case header(title: String, lines: [String], alternate: Bool)
     case separator
+    /// A section title in a submenu (`NSMenuItem.sectionHeader`): not a command, and not selectable.
+    case sectionHeader(String)
     case item(MenuItem)
 }
 
@@ -150,6 +161,8 @@ struct MenuItem {
     /// Shown with a warning triangle in the checkmark column.
     var attention = false
     var enabled = true
+    /// What VoiceOver reads when the title alone is ambiguous (a preset under a mouse's section).
+    var spoken: String?
     /// Replaces the item before it while ⌥ is held (the renderer adds ⌥ to its modifiers). AppKit
     /// folds an alternate into the item before it only when both share the key equivalent.
     var alternate = false
@@ -192,7 +205,9 @@ enum MenuPlan {
         rows.append(.separator)
         rows.append(.item(MenuItem(title: "Smooth Scrolling", checked: state.smoothScrolling,
                                    enabled: running && !state.readOnly, action: .toggleSmoothScrolling)))
-        rows.append(.item(MenuItem(title: "Pointer Speed", enabled: running, submenu: pointerRows(state))))
+        // Disabled while every mouse answering reports it has no pointer speed to set.
+        let noneOffers = state.devices.contains(where: \.online) && onlineMice(state.devices).isEmpty
+        rows.append(.item(MenuItem(title: "Pointer Speed", enabled: running && !noneOffers, submenu: pointerRows(state))))
 
         // Start, Pause and Resume share one slot, so nothing below them moves between states.
         rows.append(.separator)
@@ -280,21 +295,82 @@ enum MenuPlan {
         .item(MenuItem(title: title, attention: true, action: action))
     }
 
-    private static func pointerRows(_ state: MenuState) -> [MenuRow] {
-        var rows: [MenuRow] = []
-        let presets = state.dpiPresets
-        // A preset off the sensor's list runs at its nearest step, as the daemon snaps it.
-        let selected = presets.first { DPIPresets.snap($0, to: state.dpiSteps) == state.currentDPI }
-        for preset in presets {
-            rows.append(.item(MenuItem(title: Format.dpi(preset), checked: preset == selected,
-                                       enabled: !state.readOnly, action: .setDPI(preset))))
+    /// The mice Pointer Speed sets, one per device key: those answering now that offer a pointer speed
+    /// (`Status.Device.offers`), the first of each key (mice of one model share their settings), and
+    /// every such mouse with no usable key. Only these count for sections.
+    static func onlineMice(_ devices: [Status.Device]) -> [Status.Device] {
+        var seen = Set<String>()
+        return devices.filter { device in
+            guard device.online, device.offers(\.dpi) else { return false }
+            guard let key = device.deviceKey else { return true }
+            return seen.insert(key).inserted
         }
-        if let current = state.currentDPI, selected == nil {
-            rows.append(.item(MenuItem(title: presets.isEmpty ? Format.dpi(current) : "Custom: \(Format.dpi(current))",
-                                       checked: true, enabled: false)))
+    }
+
+    private static func pointerRows(_ state: MenuState) -> [MenuRow] {
+        let mice = onlineMice(state.devices)
+        guard mice.count >= 2 else { return singleMouseRows(state, mouse: mice.first) }
+        var rows: [MenuRow] = []
+        for mouse in mice {
+            // A mouse with no key has no entry of its own to write: writing the top level would move
+            // the other mice, so it shows its speed and offers no presets.
+            guard let key = mouse.deviceKey else {
+                if let dpi = mouse.dpi {
+                    rows.append(.sectionHeader(mouse.name))
+                    let title = Format.dpi(dpi)
+                    rows.append(.item(MenuItem(title: title, checked: true, enabled: false, spoken: "\(title), \(mouse.name)")))
+                }
+                continue
+            }
+            rows.append(.sectionHeader(mouse.name))
+            let presets = state.mousePresets[key] ?? state.dpiPresets
+            rows += presetRows(presets, current: mouse.dpi, steps: mouse.dpiSteps, readOnly: state.readOnly,
+                               mouse: mouse.name) { .setDeviceDPI($0, device: key) }
+            rows.append(editPresets(empty: presets.isEmpty, device: key, mouse: mouse.name))
+        }
+        return rows
+    }
+
+    /// One mouse: the rows as they always were. It writes the top level unless its own entry sets
+    /// `dpi` or `dpiPresets`, which would otherwise hide the choice from it.
+    private static func singleMouseRows(_ state: MenuState, mouse: Status.Device?) -> [MenuRow] {
+        let key = mouse?.deviceKey
+        let own = key.flatMap { state.dpiScoped.contains($0) ? $0 : nil }
+        let presets = key.flatMap { state.mousePresets[$0] } ?? state.dpiPresets
+        var rows = presetRows(presets, current: state.currentDPI, steps: state.dpiSteps, readOnly: state.readOnly,
+                              mouse: nil) { dpi in
+            own.map { .setDeviceDPI(dpi, device: $0) } ?? .setDPI(dpi)
         }
         if !rows.isEmpty { rows.append(.separator) }
-        rows.append(.item(MenuItem(title: presets.isEmpty ? "Add Presets…" : "Edit Presets…", action: .editPresets)))
+        rows.append(editPresets(empty: presets.isEmpty, device: own, mouse: nil))
+        return rows
+    }
+
+    /// One mouse's presets sheet, or (`device` nil) the top level's. `mouse`: the section's mouse, for
+    /// VoiceOver ("Edit Presets for MX Master 3S").
+    private static func editPresets(empty: Bool, device: String?, mouse: String?) -> MenuRow {
+        let title = empty ? "Add Presets…" : "Edit Presets…"
+        let spoken = mouse.map { "\(empty ? "Add Presets" : "Edit Presets") for \($0)" }
+        return .item(MenuItem(title: title, spoken: spoken, action: .editPresets(device: device)))
+    }
+
+    /// The presets, the one the DPI is on checked, and "Custom: N" when it is on none. `mouse`: a
+    /// section's mouse, whose name VoiceOver adds to each row ("1,600 DPI, MX Master 3S").
+    private static func presetRows(_ presets: [Int], current: Int?, steps: [Int], readOnly: Bool, mouse: String?,
+                                   action: (Int) -> MenuAction) -> [MenuRow] {
+        func spoken(_ title: String) -> String? { mouse.map { "\(title), \($0)" } }
+        var rows: [MenuRow] = []
+        // A preset off the sensor's list runs at its nearest step, as the daemon snaps it.
+        let selected = presets.first { DPIPresets.snap($0, to: steps) == current }
+        for preset in presets {
+            let title = Format.dpi(preset)
+            rows.append(.item(MenuItem(title: title, checked: preset == selected, enabled: !readOnly,
+                                       spoken: spoken(title), action: action(preset))))
+        }
+        if let current, selected == nil {
+            let title = presets.isEmpty ? Format.dpi(current) : "Custom: \(Format.dpi(current))"
+            rows.append(.item(MenuItem(title: title, checked: true, enabled: false, spoken: spoken(title))))
+        }
         return rows
     }
 }
@@ -302,14 +378,25 @@ enum MenuPlan {
 extension MenuState {
     @MainActor init(model: AppModel) {
         let live = model.liveDevice
+        let config = model.config
+        // The mouse's own settings first, as the daemon resolves them; the top level without a key.
+        let liveScope = live?.deviceKey.flatMap { ConfigScope.device($0) }
+        var presets: [String: [Int]] = [:]
+        var scoped: Set<String> = []
+        for mouse in MenuPlan.onlineMice(model.devices) {
+            guard let key = mouse.deviceKey, let scope = ConfigScope.device(key) else { continue }
+            presets[key] = config.dpiPresets(in: scope)
+            if config.isOverridden(["dpi"], in: scope) || config.isOverridden(["dpiPresets"], in: scope) { scoped.insert(key) }
+        }
         self.init(daemonRunning: model.daemonRunning, paused: model.paused, away: model.status?.away == true,
                   statusTooNew: model.statusTooNew, version: model.status?.version ?? "dev", devices: model.devices,
                   accessibilityMissing: model.accessibilityMissing, inputMonitoringMissing: model.inputMonitoringMissing,
                   hasBluetoothDevice: model.hasBluetoothDevice,
                   waitingForInputMonitoring: model.waitingForInputMonitoring.map(\.name), configError: model.configError != nil,
                   logiOptionsRunning: model.logiOptionsRunning, smoothScrolling: model.config.smoothScrollEnabled,
-                  readOnly: model.readOnly, dpiPresets: model.config.dpiPresets,
+                  readOnly: model.readOnly, dpiPresets: config.dpiPresets, mousePresets: presets, dpiScoped: scoped,
                   // The mouse's own value first: a Cycle Pointer Speed press changes it, not the config.
-                  currentDPI: live?.dpi ?? model.config.int(["dpi"]), dpiSteps: live?.dpiSteps ?? [])
+                  currentDPI: live?.dpi ?? liveScope.flatMap { config.resolvedInt(["dpi"], in: $0) } ?? config.int(["dpi"]),
+                  dpiSteps: live?.dpiSteps ?? [])
     }
 }

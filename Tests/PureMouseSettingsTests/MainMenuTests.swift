@@ -58,6 +58,6 @@ import Testing
 
     @Test func quitAndHideStayInTheAppMenu() throws {
         let app = try #require(menu(Spy()).items.first?.submenu)
-        #expect(app.items.map(\.title) == ["About PureMouse", "", "Hide PureMouse Settings", "", "Quit PureMouse Settings"])
+        #expect(app.items.map(\.title) == ["About PureMouse", "", "Hide PureMouse", "", "Quit Settings"])
     }
 }

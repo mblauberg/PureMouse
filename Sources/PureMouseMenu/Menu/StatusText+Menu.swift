@@ -26,6 +26,9 @@ extension StatusText {
         if state.daemonRunning, let standby = Standby(paused: state.paused, away: state.away) {
             parts.append(standby.spoken)
         }
+        // Every mouse answering, so two of one model are two: the count of the menu's headers.
+        let mice = state.devices.filter(\.online).count
+        if state.daemonRunning, mice >= 2 { parts.append("\(mice) mice connected") }
         if state.needsAttention { parts.append("needs attention") }
         return parts.joined(separator: ", ")
     }

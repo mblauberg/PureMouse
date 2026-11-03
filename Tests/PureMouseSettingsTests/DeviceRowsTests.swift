@@ -76,13 +76,18 @@ import Testing
         #expect(rows.contains("Image(systemName: \"checkmark\")") && rows.contains(".opacity(line.current ? 1 : 0)"))
     }
 
-    @Test func theNotificationButtonSitsInTheSwitchesRowOutsideTheToggle() throws {
+    /// While macOS has the notifications off, the row offers the button in place of the switch: a
+    /// switch styled inside LabeledContent reads as a plain toggle, and a disabled toggle row would
+    /// disable a button in its label.
+    @Test func theNotificationButtonTakesTheSwitchesPlaceWhileMacOSHasThemOff() throws {
         let general = try Self.source("GeneralPane.swift")
         let row = try #require(general.range(of: "private var lowBatteryRow").map { String(general[$0.lowerBound...]) })
-        let button = try #require(row.range(of: "Button(\"Open Notification Settings…\")"))
-        let toggle = try #require(row.range(of: "Toggle(\"Low battery notifications\", isOn: isOn)"))
-        #expect(button.lowerBound < toggle.lowerBound, "the button comes before the switch, in one row")
-        #expect(row.contains(".labelsHidden()") && row.contains(".accessibilityLabel(\"Low battery notifications\")"))
+        let denied = try #require(row.range(of: "if notificationsDenied {"))
+        let otherwise = try #require(row.range(of: "} else {"))
+        let branch = row[denied.upperBound..<otherwise.lowerBound]
+        #expect(branch.contains("Button(\"Open Notification Settings…\")"))
+        #expect(!branch.contains("Toggle("))
+        #expect(row[otherwise.upperBound...].contains("Toggle(isOn: isOn)"))
     }
 
     @Test func theDevHookOpensTheSheetForTheFirstMouse() throws {

@@ -15,9 +15,10 @@ struct GeneralPane: View {
     @State private var deniedWatch: NotificationPermission.Watch?
     @State private var showingAdvanced = false
 
-    /// Every notice that applies, as rows. Off is the PureMouse row itself, with its Start button.
+    /// Every notice that applies, as rows. Off and paused are the PureMouse row itself (its Start
+    /// button and its switch).
     private var notices: [Notice] {
-        BannerPlan.items(for: BannerPlan.State(model: model, needsAccessibility: true)).filter { $0 != .off }
+        BannerPlan.generalItems(for: BannerPlan.State(model: model, needsAccessibility: true))
     }
 
     /// The mice the daemon knows, only while it runs: a status file outlives it.
@@ -39,7 +40,7 @@ struct GeneralPane: View {
 
             Section {
                 Toggle(isOn: Binding(get: { openAtLogin.isOn }, set: { perform(.openAtLogin($0)) })) {
-                    RowLabel("Open at login", help: "Turning it off doesn't stop PureMouse.")
+                    RowLabel("Open at login")
                 }
                 .accessibilityLabel("Open at login")
                 .disabled(model.locations.daemon == nil)
@@ -96,25 +97,45 @@ struct GeneralPane: View {
 
     private var runState: RunState { RunState(daemonRunning: model.daemonRunning, paused: model.paused) }
 
+    /// Pause or resume is the switch, on the daemon's control (as the menu's item does); Start is
+    /// offered only while PureMouse is off, the recovery when it isn't running.
     private var runningRow: some View {
         let state = runState
-        return LabeledContent {
-            HStack {
-                Label(state.word, systemImage: state.symbol)
-                    .symbolRenderingMode(.multicolor)
-                    .foregroundStyle(.secondary)
-                    .labelStyle(StatusLabelStyle())
-                Button(state == .off ? "Start" : "Stop") { setRunning(state.button) }
-                    .disabled(changingRunning || model.locations.daemon == nil)
+        let word = Label(state.word, systemImage: state.symbol)
+            .symbolRenderingMode(.multicolor)
+            .foregroundStyle(.secondary)
+            .labelStyle(StatusLabelStyle())
+        return Group {
+            if let start = state.button {
+                LabeledContent {
+                    HStack {
+                        word
+                        Button("Start") { setRunning(start) }
+                            .disabled(changingRunning || model.locations.daemon == nil)
+                    }
+                } label: {
+                    RowLabel("PureMouse")
+                }
+            } else {
+                // The form's own toggle row, as Open at login is, so it keeps the switch role (a
+                // switch styled inside LabeledContent reads as a plain toggle); the state word sits
+                // in its label, beside the switch.
+                Toggle(isOn: Binding(get: { state.isOn },
+                                     set: { on in state.toggled(on).map { model.setPaused($0 == .paused) } })) {
+                    HStack {
+                        RowLabel("PureMouse")
+                        Spacer()
+                        word
+                    }
+                }
+                .accessibilityLabel("PureMouse")
             }
-        } label: {
-            RowLabel("PureMouse", help: "Stopping returns the mouse to normal. Open at login doesn't change.")
         }
     }
 
     /// The menu bar app posts the notifications, with or without its icon (it runs windowless when
-    /// the icon is hidden). While macOS has them off the switch is disabled and keeps what was
-    /// chosen, and Open Notification Settings… sits in the same row, before the switch.
+    /// the icon is hidden). While macOS has them off the row offers Open Notification Settings… in
+    /// place of the switch, whose choice is kept: it means nothing until macOS allows them.
     private var lowBatteryRow: some View {
         let help = notificationsDenied ? "Off for PureMouse in System Settings."
             : "Tells you when the battery falls to 20% and 5%."
@@ -122,16 +143,9 @@ struct GeneralPane: View {
         return Group {
             if notificationsDenied {
                 LabeledContent {
-                    HStack(spacing: 12) {
-                        // Beside the switch, not inside its label: a disabled toggle disables its label's button too.
-                        Button("Open Notification Settings…") { NSWorkspace.shared.open(NotificationPermission.settingsURL) }
-                            .buttonStyle(.bordered)
-                            .fixedSize()
-                        Toggle("Low battery notifications", isOn: isOn)
-                            .labelsHidden()
-                            .accessibilityLabel("Low battery notifications")
-                            .disabled(true)
-                    }
+                    Button("Open Notification Settings…") { NSWorkspace.shared.open(NotificationPermission.settingsURL) }
+                        .buttonStyle(.bordered)
+                        .fixedSize()
                 } label: {
                     RowLabel("Low battery notifications", help: help)
                 }
