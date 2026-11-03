@@ -139,7 +139,7 @@ the full list. The ones used most:
 | `PUREMOUSE_DEV_HIDDEN=1` | The menu app runs as if Show in menu bar were off: resident, no status item (`Locations.showsInMenuBar`) |
 | `PUREMOUSE_DEV_MENU=1` | Opens the status menu over a plain backdrop, since its glass shows whatever is behind it, without Settings or the updates question beside it; `PUREMOUSE_DEV_MENU_OPTION=1` builds it as if ⌥ were held, its alternates standing in for the items they replace |
 | `PUREMOUSE_DEV_PANE=<pane>` | Opens a tab (`general`, `mouse`, `apps`, `about`) or a Mouse segment (`buttons`, `scrolling`, `pointer`) |
-| `PUREMOUSE_DEV_PICKER=<button>` | A button's action picker on Mouse › Buttons only |
+| `PUREMOUSE_DEV_PICKER=<button>` | A button's action picker on Mouse › Buttons; with `PUREMOUSE_DEV_APP`, on the app's Buttons page |
 | `PUREMOUSE_DEV_SHORTCUT=<button>` | A button's shortcut sheet on Mouse › Buttons; with `PUREMOUSE_DEV_APP`, that button's shortcut editor sheet over the app's page (`AppPage.body`) |
 | `PUREMOUSE_DEV_MOUSE=<device key>\|all` | Chooses that mouse on Mouse, or All Mice; `PUREMOUSE_DEV_OTHERS=1` opens Buttons' Other controls; `PUREMOUSE_DEV_MORE=1` opens an app page's More thumb wheel options |
 | `PUREMOUSE_DEV_APP=<bundle id>` | Opens Apps on that app's page, adding it without writing; `PUREMOUSE_DEV_APP_SEGMENT=buttons\|scrolling` picks the segment |
@@ -430,6 +430,23 @@ even-odd paths, because `rsvg-convert` rasterises SVG masks in the PDF. The menu
 
 ## Extending
 
+- **Action pack.** Curated per-app actions live in declarative JSON at
+  `Sources/PureMouseSettingsUI/Resources/ActionPacks.json`, loaded on demand by the Settings helper
+  only (never the daemon or menu bar app). When adding or contributing a pack:
+  - Curate actions from the vendor's official macOS shortcut documentation. Record the official
+    `sourceURL` and the date checked (`verifiedDate` in `YYYY-MM-DD` format). Never invent shortcuts.
+  - At least 6 actions per pack.
+  - Required fields for each action: stable unique `id`, `bundleIDs` (matching the pack's primary or
+    alias bundle IDs), `label` using action verbs only (no "toggle" per `docs/ui-language.md`),
+    `category`, valid shortcut `payload` (parses via `Shortcut.isValid`), `sourceURL`, and
+    `verifiedDate`.
+  - Optional fields: `keywords` (synonyms and search terms), `keymapNote` (e.g.
+    `"Depends on your keymap."` for layout/keymap-dependent shortcuts like in Final Cut Pro or
+    VS Code), `pairedOpposite` (ID of opposite action for thumb wheel) with `pairLabel` (e.g.
+    `"Brush Size"`).
+  - Validation test `ActionPackCatalogTests.swift` enforces that all IDs are globally unique, bundle
+    IDs are declared in the pack, payloads parse with the shortcut parser, each pack has at least 6
+    actions, and source URLs / verified dates are present.
 - **Named button.** Keep `Config.Button` and the menu's `NamedButton` in step (names and CIDs), and
   add the control's display name to `ControlNames` (Kit).
 - **Action.** A case in `Action` and a name in `Action.named` (both in PureMouseKit), handled in

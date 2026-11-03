@@ -194,6 +194,25 @@ A per-app key that cannot be per-app (such as `dpi`) and an unknown button are s
 reported in the log; a bad value fails the load as anywhere else. Bundle IDs that differ only in
 case name the same app: the log warns, and the entry last in sorted key order applies.
 
+### Named per-app actions and action packs
+
+In Settings › Apps, picking an action from an app's curated action pack (Zoom, Microsoft Teams,
+Adobe Photoshop, Figma, Final Cut Pro, Microsoft Excel, Microsoft PowerPoint, Microsoft Word,
+Visual Studio Code, Safari, Google Chrome, Microsoft Edge) writes an ordinary `{"keys": ...}`
+shortcut or named action into `config.json`. The configuration file stores no pack identifiers,
+catalogue references, or version tags, ensuring configs stay lightweight, portable, and readable
+without PureMouse.
+
+When Settings displays a stored binding whose payload matches a pack action for that app, it
+resolves and displays the pack action's name (e.g. "Mute or Unmute Microphone" instead of "⇧⌘A").
+If the binding is edited to another shortcut, it displays as an ordinary shortcut.
+
+Where an app's action pack defines paired opposite actions (such as Photoshop's brush size, Final
+Cut Pro's timeline zoom, Excel's sheet switching, or VS Code's editor switching and code folding),
+the thumb wheel pop-up offers the pair as a single choice (e.g. "Brush Size"). Choosing it writes
+standard `left` and `right` keys to the app's `thumbWheel` configuration, and Settings recognizes
+the pair when reading the file.
+
 ## Per-device settings
 
 `devices` maps a device key to the settings that differ on that model of mouse. Everything else in

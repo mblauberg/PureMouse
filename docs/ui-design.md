@@ -421,9 +421,22 @@ which is its click, or a table of triggers ([ADR 24](adr/0024-one-action-model.m
   with Hold and Move as its Hold row. There is no "Several Actions" value.
 - A trigger exists in the UI only once it is added (More Ways to Press), so a fresh install looks as
   it does today plus one device row in General › Status.
-- The picker stays one popover: the app's actions first on an app page, sections over six rows fold
-  to five and "Show All (N)", search matches everything, and it shows only what the mouse reports.
-  No trigger strip, category strip, recents or favourites.
+- The picker stays one popover:
+  - On an app page, the app's pack actions appear directly under the top-three entries (Same as…,
+    Mouse Default, Do Nothing), grouped under `<App>'s Actions: <Category>`, before generic groups
+    (Desktop, Navigation, Media, Tabs and Zoom, Mouse, Haptic Feedback, Custom).
+  - Sections over six rows fold to five and "Show All (N)" (Custom folds after five); clicking
+    "Show All (N)" expands the section inline.
+  - Search matches everything: label, category, app name, curated keywords, and shortcut words
+    ("command shift a" or "cmd a" matches a ⌘⇧A action regardless of word order). While search is
+    active, folding is ignored (all matches shown) and results are flat (no section headers), ranked
+    app-first.
+  - In Mouse scope (`app == nil`), a search query matching only pack actions shows a single-line
+    hint at the bottom: `"Also in <App1>, <App2>. Choose them on the app's page."`
+  - Pack action rows show their trailing shortcut glyphs. For actions whose default shortcut
+    depends on user keymap or keyboard layout (Final Cut Pro, VS Code), the row's help tooltip says
+    `"Depends on your keymap."`.
+  - No trigger strip, category strip, recents or favourites.
 - An editor inside the Sequence or Action Ring sheet swaps that sheet's content; it never opens a
   second sheet.
 
