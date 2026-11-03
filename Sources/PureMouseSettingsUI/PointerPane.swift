@@ -40,12 +40,12 @@ struct PointerPane: View {
             PaneBanners()
             Section {
                 if layout.showsRows {
-                    ValueSlider(title: "Pointer speed", spokenTitle: "Pointer speed",
-                                help: "Faster moves the pointer further for the same movement.",
+                    ValueSlider(title: PointerWords.title, spokenTitle: PointerWords.title,
+                                help: PointerWords.help,
                                 value: Binding(get: { Double(DPIReading.index(of: current, in: steps)) },
                                                set: { DPIReading.step(at: $0, in: steps).map { setDPI($0, debounce: true) } }),
                                 range: 0...Double(max(steps.count - 1, 1)),
-                                low: "Slow", high: "Fast",
+                                low: PointerWords.slow, high: PointerWords.fast,
                                 format: { _ in reading.readout(live: live, configured: configured) },
                                 showsReadout: false, availability: layout.availability, mouseDefault: estimate, standing: speed)
                         // A sensor with a single setting has nothing to slide between.
@@ -67,7 +67,7 @@ struct PointerPane: View {
                                     .multilineTextAlignment(.trailing)
                                     .labelsHidden()
                                     .onSubmit { commitTyped(steps) }
-                                    .accessibilityLabel("Exact pointer speed")
+                                    .accessibilityLabel(PointerWords.exactLabel)
                                 Text("DPI").foregroundStyle(.secondary).accessibilityHidden(true)
                             }
                         } label: {
@@ -90,11 +90,11 @@ struct PointerPane: View {
                 }
             } footer: {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Tracking speed in System Settings applies on top.")
+                    Text(PointerWords.footer)
                     Button {
-                        openURL(URL(string: "x-apple.systempreferences:com.apple.Mouse-Settings.extension")!)
+                        openURL(URL(string: PointerWords.mouseSettingsURL)!)
                     } label: {
-                        Text("Open Mouse Settings").padding(.vertical, 2).contentShape(Rectangle())
+                        Text(PointerWords.openMouseSettings).padding(.vertical, 2).contentShape(Rectangle())
                     }
                     .buttonStyle(.link)
                     PaneFooter(restoreDefaults: {
@@ -106,13 +106,6 @@ struct PointerPane: View {
             }
             .disabled(model.readOnly)
         }
-        #if DEBUG
-        .onAppear {
-            if ProcessInfo.processInfo.environment["PUREMOUSE_DEV_PRESET_EDIT"] == "1" {
-                settings?.sheet = .presets
-            }
-        }
-        #endif
         .onChange(of: live) { reading.reported(live, steps: steps) }
         .onChange(of: model.writeError) { if model.writeError != nil { reading.clear() } }
         .onChange(of: exactValue) { settings?.refit() }

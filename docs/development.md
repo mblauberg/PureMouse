@@ -145,7 +145,7 @@ the full list. The ones used most:
 | `PUREMOUSE_DEV_APP=<bundle id>` | Opens Apps on that app's page, adding it without writing; `PUREMOUSE_DEV_APP_SEGMENT=buttons\|scrolling` picks the segment |
 | `PUREMOUSE_DEV_THEN_APP=<bundle id>` | After `PUREMOUSE_DEV_THEN_DELAY` seconds (default 1), asks for that app's page, as the menu's "Settings for <app>…" does with another page open |
 | `PUREMOUSE_DEV_KEY=esc\|cmd-[` | After `PUREMOUSE_DEV_KEY_DELAY` seconds (default 1.5), sends that key to the window, to test Esc and ⌘[ on an app's page |
-| `PUREMOUSE_DEV_SHEET=<name>` | A sheet: `presets` on Mouse › Pointer, or `advanced` on the pane shown (`DevSheet`) |
+| `PUREMOUSE_DEV_SHEET=<name>` | A sheet: `presets` on Mouse › Pointer (`presets-editing`: the same with its first row focused, nothing written), or `advanced` on the pane shown (`DevSheet`) |
 | `PUREMOUSE_DEV_CAPTURE=<file.png>` | Saves the helper's own windows to that file and quits (`DevCapture`). Needs no Screen Recording permission, so it works over SSH |
 | `PUREMOUSE_DEV_HOVER=<part>`, `PUREMOUSE_DEV_BUTTON=<button>`, `PUREMOUSE_DEV_FOUND=<button>` | Show the device card's hovered, selected and found-row states on Buttons (`middle`, `top`, `forward`, `back`, `thumbWheel`, `thumbRest`) |
 | `PUREMOUSE_DEV_ARRIVAL=thumbWheel\|mainWheel` | On Scrolling, arrives as the device card's part would; `PUREMOUSE_DEV_ARRIVAL_HOLD=1` keeps the outline |

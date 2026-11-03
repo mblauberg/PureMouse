@@ -64,15 +64,25 @@ import Testing
         #expect(DPIPresets.replacing(1000, with: Int.max, in: [800, 1000], steps: []) == [800, 25600])
         #expect(DPIPresets.replacing(1000, with: 0, in: [1000], steps: [0, 200, 800, 30000]) == [200])
         #expect(DPIPresets.replacing(1200, with: 800, in: [1000], steps: []) == [1000])
+        // No steps reported: a multiple of 50.
+        #expect(DPIPresets.replacing(1000, with: 1234, in: [1000], steps: []) == [1250])
+        #expect(DPIPresets.replacing(1000, with: 1224, in: [1000], steps: []) == [1200])
     }
 
     @Test func newRowsStartAtCurrentThenAdvanceThroughUnsavedSteps() {
         let steps = [800, 1000, 1600, 3200]
         #expect(DPIPresets.newPreset(current: 1550, presets: [800], steps: steps) == 1600)
         #expect(DPIPresets.newPreset(current: 800, presets: [800, 1000], steps: steps) == 1600)
-        #expect(DPIPresets.newPreset(current: 3200, presets: [3200], steps: steps) == nil)
+        // From the top step, the nearest unsaved step below.
+        #expect(DPIPresets.newPreset(current: 3200, presets: [3200], steps: steps) == 1600)
+        #expect(DPIPresets.newPreset(current: 3200, presets: [1600, 3200], steps: steps) == 1000)
+        #expect(DPIPresets.newPreset(current: 3200, presets: [800, 1000, 1600, 3200], steps: steps) == nil)
         #expect(DPIPresets.newPreset(current: 1000, presets: [1000], steps: []) == 1050)
-        #expect(DPIPresets.newPreset(current: 25600, presets: [25600], steps: []) == nil)
+        #expect(DPIPresets.newPreset(current: 25600, presets: [25600], steps: []) == 25550)
+        // With no steps reported, speeds sit on multiples of 50.
+        #expect(DPIPresets.newPreset(current: 1234, presets: [], steps: []) == 1250)
+        #expect(DPIPresets.newPreset(current: 1020, presets: [1000, 1050], steps: []) == 1100)
+        #expect(DPIPresets.newPreset(current: 800, presets: [800], steps: [3200, 800, 1600, 1000]) == 1000)
         #expect(DPIPresets.newPreset(current: 800, presets: Array(1...8), steps: steps) == nil)
         #expect(DPIPresets.removing(1600, from: [800, 1600, 3200]) == [800, 3200])
     }
@@ -102,45 +112,56 @@ import Testing
         #expect(try sandbox.tree().contains(["devices", "p1234", "dpiPresets"]))
     }
 
-    /// Source contracts cover UI wiring without launching Settings on the working Mac.
-    private func source(_ name: String) throws -> String {
-        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-        return try String(contentsOf: root.appending(path: "Sources/PureMouseSettingsUI/" + name + ".swift"), encoding: .utf8)
+    @Test func theEditorCommitsOnlyWhatWasTypedAndTracksTheRowLastEdited() {
+        var editor = PresetEditor()
+        let steps = [800, 1000, 1600, 3200]
+        #expect(editor.commit(800, in: [800, 1600], steps: steps) == nil, "nothing typed, nothing written")
+        editor.focus(800)
+        editor.draft(800, as: 1100)
+        #expect(editor.shown(800) == 1100)
+        let commit = editor.commit(800, in: [800, 1600], steps: steps)
+        #expect(commit == PresetEditor.Commit(presets: [1000, 1600], row: 1000))
+        #expect(editor.shown(800) == 800)
+        // The row last edited followed its speed to where it landed.
+        #expect(editor.lastEdited == 1000)
+        // Merging into an existing row keeps that row as the target.
+        editor.draft(1000, as: 1600)
+        #expect(editor.commit(1000, in: [1000, 1600], steps: steps)?.presets == [1600])
+        #expect(editor.lastEdited == 1600)
     }
 
-    @Test func pointerUsesPlainWordsAndLinksToMouseSettings() throws {
-        let pane = try source("PointerPane")
-        for text in [#"title: "Pointer speed""#, #"low: "Slow", high: "Fast""#, "showsReadout: false",
-                     "Faster moves the pointer further for the same movement.",
-                     "Tracking speed in System Settings applies on top.", "Open Mouse Settings",
-                     "x-apple.systempreferences:com.apple.Mouse-Settings.extension"] {
-            #expect(pane.contains(text), "Missing \(text)")
-        }
-        #expect(pane.contains(#".accessibilityLabel("Exact pointer speed")"#))
-        #expect(pane.contains("if !exactValue"))
-        #expect(pane.contains("Text(reading.readout(live: live, configured: configured))"))
-        let components = try source("Components")
-        #expect(components.contains("if showsReadout"))
+    @Test func minusTargetsTheFocusedRowThenTheLastEditedThenTheCheckedOne() {
+        var editor = PresetEditor()
+        let presets = [800, 1600, 3200]
+        #expect(editor.removalTarget(focused: nil, in: presets, checked: 3200) == 3200)
+        editor.focus(1600)
+        // Tabbing to the button clears focus; the row just edited is still the target.
+        #expect(editor.removalTarget(focused: nil, in: presets, checked: 3200) == 1600)
+        #expect(editor.removalTarget(focused: 800, in: presets, checked: 3200) == 800)
+        // A row that no longer exists is not a target.
+        #expect(editor.removalTarget(focused: nil, in: [800, 3200], checked: 3200) == 3200)
+        editor.applied()
+        #expect(editor.removalTarget(focused: nil, in: presets, checked: 3200) == 3200)
+        editor.focus(800)
+        editor.draft(800, as: 1000)
+        #expect(editor.remove(800, from: presets) == [1600, 3200])
+        #expect(editor.lastEdited == nil)
+        #expect(editor.shown(800) == 800, "its draft is gone")
     }
 
-    @Test func presetEditsCommitOnReturnAndFocusLossInTheSelectedScope() throws {
-        let sheet = try source("PresetsSheet")
-        for wiring in [".onSubmit { commit(preset) }", ".onChange(of: focused)", "if let old { commit(old) }",
-                       "let removable = focused ?? checked", "focused = preset", "let target = model.scopeTarget",
-                       "model.update(in: target)", "setDPIPresets(presets, in: target.scope)",
-                       "DPIPresets.replacing", "DPIPresets.newPreset", "#if DEBUG",
-                       "PUREMOUSE_DEV_PRESET_EDIT"] {
-            #expect(sheet.contains(wiring), "Missing \(wiring)")
-        }
+    @Test func pointerUsesPlainWordsAndLinksToMouseSettings() {
+        #expect(PointerWords.title == "Pointer speed")
+        #expect([PointerWords.slow, PointerWords.fast] == ["Slow", "Fast"])
+        #expect(PointerWords.help == "Faster moves the pointer further for the same movement.")
+        #expect(PointerWords.footer == "Tracking speed in System Settings applies on top.")
+        #expect(PointerWords.openMouseSettings == "Open Mouse Settings")
+        #expect(URL(string: PointerWords.mouseSettingsURL)?.scheme == "x-apple.systempreferences")
+        #expect(PointerWords.mouseSettingsURL.hasSuffix("com.apple.Mouse-Settings.extension"))
+        #expect(PointerWords.exactLabel != PointerWords.title, "the field and the slider sound different")
     }
 
-    @Test func disclosuresRespectMotionAndExposeANativeDisclosure() throws {
-        let components = try source("Components")
-        #expect(components.contains("@Environment(\\.accessibilityReduceMotion)"))
-        #expect(components.contains("withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2))"))
-        #expect(components.contains(".accessibilityRepresentation"))
-        #expect(components.contains("DisclosureGroup(isExpanded: $isExpanded)"))
-        #expect(components.contains(".transaction { if reduceMotion { $0.animation = nil } }"))
+    @Test func disclosuresDoNotAnimateUnderReduceMotion() {
+        #expect(DisclosureMotion.animates(reduceMotion: false))
+        #expect(!DisclosureMotion.animates(reduceMotion: true))
     }
 }

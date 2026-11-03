@@ -496,13 +496,14 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
   "Tracking speed in System Settings applies on top." and **Open Mouse Settings** opens
   `x-apple.systempreferences:com.apple.Mouse-Settings.extension`.
 - **Presets.** The sheet edits numeric speeds in place. Return or focus loss snaps to the mouse's
-  steps, clamps to 50–25600, merges duplicates and sorts. Each write targets the selected mouse
-  scope. The checkmark button uses a saved speed. **+** adds the current speed if unsaved, otherwise
-  the next unsaved sensor step above it, and focuses the new field. Without a reported step list,
-  the helper uses increments of 50 across the config range. **−** removes the focused row, or the
-  checked row when none is focused. Add is disabled at eight entries or when no next speed exists;
-  remove is disabled without a target. In DEBUG, `PUREMOUSE_DEV_PRESET_EDIT=1` opens the sheet from
-  Pointer and focuses its first row for a spare-Mac editing capture.
+  steps (a multiple of 50 when none are reported), clamps to 50-25600, merges duplicates and sorts.
+  Each write targets the selected mouse scope. The checkmark button uses a saved speed. **+** adds
+  the current speed if unsaved, otherwise the next unsaved sensor step above it (below it, from the
+  top step), and focuses the new field. **-** removes the focused row; tabbing to the button clears
+  focus, so it then removes the row last edited, and the checked row when neither applies. Add is
+  disabled at eight entries or when no unsaved speed exists; remove is disabled without a target.
+  The editing logic is `PresetEditor` in AppSupport. In DEBUG, `PUREMOUSE_DEV_SHEET=presets-editing`
+  opens the sheet with its first row focused, writing nothing, for a spare-Mac capture.
 - **Apps.** The Apps pane writes only `apps.<id>` keys (`AppSettings.swift`): each control's own key,
   removed for "Same as Mouse Settings" (an emptied app entry is pruned). An added app is not written
   until a setting is chosen; its row says so until Settings closes. Each app opens as a page of the

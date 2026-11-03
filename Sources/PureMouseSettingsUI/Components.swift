@@ -349,7 +349,7 @@ struct DisclosureLabel: View {
         // The note's button sits beside the disclosure button, not inside it: a button can't hold one.
         VStack(alignment: .leading, spacing: 0) {
             Button {
-                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { isExpanded.toggle() }
+                withAnimation(DisclosureMotion.animates(reduceMotion: reduceMotion) ? .easeInOut(duration: 0.2) : nil) { isExpanded.toggle() }
             } label: {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Image(systemName: "chevron.right")
@@ -370,7 +370,6 @@ struct DisclosureLabel: View {
             // Preserve the separate form rows visually while exposing a native disclosure to AX.
             .accessibilityRepresentation {
                 DisclosureGroup(isExpanded: $isExpanded) {} label: { Text(spokenTitle ?? title) }
-                    .transaction { if reduceMotion { $0.animation = nil } }
             }
             if let note { OverrideLine(note: note, subject: spokenTitle ?? title).disclosedRow() }
         }
