@@ -243,6 +243,9 @@ public struct AppButton: Equatable, Sendable {
         public var inheritedLabel: String {
             variesByMouse ? Applied<ButtonAction>.variesLabel : inherited.triggerLabel
         }
+        public var inheritedSpokenLabel: String {
+            variesByMouse ? Applied<ButtonAction>.variesLabel : inherited.triggerSpokenLabel
+        }
     }
 
     public let own: ButtonAction

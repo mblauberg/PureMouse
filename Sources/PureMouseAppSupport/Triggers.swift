@@ -178,6 +178,10 @@ extension ButtonAction {
     public var triggerLabel: String {
         self == .standard || self == .named("none") ? Triggers.noAction : label
     }
+    /// `triggerLabel` as VoiceOver reads it: a shortcut in words, not glyphs.
+    public var triggerSpokenLabel: String {
+        self == .standard || self == .named("none") ? Triggers.noAction : spokenLabel
+    }
 }
 
 /// The words for a button's triggers (docs/ui-language.md).

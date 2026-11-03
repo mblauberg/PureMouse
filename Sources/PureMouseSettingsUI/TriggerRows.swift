@@ -100,7 +100,7 @@ struct TriggerRows: View {
         default: nil
         }
         LabeledContent {
-            pickerButton(own, target: target, inherited: source == nil ? nil : (child.inheritedLabel, child.inheritedLabel),
+            pickerButton(own, target: target, inherited: source == nil ? nil : (child.inheritedLabel, child.inheritedSpokenLabel),
                          allowsDefault: false, allowsGesture: false, row: PickerEntry.Row(trigger: child.name))
         } label: {
             RowLabel(Gesture.label(child.name), help: help, note: note, spokenTitle: target.title + spokenSuffix)

@@ -77,6 +77,16 @@ import Testing
         #expect(config[["devices", Self.mouse, "buttons"]] == nil)
     }
 
+    // An app's Double-click row inheriting a shortcut shows its glyphs but speaks it in words, as
+    // the Click row does (#176 review).
+    @Test func anInheritedShortcutOnAChildRowIsSpokenInWords() throws {
+        let config = try tree(#"{"buttons": {"forward": {"click": "navigateForward", "doubleClick": {"keys": "cmd+w"}}}}"#)
+        let child = config.scopedButton("forward", in: app).doubleClick
+        #expect(child.inheritedLabel == "⌘W")
+        #expect(child.inheritedSpokenLabel == "Command W")
+        #expect(ButtonAction.named("none").triggerSpokenLabel == "No Action")
+    }
+
     @Test func oneHoldFormReplacesTheOtherAndTheDefaultSetDoesNotFillItBack() throws {
         let file = try tree("{}")
         // The gesture button's default is Hold and Move; a hold replaces it.
