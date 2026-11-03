@@ -28,6 +28,13 @@ public struct Config: Decodable, Sendable {
     public static let reservedControls: Set<UInt16> = [0x0050, 0x0051]
     public var gesture = GestureSettings()
     public var universalControl = UniversalControl()
+    /// How long a press lasts before a binding's `hold` fires. Top level only.
+    public var holdMs = 350
+    public static let holdMsRange = 150...1000
+    /// How long a click waits for a second press when its binding has a `doubleClick`; nil for the
+    /// system's double-click interval (`doubleClickInterval(systemSeconds:)`). Top level only.
+    public var doubleClickMs: Int?
+    public static let doubleClickMsRange = 150...1000
     /// `buttons` keyed by control ID.
     public private(set) var bindings: [UInt16: Binding] = [:]
     /// Names in `buttons` that are neither a `Button` nor a hex control ID; skipped. The daemon
@@ -63,6 +70,9 @@ public struct Config: Decodable, Sendable {
         if let section = try c.nestedContainerIfPresent(forKey: AnyKey("universalControl")) {
             universalControl = try UniversalControl(section, base: universalControl)
         }
+        holdMs = try c.decodeIfPresent(Int.self, forKey: AnyKey("holdMs"), in: Self.holdMsRange) ?? holdMs
+        doubleClickMs = try c.decodeIfPresent(Int.self, forKey: AnyKey("doubleClickMs"), in: Self.doubleClickMsRange)
+            ?? doubleClickMs
         let appsSection = c.contains(AnyKey("apps"))
             ? try c.nestedContainer(keyedBy: AnyKey.self, forKey: AnyKey("apps")) : nil
         if let appsSection { try decodeApps(appsSection) }
@@ -252,6 +262,10 @@ public struct Config: Decodable, Sendable {
             }
             let left = try c.decodeIfPresent(Action.self, forKey: AnyKey("left"))
             let right = try c.decodeIfPresent(Action.self, forKey: AnyKey("right"))
+            for (key, action) in [("left", left), ("right", right)] where action?.isWhileHeld == true {
+                throw DecodingError.dataCorruptedError(forKey: AnyKey(key), in: c,
+                    debugDescription: "\(action?.name ?? key) works only as a button's click or hold")
+            }
             if left != nil || right != nil {
                 var pair: (left: Action, right: Action) = (.none, .none)
                 if case .actions(let l, let r) = mode { pair = (l, r) }
@@ -346,33 +360,82 @@ public struct Config: Decodable, Sendable {
         }
     }
 
+    /// A control's binding: a bare action, which is its click and fires on press, or a trigger table
+    /// (ADR 24).
     public enum Binding: Decodable, Sendable {
         case action(Action)
+        /// A trigger table. Named for the gesture object it grew from, which is the same table.
         case gesture(Gesture)
 
-        public struct Gesture: Decodable, Sendable {
+        /// A trigger table: `click`, `doubleClick`, and one hold form, `hold` or the Hold and Move
+        /// directions (`up`, `down`, `left`, `right`). A trigger left out is `.none`, or, decoded
+        /// over a wider table, that table's (`init(_:base:)`).
+        public struct Gesture: Decodable, Sendable, Equatable {
             public var click: Action = .none
             public var up: Action = .none
             public var down: Action = .none
             public var left: Action = .none
             public var right: Action = .none
+            /// Fires at a second press within the double-click interval (`Config.doubleClickMs`);
+            /// while set, a lone click waits that long.
+            public var doubleClick: Action = .none
+            /// Fires once the button has been held `Config.holdMs`; while set, the click fires on
+            /// release, and not at all after a hold.
+            public var hold: Action = .none
+
+            /// The table's keys. `scroll` (Hold and Scroll, #161) is reserved: a table naming it is
+            /// rejected rather than read as an action.
+            public static let triggers = ["click", "doubleClick", "hold", "up", "down", "left", "right"]
+            public static let directions = ["up", "down", "left", "right"]
+            static let reserved = ["scroll"]
+
+            public init() {}
 
             public init(from decoder: Decoder) throws {
                 try self.init(decoder.container(keyedBy: AnyKey.self), base: nil)
             }
 
-            /// The directions `c` names, the rest from `base` (or none).
+            /// The triggers `c` names, the rest from `base` (or none). A hold form replaces the
+            /// other: `hold` clears `base`'s directions and a direction clears its `hold`, since a
+            /// button has one hold form; `c` naming both is an error at `hold`.
             init(_ c: KeyedDecodingContainer<AnyKey>, base: Gesture?) throws {
                 if let base { self = base }
-                func action(_ key: String, _ fallback: Action) throws -> Action {
-                    try c.decodeIfPresent(Action.self, forKey: AnyKey(key)) ?? fallback
+                for key in c.allKeys where !Self.triggers.contains(key.stringValue) {
+                    let detail = Self.reserved.contains(key.stringValue)
+                        ? "Hold and Scroll is not available yet"
+                        : "unknown trigger; use \(Self.triggers.joined(separator: ", "))"
+                    throw DecodingError.dataCorruptedError(forKey: key, in: c, debugDescription: detail)
                 }
-                click = try action("click", click)
+                let names = Set(c.allKeys.map(\.stringValue))
+                if names.contains("hold"), !names.isDisjoint(with: Self.directions) {
+                    throw DecodingError.dataCorruptedError(forKey: AnyKey("hold"), in: c,
+                        debugDescription: "a button has one hold form: remove hold, or up, down, left and right")
+                }
+                func action(_ key: String, _ fallback: Action, whileHeld: Bool = false) throws -> Action {
+                    guard let action = try c.decodeIfPresent(Action.self, forKey: AnyKey(key)) else { return fallback }
+                    if action.isWhileHeld, !whileHeld {
+                        throw DecodingError.dataCorruptedError(forKey: AnyKey(key), in: c,
+                            debugDescription: "\(action.name) works only as a button's click or hold")
+                    }
+                    return action
+                }
+                click = try action("click", click, whileHeld: true)
+                doubleClick = try action("doubleClick", doubleClick)
+                if names.contains("hold") {
+                    (up, down, left, right) = (.none, .none, .none, .none)
+                } else if !names.isDisjoint(with: Self.directions) {
+                    hold = .none
+                }
+                hold = try action("hold", hold, whileHeld: true)
                 up = try action("up", up)
                 down = try action("down", down)
                 left = try action("left", left)
                 right = try action("right", right)
             }
+
+            /// Whether a direction is set: the button is Hold and Move, held with its pointer
+            /// motion diverted.
+            public var moves: Bool { [up, down, left, right].contains { $0 != .none } }
         }
 
         public init(from decoder: Decoder) throws {
@@ -408,9 +471,11 @@ public struct Config: Decodable, Sendable {
             return isGesture(keys)
         }
 
+        /// An object naming any trigger (or a reserved one) is a table; `Gesture` rejects any other
+        /// key in it, naming that key.
         private static func isGesture(_ keys: [AnyKey]) -> Bool {
-            let gestureKeys: Set = ["click", "up", "down", "left", "right"]
-            return !keys.isEmpty && keys.allSatisfy { gestureKeys.contains($0.stringValue) }
+            let tableKeys = Set(Gesture.triggers + Gesture.reserved)
+            return keys.contains { tableKeys.contains($0.stringValue) }
         }
     }
 
@@ -462,6 +527,20 @@ public struct Config: Decodable, Sendable {
         case 0x00FD: .action(.cycleDPI)              // DPI button
         default: nil
         }
+    }
+
+    /// The system's double-click interval in the global defaults, in seconds (System Settings ›
+    /// Accessibility › Pointer Control). Read by the daemon and Settings, not by Kit.
+    public static let systemDoubleClickKey = "com.apple.mouse.doubleClickThreshold"
+
+    /// The double-click interval in milliseconds: `doubleClickMs`, else the system's (nil or not
+    /// positive: 0.5 s, the system default), held to `doubleClickMsRange` so a click never waits
+    /// longer than a configured one could.
+    public func doubleClickInterval(systemSeconds: Double?) -> Int {
+        if let doubleClickMs { return doubleClickMs }
+        let seconds = systemSeconds.flatMap { $0 > 0 && $0.isFinite ? $0 : nil } ?? 0.5
+        let range = Self.doubleClickMsRange
+        return min(max(Int((seconds * 1000).rounded()), range.lowerBound), range.upperBound)
     }
 
     public static var defaultURL: URL {
