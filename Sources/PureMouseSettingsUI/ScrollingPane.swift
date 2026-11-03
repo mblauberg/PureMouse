@@ -9,7 +9,8 @@ struct ScrollingPane: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showingAdvanced = false
     /// The section the device card sent the person to: outlined for a moment (`ArrivalOutline`).
-    @State private var outlined: ScrollingSection?
+    @State private var outline = ArrivalOutlineState()
+    @State private var outlineTask: Task<Void, Never>?
     @AccessibilityFocusState private var focused: ScrollingSection?
 
     /// How long the outline stays before it fades.
@@ -89,7 +90,7 @@ struct ScrollingPane: View {
             }
         }
         .overlayPreferenceValue(ArrivalBoundsKey.self) { bounds in
-            ArrivalOutline(section: outlined, bounds: bounds, reduceMotion: reduceMotion)
+            ArrivalOutline(section: outline.section, bounds: bounds, reduceMotion: reduceMotion)
         }
         .disabled(model.readOnly)
         // A request from the device card: scroll to the section, outline it and move VoiceOver to its header.
@@ -121,15 +122,17 @@ struct ScrollingPane: View {
     private func arrive(at section: ScrollingSection, proxy: ScrollViewProxy) {
         settings?.arrival = nil
         proxy.scrollTo(section, anchor: .top)
-        outlined = section
+        let token = outline.begin(section)
+        outlineTask?.cancel()
         // Let the pane lay out before VoiceOver is moved.
         DispatchQueue.main.async { focused = section }
         #if DEBUG
         if ProcessInfo.processInfo.environment["PUREMOUSE_DEV_ARRIVAL_HOLD"] != nil { return }
         #endif
-        Task { @MainActor in
+        outlineTask = Task { @MainActor in
             try? await Task.sleep(for: Self.outlineDuration)
-            if outlined == section { outlined = nil }
+            guard !Task.isCancelled else { return }
+            outline.expire(token)
         }
     }
 
@@ -339,6 +342,26 @@ private extension View {
     /// Reports these rows' bounds as part of `section`.
     func arrivalBounds(_ section: ScrollingSection) -> some View {
         anchorPreference(key: ArrivalBoundsKey.self, value: .bounds) { [section: [$0]] }
+    }
+}
+
+/// Which section is outlined after an arrival from the device card, and whose timeout may end it:
+/// each arrival takes a token, and only the latest arrival's timeout clears the outline, so an
+/// earlier one cannot cut a newer one short.
+struct ArrivalOutlineState: Equatable {
+    private(set) var section: ScrollingSection?
+    private var latest = 0
+
+    /// Outlines `section`; the token is the arrival's, for `expire`.
+    mutating func begin(_ section: ScrollingSection) -> Int {
+        latest += 1
+        self.section = section
+        return latest
+    }
+
+    /// Ends the outline, unless a later arrival has replaced the one `token` belongs to.
+    mutating func expire(_ token: Int) {
+        if token == latest { section = nil }
     }
 }
 
