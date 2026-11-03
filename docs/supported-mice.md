@@ -25,8 +25,8 @@ What each mouse reports, and so what PureMouse turns on for it:
 | G305 and other G-series mice in onboard mode | Battery and, where the mouse accepts it, DPI; in onboard mode DPI cannot be set and the status says so | Solaar's device listing |
 | G Pro X 2 Superstrike | DPI and battery | Solaar's device listing |
 
-Only the MX Master 3S has been tested on a real mouse by this project. The other rows are what
-each mouse reports, not what PureMouse has been seen doing on it. The captures and listings are
+Tested on hardware: the MX Master 3S. The other rows are what each mouse reports, not what
+PureMouse has been seen doing on it. The captures and listings are
 kept as test fixtures in [`Tests/Fixtures/probe`](../Tests/Fixtures/probe), each with its source in
 its header, and the tests run PureMouse against them; [How it
 works](how-it-works.md#protocol-references) lists the protocol references.
