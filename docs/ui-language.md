@@ -127,3 +127,35 @@ One term per concept. "Retire" lists words that must not appear in UI text for t
 | Checking for a new release | Check for Updates (button, on demand); "Check for updates automatically" (switch, About; sentence case); the question "Check for updates automatically?" with Check Automatically / Don't Check | Auto-update, Updater, "Look for updates", Check Now |
 | A newer release is known | "Update to 1.2.3…" (menu row; installs after an alert); "Update and Relaunch" (About button, same alert); "Skip This Version" (menu row under it); "View Release" (the page, About and the menu after a refusal); notification "PureMouse 1.2.3 is available" | Upgrade, Install Update, Download, "New version" |
 | Support | Support PureMouse (About link); GitHub Sponsors (the destination) | Donate, Buy Me a Coffee, Pro, Free version |
+
+## Planned (#155)
+
+Words for the agreed target in [UI design](ui-design.md#planned-structure-155), not built. Each
+slice moves its rows into the Glossary above when it ships. Until then the Glossary is what the
+code says, so "Run Command" stays until Run Script… replaces it.
+
+| Concept | Use | Retire |
+|---|---|---|
+| Quick press | Click | Tap, single press |
+| Two presses | Double-click (row); Double-Click (picker entry) | Double-press, double tap |
+| Press and hold | Hold (row); "press and hold" in prose | Long press |
+| Adding triggers | More Ways to Press (picker section) | Several Actions, Add Interaction, trigger |
+| An unset trigger | No Action | None, Not set |
+| Hold forms | Hold and Move, Hold and Scroll | chord, combo, gesture (for the form) |
+| Radial menu | Action Ring; positions Top, Top right … | Actions Ring, slice, pie menu |
+| Modifier plus wheel | Modifier Keys (section); rows Shift, Option, Command, Control; values Normal Scrolling, Scroll Sideways, Scroll Slowly, Zoom, Volume … | modifier scroll |
+| Debounce | Ignore repeated clicks ("For a worn button that clicks twice.") | debounce, chatter |
+| Click lock | Drag Lock ("Click to start dragging, click again to let go.") | Click Lock, Hold to drag |
+| Precision hold | Precise Pointer ("Slows the pointer while you hold the button.") | Precision While Held, sniper, DPI shift |
+| Per-app off | Use PureMouse in this app (switch); Off (Apps row); Off in <App> (menu) | disable, exclude, bypass |
+| Host switching | Easy-Switch; Computer 1-3; This Mac; Switch to Computer 2 | host, channel, slot |
+| Device facts | About This Mouse (sheet); Copy Details | Diagnostics, Device info |
+| Applied state | Applying settings…, Settings not applied, Apply Settings Again; "Settings applied at 09:14" (⌥ only) | synced, reapply, restore |
+| Per-app catalogue | the app's name as the section; "Zoom's actions" in prose | pack, plugin, profile, Smart Actions |
+| New actions | Open…, Run Shortcut…, Menu Item…, Insert Text…, Run Script… (AppleScript \| Shell), Sequence… (Add Step, Wait), Action Ring… | Run Command, Type Text, Launch, Macro, Workflow |
+| Config transfer | Export Settings…, Import Settings… | Backup, Sync |
+| Receiver | Logi Bolt receiver, Unifying receiver; Pair a Mouse…, Unpair… | dongle, link |
+
+Picker actions use verbs and never "toggle" ("Mute or Unmute Microphone"). Captions state the cost
+where it arises and never mention timers ("Single clicks wait 0.5 s for a second click."). Config
+errors name the field (`buttons.back.hold: unknown action "explode"`).
