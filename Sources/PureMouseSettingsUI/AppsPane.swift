@@ -19,8 +19,11 @@ struct AppsPane: View {
     var body: some View {
         Group {
             if let key = list.open {
+                // Tied to the app: switching from one to another (the status menu's "Settings for
+                // <app>…") starts a page, so no editor, picker, disclosure or icon is left over.
                 AppPage(key: key, identity: identities.identity(key), segment: list.segment,
                         select: { list.select($0) }, back: { list.close() }, remove: { remove(key) })
+                    .id(key)
             } else {
                 appList
             }

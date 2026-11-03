@@ -121,13 +121,19 @@ struct ValueSlider: View {
     var mouseDefault = false
     /// On a mouse or in an app: whether the value is its own rather than the wider scope's.
     var standing = RowStanding.none
+    /// In an app: said in place of the number while the mice the app leaves the value to differ,
+    /// since the slider's position is then only the first mouse's ("Varies by Mouse").
+    var variesText: String?
+    /// Room kept for the words a sibling row's readout may say, so the tracks of rows that do and
+    /// do not say them still line up.
+    var reservesRoomFor: String?
     private var note: InheritedOverride? { standing.note }
 
     var body: some View {
         LabeledContent {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 EndLabeledSlider(title: spokenTitle ?? title, value: $value, range: range, low: low, high: high)
-                    .accessibilityValue(standing.spoken(format(value)))
+                    .accessibilityValue(standing.spoken(variesText ?? format(value)))
                     .frame(width: 200)
                 // The readout takes the room of the widest value it can show, hidden, so the
                 // slider does not shift as the digits change, and at least one shared width, so
@@ -135,7 +141,8 @@ struct ValueSlider: View {
                 ZStack(alignment: .trailing) {
                     Text(format(range.lowerBound)).hidden()
                     Text(format(range.upperBound)).hidden()
-                    Text(format(value))
+                    if let reservesRoomFor { Text(reservesRoomFor).hidden() }
+                    Text(variesText ?? format(value))
                 }
                 .frame(minWidth: 56, alignment: .trailing)
                 .monospacedDigit()

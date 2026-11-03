@@ -40,10 +40,12 @@ struct ThumbWheelPresentation {
 
     /// The Custom row for the way the key `key` turns: the scope's own action, else what the wider
     /// scope does for that key.
-    func direction(_ key: String) -> InheritedValue<String> {
+    /// With `varies`, the mice the app leaves it to do different things, so it says "Varies by Mouse".
+    func direction(_ key: String, varies: Bool = false) -> InheritedValue<String> {
         let wider = base.pair.map { key == "left" ? $0.left : $0.right } ?? .named("none")
         let current = state.pair.map { key == "left" ? $0.left : $0.right } ?? .named("none")
-        return InheritedValue(own: owns(key) ? current.label : nil, inherited: wider.label, source: source)
+        return InheritedValue(own: owns(key) ? current.label : nil,
+                              inherited: varies ? Applied<ButtonAction>.variesLabel : wider.label, source: source)
     }
 }
 
@@ -68,6 +70,9 @@ struct ThumbWheelRows: View {
     /// In an app: the mice it may run with have different choices (`inherited` is the first one's),
     /// so the Action row says "Varies by Mouse" while the app leaves it alone.
     var inheritedVaries = false
+    /// In an app: the keys (`left`, `right`, as written) the mice set to different actions, which
+    /// those rows say "Varies by Mouse" for while the app leaves them alone.
+    var inheritedVariesDirections: Set<String> = []
     /// The scope `inherited` is from: Mouse Settings for an app, All Mice for a mouse.
     var source = InheritedScope.mouseSettings
     /// The mouse the rows edit (`path` is its `thumbWheel`), or `.global` for the top level and an app.
@@ -278,7 +283,7 @@ struct ThumbWheelRows: View {
                                    label: "turning the thumb wheel \(direction)", appName: appName)
         let spokenName = "Thumb wheel, \(title.lowercased())\(spokenSuffix)"
         let inherits = inherited != nil
-        let value = presentation.direction(key)
+        let value = presentation.direction(key, varies: inheritedVariesDirections.contains(key))
         let note = inherits ? value.note { apply(.standard, to: target) } : nil
         return LabeledContent {
             ActionButton(action: inherits && value.isInherited ? .standard : action,

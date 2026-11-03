@@ -232,4 +232,67 @@ private func changed(_ before: ConfigTree, _ after: ConfigTree) -> Set<String> {
         #expect(config.appSummary("none.here") == AppList.noCustomSettings)
         #expect(config.appAreas("a.b") == [.buttons, .scrolling])
     }
+
+    // MARK: Fix round: the mice are compared by what they resolve, not by the kind of choice
+
+    @Test func miceWithDifferentCustomThumbWheelActionsVary() throws {
+        let config = try tree("""
+            {"devices": {"\(mx)": {"name": "MX", "thumbWheel": {"left": "zoomOut", "right": "zoomIn"}},
+                         "\(m750)": {"name": "M750", "thumbWheel": {"left": "mute", "right": "zoomIn"}}}}
+            """)
+        let mice = [mouse(mx), mouse(m750)]
+        // Both resolve to Custom, so the choice alone does not tell them apart.
+        #expect(!config.thumbWheelChoice(inheriting: mice).varies)
+        #expect(config.thumbWheelVaries(inheriting: mice))
+        #expect(config.thumbWheelAction("left", inheriting: mice).varies)
+        #expect(!config.thumbWheelAction("right", inheriting: mice).varies)
+        #expect(config.thumbWheelAction("right", inheriting: mice).first == .named("zoomIn"))
+        // The same actions on both mice are one thumb wheel.
+        let same = try tree("""
+            {"devices": {"\(mx)": {"name": "MX", "thumbWheel": {"left": "zoomOut", "right": "zoomIn"}},
+                         "\(m750)": {"name": "M750", "thumbWheel": {"left": "zoomOut", "right": "zoomIn"}}}}
+            """)
+        #expect(!same.thumbWheelVaries(inheriting: mice))
+        // Different kinds of choice still vary.
+        let kinds = try tree(#"{"devices": {"\#(mx)": {"name": "MX", "thumbWheel": {"action": "zoom"}}}}"#)
+        #expect(kinds.thumbWheelVaries(inheriting: mice))
+    }
+
+    @Test func aResetSpeedVariesWhileTheMiceDiffer() throws {
+        let config = try tree("""
+            {"devices": {"\(mx)": {"name": "MX", "smoothScroll": {"speed": 2}},
+                         "\(m750)": {"name": "M750", "smoothScroll": {"speed": 1.5}}},
+             "apps": {"a.b": {"smoothScroll": {"smoothingMs": 50}}}}
+            """)
+        let mice = [mouse(mx), mouse(m750)]
+        // Speed is not the app's own (only Glide is), so it follows the mice, which differ.
+        #expect(!config.contains(["apps", "a.b", "smoothScroll", "speed"]))
+        let speed = config.appliedNumber(["smoothScroll", "speed"], inheriting: mice, default: 1)
+        #expect(speed.varies && speed.values == [2, 1.5])
+        let agreed = config.appliedNumber(["smoothScroll", "smoothingMs"], inheriting: mice, default: 125)
+        #expect(!agreed.varies && agreed.first == 125)
+    }
+
+    @Test func startingAGestureInAnAppSeedsItFromWhatTheMouseShows() throws {
+        // Global Back is Mute, the mouse's is Zoom In: the page shows Zoom In.
+        let config = try tree("""
+            {"buttons": {"back": "mute"},
+             "devices": {"\(mx)": {"name": "MX", "buttons": {"back": "zoomIn"}}}}
+            """)
+        var edited = config
+        edited.bindInApp("a.b", button: "back", to: .gesture, inheriting: [mouse(mx)])
+        #expect(edited.string(["apps", "a.b", "buttons", "back", "click"]) == "zoomIn")
+        // The daemon agrees: on that mouse the click is what the page showed, not the top level's.
+        let settings = try #require(try decode(edited).forDevice(mx).settings(forApp: "a.b"))
+        guard case .gesture(let gesture)? = settings.bindings[0x0053] else { Issue.record("not a gesture"); return }
+        #expect(gesture.click == .zoomIn)
+        // With no mouse known, the top level is what shows, and what seeds.
+        var global = config
+        global.bindInApp("a.b", button: "back", to: .gesture)
+        #expect(global.string(["apps", "a.b", "buttons", "back", "click"]) == "mute")
+        // A mouse that binds the button to Mouse Default seeds a click that does nothing there.
+        var native = try tree(#"{"buttons": {"back": "mute"}, "devices": {"\#(mx)": {"name": "MX", "buttons": {"back": "default"}}}}"#)
+        native.bindInApp("a.b", button: "back", to: .gesture, inheriting: [mouse(mx)])
+        #expect(native.string(["apps", "a.b", "buttons", "back", "click"]) == "none")
+    }
 }

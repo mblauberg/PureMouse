@@ -269,7 +269,7 @@ private struct ScrollingAdvancedSheet: View {
                                         standing: model.standing(of: [["smoothScroll", "acceleration"]], in: target))
                         }
                         if layout.shows(.glide) {
-                            ValueSlider(title: "Glide", help: "0 scrolls instantly.",
+                            ValueSlider(title: "Glide", help: "Short glides stop sooner.",
                                         value: model.number(["smoothScroll", "smoothingMs"], default: 125, step: 25, in: target),
                                         range: 0...500, low: "Short", high: "Long", format: Format.milliseconds,
                                         availability: layout.availability(.glide),

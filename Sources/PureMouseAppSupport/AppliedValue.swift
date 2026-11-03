@@ -50,6 +50,26 @@ extension ConfigTree {
         Applied((scopes.isEmpty ? [.global] : scopes).map { thumbWheelChoice(in: $0) })
     }
 
+    /// The thumb wheel differs between the mice: they choose differently, or the same kind of
+    /// choice (Custom) sets different actions. Reading two mice's `custom` as one choice would show
+    /// the first mouse's actions as shared.
+    public func thumbWheelVaries(inheriting scopes: [ConfigScope]) -> Bool {
+        thumbWheelChoice(inheriting: scopes).varies || Applied(thumbWheelState(inheriting: scopes).values.map(\.pair)).varies
+    }
+
+    /// What one way of turning the thumb wheel does on each of the mice (`key` is `left` or
+    /// `right`, as the keys are written), as one action or several. No pair is no action.
+    public func thumbWheelAction(_ key: String, inheriting scopes: [ConfigScope]) -> Applied<ButtonAction> {
+        Applied((scopes.isEmpty ? [.global] : scopes).map { scope in
+            thumbWheel(in: scope).pair.map { key == "left" ? $0.left : $0.right } ?? .named("none")
+        })
+    }
+
+    /// A number as it applies on each of the mice, as one value or several.
+    public func appliedNumber(_ path: [String], inheriting scopes: [ConfigScope], default fallback: Double) -> Applied<Double> {
+        Applied((scopes.isEmpty ? [.global] : scopes).map { number(path, in: $0, default: fallback) })
+    }
+
     /// What the thumb wheel does on each of the mice, as one state or several.
     public func thumbWheelState(inheriting scopes: [ConfigScope]) -> Applied<ThumbWheelState> {
         Applied((scopes.isEmpty ? [.global] : scopes).map { thumbWheel(in: $0) })
