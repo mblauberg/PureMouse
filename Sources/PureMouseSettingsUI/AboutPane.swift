@@ -46,7 +46,7 @@ struct AboutPane: View {
             }
             .padding(.top, 6)
             VStack(spacing: 2) {
-                Text("No account, no telemetry. The network is used only to check for updates.")
+                Text("No account, no telemetry. The network is used only to check for and download updates.")
                 Text("Not affiliated with Logitech.")
             }
             .font(.footnote)

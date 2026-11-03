@@ -20,6 +20,17 @@ public struct UpdateOffer: Equatable, Sendable {
     /// The menu row.
     public var menuTitle: String { "Update to \(version.text)…" }
     public static let skipTitle = "Skip This Version"
+    public static let viewTitle = "View Release"
+
+    /// The menu row while the update downloads and is checked.
+    public var installingTitle: String { "Updating to \(version.text)…" }
+
+    /// The alert the row opens: nothing is downloaded until it is answered.
+    public var confirmTitle: String { "Update to PureMouse \(version.text)?" }
+    public static let confirmMessage = "PureMouse downloads the update from GitHub, checks that it is signed by the same certificate as this copy, replaces this copy and opens again."
+    public static let confirmAccept = "Update and Relaunch"
+    public static let confirmDecline = "Cancel"
+    public static let relaunchFailed = (title: "PureMouse is updated.", body: "Open it from Applications to finish.")
 }
 
 /// The one question PureMouse asks about automatic checks, asked once (`UpdateReminders.shouldAsk`).

@@ -29,6 +29,8 @@ struct MenuState {
     var frontmost: FrontmostApp?
     /// A newer release found by the daily check (`UpdateReminders.offer`), not skipped.
     var update: UpdateOffer?
+    /// What the Update row is doing (`AppController.installUpdate`).
+    var installing: UpdateInstallState = .idle
 
     /// The status item badges exactly what the menu flags.
     var needsAttention: Bool { !MenuPlan.attentionRows(self).isEmpty }
@@ -87,6 +89,15 @@ struct FrontmostApp: Equatable {
     }
 }
 
+/// Where an update chosen from the menu stands. Kept in memory only: a relaunch starts idle.
+enum UpdateInstallState: Equatable {
+    case idle
+    /// Downloading, checking and swapping; the row is disabled.
+    case installing
+    /// Nothing was replaced. `reason` is one line; `retry` is whether trying again could work.
+    case failed(reason: String, retry: Bool)
+}
+
 /// What choosing a row does; `StatusMenu` maps each to the model or `AppController`.
 enum MenuAction {
     case openSettings(SettingsPane?)
@@ -97,6 +108,8 @@ enum MenuAction {
     case openReleases
     /// The release page of a newer version.
     case openUpdate(URL)
+    /// Asks, then downloads, verifies and installs the newer version.
+    case installUpdate
     case skipUpdate
     case openPrivacy(PrivacyPane)
     case toggleSmoothScrolling
@@ -210,12 +223,24 @@ enum MenuPlan {
         return rows
     }
 
-    /// A newer release: a plain row (no warning, no badge on the icon) that opens its page, and
-    /// Skip This Version under it. Both stay until PureMouse is updated or the version is skipped.
+    /// A newer release: plain rows (no warning, no badge on the icon). Update to 1.2.3… asks, then
+    /// installs; while that runs it is disabled and says so. After a failure the row gives its one-line
+    /// reason and the release page (the manual way), and offers another try where one could work.
+    /// Skip This Version stays under them until PureMouse is updated or the version is skipped.
     static func updateRows(_ state: MenuState) -> [MenuRow] {
         guard let update = state.update else { return [] }
-        return [.item(MenuItem(title: update.menuTitle, action: .openUpdate(update.page))),
-                .item(MenuItem(title: UpdateOffer.skipTitle, action: .skipUpdate))]
+        let skip = MenuRow.item(MenuItem(title: UpdateOffer.skipTitle, action: .skipUpdate))
+        switch state.installing {
+        case .idle:
+            return [.item(MenuItem(title: update.menuTitle, action: .installUpdate)), skip]
+        case .installing:
+            return [.item(MenuItem(title: update.installingTitle, enabled: false)), skip]
+        case .failed(let reason, let retry):
+            var rows = [MenuRow.item(MenuItem(title: reason, enabled: false))]
+            if retry { rows.append(.item(MenuItem(title: update.menuTitle, action: .installUpdate))) }
+            rows.append(.item(MenuItem(title: UpdateOffer.viewTitle, action: .openUpdate(update.page))))
+            return rows + [skip]
+        }
     }
 
     /// The header, and with a detail line its ⌥ alternate.

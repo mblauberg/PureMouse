@@ -14,10 +14,31 @@ struct UpdateSetup {
     var ask: @MainActor () -> Bool
     var announce: @MainActor (UpdateOffer) -> Void
 
+    // Installing what the check found: asked for by the person, never by the schedule.
+    var install: @Sendable (UpdateCheck.Release, String, URL?) async -> UpdateInstallOutcome = {
+        await UpdateInstaller.live.install($0, current: $1, installedApp: $2)
+    }
+    /// The PureMouse.app this process belongs to; nil for a development build.
+    var installedApp: URL? = Locations.live.installedApp
+    /// The alert behind the menu row; true to go ahead.
+    var confirm: @MainActor (UpdateOffer) -> Bool = Alerts.confirmUpdate
+    /// Opens the installed app the way double-clicking it does, after quitting Settings; true if
+    /// it was accepted.
+    var relaunch: @MainActor (URL) async -> Bool = UpdateSetup.relaunchLive
+    var openPage: @MainActor (URL) -> Void = { NSWorkspace.shared.open($0) }
+    var terminate: @MainActor () -> Void = { NSApp.terminate(nil) }
+    var alert: @MainActor (String, String) -> Void = Alerts.show
+
     @MainActor static var live: UpdateSetup {
         UpdateSetup(preferences: UpdatePreferences(.standard),
                     scheduler: BackgroundActivity(identifier: Companion.menuLabel + ".update-check"),
                     ask: Alerts.askAboutUpdates, announce: { Notifier.post($0) })
+    }
+
+    @MainActor static func relaunchLive(_ app: URL) async -> Bool {
+        await withCheckedContinuation { continuation in
+            SettingsLauncher.shared.quit { continuation.resume(returning: UpdateRelaunch.open(app)) }
+        }
     }
 }
 
@@ -37,6 +58,16 @@ final class AppController: NSObject, NSApplicationDelegate {
     let updates: UpdateReminders
     private let askAboutUpdates: @MainActor () -> Bool
     private var questionSettled = false
+    private let install: @Sendable (UpdateCheck.Release, String, URL?) async -> UpdateInstallOutcome
+    private let installedApp: URL?
+    private let current: String
+    private let confirmUpdate: @MainActor (UpdateOffer) -> Bool
+    private let relaunch: @MainActor (URL) async -> Bool
+    private let openPage: @MainActor (URL) -> Void
+    private let terminate: @MainActor () -> Void
+    private let alert: @MainActor (String, String) -> Void
+    /// Where an update chosen from the menu stands; the menu shows it.
+    private(set) var installState = UpdateInstallState.idle
 
     /// The defaults are the live app; a test passes a sandbox and spies for what reaches the
     /// notification centre.
@@ -55,6 +86,14 @@ final class AppController: NSObject, NSApplicationDelegate {
                                   now: setup.now, scheduler: setup.scheduler, announce: setup.announce,
                                   withdraw: { withdraw([$0]) })
         askAboutUpdates = setup.ask
+        install = setup.install
+        installedApp = setup.installedApp
+        current = setup.current
+        confirmUpdate = setup.confirm
+        relaunch = setup.relaunch
+        openPage = setup.openPage
+        terminate = setup.terminate
+        alert = setup.alert
         super.init()
     }
 
@@ -137,10 +176,40 @@ final class AppController: NSObject, NSApplicationDelegate {
     }
 
     func openUpdate(_ page: URL) {
-        NSWorkspace.shared.open(page)
+        openPage(page)
+    }
+
+    /// Update to 1.2.3…: asks, then downloads and checks the release and swaps it in
+    /// (`UpdateInstaller`), then relaunches. A refusal leaves the installed app untouched and the
+    /// menu says why. A copy that cannot be replaced without a password opens the release page.
+    func installUpdate() {
+        guard iconShown, installState != .installing, let offer = updates.offer, confirmUpdate(offer) else { return }
+        installState = .installing
+        let release = UpdateCheck.Release(version: offer.version, page: offer.page)
+        Task {
+            let outcome = await install(release, current, installedApp)
+            await finishInstall(outcome, offer)
+        }
+    }
+
+    private func finishInstall(_ outcome: UpdateInstallOutcome, _ offer: UpdateOffer) async {
+        switch outcome {
+        case .failed(let failure):
+            installState = .failed(reason: failure.reason, retry: !failure.opensReleasePage)
+            if failure.opensReleasePage { openPage(offer.page) }
+        case .installed:
+            installState = .idle
+            model.flush()
+            guard let installedApp, await relaunch(installedApp) else {
+                alert(UpdateOffer.relaunchFailed.title, UpdateOffer.relaunchFailed.body)
+                return
+            }
+            terminate()
+        }
     }
 
     func skipUpdate() {
+        installState = .idle
         updates.skip()
     }
 

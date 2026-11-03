@@ -28,6 +28,20 @@ extension UpdateSetup {
     }
 }
 
+/// What the install row did, recorded.
+@MainActor
+final class InstallSpy {
+    var outcome: UpdateInstallOutcome = .installed(UpdateCheck.Version("0.6.0")!)
+    var confirm = true
+    var relaunchWorks = true
+    var confirmed: [UpdateOffer] = []
+    var installs: [(release: UpdateCheck.Release, current: String, app: URL?)] = []
+    var relaunched: [URL] = []
+    var opened: [URL] = []
+    var terminated = 0
+    var alerts: [String] = []
+}
+
 /// The question about automatic checks, asked of the person once.
 @MainActor
 struct AppControllerUpdateTests {
@@ -201,5 +215,106 @@ struct AppControllerUpdateTests {
         Notifier.handleClick(action: UNNotificationDefaultActionIdentifier,
                              page: Notifier.page(in: [Notifier.pageKey: "file:///etc/passwd"])) { opened.append($0) }
         #expect(opened.count == 1)
+    }
+
+    // MARK: Installing
+
+    private static let page = URL(string: "https://github.com/mblauberg/PureMouse/releases/tag/v0.6.0")!
+    private static let app = URL(fileURLWithPath: "/Applications/PureMouse.app")
+
+    /// A launch with 0.6.0 on offer and every outside effect recorded.
+    private func offered(_ spy: InstallSpy) -> AppController {
+        preferences.automatic = true
+        preferences.latest = UpdateCheck.Release(version: UpdateCheck.Version("0.6.0")!, page: Self.page)
+        var setup = UpdateSetup.inert(preferences: preferences, scheduler: scheduler)
+        setup.installedApp = Self.app
+        setup.confirm = { spy.confirmed.append($0); return spy.confirm }
+        setup.install = { release, current, app in
+            await MainActor.run { spy.installs.append((release, current, app)) }
+            return await spy.outcome
+        }
+        setup.relaunch = { spy.relaunched.append($0); return spy.relaunchWorks }
+        setup.openPage = { spy.opened.append($0) }
+        setup.terminate = { spy.terminated += 1 }
+        setup.alert = { title, _ in spy.alerts.append(title) }
+        return AppController(locations: locations, iconShown: true, announce: { _, _, _ in },
+                             withdraw: { _ in }, requestPermission: {}, updates: setup)
+    }
+
+    @Test func choosingUpdateAsksFirstAndInstallsOnlyOnAYes() async {
+        let spy = InstallSpy()
+        spy.confirm = false
+        let controller = offered(spy)
+        controller.installUpdate()
+        await settle { false }
+        #expect(spy.confirmed.map(\.version.text) == ["0.6.0"])
+        #expect(spy.installs.isEmpty && controller.installState == .idle)
+    }
+
+    @Test func aGoodInstallRelaunchesTheInstalledAppAndEndsThisOne() async {
+        let spy = InstallSpy()
+        let controller = offered(spy)
+        controller.installUpdate()
+        #expect(controller.installState == .installing)
+        await settle { spy.terminated > 0 }
+        #expect(spy.installs.count == 1 && spy.installs[0].release.page == Self.page)
+        #expect(spy.installs[0].current == "0.5.0" && spy.installs[0].app == Self.app)
+        #expect(spy.relaunched == [Self.app] && spy.terminated == 1 && spy.opened.isEmpty)
+    }
+
+    @Test func aRefusalShowsItsReasonAndLeavesThisAppRunning() async {
+        let spy = InstallSpy()
+        spy.outcome = .failed(.checksumMismatch)
+        let controller = offered(spy)
+        controller.installUpdate()
+        await settle { controller.installState != .installing }
+        #expect(controller.installState == .failed(reason: "The download doesn't match its checksum", retry: true))
+        #expect(spy.relaunched.isEmpty && spy.terminated == 0 && spy.opened.isEmpty)
+    }
+
+    @Test func aCopyThatCannotBeReplacedOpensTheReleasePageWithoutAnotherTry() async {
+        let spy = InstallSpy()
+        spy.outcome = .failed(.cannotInstallHere(.notWritable))
+        let controller = offered(spy)
+        controller.installUpdate()
+        await settle { controller.installState != .installing }
+        #expect(spy.opened == [Self.page])
+        guard case .failed(let reason, let retry) = controller.installState else { Issue.record("not failed"); return }
+        #expect(!retry && reason == UpdateInstallFailure.cannotInstallHere(.notWritable).reason)
+        #expect(spy.terminated == 0)
+    }
+
+    @Test func aSecondChoiceWhileInstallingDoesNothing() async {
+        let spy = InstallSpy()
+        let controller = offered(spy)
+        controller.installUpdate()
+        controller.installUpdate()
+        await settle { spy.terminated > 0 }
+        #expect(spy.confirmed.count == 1 && spy.installs.count == 1)
+    }
+
+    @Test func nothingIsInstalledWhenNothingIsOffered() async {
+        let spy = InstallSpy()
+        let controller = offered(spy)
+        preferences.latest = nil
+        controller.installUpdate()
+        await settle { false }
+        #expect(spy.confirmed.isEmpty && spy.installs.isEmpty)
+    }
+
+    @Test func anUpdatedAppThatWillNotReopenSaysSoAndStaysUp() async {
+        let spy = InstallSpy()
+        spy.relaunchWorks = false
+        let controller = offered(spy)
+        controller.installUpdate()
+        await settle { !spy.relaunched.isEmpty }
+        #expect(spy.terminated == 0 && spy.alerts == ["PureMouse is updated."])
+    }
+
+    @Test func theConfirmationNamesTheVersionAndTheTwoChoices() throws {
+        let alert = Alerts.updateConfirmation(UpdateOffer(version: try #require(UpdateCheck.Version("0.6.0")), page: Self.page))
+        #expect(alert.messageText == "Update to PureMouse 0.6.0?")
+        #expect(alert.buttons.map(\.title) == ["Update and Relaunch", "Cancel"])
+        #expect(alert.buttons.first?.keyEquivalent == "\r")
     }
 }

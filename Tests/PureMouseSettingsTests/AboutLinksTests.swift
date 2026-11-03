@@ -73,7 +73,7 @@ import Testing
         let toggle = try #require(about.range(of: #"Toggle("Check for updates automatically""#)).lowerBound
         let outcome = try #require(about.range(of: "switch outcome")).lowerBound
         #expect(button < toggle && toggle < outcome)
-        #expect(about.contains("The network is used only to check for updates."))
+        #expect(about.contains("The network is used only to check for and download updates."))
     }
 }
 
