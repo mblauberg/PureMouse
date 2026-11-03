@@ -135,6 +135,12 @@ footprint's median plus 2 MB, rounded up; the cold start's plus half, rounded up
 lower them when a change earns it. Only a Mac with a desktop session can run the rig, so CI does not; repeat it on the
 spare Mac after each macOS release (and see `docs/companion.md`, "Footprint", for the figures).
 
+The README's "Lightweight by design" table publishes these figures, the download and installed
+sizes (`scripts/size-budget.env`) and the background process's footprint, each labelled with the
+version, date and macOS it was measured on. Measure them again for every minor release (X.Y.0),
+before tagging it, and update the figures and their labels together; a label still naming an older
+version says the figure was not re-taken.
+
 ## Signing
 
 `scripts/sign-bundle.sh` signs every build inside out, the nested apps (the menu bar app, then the
@@ -160,11 +166,13 @@ signature from that team.
 
 ## Releases
 
-1. Tag `vX.Y.Z` (or `vX.Y.Z-rc.N`) on a clean `main`; the bundle version is the tag without the `v`.
-2. Run `PUREMOUSE_SIGN_IDENTITY=PureMouse ./scripts/release.sh` on a Mac that holds the
+1. For a minor release (X.Y.0), re-take the README's "Lightweight by design" figures first
+   ("Footprint rig" above).
+2. Tag `vX.Y.Z` (or `vX.Y.Z-rc.N`) on a clean `main`; the bundle version is the tag without the `v`.
+3. Run `PUREMOUSE_SIGN_IDENTITY=PureMouse ./scripts/release.sh` on a Mac that holds the
    `PureMouse` identity. Naming it matters: on a Mac that also holds a Developer ID, the build would
    otherwise sign with that, and every user would have to grant permissions again.
-3. Attach `.build/dist/PureMouse-X.Y.Z.dmg` and `.build/dist/SHA256SUMS` to a GitHub release.
+4. Attach `.build/dist/PureMouse-X.Y.Z.dmg` and `.build/dist/SHA256SUMS` to a GitHub release.
    `shasum -a 256 -c SHA256SUMS` checks the download.
 
 `release.sh` takes no version: it refuses unless `HEAD` is tagged exactly `vX.Y.Z` or `vX.Y.Z-rc.N`
