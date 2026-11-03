@@ -133,7 +133,8 @@ test_settings_plist_is_a_regular_app_with_its_own_identifier() {
     local menu="$(menu_of $app)/Contents/Info.plist" settings="$(settings_of $app)/Contents/Info.plist"
     plutil -lint -s "$settings"
     local differing=$(diff "$menu" "$settings" | sed -n 's/^[<>] *<key>\([^<]*\)<.*/\1/p' | sort -u)
-    local expected=$'CFBundleDisplayName\nCFBundleExecutable\nCFBundleIdentifier\nLSUIElement'
+    # Both show as PureMouse now, so the display name no longer differs (ADR 0009, amendment).
+    local expected=$'CFBundleExecutable\nCFBundleIdentifier\nLSUIElement'
     [[ $differing == $expected ]] || { print -u2 -- "differing keys: ${(f)differing}"; return 1; }
     # Its own allocator setting, for the opens that do not pass on the menu app's environment.
     [[ $(/usr/libexec/PlistBuddy -c "Print :LSEnvironment:MallocSpaceEfficient" "$settings") == 1 ]] || return 1
