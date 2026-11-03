@@ -95,10 +95,11 @@ struct DeviceCardPlan: Equatable {
 
     /// The mouse the card shows: the one chosen, else, under All Mice, the first mouse when every
     /// known mouse is the same model (a pop-up offered or not). A mouse with no model counts as a
-    /// different one, so a known and an unknown mouse together have no card.
-    static func mouse(selected: KnownMouse?, known: [KnownMouse]) -> KnownMouse? {
+    /// different one, so a known and an unknown mouse together have no card. A reported mouse with no
+    /// device key (`unidentified`) is not in `known`, but counts the same way.
+    static func mouse(selected: KnownMouse?, known: [KnownMouse], unidentified: Bool = false) -> KnownMouse? {
         if let selected { return selected }
-        guard let first = known.first, let model = DeviceArt.model(forKey: first.key) else { return nil }
+        guard !unidentified, let first = known.first, let model = DeviceArt.model(forKey: first.key) else { return nil }
         return known.allSatisfy { DeviceArt.model(forKey: $0.key) == model } ? first : nil
     }
 
@@ -114,8 +115,20 @@ struct DeviceCardPlan: Equatable {
         }
     }
 
+    /// "Back button", "Gesture button", "Thumb panel" (a panel, not a button).
     static func buttonName(_ button: NamedButton) -> String {
-        button.label.lowercased().hasSuffix("button") ? button.label : button.label + " button"
+        let label = button.label.lowercased()
+        return label.hasSuffix("button") || button == .thumbPanel ? button.label : button.label + " button"
+    }
+
+    /// The part in a sentence after "The": "Back button", "gesture button", "top button", "thumb
+    /// panel". Back and Forward are the buttons' own names, so they keep their capitals; the rest
+    /// describe where the part is.
+    static func sentenceName(_ button: NamedButton) -> String {
+        switch button {
+        case .back, .forward: buttonName(button)
+        default: buttonName(button).lowercased()
+        }
     }
 
     /// "Back button, set to Back"; a wheel is named alone and its actions carry the rest.
@@ -141,7 +154,7 @@ struct DeviceCardPlan: Equatable {
         guard let current, let target = target(current) else { return Self.hint }
         switch (model.binds[current], target.destinations) {
         case (.button(let button)?, _):
-            return "The \(Self.buttonName(button)) is set to \(actions[button]?.shown ?? button.label)."
+            return "The \(Self.sentenceName(button)) is set to \(actions[button]?.shown ?? button.label)."
         case (.mainWheel?, let destinations) where destinations.count > 1:
             return "Choose the wheel click or the main wheel's scrolling settings."
         case (.mainWheel(let click)?, let destinations) where destinations == [.row(click)]:
@@ -210,9 +223,13 @@ extension View {
 
 private struct MarkedRow: ViewModifier {
     let mark: RowMark
-    /// How far the band reaches past the row's content: to the form's edge, and to the row's
-    /// height (the form pads each row's content above and below).
-    private static let bleed = EdgeInsets(top: 10, leading: 8, bottom: 10, trailing: 8)
+    /// What the grouped form pads a row's content with, on every side: the band can reach this far.
+    private static let rowPadding: CGFloat = 10
+    /// What is left between the band and the form's edge, on every side, so the first and last rows
+    /// are inset as much as the sides.
+    private static let inset: CGFloat = 4
+    /// How far the band reaches past the row's content.
+    private static let bleed = rowPadding - inset
     private static let corner = RectangleCornerRadii(topLeading: 8, bottomLeading: 8, bottomTrailing: 8, topTrailing: 8)
 
     /// The band is a shape behind the content in a stack (the scan keeps `.background` out of Settings).
@@ -222,8 +239,7 @@ private struct MarkedRow: ViewModifier {
                 let band = UnevenRoundedRectangle(cornerRadii: Self.corner)
                 band.fill(.tint.opacity(mark.fillOpacity))
                     .overlay { if mark.outlined { band.strokeBorder(.tint, lineWidth: 1) } }
-                    .padding(EdgeInsets(top: -Self.bleed.top, leading: -Self.bleed.leading,
-                                        bottom: -Self.bleed.bottom, trailing: -Self.bleed.trailing))
+                    .padding(-Self.bleed)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
@@ -266,7 +282,7 @@ struct DeviceCard: View {
 
     /// The drawing's size on the card, as a multiple of its 100 x 124 pt page.
     static let scale: CGFloat = 1.5
-    /// The name and caption's width, fixed so the group does not shift as the caption changes.
+    /// The most width the name and caption take; a caption wraps at it.
     private static let textWidth: CGFloat = 240
     private static let gap: CGFloat = 24
     /// The width of a hovered or selected part's outline, so a small part reads in either appearance.
@@ -284,12 +300,10 @@ struct DeviceCard: View {
                 Text(name)
                     .font(.title3.weight(.semibold))
                     .lineLimit(1)
-                Text(plan.caption(hovered: hovered, selected: selected, actions: actions))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2, reservesSpace: true)
-                    .accessibilityHidden(true)
+                caption
             }
-            .frame(width: Self.textWidth, alignment: .leading)
+            // As wide as its widest caption needs, so the group centres on the card, and no wider.
+            .frame(maxWidth: Self.textWidth, alignment: .leading)
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .contain)
@@ -300,6 +314,26 @@ struct DeviceCard: View {
             }
         }
         #endif
+    }
+
+    /// The caption slot, as wide as the widest sentence it can say (the others laid out invisibly
+    /// beneath it), so the group neither leaves dead room nor shifts as the caption changes.
+    private var caption: some View {
+        let sentences = [DeviceCardPlan.hint] + plan.targets.map {
+            plan.caption(hovered: $0.part, selected: nil, actions: actions)
+        }
+        return ZStack(alignment: .topLeading) {
+            ForEach(sentences, id: \.self) { sentence in
+                Text(sentence)
+                    .lineLimit(2, reservesSpace: true)
+                    .opacity(0)
+                    .accessibilityHidden(true)
+            }
+            Text(plan.caption(hovered: hovered, selected: selected, actions: actions))
+                .foregroundStyle(.secondary)
+                .lineLimit(2, reservesSpace: true)
+                .accessibilityHidden(true)
+        }
     }
 
     private var art: some View {

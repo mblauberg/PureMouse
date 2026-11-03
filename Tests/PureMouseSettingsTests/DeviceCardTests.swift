@@ -268,6 +268,14 @@ private let allButtons = Set(NamedButton.allCases)
         #expect(DeviceCardPlan.mouse(selected: nil, known: []) == nil)
     }
 
+    @Test func anUnidentifiedSecondMouseDoesNotShowOneModelsCardUnderAllMice() {
+        let a = KnownMouse(key: mx3s, name: "MX Master 3S", reported: true)
+        #expect(DeviceCardPlan.mouse(selected: nil, known: [a], unidentified: false) == a)
+        #expect(DeviceCardPlan.mouse(selected: nil, known: [a], unidentified: true) == nil,
+                "one identified mouse and another with no model are not one drawing")
+        #expect(DeviceCardPlan.mouse(selected: a, known: [a], unidentified: true) == a, "a chosen mouse still shows its own card")
+    }
+
     // MARK: Words
 
     private let actions: [NamedButton: DeviceCardPlan.ActionText] = [
@@ -294,11 +302,22 @@ private let allButtons = Set(NamedButton.allCases)
         #expect(caption(.thumbWheel) == "Click to open the thumb wheel's scrolling settings.")
         #expect(caption(.middle) == "Choose the wheel click or the main wheel's scrolling settings.")
         #expect(caption(nil) == DeviceCardPlan.hint)
-        #expect(caption(nil, .gesture) == "The Gesture button is set to Gesture.", "no hover: the selected part")
+        #expect(caption(nil, .gesture) == "The gesture button is set to Gesture.", "no hover: the selected part")
         #expect(caption(.back, .gesture) == "The Back button is set to Back.", "the part under the pointer wins")
         let wheelOnly = DeviceCardPlan(model: DeviceArt.model(forKey: mx3s)!, listed: allButtons,
                                        mainWheelSettings: false, thumbWheelSettings: true)
         #expect(wheelOnly.caption(hovered: .middle, selected: nil, actions: actions) == "The wheel click is set to Mouse Default.")
+    }
+
+    @Test func theThumbRestIsAPanelNotAButtonAndOnlyBackAndForwardKeepTheirCapitals() {
+        let plan = plan(mx4, listed: allButtons)
+        let thumb = plan.caption(hovered: .thumbRest, selected: nil, actions: [:])
+        #expect(thumb == "The thumb panel is set to Thumb panel.", "no action known: its label")
+        let shown: [NamedButton: DeviceCardPlan.ActionText] = [.thumbPanel: .init(shown: "Mouse Default", spoken: "Mouse Default")]
+        #expect(plan.caption(hovered: .thumbRest, selected: nil, actions: shown) == "The thumb panel is set to Mouse Default.")
+        #expect(DeviceCardPlan.sentenceName(.back) == "Back button" && DeviceCardPlan.sentenceName(.forward) == "Forward button")
+        #expect(DeviceCardPlan.sentenceName(.gesture) == "gesture button" && DeviceCardPlan.sentenceName(.top) == "top button")
+        #expect(DeviceCardPlan.buttonName(.thumbPanel) == "Thumb panel", "VoiceOver says the part, not a button")
     }
 
     @Test func everyCaptionIsAFullSentenceThatFitsTwoLines() {

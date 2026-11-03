@@ -55,6 +55,15 @@ public enum MouseScope {
         return mice
     }
 
+    /// Some reported mouse has no usable device key, so it is not in `known` (nothing can be chosen
+    /// for it) yet still counts as a mouse: under All Mice, one model's drawing would not describe it.
+    public static func hasUnidentified(devices: [Status.Device]) -> Bool {
+        devices.contains { device in
+            guard let key = device.model?.lowercased() else { return true }
+            return !Config.isDeviceKey(key)
+        }
+    }
+
     /// The pop-up shows with two or more mice known, or with any `devices` entry in the config: a
     /// lone mouse with an entry gets it too, since otherwise the entry's overrides would shadow
     /// edits made under All Mice with nothing to show it.
