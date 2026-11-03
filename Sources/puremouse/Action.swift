@@ -7,7 +7,7 @@ extension Action {
     /// Accessibility. Device actions, `run` (a shell command) and `none` do not.
     var postsEvents: Bool {
         switch self {
-        case .none, .toggleScrollMode, .cycleDPI, .haptic, .run: false
+        case .none, .toggleScrollMode, .cycleDPI, .haptic, .run, .precisePointer: false
         default: true
         }
     }
@@ -24,7 +24,7 @@ extension Config.Binding {
         case .action(let action):
             return !action.postsEvents
         case .gesture(let gesture):
-            return [gesture.click, gesture.up, gesture.down, gesture.left, gesture.right].contains {
+            return [gesture.click, gesture.doubleClick, gesture.hold, gesture.up, gesture.down, gesture.left, gesture.right].contains {
                 if case .none = $0 { false } else { !$0.postsEvents }
             }
         }
@@ -40,8 +40,8 @@ enum SystemActions {
             return
         }
         switch action {
-        case .none, .toggleScrollMode, .cycleDPI, .haptic:
-            break
+        case .none, .toggleScrollMode, .cycleDPI, .haptic, .precisePointer, .dragLock:
+            break  // the device session's, and the held buttons' (`Session.perform`)
         case .missionControl:
             dock("com.apple.expose.awake", fallback: Keystroke(key: 126, modifiers: .maskControl))
         case .appExpose:

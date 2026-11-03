@@ -160,10 +160,10 @@ private func changed(_ before: ConfigTree, _ after: ConfigTree) -> Set<String> {
         let mice = [mouse(mx), mouse(m750)]
         let gesture = config.appButton("a.b", button: "gesture", inheriting: mice)
         #expect(gesture.inheritsGesture)
-        let up = try #require(gesture.directions.first { $0.name == "up" })
+        let up = try #require(gesture.triggers.first { $0.name == "up" })
         #expect(up.variesByMouse && up.inheritedLabel == "Varies by Mouse")
-        let left = try #require(gesture.directions.first { $0.name == "left" })
-        #expect(!left.variesByMouse && left.inheritedLabel == ButtonAction.named("none").label)
+        let left = try #require(gesture.triggers.first { $0.name == "left" })
+        #expect(!left.variesByMouse && left.inheritedLabel == Triggers.noAction)
         let choice = config.thumbWheelChoice(inheriting: mice)
         #expect(choice.varies)
         #expect(choice.values == [.preset("volume"), .scroll])
@@ -315,19 +315,19 @@ private func changed(_ before: ConfigTree, _ after: ConfigTree) -> Set<String> {
         let mice = [mouse(mx), mouse(m750)]
         let inherited = config.appButton("a.b", button: "gesture", inheriting: mice)
         #expect(inherited.inheritsGesture)
-        #expect(inherited.gestureSummary == "Click: Mission Control, 1 direction set.")
-        #expect(inherited.gestureSummary == config.gestureSummary("gesture", in: mouse(mx)))
+        #expect(inherited.summary == "Hold and Move: App Exposé.")
+        #expect(inherited.summary == config.scopedButton("gesture", in: mouse(mx)).summary)
         // The app's own direction counts too, over what the mice give.
         var edited = config
         edited.bindInApp("a.b", button: "gesture", direction: "left", to: .named("spaceLeft"))
-        #expect(edited.appButton("a.b", button: "gesture", inheriting: mice).gestureSummary == "Click: Mission Control, 2 directions set.")
+        #expect(edited.appButton("a.b", button: "gesture", inheriting: mice).summary == "Hold and Move: App Exposé, Move Left a Space.")
         // Not a gesture here: nothing to summarise. Mice that differ: no one summary is right.
-        #expect(try tree(#"{"buttons": {"back": "mute"}}"#).appButton("a.b", button: "back", inheriting: mice).gestureSummary == nil)
+        #expect(try tree(#"{"buttons": {"back": "mute"}}"#).appButton("a.b", button: "back", inheriting: mice).summary == nil)
         let differ = try tree("""
             {"buttons": {"gesture": {"click": "missionControl", "up": "appExpose"}},
              "devices": {"\(mx)": {"name": "MX", "buttons": {"gesture": {"up": "mute"}}}, "\(m750)": {"name": "M750"}}}
             """)
-        #expect(differ.appButton("a.b", button: "gesture", inheriting: mice).gestureSummary == nil)
+        #expect(differ.appButton("a.b", button: "gesture", inheriting: mice).summary == nil)
     }
 
     @Test func oppositeWheelDirectionsVaryEvenWithTheSameActions() throws {
@@ -410,9 +410,10 @@ private func changed(_ before: ConfigTree, _ after: ConfigTree) -> Set<String> {
         var global = config
         global.bindInApp("a.b", button: "back", to: .gesture)
         #expect(global.string(["apps", "a.b", "buttons", "back", "click"]) == "mute")
-        // A mouse that binds the button to Mouse Default seeds a click that does nothing there.
+        // A mouse that binds the button to Mouse Default seeds no click: a tap stays the mouse's.
         var native = try tree(#"{"buttons": {"back": "mute"}, "devices": {"\#(mx)": {"name": "MX", "buttons": {"back": "default"}}}}"#)
         native.bindInApp("a.b", button: "back", to: .gesture, inheriting: [mouse(mx)])
-        #expect(native.string(["apps", "a.b", "buttons", "back", "click"]) == "none")
+        #expect(native[["apps", "a.b", "buttons", "back", "click"]] == nil)
+        #expect(native[["apps", "a.b", "buttons", "back"]] is [String: Any])
     }
 }

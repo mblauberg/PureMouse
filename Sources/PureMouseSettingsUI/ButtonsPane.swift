@@ -12,8 +12,10 @@ struct ButtonsPane: View {
     /// gets one until Settings closes, so its picker can open.
     @State private var capturedKey: String?
     @State private var sheet: SheetRequest?
-    /// Gesture buttons whose directions show; collapsed until opened or chosen.
+    /// Buttons whose Double-click and Hold rows show; collapsed until opened or added.
     @State private var expanded: Set<String> = []
+    /// Child rows added from More Ways to Press that do nothing yet ("forward.doubleClick").
+    @State private var wanted: Set<String> = []
     @State private var showOthers = false
     @State private var showingAdvanced = false
 
@@ -97,9 +99,12 @@ struct ButtonsPane: View {
             if let key = environment["PUREMOUSE_DEV_FOUND"] {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { found(key) }
             }
+            // A trigger's picker ("forward.hold") opens with its row's children shown.
             if let key = environment["PUREMOUSE_DEV_PICKER"] {
+                if let button = key.split(separator: ".").first, key.contains(".") { expanded.insert(String(button)) }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { presented = key }
             }
+            if let key = environment["PUREMOUSE_DEV_EXPAND"] { expanded.insert(key) }
             if let key = environment["PUREMOUSE_DEV_SHORTCUT"] {
                 sheet = SheetRequest(kind: .shortcut, target: BindingTarget(button: key), initial: "cmd+w")
             }
@@ -177,11 +182,9 @@ struct ButtonsPane: View {
         return actions
     }
 
-    /// The action a row shows for a button: the mouse's own, else what it inherits.
+    /// The action a row shows for a button: its click, the mouse's own, else what it inherits.
     private func shownAction(_ key: String) -> ButtonAction {
-        guard isMouse else { return model.config.binding(key) }
-        let state = model.config.scopedButton(key, in: scope)
-        return state.own == .standard ? state.everywhere : state.own
+        model.config.scopedButton(key, in: scope).effectiveClick
     }
 
     private var otherRows: [String] {
@@ -198,138 +201,28 @@ struct ButtonsPane: View {
         return owners.isEmpty ? ControlAvailability.unsupportedCaption : owners.joined(separator: ", ")
     }
 
-    @ViewBuilder
+    /// A button's rows (`TriggerRows`): on a mouse, what applies, shown as in All Mice; with its
+    /// own, the row says "Set for this mouse." (`InheritedValue`, as on an app's page).
     private func row(_ key: String, indented: Bool = false) -> some View {
-        if isMouse { mouseRow(key, indented: indented) } else { globalRow(key, indented: indented) }
-    }
-
-    /// A button on a mouse: the binding that applies, shown as in All Mice; with its own, the row
-    /// says "Set for this mouse." (`InheritedValue`, as on an app's page).
-    @ViewBuilder
-    private func mouseRow(_ key: String, indented: Bool) -> some View {
         let state = model.config.scopedButton(key, in: scope)
-        let inheritedLabel = state.everywhere.label
-        let inheritedSpoken = state.everywhere.spokenLabel
-        let target = BindingTarget(button: key)
-        let mark = RowMark.of(key, selected: card?.button, found: highlighted)
-        let note = ActionButton.inherited(state.own, inheriting: inheritedLabel, source: InheritedScope.allMice)
-            .note { apply(.standard, to: target) }
-        if state.directions.isEmpty {
-            let help = caption(key)
-            LabeledContent {
-                actionButton(state.own, target: target, sameAsInherited: inheritedLabel, spokenInherited: inheritedSpoken)
-            } label: {
-                RowLabel(NamedButton.title(forKey: key), help: help, note: note)
-            }
-            .overridable(note, help: help)
-            .padding(.leading, indented ? 16 : 0)
-            .rowMark(mark)
-            .id(key)
-        } else {
-            let isExpanded = Binding(get: { expanded.contains(key) },
-                                     set: { if $0 { expanded.insert(key) } else { expanded.remove(key) } })
-            let help = model.config.gestureSummary(key, in: scope)
-            LabeledContent {
-                actionButton(state.own, target: target, sameAsInherited: inheritedLabel, spokenInherited: inheritedSpoken)
-            } label: {
-                DisclosureLabel(title: NamedButton.title(forKey: key), help: help, note: note,
-                                spokenTitle: "\(NamedButton.title(forKey: key)) directions", isExpanded: isExpanded)
-            }
-            .overridable(note, help: help)
-            .padding(.leading, indented ? 16 : 0)
-            .rowMark(mark)
-            .id(key)
-            if isExpanded.wrappedValue {
-                Text("Hold the button and move the mouse. Release without moving to click.")
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, indented ? 38 : 22)
-                ForEach(state.directions, id: \.name) { direction in
-                    // A direction the mouse leaves out follows the All Mice gesture's, if it has one,
-                    // else does nothing; one it sets itself is marked either way.
-                    let target = BindingTarget(button: key, direction: direction.name)
-                    let note = ActionButton.inherited(direction, source: InheritedScope.allMice).note { apply(.standard, to: target) }
-                    LabeledContent {
-                        actionButton(direction.own, target: target, sameAsInherited: direction.inherited.label,
-                                     spokenInherited: direction.inherited.spokenLabel)
-                    } label: {
-                        RowLabel(Gesture.label(direction.name), note: note, spokenTitle: target.title)
-                    }
-                    .overridable(note, help: nil)
-                    .padding(.leading, indented ? 38 : 22)
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func globalRow(_ key: String, indented: Bool) -> some View {
-        let action = model.config.binding(key)
-        let mark = RowMark.of(key, selected: card?.button, found: highlighted)
-        if action == .gesture {
-            let isExpanded = Binding(get: { expanded.contains(key) },
-                                     set: { if $0 { expanded.insert(key) } else { expanded.remove(key) } })
-            LabeledContent {
-                actionButton(action, target: BindingTarget(button: key))
-            } label: {
-                DisclosureLabel(title: NamedButton.title(forKey: key), help: model.config.gestureSummary(key),
-                                spokenTitle: "\(NamedButton.title(forKey: key)) directions", isExpanded: isExpanded)
-            }
-            .padding(.leading, indented ? 16 : 0)
-            .rowMark(mark)
-            .id(key)
-            if isExpanded.wrappedValue {
-                Text("Hold the button and move the mouse. Release without moving to click.")
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, indented ? 38 : 22)
-                ForEach(Gesture.directions, id: \.self) { direction in
-                    LabeledContent(Gesture.label(direction)) {
-                        actionButton(model.config.gestureBinding(key, direction),
-                                     target: BindingTarget(button: key, direction: direction))
-                    }
-                    .padding(.leading, indented ? 38 : 22)
-                }
-            }
-        } else {
-            LabeledContent {
-                actionButton(action, target: BindingTarget(button: key))
-            } label: {
-                RowLabel(NamedButton.title(forKey: key), help: caption(key))
-            }
-            .padding(.leading, indented ? 16 : 0)
-            .rowMark(mark)
-            .id(key)
-        }
-    }
-
-    private func actionButton(_ action: ButtonAction, target: BindingTarget, sameAsInherited: String? = nil,
-                              spokenInherited: String? = nil) -> some View {
-        let id = target.direction.map { "\(target.button).\($0)" } ?? target.button
-        let isDirection = target.direction != nil
-        let inherits = sameAsInherited != nil
-        return ActionButton(
-            action: isDirection && action == .standard && !inherits ? .named("none") : action,
+        return TriggerRows(
+            key: key, state: state, source: isMouse ? InheritedScope.allMice : nil, help: caption(key),
+            spokenSuffix: isMouse ? ", \(model.selectedMouse?.name ?? "")" : "",
+            indented: indented, mark: RowMark.of(key, selected: card?.button, found: highlighted),
             // On a mouse, Mouse Default is its own value ("default") beside "Same as All Mice".
-            allowsDefault: !isDirection && PickerEntry.offersMouseDefault(for: target.button, inMouseOrApp: isMouse, current: action),
-            allowsGesture: !isDirection,
-            isPresented: Binding(get: { presented == id }, set: { open in
-                presented = open ? id : nil
-                if open, let button = NamedButton(rawValue: target.button) { card?.select(button) }
-            }),
-            choose: { entry in choose(entry, for: target, current: action) },
-            accessibilityName: target.title + (inherits && model.selectedMouse != nil ? ", \(model.selectedMouse?.name ?? "")" : ""),
-            sameAsInherited: sameAsInherited,
-            spokenInherited: spokenInherited,
-            source: InheritedScope.allMice,
-            scope: scope)
+            offersMouseDefault: PickerEntry.offersMouseDefault(for: key, inMouseOrApp: isMouse, current: state.click),
+            doubleClickMs: model.config.doubleClickMilliseconds(systemSeconds: ConfigTree.systemDoubleClickSeconds),
+            scope: scope, expanded: $expanded, wanted: $wanted, presented: $presented,
+            choose: { entry, target, current in choose(entry, for: target, current: current) },
+            opened: { target in if let button = NamedButton(rawValue: target.button) { card?.select(button) } })
     }
 
     private func choose(_ entry: PickerEntry, for target: BindingTarget, current: ButtonAction) {
         highlighted = nil
         switch entry.kind {
         case .set(let action): apply(action, to: target)
-        case .gesture:
-            apply(.gesture, to: target)
-            expanded.insert(target.button)
+        case .gesture: apply(.gesture, to: target)
+        case .trigger: break  // `TriggerRows` adds the row
         case .shortcut:
             let initial = if case .keys(let spec) = current { spec } else { "" }
             // Let the popover close before the sheet opens.
@@ -343,10 +236,10 @@ struct ButtonsPane: View {
     private func apply(_ action: ButtonAction, to target: BindingTarget) {
         let scope = scope
         model.update(in: model.scopeTarget) {
-            if let direction = target.direction {
-                $0.bind(target.button, direction: direction, to: action, in: scope)
+            if let trigger = target.direction {
+                $0.bindTrigger(target.button, trigger, to: action, in: scope)
             } else {
-                $0.bind(target.button, to: action, in: scope)
+                $0.bindClick(target.button, to: action, in: scope)
             }
         }
     }

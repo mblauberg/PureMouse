@@ -151,42 +151,81 @@ extension Session {
         }
     }
 
-    /// The binding for a press: the frontmost app's when an app entry names it, else the global one.
-    /// Only a control some app names needs the lookup, unless some app has PureMouse turned off.
-    /// An app that sets the control to `"default"` names it (`AppSettings.buttons`) but has no binding
-    /// for it, so the press is `nil` here. An app that is turned off is also `nil` here (native click
-    /// or do nothing).
-    private func binding(for cid: UInt16) -> Config.Binding? {
-        if (appButtons.contains(cid) || hasDisabledApps), let app = environment.frontmostApp(), let scoped = config.settings(forApp: app) {
-            if !scoped.enabled {
+    /// The plan for a press: the frontmost app's when an app entry names the control, else the
+    /// global one. Only a control some app names needs the lookup, unless some app has PureMouse
+    /// turned off. An app that sets the control to `"default"` names it (`AppSettings.buttons`) but
+    /// has no binding for it: the mouse's own. An app that is turned off gets the mouse's own for
+    /// every control.
+    private func plan(for cid: UInt16) -> PressPlan {
+        if appButtons.contains(cid) || hasDisabledApps, let app = environment.frontmostApp() {
+            if hasDisabledApps, config.settings(forApp: app)?.enabled == false {
                 Log.debug("\(name): buttons off in \(app)")
-                return nil
+                return PressPlan(nil)
             }
-            if appButtons.contains(cid) {
+            if appButtons.contains(cid), let plans = appPlans[app.lowercased()] {
                 Log.debug("\(name): buttons with \(app)'s settings")
-                return scoped.bindings[cid]
+                return plans[cid] ?? PressPlan(nil)
             }
         }
-        return global.bindings[cid]
+        return globalPlans[cid] ?? PressPlan(nil)
     }
 
+    /// A press: the click at once when it is the only trigger (`PressPlan.immediate`); otherwise
+    /// the press is followed until its release, with the hold's deadline armed for it, or it is
+    /// the second press of a double-click.
     private func press(_ cid: UInt16) {
         Log.debug("\(name): press \(ControlNames.describe(cid))")
-        let binding = binding(for: cid)
-        // A control that is a gesture in some scope is diverted with raw pointer motion, which holds
-        // the pointer still. Where this press is not a gesture, the pointer must move.
-        if case .gesture? = binding {} else if bound[cid] == true { setPointerFree(cid, true) }
-        switch binding {
-        case .action(.middleClick):
-            held.pressMiddle(cid)  // held until release, so it can drag
-        case .action(let action):
-            perform(action)
-        case .gesture(let gesture):
-            guard held.holdGesture(cid, gesture) else { return }
-            recognizer.begin()
-        case nil:
-            performNative(cid)
+        // A control that is Hold and Move in some scope is diverted with raw pointer motion, which
+        // holds the pointer still. Where this press is not moving, the pointer must move.
+        if let waiting = presses[cid], waiting.stage == .waiting {
+            if bound[cid] == true { setPointerFree(cid, true) }
+            waiting.deadline?.cancel()
+            presses[cid] = Press(plan: waiting.plan, stage: .done)
+            Log.debug("\(name): double-click")
+            if let action = waiting.plan.doubleClick { perform(action) }
+            return
         }
+        // Another control's lone click is not kept waiting behind this press.
+        for (other, press) in presses where press.stage == .waiting { clickAfterWaiting(other, press) }
+        let plan = plan(for: cid)
+        if !plan.moves, bound[cid] == true { setPointerFree(cid, true) }
+        guard !plan.immediate else {
+            pressed(plan.click, cid)
+            return
+        }
+        var press = Press(plan: plan, stage: .down)
+        switch plan.hold {
+        case .move(let table):
+            guard held.holdGesture(cid, table) else { return }
+            recognizer.begin()
+        case .action:
+            press.deadline = environment.deadline(.milliseconds(config.holdMs)) { [weak self] in self?.holdReached(cid) }
+        case .none:
+            break
+        }
+        presses[cid] = press
+    }
+
+    /// An action fired while its control is down: Middle Click and Precise Pointer last until the
+    /// control is let go; nil is the mouse's own behaviour.
+    private func pressed(_ action: Action?, _ cid: UInt16) {
+        switch action {
+        case nil: performNative(cid)
+        case .middleClick?: held.pressMiddle(cid)  // held until release, so it can drag
+        case .precisePointer(let dpi)?: startPrecise(cid, dpi: dpi)
+        case let action?: perform(action)
+        }
+    }
+
+    /// The hold's deadline: the button is still down and nothing else has fired, so the hold
+    /// fires, and its release will not click.
+    private func holdReached(_ cid: UInt16) {
+        guard var press = presses[cid], press.stage == .down, case .action(let action) = press.plan.hold else { return }
+        press.stage = .done
+        press.deadline = nil
+        presses[cid] = press
+        Log.debug("\(name): hold \(ControlNames.describe(cid))")
+        pressed(action, cid)
     }
 
     /// Mouse Default: what the control does without PureMouse (`Config.nativeBehaviour`). A press
@@ -200,31 +239,85 @@ extension Session {
         }
     }
 
+    /// A release: ends what the press holds; a press that fired nothing is a click, now or, when a
+    /// double-click is watched for, once the wait for a second press runs out.
     private func release(_ cid: UInt16) {
         if pointerFree.contains(cid) { setPointerFree(cid, false) }
-        guard let gesture = held.release(cid) else { return }
-        if recognizer.end() { perform(gesture.click) }
+        if held.release(cid) != nil { _ = recognizer.end() }
+        if precise == cid { endPrecise() }
+        guard var press = presses.removeValue(forKey: cid) else { return }
+        press.deadline?.cancel()
+        press.deadline = nil
+        guard press.stage == .down else { return }
+        guard press.plan.doubleClick != nil else {
+            click(press.plan.click, cid)
+            return
+        }
+        press.stage = .waiting
+        let interval = config.doubleClickInterval(systemSeconds: environment.doubleClickSeconds())
+        press.deadline = environment.deadline(.milliseconds(interval)) { [weak self] in self?.doubleClickMissed(cid) }
+        presses[cid] = press
+    }
+
+    /// No second press came in time: the lone click fires.
+    private func doubleClickMissed(_ cid: UInt16) {
+        guard let press = presses[cid], press.stage == .waiting else { return }
+        clickAfterWaiting(cid, press)
+    }
+
+    private func clickAfterWaiting(_ cid: UInt16, _ press: Press) {
+        press.deadline?.cancel()
+        presses[cid] = nil
+        click(press.plan.click, cid)
+    }
+
+    /// The click of a press that was let go, now or after the double-click wait. nil is the
+    /// mouse's own behaviour, as on press (`performNative`), but the press is over, so a native
+    /// click is posted whole, press and release.
+    private func click(_ action: Action?, _ cid: UInt16) {
+        guard let action else {
+            switch Config.nativeBehaviour(of: cid) {
+            case .click?:
+                held.clickNatively(cid)
+                _ = held.release(cid)
+            case .action(let action)?: perform(action)
+            case nil: break
+            }
+            return
+        }
+        perform(action)
     }
 
     /// Lets go of every held button without acting on it, posting the releases of native clicks,
-    /// and ends any thumb-wheel movement: for when the mouse's own releases may never come.
+    /// Middle Click and Drag Lock, ends Precise Pointer, cancels every press's deadline, and ends
+    /// any thumb-wheel movement: for when the mouse's own releases may never come.
     func dropHeld() {
+        for press in presses.values { press.deadline?.cancel() }
+        presses = [:]
         held.drop()
+        endPrecise()
         // The mouse's own reporting flags are set again by the apply that follows.
         pointerFree = []
         thumbLast = nil
     }
 
     private func moved(dx: Int, dy: Int) {
-        guard let gesture = held.gesture?.gesture,
+        guard let gesture = held.gesture,
               let direction = recognizer.move(dx: dx, dy: dy) else { return }
         Log.debug("\(name): gesture \(direction)")
-        perform(gesture.action(for: direction))
+        presses[gesture.cid]?.stage = .done
+        perform(gesture.gesture.action(for: direction))
     }
 
+    /// Performs a one-shot action. Precise Pointer is not one: it is started by its press
+    /// (`pressed`), and Kit accepts it only where that happens.
     private func perform(_ action: Action) {
+        if case .dragLock = action {
+            held.toggleDragLock()
+            return
+        }
         guard action.actsOnDevice else {
-            SystemActions.perform(action)
+            environment.performSystem(action)
             return
         }
         // Queued so quick presses each take effect once, in order, and none lands mid-apply.

@@ -29,6 +29,8 @@ struct AppPage: View {
     @State private var presented: String?
     @State private var editor: SheetRequest?
     @State private var expanded: Set<String> = []
+    /// Child rows added from More Ways to Press that do nothing yet ("forward.doubleClick").
+    @State private var wanted: Set<String> = []
     @State private var showOthers = false
     @State private var confirmingRemove = false
 
@@ -84,9 +86,11 @@ struct AppPage: View {
         #if DEBUG
         .onAppear {
             // With PUREMOUSE_DEV_APP: PUREMOUSE_DEV_OTHERS=1 opens "Other controls",
+            // PUREMOUSE_DEV_EXPAND=<button> shows a button's Double-click and Hold rows,
             // PUREMOUSE_DEV_SHORTCUT opens a button's shortcut editor sheet over the page, and
             // PUREMOUSE_DEV_PICKER opens a button's action picker popover.
             if ProcessInfo.processInfo.environment["PUREMOUSE_DEV_OTHERS"] != nil { showOthers = true }
+            if let button = ProcessInfo.processInfo.environment["PUREMOUSE_DEV_EXPAND"] { expanded.insert(button) }
             if let button = ProcessInfo.processInfo.environment["PUREMOUSE_DEV_SHORTCUT"] {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     editor = SheetRequest(kind: .shortcut, target: bindingTarget(button), initial: "cmd+w")
@@ -162,79 +166,24 @@ struct AppPage: View {
 
     private func title(_ button: String) -> String { NamedButton.title(forKey: button) }
 
-    @ViewBuilder
+    /// A button's rows (`TriggerRows`, as on the Mouse tab): the app's own triggers over what the
+    /// mice give it. Expanding a row writes nothing.
     private func row(_ button: String, _ config: ConfigTree, indented: Bool = false) -> some View {
         let state = config.appButton(key, button: button, inheriting: mice)
-        let target = bindingTarget(button)
-        let inherited = state.inheritedLabel
-        let spokenInherited = state.inheritedSpokenLabel
-        let note = ActionButton.inherited(state.own, inheriting: inherited).note { apply(.standard, to: target) }
-        if state.directions.isEmpty {
-            LabeledContent {
-                actionButton(state.own, target: target, sameAs: inherited, spokenSameAs: spokenInherited)
-            } label: {
-                RowLabel(title(button), note: note)
-            }
-            .overridable(note, help: nil)
-            .padding(.leading, indented ? 16 : 0)
-        } else {
-            // A gesture of the app's own, or one the mice set that the app inherits: its
-            // directions start collapsed, and expanding them writes nothing.
-            let isExpanded = Binding(get: { expanded.contains(button) },
-                                     set: { if $0 { expanded.insert(button) } else { expanded.remove(button) } })
-            // What the gesture does here, as the Mouse page captions it: the app's directions over
-            // what the mice give it.
-            let summary = state.gestureSummary
-            LabeledContent {
-                actionButton(state.own, target: target, sameAs: inherited, spokenSameAs: spokenInherited)
-            } label: {
-                DisclosureLabel(title: title(button), help: summary, note: note, spokenTitle: "\(title(button)) directions",
-                                isExpanded: isExpanded)
-            }
-            .overridable(note, help: summary)
-            .padding(.leading, indented ? 16 : 0)
-            if isExpanded.wrappedValue {
-                ForEach(state.directions, id: \.name) { direction in
-                    let target = bindingTarget(button, direction: direction.name)
-                    // A direction the app leaves out follows the mice's gesture, if they have one,
-                    // else does nothing; one it sets itself is marked either way.
-                    let note = ActionButton.inherited(direction, source: InheritedScope.mouseSettings)
-                        .note { apply(.standard, to: target) }
-                    LabeledContent {
-                        actionButton(direction.own, target: target, sameAs: direction.inheritedLabel,
-                                     spokenSameAs: direction.inheritedSpokenLabel)
-                    } label: {
-                        RowLabel(Gesture.label(direction.name), note: note, spokenTitle: target.title + spoken)
-                    }
-                    .overridable(note, help: nil)
-                    .padding(.leading, indented ? 38 : 22)
-                }
-            }
-        }
-    }
-
-    private func actionButton(_ action: ButtonAction, target: BindingTarget, sameAs: String?,
-                              spokenSameAs: String?) -> some View {
-        let id = target.direction.map { "\(target.button).\($0)" } ?? target.button
-        let isDirection = target.direction != nil
-        return ActionButton(
-            action: action,
-            allowsDefault: !isDirection && PickerEntry.offersMouseDefault(for: target.button, inMouseOrApp: true, current: action),
-            allowsGesture: !isDirection,
-            isPresented: Binding(get: { presented == id }, set: { presented = $0 ? id : nil }),
-            choose: { entry in choose(entry, for: target, current: action) },
-            accessibilityName: target.title + spoken,
-            sameAsInherited: sameAs,
-            spokenInherited: spokenSameAs,
-            app: key)
+        return TriggerRows(
+            key: button, state: state, source: InheritedScope.mouseSettings, spokenSuffix: spoken, indented: indented,
+            offersMouseDefault: PickerEntry.offersMouseDefault(for: button, inMouseOrApp: true, current: state.click),
+            doubleClickMs: config.doubleClickMilliseconds(systemSeconds: ConfigTree.systemDoubleClickSeconds),
+            app: key, expanded: $expanded, wanted: $wanted, presented: $presented,
+            choose: { entry, target, current in choose(entry, for: bindingTarget(target.button, direction: target.direction),
+                                                       current: current) })
     }
 
     private func choose(_ entry: PickerEntry, for target: BindingTarget, current: ButtonAction) {
         switch entry.kind {
         case .set(let action): apply(action, to: target)
-        case .gesture:
-            apply(.gesture, to: target)
-            expanded.insert(target.button)
+        case .gesture: apply(.gesture, to: target)
+        case .trigger: break  // `TriggerRows` adds the row
         case .shortcut:
             let initial = if case .keys(let spec) = current { spec } else { "" }
             // Let the picker's popover close before the editor's sheet opens.
@@ -246,11 +195,12 @@ struct AppPage: View {
     }
 
     private func apply(_ action: ButtonAction, to target: BindingTarget) {
+        let scope = ConfigTree.appScope(key), mice = mice
         model.update {
-            if let direction = target.direction {
-                $0.bindInApp(key, button: target.button, direction: direction, to: action)
+            if let trigger = target.direction {
+                $0.bindTrigger(target.button, trigger, to: action, in: scope, inheriting: mice)
             } else {
-                $0.bindInApp(key, button: target.button, to: action, inheriting: mice)
+                $0.bindClick(target.button, to: action, in: scope, inheriting: mice)
             }
         }
     }

@@ -74,7 +74,15 @@ final class Session {
     var notchedRefused = false
 
     /// Buttons down, the gesture held and native clicks posted (`HeldButtons`).
-    var held = HeldButtons()
+    var held: HeldButtons
+    /// Each bound control's press plan where no app entry matches, and by lowercased bundle ID for
+    /// the apps that set buttons, compiled here so a press only looks one up.
+    let globalPlans: [UInt16: PressPlan]
+    let appPlans: [String: [UInt16: PressPlan]]
+    /// The presses under way that wait on a trigger, by control (`Session+Input`).
+    var presses: [UInt16: Press] = [:]
+    /// The control whose press has Precise Pointer slowing the pointer, until it is let go.
+    var precise: UInt16?
     /// Controls pressed now whose raw pointer motion is off for the press (`setPointerFree`).
     var pointerFree: Set<UInt16> = []
     /// The thumb wheel settings of the current movement and its step counter.
@@ -140,6 +148,11 @@ final class Session {
         /// Set by `cycleDPI`, overriding `config.dpi`; cleared by a reload that changes `dpi` or
         /// `dpiPresets` (see `Daemon.reload`) and by `useConfiguredDPI`.
         var liveDPI: Int?
+        /// The pointer speed Precise Pointer slowed from, while the slower one may be on the mouse:
+        /// set by the write that slows it, cleared by the one that puts the speed in effect back
+        /// (`restorePointerSpeed`, `applyDPI`, `restore`). Handed to a replacement, so a reload
+        /// mid-hold still restores it.
+        var preciseFrom: Int?
         /// The feature DPI is set through, found once per mouse (`dpiFeature`).
         var dpiFeature: DPIFeature?
         /// The sensor's supported resolutions, read once per mouse.
@@ -222,13 +235,16 @@ final class Session {
                     native.insert(cid)
                     continue
                 }
-                let isGesture = if case .gesture = binding { true } else { false }
-                bound[cid] = (bound[cid] ?? false) || (isGesture && controls[cid]?.supportsRawXY == true)
+                let moves = PressPlan(binding).moves
+                bound[cid] = (bound[cid] ?? false) || (moves && controls[cid]?.supportsRawXY == true)
             }
         }
         self.bound = bound
         needsAccessibility = native.subtracting(bound.keys)
         appButtons = config.apps.values.reduce(into: []) { $0.formUnion($1.buttons) }
+        globalPlans = global.bindings.mapValues(PressPlan.init)
+        appPlans = config.apps.filter { $0.value.setsButtons }.mapValues { $0.bindings.mapValues(PressPlan.init) }
+        held = environment.heldButtons()
         appThumbWheel = config.apps.values.contains { $0.setsThumbWheel }
         hasDisabledApps = config.apps.values.contains { !$0.enabled }
         globalProfile = Self.profile(global, config)
@@ -665,7 +681,7 @@ final class Session {
 
     /// The hand-backs `restore` makes, each one request when feature indices are cached.
     var restoreSteps: Int {
-        wheelsToRestore.count + divertedControls.count
+        wheelsToRestore.count + divertedControls.count + (state.preciseFrom != nil ? 1 : 0)
     }
 
     /// The wheels `restore` may have to hand back. One of unknown presence counts, since
@@ -714,6 +730,10 @@ final class Session {
             await attempt("release \(ControlNames.describe(cid))") {
                 try await ReprogControls.setDiverted(self.device, cid: cid, divert: false, rawXY: false)
             }
+        }
+        // Precise Pointer let go by the finish above: its slower speed is not left on the mouse.
+        if state.preciseFrom != nil, let feature = state.dpiFeature {
+            await attempt("restore pointer speed") { try await self.restorePointerSpeed(feature) }
         }
         Log.info("\(name): restored native behaviour")
     }

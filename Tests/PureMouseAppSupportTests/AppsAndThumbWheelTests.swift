@@ -264,18 +264,24 @@ private func resolved(_ wheel: Config.ThumbWheel) -> Resolved {
 }
 
 @Test func anAppGestureStartsFromWhatTheButtonDid() throws {
-    // Globally a gesture: the app's own starts from the global click.
+    // Globally Hold and Move already: it applies in the app, so nothing is written.
     var config = try tree(#"{"buttons": {"gesture": {"click": "missionControl", "left": "spaceLeft"}}}"#)
     config.bindInApp("a.b", button: "gesture", to: .gesture)
-    #expect(config[["apps", "a.b", "buttons", "gesture"]] as? NSDictionary == ["click": "missionControl"])
-    // Its own action becomes the click.
+    #expect(config[["apps", "a.b"]] == nil)
+    let standard: NSDictionary = ["up": "missionControl", "down": "appExpose", "left": "spaceLeft", "right": "spaceRight"]
+    func seeded(click: String) -> NSDictionary {
+        let out = NSMutableDictionary(dictionary: standard)
+        out["click"] = click
+        return out
+    }
+    // Its own action becomes the click, with the standard directions.
     config.bindInApp("c.d", button: "back", to: .named("mute"))
     config.bindInApp("c.d", button: "back", to: .gesture)
-    #expect(config[["apps", "c.d", "buttons", "back"]] as? NSDictionary == ["click": "mute"])
-    // Globally a plain action.
+    #expect(config[["apps", "c.d", "buttons", "back"]] as? NSDictionary == seeded(click: "mute"))
+    // Globally a plain action: the table over it starts empty, so the click is copied.
     config.set("showDesktop", at: ["buttons", "top"])
     config.bindInApp("e.f", button: "top", to: .gesture)
-    #expect(config[["apps", "e.f", "buttons", "top"]] as? NSDictionary == ["click": "showDesktop"])
+    #expect(config[["apps", "e.f", "buttons", "top"]] as? NSDictionary == seeded(click: "showDesktop"))
     _ = try decoded(config)
 }
 
@@ -346,9 +352,9 @@ private func resolved(_ wheel: Config.ThumbWheel) -> Resolved {
     let button = config.appButton("a.b", button: "gesture")
     #expect(button.inheritsGesture)
     #expect(button.own == .standard)
-    #expect(button.directions.map(\.name) == Gesture.directions)
-    #expect(button.directions.first { $0.name == "up" } == .init(name: "up", own: .standard, everywhere: .named("appExpose")))
-    #expect(button.directions.first { $0.name == "left" }?.everywhere == .standard)
+    #expect(button.triggers.map(\.name) == Gesture.triggers)
+    #expect(button.triggers.first { $0.name == "up" } == .init(name: "up", own: .standard, everywhere: .named("appExpose")))
+    #expect(button.triggers.first { $0.name == "left" }?.everywhere == .standard)
     // Reading it (expanding the row) wrote nothing.
     #expect(!config.contains(["apps"]))
     // Editing one direction writes only that direction under the app.
@@ -366,8 +372,8 @@ private func resolved(_ wheel: Config.ThumbWheel) -> Resolved {
     // The app's own gesture now: the other directions still show what applies everywhere.
     let own = edited.appButton("a.b", button: "gesture")
     #expect(own.own == .gesture && !own.inheritsGesture)
-    #expect(own.directions.first { $0.name == "up" } == .init(name: "up", own: .standard, everywhere: .named("appExpose")))
-    #expect(own.directions.first { $0.name == "left" }?.own == .named("spaceLeft"))
+    #expect(own.triggers.first { $0.name == "up" } == .init(name: "up", own: .standard, everywhere: .named("appExpose")))
+    #expect(own.triggers.first { $0.name == "left" }?.own == .named("spaceLeft"))
     // Back to Same as Mouse Settings: the app's entry goes.
     edited.bindInApp("a.b", button: "gesture", direction: "left", to: .standard)
     #expect(!edited.contains(["apps"]))
@@ -376,11 +382,11 @@ private func resolved(_ wheel: Config.ThumbWheel) -> Resolved {
 @Test func onlyAGestureShowsDirectionsInAnApp() throws {
     let config = try tree(#"{"buttons": {"gesture": {"click": "missionControl"}, "back": "mute"}, "apps": {"a.b": {"buttons": {"gesture": "zoomIn", "top": {"click": "mute"}}}}}"#)
     // The app's plain action replaces the global gesture.
-    #expect(config.appButton("a.b", button: "gesture").directions.isEmpty)
-    #expect(config.appButton("a.b", button: "back") == AppButton(own: .standard, everywhere: .named("mute"), directions: []))
+    #expect(config.appButton("a.b", button: "gesture").triggers.isEmpty)
+    #expect(config.appButton("a.b", button: "back") == AppButton(own: .standard, everywhere: .named("mute"), triggers: []))
     // The app's own gesture, with nothing set everywhere for it: no inherited directions.
     let top = config.appButton("a.b", button: "top")
-    #expect(top.own == .gesture && top.directions.allSatisfy { $0.everywhere == nil })
+    #expect(top.own == .gesture && top.triggers.allSatisfy { $0.everywhere == nil })
 }
 
 @Test func theAppsListAddsWithoutWritingAndRemoveClosesTheSheet() throws {

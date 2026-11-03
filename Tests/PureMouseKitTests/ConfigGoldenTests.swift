@@ -40,7 +40,12 @@ import Testing
             let name = mirror.displayStyle == .enum ? "\(value)".prefix { $0 != "(" } : "\(mirror.subjectType)".prefix { $0 != "<" }
             // `Config.devices` came after the capture; an empty one is left out so configs without
             // `devices` keep their golden output (DeviceConfigTests covers the entries).
+            // Fields added later still are left out at their defaults for the same reason: the
+            // trigger table's `doubleClick` and `hold`, and `holdMs` and `doubleClickMs` (#158).
+            let later = ["doubleClick": "none", "hold": "none", "holdMs": "350", "doubleClickMs": "nil"]
             let children = mirror.children.filter { $0.label != "devices" || !Mirror(reflecting: $0.value).children.isEmpty }
+                .filter { $0.label != "clickIsUnset" }  // likewise, at either value (TriggerSessionTests covers it)
+                .filter { child in child.label.flatMap { later[$0] } != "\(child.value)".replacingOccurrences(of: "Optional(", with: "") }
             return nested(String(name), children.map { ($0.label ?? "_", $0.value) })
         default:
             return ["\(pad)\(label): \(value)"]

@@ -21,19 +21,30 @@ public enum ButtonAction: Equatable, Sendable {
         case nil: self = .standard
         case let name as String: self = name == Config.Binding.nativeValue ? .mouseDefault : .named(name)
         case let object as [String: Any]:
-            if let spec = object["keys"] as? String {
+            // A table first, as Kit reads it (`Config.Binding.decode`).
+            if Gesture.isTable(object) {
+                self = .gesture
+            } else if let spec = object["keys"] as? String {
                 self = .keys(spec)
             } else if let command = object["run"] as? String {
                 self = .run(command)
             } else if let waveform = object["haptic"] as? String {
                 self = .haptic(waveform)
-            } else if !object.isEmpty, object.keys.allSatisfy(Gesture.directions.contains) {
-                self = .gesture
+            } else if object["precisePointer"] != nil {
+                // A speed of its own is config-only: the row shows the action.
+                self = .named("precisePointer")
             } else {
                 self = .named("?")
             }
         default: self = .named("?")
         }
+    }
+
+    /// Whether the action lasts while the button is held, so it owns the button on its Click row
+    /// (`Action.isWhileHeld`): Precise Pointer.
+    public var isWhileHeld: Bool {
+        if case .named(let name) = self { return Action.named[name]?.isWhileHeld ?? false }
+        return false
     }
 
     /// The label on a button's pop-up.
@@ -55,11 +66,41 @@ public enum ButtonAction: Equatable, Sendable {
     }
 }
 
+/// A button's trigger table (ADR 24): `click`, `doubleClick`, and one hold form, `hold` or Hold and
+/// Move's four directions. Settings reads and lays tables as Kit decodes them
+/// (`Config.Binding.Gesture`).
 public enum Gesture {
-    public static let directions = ["click", "up", "down", "left", "right"]
-    public static func label(_ direction: String) -> String {
-        switch direction {
+    /// Every key of a table, in the order its rows show.
+    public static let triggers = Config.Binding.Gesture.triggers
+    /// Hold and Move's directions: the hold form that is not `hold`.
+    public static let directions = Config.Binding.Gesture.directions
+
+    /// Hold and Move's standard directions, seeded when it is chosen (#146).
+    public static let standardDirections: [String: String] = [
+        "up": "missionControl", "down": "appExpose", "left": "spaceLeft", "right": "spaceRight",
+    ]
+
+    /// Whether Kit reads `object` as a table: it names a trigger, or a key kept for one (`scroll`).
+    public static func isTable(_ object: [String: Any]) -> Bool {
+        object.keys.contains { triggers.contains($0) || Config.Binding.Gesture.reserved.contains($0) }
+    }
+
+    /// `top` over a wider table `base`, trigger by trigger, as Kit decodes a scope's table over a
+    /// wider one: a `null` leaves `base`'s, and a hold form replaces the other (`hold` clears the
+    /// directions, a direction clears `hold`).
+    public static func merge(_ top: [String: Any], over base: [String: Any]) -> [String: Any] {
+        var out = base
+        if top["hold"] != nil { for key in directions { out[key] = nil } }
+        if directions.contains(where: { top[$0] != nil }) { out["hold"] = nil }
+        for (key, value) in top where !(value is NSNull && out[key] != nil) { out[key] = value }
+        return out
+    }
+
+    public static func label(_ trigger: String) -> String {
+        switch trigger {
         case "click": "Click"
+        case "doubleClick": "Double-click"
+        case "hold": "Hold"
         case "up": "Move up"
         case "down": "Move down"
         case "left": "Move left"
@@ -78,7 +119,7 @@ public enum ActionCatalog {
     public static let groups: [Group] = [
         Group(title: "Desktop", names: ["missionControl", "appExpose", "showDesktop", "launchpad"]),
         Group(title: "Spaces and Navigation", names: ["spaceLeft", "spaceRight", "navigateBack", "navigateForward"]),
-        Group(title: "Mouse", names: ["middleClick", "toggleScrollMode", "cycleDPI"]),
+        Group(title: "Mouse", names: ["middleClick", "precisePointer", "dragLock", "toggleScrollMode", "cycleDPI"]),
         Group(title: "Media", names: ["playPause", "nextTrack", "previousTrack", "volumeUp", "volumeDown", "mute"]),
         Group(title: "Display", names: ["brightnessUp", "brightnessDown"]),
         Group(title: "Tabs and Zoom", names: ["nextTab", "previousTab", "zoomIn", "zoomOut"]),
@@ -104,6 +145,8 @@ public enum ActionCatalog {
         case "nextTrack": "Next Track"
         case "previousTrack": "Previous Track"
         case "middleClick": "Middle Click"
+        case "precisePointer": "Precise Pointer"
+        case "dragLock": "Drag Lock"
         case "brightnessUp": "Brightness Up"
         case "brightnessDown": "Brightness Down"
         case "nextTab": "Next Tab"
@@ -135,12 +178,23 @@ public enum ActionCatalog {
         case "nextTrack": "forward"
         case "previousTrack": "backward"
         case "middleClick": "cursorarrow.click"
+        case "precisePointer": "scope"
+        case "dragLock": "hand.raised"
         case "brightnessUp": "sun.max"
         case "brightnessDown": "sun.min"
         case "nextTab": "arrow.right.to.line"
         case "previousTab": "arrow.left.to.line"
         case "zoomIn": "plus.magnifyingglass"
         case "zoomOut": "minus.magnifyingglass"
+        default: nil
+        }
+    }
+
+    /// The line under an action in the picker, for those whose name alone does not say what they do.
+    public static func caption(for name: String) -> String? {
+        switch name {
+        case "precisePointer": "Slows the pointer while you hold the button."
+        case "dragLock": "Click to start dragging, click again to let go."
         default: nil
         }
     }

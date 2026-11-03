@@ -143,6 +143,14 @@ One term per concept. "Retire" lists words that must not appear in UI text for t
 | Easy-Switch status | Easy-Switch; "Computer 1 · This Mac" (checkmark), "Computer 2 · MacBook Air", "Computer 3 · Not paired"; "Computer 1" on the mouse's row in General | host, channel, slot |
 | Media and click actions | Play/Pause, Next Track, Previous Track, Volume Up, Volume Down, Mute (picker › Media); Middle Click (picker › Mouse: the action; "Wheel click" is the button's row) | Play-Pause, Skip, Mouse 3, Button 3 |
 | Whether settings are on the mouse | Applying settings… and Settings not applied (the device line in the menu and General, only while true); Apply Settings Again (the menu's attention row); "Settings applied at 09:14" (the ⌥ line only). Never "Settings applied" on the menu header | synced, reapply, restore, Applied (as a status line) |
+| Quick press | Click (the button's own row and pop-up, which always shows the click; the gesture button reads "Mission Control", its Hold row Hold and Move) | Tap, single press |
+| Two presses | Double-click (row); Double-Click (picker entry); its caption states the wait with the live interval: "Single clicks wait 0.5 s for a second click." | Double-press, double tap, any mention of a timer or delay |
+| Press and hold | Hold (row); "press and hold" in prose | Long press |
+| Adding triggers | More Ways to Press (the foot of a button's picker: Double-Click, Hold, Hold and Move); a collapsed row sums them up: "Double-click: Mission Control. Hold: Precise Pointer."; VoiceOver names the triangle "<button>, more ways to press" | Several Actions, Add Interaction, trigger |
+| An unset trigger | No Action (a Double-click or Hold row's first entry) | None, Not set |
+| Hold forms | Hold and Move (the Hold row's second entry and the More Ways to Press entry; caption "Hold the button and move the mouse. Release without moving to click."); its rows Move up, Move down, Move left, Move right | chord, combo, gesture (for the form) |
+| Click lock | Drag Lock (picker › Mouse; "Click to start dragging, click again to let go.") | Click Lock, Hold to drag |
+| Precision hold | Precise Pointer (picker › Mouse; "Slows the pointer while you hold the button."); on a Click row it owns the button, so Double-Click and Hold are dimmed with "Remove Hold first.", and Precise Pointer is dimmed with "Remove Double-click and Hold first." while they apply | Precision While Held, sniper, DPI shift |
 | Per-app catalogue | the app's name as the picker section ("Zoom", "Adobe Photoshop"); "Zoom's actions" in prose; "Depends on your keymap" under an action whose shortcut the person can change in the app | pack, plugin, profile, Smart Actions |
 
 ## Planned (#155)
@@ -153,17 +161,10 @@ code says, so "Run Command" stays until Run Script… replaces it.
 
 | Concept | Use | Retire |
 |---|---|---|
-| Quick press | Click | Tap, single press |
-| Two presses | Double-click (row); Double-Click (picker entry) | Double-press, double tap |
-| Press and hold | Hold (row); "press and hold" in prose | Long press |
-| Adding triggers | More Ways to Press (picker section) | Several Actions, Add Interaction, trigger |
-| An unset trigger | No Action | None, Not set |
-| Hold forms | Hold and Move, Hold and Scroll | chord, combo, gesture (for the form) |
+| Hold forms | Hold and Scroll (Hold and Move is in the Glossary) | chord, combo, gesture (for the form) |
 | Radial menu | Action Ring; positions Top, Top right … | Actions Ring, slice, pie menu |
 | Modifier plus wheel | Modifier Keys (section); rows Shift, Option, Command, Control; values Normal Scrolling, Scroll Sideways, Scroll Slowly, Zoom, Volume … | modifier scroll |
 | Debounce | Ignore repeated clicks ("For a worn button that clicks twice.") | debounce, chatter |
-| Click lock | Drag Lock ("Click to start dragging, click again to let go.") | Click Lock, Hold to drag |
-| Precision hold | Precise Pointer ("Slows the pointer while you hold the button.") | Precision While Held, sniper, DPI shift |
 | Per-app off | Use PureMouse in this app (switch); Off (Apps row); Off in <App> (menu) | disable, exclude, bypass |
 | Host switching | Switch to Computer 2 (the command; the status words are in the Glossary) | host, channel, slot |
 | New actions | Open…, Run Shortcut…, Menu Item…, Insert Text…, Run Script… (AppleScript \| Shell), Sequence… (Add Step, Wait), Action Ring… | Run Command, Type Text, Launch, Macro, Workflow |
