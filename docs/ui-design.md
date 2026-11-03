@@ -176,8 +176,8 @@ Each level has one mechanism, and each label says what it reveals.
 - The icon is a template image (black and clear, 18 pt), never coloured. A changed state is a
   different shape or opacity, not a colour: running is the plain glyph; **paused** is the same glyph
   at full opacity with a diagonal slash knocked out of it ("/", bottom left to top right: a 2 pt
-  line in a 1 pt gap, its ends on whole or half points, so it stays crisp at 1x and clears the
-  badge's ring by at least 1 pt); **off** (PureMouse not running) is the plain glyph dimmed to 40%. Off wins: a status
+  line with a 1 pt gap on its upper-left side only, as the system's `.slash` symbols have it, its
+  ends on whole or half points, clearing the badge's ring by at least 1 pt); **off** (PureMouse not running) is the plain glyph dimmed to 40%. Off wins: a status
   left saying paused by a daemon that has stopped reads off. A small badge (attention, or a battery
   at 10% or less) sits at the bottom right of any of them (`StatusIcon.Look`, decided by
   `StatusIcon.look(daemonRunning:paused:)`).

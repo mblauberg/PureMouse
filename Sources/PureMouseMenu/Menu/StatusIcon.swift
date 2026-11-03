@@ -78,37 +78,45 @@ enum StatusIcon {
     }
 
     /// The slash's stroke: a whole number of points, so it keeps its weight at 1x, with a gap of 1 pt
-    /// on each side cut through the glyph.
+    /// cut through the glyph on its upper-left side only, as the system's `.slash` symbols have it.
     static let slashWidth: CGFloat = 2
     static let slashGap: CGFloat = 1
 
     /// The slash's ends in an 18 pt glyph, at whole or half points: from the bottom left to the top
-    /// right (the badge sits at the bottom right), on the line y = x + 2.5. That is as far up and left of
-    /// the glyph's centre as it takes to leave the cut at least 1 pt from the badge's ring (a circle of
-    /// radius 5 about (13.5, 4.5)): the distance from the ring's centre to the line is 8.1 pt, and the cut
-    /// reaches half the stroke plus the gap (2 pt) from the line, the ring 5 pt from its centre.
+    /// right (the badge sits at the bottom right), on the line y = x + 1, just above the glyph's
+    /// centre. The gap is on the far side from the badge, so only half the stroke (1 pt) reaches
+    /// towards the badge's ring (a circle of radius 5 about (13.5, 4.5)): the line is 7.07 pt from the
+    /// ring's centre, which leaves just over 1 pt clear.
     static func slashEnds(in size: NSSize) -> (NSPoint, NSPoint) {
         func snap(_ value: CGFloat) -> CGFloat { (value * 2).rounded() / 2 }
         func point(_ x: CGFloat, _ y: CGFloat) -> NSPoint {
             NSPoint(x: snap(size.width * x / 18), y: snap(size.height * y / 18))
         }
-        return (point(3.5, 6), point(13.5, 16))
+        return (point(3.5, 4.5), point(13.5, 14.5))
     }
 
-    /// A "/" through the glyph: a gap cut through it with the line left standing in it, so it reads
-    /// over the mouse's body.
+    /// A "/" through the glyph: a gap cut through it beside the line, on the upper-left side, then the
+    /// line, so it reads over the mouse's body without the stripes a gap on both sides makes at 1x.
     private static func slash(in size: NSSize, _ context: CGContext) {
         let (start, end) = slashEnds(in: size)
+        let length = max(hypot(end.x - start.x, end.y - start.y), 1)
+        // The unit normal towards the upper left.
+        let normal = NSPoint(x: -(end.y - start.y) / length, y: (end.x - start.x) / length)
+        let shift = slashGap / 2
+        let cut = NSBezierPath()
+        cut.move(to: NSPoint(x: start.x + normal.x * shift, y: start.y + normal.y * shift))
+        cut.line(to: NSPoint(x: end.x + normal.x * shift, y: end.y + normal.y * shift))
+        cut.lineCapStyle = .round
+        cut.lineWidth = slashWidth + slashGap
+        context.setBlendMode(.clear)
+        cut.stroke()
+        context.setBlendMode(.normal)
         let line = NSBezierPath()
         line.move(to: start)
         line.line(to: end)
         line.lineCapStyle = .round
-        context.setBlendMode(.clear)
-        line.lineWidth = slashWidth + 2 * slashGap
-        line.stroke()
-        context.setBlendMode(.normal)
-        NSColor.black.setStroke()
         line.lineWidth = slashWidth
+        NSColor.black.setStroke()
         line.stroke()
     }
 
