@@ -65,7 +65,18 @@ answering a question people have, and a good default means most people never tou
   `ConfigScope.resolved`; the pop-up's first entry then reads "Same as Mouse Settings (Varies by
   Mouse)"). A row the app sets reads "Set for this app." with "Use Mouse Setting", which removes
   only that app's key under `apps.<id>`; Mouse Default is a value of its own, distinct from
-  leaving the row alone. Turning Custom scrolling on starts from the first mouse's values. Each
+  leaving the row alone, and its caption is the one the Mouse page gives (a gesture's "Click: Mission
+  Control, 1 direction set.", worked out from the app's directions over the mice's). Turning
+  Custom scrolling on starts from the first mouse's values; its caption describes the on state
+  ("Gives this app its own scrolling speed and glide.") whatever the smooth-scrolling settings are,
+  and Glide is disabled only while smooth scrolling is off on every mouse the app may run with.
+  The Speed and Glide sliders put the knob at the first mouse's value and read "Varies" (VoiceOver
+  "Varies by Mouse") while the mice differ; the short word keeps the track where it is on Mouse ›
+  Scrolling, as does Turn distance's "Varies" beside its stepper. "More thumb wheel options" shows
+  while the rows apply on any mouse the app may run with, not only the first. A suggestion for a
+  well-known app (Safari: "The thumb wheel switches tabs.") is an ordinary form row at the top of
+  Scrolling, "Suggested for Safari" with the words under it and a bordered **Use Suggested
+  Settings** button at the trailing edge: no symbol, no banner. Each
   Apps row names the areas its app changes in words ("Buttons, Scrolling", or "No custom
   settings"), never by colour. "Settings for <app>…" in the status menu opens the same page.
   An added app is not written until a setting is chosen (its row says so until Settings closes).
@@ -404,7 +415,8 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
   shows is the one the known mice resolve (`Applied`, over `AppModel.appInheritedScopes`), or
   "Varies by Mouse", for the thumb wheel's Turn distance and Swap directions too (`ConfigTree.thumbWheelKeysVarying`; Swap
   directions is an On/Off pop-up while it varies). The header is a view of its own above the form, as
-  the Mouse tab's strip is (no scroll-edge line under it), and the form is capped to what the pane's
+  the Mouse tab's strip is (no scroll-edge line under it), with a fixed 16 pt top inset and its own
+  height (`AppPageHeader.topInset`), not left to the first `sizeThatFits` pass, and the form is capped to what the pane's
   limit (`paneMaxHeight`) leaves below it, so it scrolls with the header in view. Names are looked up without
   icons (`AppIdentities`); an icon loads when its frame meets the scroll view's visible bounds
   (`AppIcon`): a grouped form builds every row, so `onAppear` is not enough, and macOS 14 lacks
