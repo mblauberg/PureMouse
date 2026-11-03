@@ -135,6 +135,43 @@ struct DaemonTests {
         #expect(h.daemon.missingPermissions.isEmpty)
     }
 
+    /// What the descriptor declares decides before the name does: a keyboard with a model-only or
+    /// unknown name is not a mouse, and a mouse with a keyboard word in its name is.
+    @Test func theDeclaredUsagesDecideBeforeTheName() {
+        let mouse = [HIDUsagePair(page: 1, usage: 2), HIDUsagePair(page: 0xFF43, usage: 0x202)]
+        let pointer = [HIDUsagePair(page: 1, usage: 1)]
+        let keyboard = [HIDUsagePair(page: 1, usage: 6), HIDUsagePair(page: 0xFF43, usage: 0x202)]
+        let keypad = [HIDUsagePair(page: 1, usage: 7)]
+        let comboMouseAndKeyboard = keyboard + mouse
+        let vendorOnly = [HIDUsagePair(page: 0xFF43, usage: 0x202)]
+        for name in ["MX Master 3S", "K860", "MX Mech", "?", "Logitech Keyboard K380", ""] {
+            #expect(Daemon.mayBeMouse(product: name, usages: mouse), "mouse usages: \(name)")
+            #expect(Daemon.mayBeMouse(product: name, usages: pointer), "pointer usages: \(name)")
+            #expect(Daemon.mayBeMouse(product: name, usages: comboMouseAndKeyboard), "a pointing device with keys: \(name)")
+            #expect(!Daemon.mayBeMouse(product: name, usages: keyboard), "keyboard usages: \(name)")
+            #expect(!Daemon.mayBeMouse(product: name, usages: keypad), "keypad usages: \(name)")
+        }
+        // Unknown usages fall back to the name: a model-only or unknown name passes.
+        #expect(Daemon.mayBeMouse(product: "MX Master 3S", usages: vendorOnly))
+        #expect(Daemon.mayBeMouse(product: "?", usages: []))
+        #expect(!Daemon.mayBeMouse(product: "MX Keys S", usages: vendorOnly))
+        #expect(!Daemon.mayBeMouse(product: "MX Keys S", usages: []))
+    }
+
+    @Test func aBluetoothKeyboardWithAModelOnlyNameDoesNotWait() throws {
+        let h = try DaemonHarness("{}", permissions: .accessibility)
+        defer { h.close() }
+        let keyboard = FakeTransport(product: "K860")
+        keyboard.usagePairs = [HIDUsagePair(page: 1, usage: 6)]
+        _ = h.daemon.listen(keyboard, index: directDeviceIndex)
+        #expect(h.daemon.status(running: true).waiting.isEmpty)
+        #expect(h.daemon.missingPermissions.isEmpty)
+        let mouse = FakeTransport(product: "M750")
+        mouse.usagePairs = [HIDUsagePair(page: 1, usage: 2)]
+        _ = h.daemon.listen(mouse, index: directDeviceIndex)
+        #expect(h.daemon.missingPermissions == .inputMonitoring || h.daemon.missingPermissions.contains(.inputMonitoring))
+    }
+
     /// With a receiver mouse only, the daemon asks for Accessibility and never for Input
     /// Monitoring, which only Bluetooth needs.
     @Test func aReceiverMouseAsksForAccessibilityOnly() async throws {

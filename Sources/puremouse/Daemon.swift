@@ -379,7 +379,7 @@ final class Daemon {
     /// keyboard by asking; its name has to do.
     private var bluetoothMice: [(key: Key, device: HIDPPDevice)] {
         endpoints.filter { key, device in
-            !device.interface.isReceiver && !ignored.contains(key) && Self.mayBeMouse(product: device.interface.product)
+            !device.interface.isReceiver && !ignored.contains(key) && Self.mayBeMouse(product: device.interface.product, usages: device.interface.usagePairs)
         }.map { ($0.key, $0.value) }
     }
 
@@ -391,9 +391,14 @@ final class Daemon {
         }.sorted { $0.id < $1.id }
     }
 
-    /// Whether a Bluetooth HID++ device might be a mouse by its name: a keyboard is not worth
-    /// asking Input Monitoring for.
-    static func mayBeMouse(product: String) -> Bool {
+    /// Whether a Bluetooth HID++ device might be a mouse: a keyboard is not worth asking Input
+    /// Monitoring for. The usages its descriptor declares decide first (a Generic Desktop Mouse or
+    /// Pointer is a mouse; a Keyboard or Keypad without one is not). Only a device that declares
+    /// neither, or nothing, is judged by its name, which is a guess: a name with no keyboard word
+    /// passes.
+    static func mayBeMouse(product: String, usages: [HIDUsagePair] = []) -> Bool {
+        if usages.contains(where: \.isPointing) { return true }
+        if usages.contains(where: \.isTyping) { return false }
         let name = product.lowercased()
         return !["keyboard", "keys", "keypad"].contains { name.contains($0) }
     }
