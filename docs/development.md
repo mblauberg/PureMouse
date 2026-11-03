@@ -54,6 +54,12 @@ swift build && swift test
 scripts/tests/run.sh        # the build scripts; uses .build/app/PureMouse.app when built
 ```
 
+`scripts/test-update-install.sh --dir <new folder>` proves the update install with real code
+signatures (ADR 22): two throwaway identities in a temporary keychain, a signed fixture release,
+and each bad release refused with the installed app untouched. It builds, signs and mounts images, so
+run it on a spare Mac (the workshop), not in CI; it never touches `/Applications` or the real login
+agents.
+
 `scripts/tests/run.sh <name>` runs only the tests whose names contain `<name>`. The Swift tests
 cover pure logic. Anything that touches the mouse needs a live check:
 

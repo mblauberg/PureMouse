@@ -224,7 +224,16 @@ one. This file covers how to work on it safely.
   permissions set up; Settings' About switch writes the same key, which the menu app hears by
   key-value observing. One notification per version (`update.X.Y.Z`, quiet, opens the release
   page), and the menu shows `Update to X.Y.Z…` and `Skip This Version` until the running version
-  catches up (`MenuPlan`). Nothing here is in `puremouse` or PureMouseKit, and the rig drives a
+  catches up (`MenuPlan`). `Update to X.Y.Z…` asks, then `UpdateInstaller` (PureMouseAppSupport,
+  ADR 0022; the live parts are in `UpdateInstallLive.swift`) downloads the release's dmg and
+  `SHA256SUMS`, checks the hash, a read-only mount with one `PureMouse.app`, its signature against
+  the requirement taken from the running process (`SecCodeCopySelf`, never the download; the
+  nested menu app's identifier is replaced by the app's), and a strictly newer version, copies it
+  beside the installed app, re-checks the copy, and swaps with one `replaceItemAt`, then
+  `UpdateRelaunch` opens the app. A copy that can't be replaced without a password opens the
+  release page instead. Every path unmounts and deletes. Change it only with the matching real
+  signature proof, `scripts/test-update-install.sh` (workshop), and keep `puremouse` and
+  PureMouseKit free of network and install code. Nothing here is in `puremouse` or PureMouseKit, and the rig drives a
   check with `--env PUREMOUSE_RIG_UPDATES=check`.
 - The DPI the menu and Mouse › Pointer show is the mouse's live value (a `cycleDPI` press
   changes it without touching the config), then the configured one; a change made in the pane

@@ -29,6 +29,10 @@ is worth reporting:
   are in scope.
 - **The update check** is one HTTPS GET to the GitHub API, made when you press
   **Check for Updates**, or at most once a day if you allowed automatic checks. A way to make it fetch or open anything else is in scope.
+- **Installing an update** (**Update to X.Y.Z…**, [ADR 22](docs/adr/0022-update-trust-is-the-signing-requirement.md))
+  runs a download, so anything that makes it install what does not satisfy the running app's own
+  code-signing requirement, install a version that is not newer, leave the installed app half
+  replaced, or ask for a password is in scope.
 - **The signed app and the release process**: a tampered download that still verifies, or a way
   into the release workflow's signing secrets.
 
