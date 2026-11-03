@@ -76,6 +76,10 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         let front = NSWorkspace.shared.frontmostApplication
         state.frontmost = FrontmostApp(bundleID: front?.bundleIdentifier, name: front?.localizedName,
                                        isRegular: front?.activationPolicy == .regular)
+        #if DEBUG
+        if let dev = DevHooks.frontmost { state.frontmost = FrontmostApp(bundleID: dev.bundleID, name: dev.name) }
+        #endif
+        state.frontmostIsOff = state.frontmost?.bundleID.map { !model.config.isAppEnabled($0) } ?? false
         var rows = MenuPlan.rows(for: state, option: option)
         #if DEBUG
         rows = DevHooks.submenu(rows)

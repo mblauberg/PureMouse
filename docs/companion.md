@@ -112,12 +112,15 @@ removed whole; removing a key that is not there is a no-op, so it never prunes a
 pending edit nothing is written. It refuses to build on a file that does not parse or validate, and
 writes through `JSON.encode` (shortest decimals, sorted keys, whole and big numbers kept digit for
 digit), never `JSONSerialization`. Before writing, it validates the whole file with
-`ConfigCheck.validate`, which runs the daemon's own decoder. Only Reset All Settings and Restore Last
-Working replace the whole file (`ConfigFile.replace`, keeping `config.json.bak`); Open Config File
-only creates a missing file (`createIfMissing`).
+`ConfigCheck.validate`, which runs the daemon's own decoder. Only Reset All Settings, Restore Last
+Working and Import Settings… replace the whole file (`ConfigFile.replace`, keeping `config.json.bak`);
+Open Config File only creates a missing file (`createIfMissing`). Import validates the chosen file
+first (`ConfigTransfer.read`, the same decoder), so a file that fails never reaches the write, and
+asks the daemon nothing: it reloads because the file changed. Export reads the file and writes the
+copy where the person chose (`ConfigStore.exportSettings`); it takes no lock and changes nothing.
 
-Every config write (a save, Reset All Settings or Restore Last Working with its `config.json.bak`,
-creating a missing file) is one read-merge-replace under an exclusive `flock` on `config.json.lock`
+Every config write (a save, Reset All Settings, Restore Last Working or Import Settings… with its
+`config.json.bak`, creating a missing file) is one read-merge-replace under an exclusive `flock` on `config.json.lock`
 beside the resolved config (`ConfigFile`, `FileLock`), so two writer processes never drop each
 other's keys; a writer waits while another holds it. The lock is a separate file because the
 config is replaced atomically. Hand edits take no lock: saves replay their keys onto the file as

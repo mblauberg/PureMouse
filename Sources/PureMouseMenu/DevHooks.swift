@@ -182,6 +182,13 @@ enum DevHooks {
     /// `PUREMOUSE_DEV_MENU=1`: a hand-started copy opens only the menu, not Settings as well.
     static var opensMenuOnly: Bool { ProcessInfo.processInfo.environment["PUREMOUSE_DEV_MENU"] != nil }
 
+    /// `PUREMOUSE_DEV_FRONT=<bundle id>` (with `PUREMOUSE_DEV_FRONT_NAME=<name>`): the menu builds as
+    /// if that app were frontmost, for "Settings for <app>…" and "Off in <app>".
+    static var frontmost: (bundleID: String, name: String?)? {
+        let environment = ProcessInfo.processInfo.environment
+        return environment["PUREMOUSE_DEV_FRONT"].map { ($0, environment["PUREMOUSE_DEV_FRONT_NAME"]) }
+    }
+
     /// `PUREMOUSE_DEV_MENU_OPTION=1`: the menu builds as if ⌥ were held, for the detail line.
     static var holdsOption: Bool { ProcessInfo.processInfo.environment["PUREMOUSE_DEV_MENU_OPTION"] != nil }
 

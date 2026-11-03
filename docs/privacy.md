@@ -74,6 +74,11 @@ reconnects. It stores nothing on the mouse or the receiver.
 | `~/Library/Preferences/io.github.mblauberg.puremouse.menu.plist`, the `Updates…` keys | The menu bar app ([`Sources/PureMouseAppSupport/UpdateReminders.swift`](../Sources/PureMouseAppSupport/UpdateReminders.swift), `UpdatePreferences`); Settings › About writes the first one ([`Sources/PureMouseSettingsUI/AboutPane.swift`](../Sources/PureMouseSettingsUI/AboutPane.swift)) | `UpdatesAutomatic`: your answer to "Check for updates automatically?" (absent until you answer or use the switch in About). `UpdatesLaunches`: how many times the menu bar app has started with its icon shown, counted only until you answer. `UpdatesLastCheck`: when the last scheduled request was made, successful or not. `UpdatesETag`: the ETag GitHub sent with the latest release. `UpdatesLatestVersion` and `UpdatesLatestPage`: that release's version and web page. `UpdatesSkippedVersion`: the version you chose **Skip This Version** for. `UpdatesNotifiedVersion`: the newest version a reminder was shown for. `UpdatesInstallRequestVersion` and `UpdatesInstallRequestPage`: written by **Update and Relaunch** in About to ask the menu bar app to install that release, and cleared by the menu bar app as soon as it reads them. `UpdatesInstallStatus`: the line "Updating to X.Y.Z…" or why an install failed, shown under the button; cleared when the menu bar app starts |
 | `~/Library/Preferences/io.github.mblauberg.puremouse.settings.plist` | macOS, for Settings ([`Sources/PureMouseSettingsUI/SettingsWindow.swift`](../Sources/PureMouseSettingsUI/SettingsWindow.swift)) | The Settings window's position and its last tab and segment |
 
+Export Settings… (General › Advanced…, and the File menu) writes a copy of `config.json` to the file
+you choose in a standard save panel, and Import Settings… reads a file you choose in an open panel;
+PureMouse keeps neither path. The copy holds what the config holds (including any `run` commands and
+app bundle IDs you wrote), and it is yours to keep or share; nothing is sent anywhere.
+
 The file and channel formats are in [Configuration](configuration.md) and
 [Companion](companion.md). The low-battery warning is a local notification
 ([`Sources/PureMouseMenu/Model/Notifier.swift`](../Sources/PureMouseMenu/Model/Notifier.swift)).

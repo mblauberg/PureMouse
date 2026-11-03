@@ -22,6 +22,9 @@ struct SessionEnvironment {
     var attemptTimeout: Duration?
     /// The wall clock, for the time settings were applied.
     var date: () -> Date = { Date() }
+    /// The frontmost app and the app under the pointer, looked up without observers.
+    var frontmostApp: @MainActor () -> String? = { ForegroundApp.shared.frontmost() }
+    var appUnderPointer: @MainActor () -> String? = { ForegroundApp.shared.underPointer() }
     /// Arms a one-shot deadline for one press, a hold or a double-click wait (`Session.press`),
     /// and returns its handle; the press's release or the drop of every press cancels it, so none
     /// is armed while no button is down or waiting. A test supplies a clock it turns by hand.

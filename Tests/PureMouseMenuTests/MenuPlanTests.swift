@@ -525,3 +525,57 @@ struct MenuPlanTests {
             """))
     }
 }
+
+// MARK: Off in this app
+
+extension MenuPlanTests {
+    private static func offState(_ devices: [Status.Device] = [mouse("a")]) -> MenuState {
+        var state = running(devices)
+        state.frontmost = FrontmostApp(bundleID: "com.valvesoftware.dota2", name: "Dota 2")
+        state.frontmostIsOff = true
+        return state
+    }
+
+    @Test func theHeaderSaysOffInTheAppWhileTheFrontmostAppIsOff() {
+        let text = lines(Self.offState())
+        #expect(text.hasPrefix("header MX Master 3S, Off in Dota 2\n"))
+        #expect(text.contains("⌥header MX Master 3S, Off in Dota 2, 800 DPI · Wheel: ratchet · v0.3.0"))
+        // A state in passing: no badge and no row of its own.
+        #expect(!Self.offState().needsAttention)
+    }
+
+    @Test func offInTheAppAddsNoRow() {
+        var on = Self.offState()
+        on.frontmostIsOff = false
+        let withoutLine = lines(on).split(separator: "\n").count
+        #expect(lines(Self.offState()).split(separator: "\n").count == withoutLine)
+        #expect(lines(on).hasPrefix("header MX Master 3S, USB receiver · Battery 80%\n"))
+    }
+
+    @Test func aProblemWinsOverOffInTheApp() {
+        for state in [Status.Device.Applied.State.notApplied, .applying] {
+            let device = Self.mouse(applied: .init(state: state))
+            let text = lines(Self.offState([device]))
+            let problem = state == .notApplied ? "Settings not applied" : "Applying settings…"
+            #expect(text.hasPrefix("header MX Master 3S, \(problem)\n"), "\(state)")
+            #expect(!text.contains("Off in Dota 2"))
+        }
+    }
+
+    @Test func aSleepingMouseReadsAsleepAndAnotherMacIsNotOffHere() {
+        var asleep = Self.mouse("a")
+        asleep.online = false
+        #expect(lines(Self.offState([asleep])).hasPrefix("header MX Master 3S, Asleep\n"))
+        var away = Self.offState()
+        away.away = true
+        #expect(lines(away).hasPrefix("header MX Master 3S, On another Mac · USB receiver · Battery 80%\n"))
+    }
+
+    @Test func pausedWinsOverOffInTheApp() {
+        var paused = Self.offState()
+        paused.paused = true
+        let text = lines(paused)
+        #expect(text.hasPrefix("header MX Master 3S, Paused · USB receiver · Battery 80%\n"))
+        #expect(!text.contains("Off in Dota 2"))
+    }
+}
