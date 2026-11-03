@@ -35,6 +35,10 @@ The mouse forgets every setting PureMouse gives it whenever it sleeps, reconnect
 between a receiver and Bluetooth. PureMouse reapplies them on every reconnect, after the Mac wakes
 and on each config reload.
 
+Which mouse it is decides which settings apply (a `devices` entry on top of the top level). If the
+mouse does not answer when asked who it is, it gets the top-level settings meanwhile, and is asked
+again after each configure until it answers, then switches to its own entry. Nothing is polled.
+
 On quit or logout it hands the wheels and buttons back to the mouse first. Nothing is stored on
 the mouse or receiver, so they behave normally on any other computer.
 

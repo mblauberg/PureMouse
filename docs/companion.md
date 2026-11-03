@@ -372,11 +372,12 @@ Choices the contract left open, as the daemon implements them:
   The daemon acts on a capture token once, so rewriting `control.json` with the same token does
   not restart it. With `capture.device`, only mice with that key listen, and only they join when
   adopted during it; a mouse with no key is reached only by a request without `device`.
-- **Identity.** Read once per adoption (`Identification.read`): the name (0x0005), kind (0x0005
+- **Identity.** Read at adoption (`Identification.read`): the name (0x0005), kind (0x0005
   getDeviceType), and model and unit IDs (0x0003). A mouse whose 0x0003 answers with an error, or
   that lacks it, is keyed by its product ID: the interface's for Bluetooth, the slot's wireless
   product ID on a receiver. A 0x0003 that times out leaves `model` absent rather than guess, and that
-  mouse uses the top-level settings. A model ID of all zeros or all 0xFF counts as absent, as does
+  mouse uses the top-level settings until a later configure, reconnect or reload reads it again
+  (once per configure, only while unanswered) and gives it its key. A model ID of all zeros or all 0xFF counts as absent, as does
   such a unit ID. A receiver mouse keyed by its product but found before its slot announced one
   gets its key when the slot next announces it linked up, with a session on that key's settings.
   The key is in the adoption log line (`model=`). Two mice of one model share a key,

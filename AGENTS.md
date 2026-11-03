@@ -347,7 +347,10 @@ one. This file covers how to work on it safely.
   each entry is decoded on top of the top level, then `apps` on top of that, so precedence is top
   level, device, app. The key is `m` plus the 0x0003 model ID, else `p` plus the product ID
   (`Config.deviceKey`, read at adoption by `Identification`; a 0x0003 timeout leaves it nil and the
-  top level applies). A receiver mouse keyed by its product but adopted before its slot was
+  top level applies, and the identity `unresolved`: after each configure that succeeds it is read
+  again, once, by `Daemon.resolveIdentity`, which replaces the session with one on the key's
+  settings; a reload or reconnect configures again, so it is retried then, and never in a loop or
+  on a timer. An answer, an error included, is final, so a known identity is never read again). A receiver mouse keyed by its product but adopted before its slot was
   announced gets its key, and a session on that key's settings, when it next links up
   (`Daemon.sessionSlotAnnounced`); while quitting or paused that only records the product. The
   daemon hands each session `config.forDevice(deviceKey)` at adoption and on reload; permission

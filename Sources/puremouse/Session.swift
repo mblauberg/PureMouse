@@ -27,6 +27,9 @@ final class Session {
     /// Called with each connection notification before the session acts on it; true when the daemon
     /// dealt with it (it replaced this session, or is quitting or paused), so the session does not.
     var onConnection: ((Report) -> Bool)?
+    /// Called after a configure succeeds while the identity is `unresolved`: the daemon reads it
+    /// again, and replaces this session with one keyed by the answer. Once per configure.
+    var resolveIdentity: ((Session) async -> Void)?
     let config: Config
     let environment: SessionEnvironment
     /// What applies where no app entry matches.
@@ -380,6 +383,7 @@ final class Session {
                     let features = (1...255).compactMap { device.feature(at: UInt8($0)) }.sorted()
                         .map { String(format: "%04x", $0) }
                     Log.info("\(name): configured; features(PureMouse)=\(features.joined(separator: " "))")
+                    if identity.unresolved, !finished { await resolveIdentity?(self) }
                     return
                 } catch is CancellationError {
                     return

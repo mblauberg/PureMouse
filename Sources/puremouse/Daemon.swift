@@ -558,6 +558,25 @@ final class Daemon {
         return true
     }
 
+    /// Reads again the identity of a session whose 0x0003 read got no answer, once after a
+    /// configure that succeeded (`Session.resolveIdentity`). An answer, an error among them, ends
+    /// it and replaces the session with one on the settings for the key it gives, as a slot
+    /// announcement does; no answer leaves it for the next configure or reload. No timer, no loop.
+    private func resolveIdentity(of session: Session) async {
+        let key = Key(session.device)
+        let identity = await Identification.read(session.device, kind: session.kind, productID: productID(of: session.device))
+        guard !identity.unresolved, !session.finished, accepting, sessions[key] === session else { return }
+        Log.info("\(session.name): model=\(identity.deviceKey ?? "unknown") read after the first attempt failed")
+        replace(session, at: key, identity: identity, keepingLiveDPI: Self.keepsLiveDPI(
+            config.forDevice(session.deviceKey), config.forDevice(identity.deviceKey)))
+    }
+
+    /// The product ID `Identification` keys by when the mouse has no model ID: the slot's for a
+    /// receiver, else the interface's.
+    private func productID(of device: HIDPPDevice) -> UInt16? {
+        device.interface.isReceiver ? slotProducts[Key(device)] : UInt16(exactly: device.interface.productID)
+    }
+
     /// Records the wireless product ID announced in a slot; true when it names a different device
     /// from the one known there.
     private func productAnnounced(_ product: UInt16, _ key: Key) -> Bool {
@@ -653,8 +672,7 @@ final class Daemon {
         } catch {
             return .noAnswer
         }
-        let pid: UInt16? = device.interface.isReceiver
-            ? slotProducts[key] : UInt16(exactly: device.interface.productID)
+        let pid = productID(of: device)
         let name = (try? await DeviceName.get(device)).flatMap { $0.isEmpty ? nil : $0 } ?? "device \(device.index)"
         let identity = await Identification.read(device, kind: kind, productID: pid)
         let pidLabel = pid.map { String(format: "0x%04x", $0) } ?? "unknown"
@@ -689,6 +707,7 @@ final class Daemon {
     private func add(_ session: Session, _ key: Key) {
         sessions[key] = session
         session.onChange = { [weak self] in self?.statusChanged() }
+        session.resolveIdentity = { [weak self] in await self?.resolveIdentity(of: $0) }
         if session.device.interface.isReceiver {
             session.onConnection = { [weak self, unowned session] in self?.sessionSlotAnnounced(session, $0) ?? false }
         }
