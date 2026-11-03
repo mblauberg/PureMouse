@@ -52,12 +52,30 @@ public enum DPIPresets {
 
     public static func removing(_ dpi: Int, from presets: [Int]) -> [Int] { presets.filter { $0 != dpi } }
 
-    /// Whether "Add Preset" has anything to add: the speed is not saved yet and there is room.
-    public static func canAdd(_ dpi: Int, to presets: [Int]) -> Bool {
-        !presets.contains(dpi) && presets.count < limit
+    /// Commits an edited row, snapping to a valid sensor step inside the config's range.
+    /// Replacing with an existing speed merges the two rows.
+    public static func replacing(_ preset: Int, with dpi: Int, in presets: [Int], steps: [Int]) -> [Int] {
+        guard presets.contains(preset) else { return presets }
+        return Array(Set(presets.filter { $0 != preset } + [normalized(dpi, steps: steps)])).sorted()
     }
 
-    /// The preset the pointer speed is set to (its nearest step), the one the sheet checks and "−" removes.
+    /// Starts at the current speed, then offers the next unsaved sensor step above it.
+    /// Without a sensor report, use the config's range in increments of 50.
+    public static func newPreset(current: Int, presets: [Int], steps: [Int]) -> Int? {
+        guard presets.count < limit else { return nil }
+        let speed = normalized(current, steps: steps)
+        if !presets.contains(speed) { return speed }
+        let available = steps.isEmpty ? Array(stride(from: 50, through: 25600, by: 50)) : steps
+        return available.filter { (50...25600).contains($0) && $0 > speed && !presets.contains($0) }.min()
+    }
+
+    private static func normalized(_ dpi: Int, steps: [Int]) -> Int {
+        let clamped = min(max(dpi, 50), 25600)
+        return snap(clamped, to: steps.filter { (50...25600).contains($0) })
+    }
+
+    /// The preset the pointer speed is set to (its nearest step), checked by the sheet
+    /// and removed by "−" when no row is focused.
     public static func selected(in presets: [Int], current: Int, steps: [Int]) -> Int? {
         presets.first { snap($0, to: steps) == current }
     }

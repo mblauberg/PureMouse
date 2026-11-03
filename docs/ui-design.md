@@ -149,7 +149,9 @@ Each level has one mechanism, and each label says what it reveals.
   edits). A sheet that holds edits until confirmed, such as the shortcut recorder, has Cancel and a
   verb. Each sheet has a fixed width and fits its content.
 - **Disclosure triangle** only for a control's own children (gesture directions, Exact value);
-  at most one per row.
+  at most one per row. `DisclosureLabel` exposes a native `DisclosureGroup` accessibility
+  representation (AXDisclosureTriangle); both pointer and accessibility activation respect Reduce
+  Motion and toggle without animation when it is on.
 - **⌥ alternates** only in the status menu, and each also has a home in Settings (see Status menu).
 - No sheet opens from a sheet; inside a sheet, use disclosures. The editors (keyboard shortcut,
   shell command) are always sheets, an app's page included: it is a page of the Apps tab, not a sheet.
@@ -241,7 +243,8 @@ Each level has one mechanism, and each label says what it reveals.
 
 - System animation only; nothing animates on frequent interactions, and nothing relies on motion
   to say something. Under Reduce Motion, no scale, zoom or bounce. No sounds.
-- Windows, panes, sheets and popovers open with nothing focused (house rule). Every control is
+- Windows, panes, sheets and popovers open with nothing focused (house rule). Adding a preset
+  focuses its new editable row. Every control is
   reachable by Tab and by Full Keyboard Access, has a distinct accessibility label, and is at
   least 20 × 20 pt. Tooltips are under 75 characters and never repeat the control's name. Check
   focus with keyboard navigation (`AppleKeyboardUIMode`) both on and off.
@@ -487,6 +490,19 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
   `cycleDPI` press changes it without touching the config), then the configured one; a change made
   in the pane shows until the mouse reports it (`DPIReading`). Choosing the saved value changes
   nothing on disk, so `AppModel.setDPI` sends `useConfiguredDPI` ([companion.md](companion.md)).
+  The row says "Pointer speed", with Slow/Fast ends and no numeric readout beside the slider.
+  Collapsed Exact value shows the current DPI in secondary text; expanding it reveals the numeric
+  field. Help says "Faster moves the pointer further for the same movement." The footer says
+  "Tracking speed in System Settings applies on top." and **Open Mouse Settings** opens
+  `x-apple.systempreferences:com.apple.Mouse-Settings.extension`.
+- **Presets.** The sheet edits numeric speeds in place. Return or focus loss snaps to the mouse's
+  steps, clamps to 50–25600, merges duplicates and sorts. Each write targets the selected mouse
+  scope. The checkmark button uses a saved speed. **+** adds the current speed if unsaved, otherwise
+  the next unsaved sensor step above it, and focuses the new field. Without a reported step list,
+  the helper uses increments of 50 across the config range. **−** removes the focused row, or the
+  checked row when none is focused. Add is disabled at eight entries or when no next speed exists;
+  remove is disabled without a target. In DEBUG, `PUREMOUSE_DEV_PRESET_EDIT=1` opens the sheet from
+  Pointer and focuses its first row for a spare-Mac editing capture.
 - **Apps.** The Apps pane writes only `apps.<id>` keys (`AppSettings.swift`): each control's own key,
   removed for "Same as Mouse Settings" (an emptied app entry is pruned). An added app is not written
   until a setting is chosen; its row says so until Settings closes. Each app opens as a page of the
@@ -523,7 +539,7 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
 | Mouse header | Buttons, Scrolling, Pointer segments; mouse pop-up with two or more mice; Find by Pressing… and the device card on Buttons | — |
 | Mouse › Buttons | One row per button with its action | Gesture directions (disclosure, collapsed, caption summarises them; choosing Hold and Move expands it); Other controls (disclosure: named controls and bound ones, see Device card); Advanced… sheet, only while some button anywhere is Hold and Move: gesture Distance and Repeat |
 | Mouse › Scrolling | Smooth scrolling, Feel, Speed; Main Wheel: Reverse direction, Wheel mode, SmartShift; Thumb Wheel: Action (Turn left/right when Custom); each when the mouse has it | Advanced… sheet, each row only when it applies: Acceleration, Glide, Hold Shift to scroll sideways (dimmed while smooth scrolling is off); Switches at (while SmartShift is on); thumb wheel Reverse direction (when it scrolls here or in some app), Swap directions and Turn distance (when it has actions), Speed (when it scrolls) |
-| Mouse › Pointer | Pointer Speed slider with its value; Presets summary row; both only when the mouse can adjust its speed (else one "Not supported by this mouse." row, unless a value is set) | Exact value (disclosure); Edit Presets… sheet (also opened from the menu) |
+| Mouse › Pointer | Pointer speed slider (Slow/Fast, no readout); collapsed Exact value with secondary DPI; Presets summary row; all only when the mouse can adjust its speed (else one "Not supported by this mouse." row, unless a value is set) | Exact value (disclosure); Edit Presets… sheet (also opened from the menu) |
 | Apps | App list whose rows name the areas each app changes, Add App (bordered pull-down) in the footer, routing note; empty state with an Add App… button that opens the Applications panel | Each app opens as a page (‹ Apps, Buttons \| Scrolling); on it, gesture directions, other controls and more thumb wheel options are disclosures, and the editors are sheets |
 | About | Icon, name, version, Check for Updates, Check for updates automatically (switch), links, Support PureMouse | — |
 | Status menu | Device header, attention rows when active, Update to X.Y.Z… with Skip This Version under it (while a newer release is known), Smooth Scrolling, Pointer Speed, Start/Pause/Resume, Settings…, Settings for <app>… (the frontmost app, if any), Quit PureMouse | ⌥: detail line, Show Log in Finder, Hide Menu Bar Icon |
