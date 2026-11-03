@@ -90,6 +90,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         case .start: action.command.map { model.perform($0) }
         case .setPaused(let paused): model.setPaused(paused)
         case .reloadConfig: model.reloadDaemonConfig()
+        case .applySettingsAgain: model.applySettingsAgain()
         case .showLog: NSWorkspace.shared.activateFileViewerSelecting([model.locations.log])
         case .quit: app.quitAll()
         case .hideMenuBarIcon: app.hideMenuBarIcon()
