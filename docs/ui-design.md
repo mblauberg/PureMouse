@@ -559,11 +559,14 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
   It reads `AppButton` (`scopedButton`, `appButton`: per trigger, the scope's own value and the one
   inherited) and writes through `bindClick`, `bindTrigger` and `bindHoldAndMove`
   (`Triggers.swift`), which keep the file in the forms Kit reads: a table left with only its click
-  is written as the bare action; a trigger the wider table sets is switched off with `"none"`, as is
+  is written as the bare action; a table whose click is Mouse Default has no `click` key (`"none"` is
+  written for the click only when the person chose Do Nothing), and one left with nothing is no entry
+  (or `"default"` over a wider bare action); a trigger the wider table sets is switched off with `"none"`, as is
   one the default set's table holds at the top level, so layering does not refill it; writing one
   hold form removes the other. A child row added from More Ways to Press is view state (`wanted`)
   until an action is chosen. The picker's rows come from `PickerEntry.all(…, row:)`: a Hold row
-  leads with No Action and Hold and Move, trigger rows offer no Mouse Default, and a while-held
+  leads with No Action and Hold and Move, trigger rows offer no Mouse Default (the click does, while
+  no trigger applies or its table can leave the click out), and a while-held
   action (Precise Pointer) is offered only on the click and the Hold row, and dims More Ways to Press
   while it is the click. The Double-click caption reads the live interval
   (`ConfigTree.doubleClickMilliseconds`: `doubleClickMs`, else the system's).

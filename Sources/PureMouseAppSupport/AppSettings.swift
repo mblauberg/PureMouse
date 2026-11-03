@@ -220,9 +220,10 @@ public struct AppButton: Equatable, Sendable {
         /// The scope sets this trigger itself, whether or not a wider table has one.
         public var isOwn: Bool { own != .standard }
 
-        /// What applies while the scope leaves the trigger out: the wider table's, else nothing.
+        /// What applies while the scope leaves the trigger out: the wider table's, else nothing; for
+        /// the click, the mouse's own (Mouse Default), since a table with no click leaves it so.
         public var inherited: ButtonAction {
-            guard let everywhere, everywhere != .standard else { return .named("none") }
+            guard let everywhere, everywhere != .standard else { return name == "click" ? .standard : .named("none") }
             return everywhere
         }
     }
@@ -263,12 +264,24 @@ public struct AppButton: Equatable, Sendable {
 
     // MARK: Click
 
-    /// The pop-up's value: the click. `.standard` while the scope leaves it to the wider scope.
+    /// The pop-up's value: the click. `.standard` while the scope leaves it to the wider scope. A
+    /// table that names no click, with none wider showing through, reads Mouse Default: a quick tap is
+    /// the mouse's own (`.mouseDefault` on a mouse or in an app, where it is a value of its own).
     public var click: ButtonAction {
         guard own == .gesture, let click = trigger("click") else { return own }
         if click.isOwn { return click.own }
-        // A table over a wider bare action starts empty: its click does nothing.
-        return click.everywhere == nil ? .named("none") : .standard
+        if !clickLeftToMouse { return .standard }
+        return isTopLevel ? .standard : .mouseDefault
+    }
+
+    /// The scope's table names no click and no wider table gives it one, so a quick tap is the mouse's.
+    public var clickLeftToMouse: Bool { canLeaveClickToMouse && trigger("click")?.isOwn == false }
+
+    /// The scope's own table can hand the click to the mouse by leaving it out: no wider table names
+    /// one that would show through (`ConfigTree.bindClick`, Mouse Default).
+    public var canLeaveClickToMouse: Bool {
+        guard own == .gesture, let click = trigger("click") else { return false }
+        return click.everywhere == nil || click.everywhere == .standard
     }
 
     /// What a click does while the scope leaves it: the wider table's click, else the wider binding.

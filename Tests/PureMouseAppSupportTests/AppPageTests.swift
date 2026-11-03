@@ -410,9 +410,10 @@ private func changed(_ before: ConfigTree, _ after: ConfigTree) -> Set<String> {
         var global = config
         global.bindInApp("a.b", button: "back", to: .gesture)
         #expect(global.string(["apps", "a.b", "buttons", "back", "click"]) == "mute")
-        // A mouse that binds the button to Mouse Default seeds a click that does nothing there.
+        // A mouse that binds the button to Mouse Default seeds no click: a tap stays the mouse's.
         var native = try tree(#"{"buttons": {"back": "mute"}, "devices": {"\#(mx)": {"name": "MX", "buttons": {"back": "default"}}}}"#)
         native.bindInApp("a.b", button: "back", to: .gesture, inheriting: [mouse(mx)])
-        #expect(native.string(["apps", "a.b", "buttons", "back", "click"]) == "none")
+        #expect(native[["apps", "a.b", "buttons", "back", "click"]] == nil)
+        #expect(native[["apps", "a.b", "buttons", "back"]] is [String: Any])
     }
 }

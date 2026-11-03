@@ -93,10 +93,10 @@ private func entry(_ id: String, _ entries: [PickerEntry]) -> PickerEntry? { ent
         #expect(text.contains("offersMouseDefault: PickerEntry.offersMouseDefault("), "\(file)")
         #expect(!text.contains("allowsDefault: false"), "\(file)")
     }
-    // The one row both panes draw offers it on the click, while no other trigger applies, and never
-    // on a child row (a table's click is PureMouse's, so its other triggers would go).
+    // The one row both panes draw offers it on the click, while no other trigger applies or the table
+    // can leave its click out (the tap is then the mouse's), and never on a child row.
     let rows = try String(contentsOf: ui.appending(path: "TriggerRows.swift"), encoding: .utf8)
-    #expect(rows.contains("allowsDefault: offersMouseDefault && !othersApply"))
+    #expect(rows.contains("allowsDefault: offersMouseDefault && (!othersApply || state.canLeaveClickToMouse)"))
     #expect(rows.components(separatedBy: "allowsDefault: false").count == 3)
 }
 

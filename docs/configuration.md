@@ -424,7 +424,12 @@ the wider scope's table (the top level for a mouse, the mouse or top level for a
 `"none"` to switch it off there. Writing one hold form drops the other from the wider table, so a
 `hold` replaces inherited directions and a direction replaces an inherited `hold`. A bare action
 replaces the whole table, and a table over a wider bare action starts with no triggers. Settings
-writes a table back to a bare action once its click is all that is left.
+writes a table back to a bare action once its click is all that is left. Adding Double-click or
+Hold to a button whose click is Mouse Default writes a table with no `click`, so a quick tap stays the
+mouse's own; Settings writes `"click": "none"` only when the person chooses **Do Nothing** for the
+click. Choosing **Mouse Default** for the click of a table takes its `click` key out, and a table
+left with no click and no trigger is written as no entry (the bare default), or as `"default"` where
+a wider bare action or the default set's binding would otherwise apply.
 
 ## System Settings
 

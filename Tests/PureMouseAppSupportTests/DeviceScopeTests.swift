@@ -1171,15 +1171,16 @@ private func kitSays(_ root: [String: Any], mouse key: String, sets path: [Strin
     #expect((config.resolved(["buttons"], in: d) as? [String: Any])?.isEmpty == true)
 }
 
-@Test func mouseDefaultOnAMouseThenAGestureStartsWithAClickThatDoesNothing() throws {
+@Test func mouseDefaultOnAMouseThenAGestureStartsWithNoClickSoATapStaysTheMouses() throws {
     var config = try tree(#"{"buttons": {"back": "mute"}}"#)
     let d = device(mouse)
     config.bind("back", to: .mouseDefault, in: d)
     config.bind("back", to: .gesture, in: d)
-    #expect(config.string(["devices", mouse, "buttons", "back", "click"]) == "none")
+    #expect(config[["devices", mouse, "buttons", "back"]] is [String: Any])
+    #expect(config[["devices", mouse, "buttons", "back", "click"]] == nil)
     let kit = try decode(config).forDevice(mouse)
     guard case .gesture(let gesture)? = kit.bindings[0x0053] else { Issue.record("gesture"); return }
-    #expect(gesture.click == Action.none)
+    #expect(gesture.click == Action.none && gesture.clickIsUnset)
 }
 
 @Test func mouseDefaultOverAWiderGestureThenHoldAndMoveInheritsTheGestureWhole() throws {
@@ -1290,9 +1291,10 @@ private func kitBinding(_ config: ConfigTree, _ cid: UInt16 = 0x0053, app: Strin
     let settings = try #require(decoded.settings(forApp: "com.example.x"))
     #expect(settings.bindings[0x0053] == nil && settings.buttons.contains(0x0053))
     #expect(decoded.global.bindings[0x0053] != nil)
-    // A gesture there starts with a click that does nothing, not "default".
+    // A gesture there starts with no click (a tap stays the mouse's), not "default" and not "none".
     config.bindInApp("com.example.x", button: "back", to: .gesture)
-    #expect(config.string(["apps", "com.example.x", "buttons", "back", "click"]) == "none")
+    #expect(config[["apps", "com.example.x", "buttons", "back"]] is [String: Any])
+    #expect(config[["apps", "com.example.x", "buttons", "back", "click"]] == nil)
     config.bindInApp("com.example.x", button: "back", to: .mouseDefault)
     config.bindInApp("com.example.x", button: "back", to: .standard)
     #expect(!config.hasApp("com.example.x"))

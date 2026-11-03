@@ -215,6 +215,28 @@ private struct Rig {
     #expect(try name(json) { $0.set(nil, at: ["apps", "com.apple.Music", "buttons", "back"]) } == "Button Action")
 }
 
+@MainActor @Test func aTriggerAddedToOrRemovedFromAMouseDefaultButtonIsAButtonAction() throws {
+    let app = ConfigScope.app("com.example.x")
+    // Adding Double Click writes a table with no click; removing it removes the entry; both undo as one step.
+    let rig = try Rig(#"{"buttons": {"top": "mute"}}"#)
+    rig.store.update { $0.bind("top", to: .standard) }
+    rig.store.update { $0.bindTrigger("top", "doubleClick", to: .named("missionControl")) }
+    #expect(rig.manager.undoActionName == "Button Action")
+    #expect(try rig.disk()[["buttons", "top"]] as? NSDictionary == ["doubleClick": "missionControl"])
+    rig.store.update { $0.bindTrigger("top", "doubleClick", to: .named("none")) }
+    #expect(rig.manager.undoActionName == "Button Action")
+    #expect(try rig.disk()[["buttons", "top"]] == nil)
+    rig.manager.undo()
+    #expect(try rig.disk()[["buttons", "top"]] as? NSDictionary == ["doubleClick": "missionControl"])
+    #expect(rig.manager.redoActionName == "Button Action")
+    rig.manager.redo()
+    #expect(try rig.disk()[["buttons", "top"]] == nil)
+    // In an app the step is named for the button too, whether the entry is first written or removed.
+    #expect(try name { $0.bindTrigger("top", "hold", to: .named("mute"), in: app) } == "Button Action")
+    let json = #"{"apps": {"com.example.x": {"buttons": {"top": {"hold": "mute"}}, "thumbWheel": {"action": "volume"}}}}"#
+    #expect(try name(json) { $0.bindTrigger("top", "hold", to: .standard, in: app) } == "Button Action")
+}
+
 @MainActor @Test func anythingMixedIsChanges() throws {
     #expect(try name { $0.set(1600, at: ["dpi"]); $0.set(true, at: ["scrollWheel", "inverted"]) } == "Changes")
     #expect(try name { $0.set(2.0, at: ["smoothScroll", "speed"]); $0.set(200, at: ["smoothScroll", "smoothingMs"]) } == "Changes")

@@ -51,28 +51,34 @@ extension ConfigTree {
 
     /// The table a scope starts from to add a trigger: its own, or one whose click keeps what the
     /// button did there (a table over a wider bare action starts empty, so that click is copied;
-    /// over a wider table it inherits). Mouse Default and no binding give a click that does nothing:
-    /// a table's click is PureMouse's, never the mouse's own.
+    /// over a wider table it inherits). Mouse Default and no binding give a table with no `click`,
+    /// which leaves a quick tap to the mouse: adding a trigger does not turn the tap off.
     private func startingTable(_ button: String, in scope: ConfigScope, inheriting: [ConfigScope]) -> [String: Any] {
         let own = ownBinding(button, in: scope)
         if let mine = Self.table(own) { return mine }
-        if let own { return ["click": Self.isNative(own) ? "none" : own] }
+        if let own { return Self.isNative(own) ? [:] : ["click": own] }
         let wider = widerBinding(button, for: scope, inheriting: inheriting)
         if Self.table(wider) != nil { return [:] }
-        return ["click": wider ?? "none"]
+        return wider.map { ["click": $0] } ?? [:]
     }
 
     /// Sets what a click does (the row's pop-up). The other triggers stay: with any applying, the
     /// click goes into the scope's table; with none, the bare action is written. `.standard`
     /// ("Same as …") gives the click back to the wider table, or the whole binding where there is
-    /// none; Mouse Default replaces the whole binding (its picker entry is offered only while no
-    /// other trigger applies). `.gesture` is Hold and Move (`bindHoldAndMove`).
+    /// none. Mouse Default on a table of the scope's own that no wider click shows through removes
+    /// its `click` key, so a quick tap is the mouse's; elsewhere it replaces the whole binding.
+    /// `.gesture` is Hold and Move (`bindHoldAndMove`). Only an explicit None writes `"click": "none"`.
     public mutating func bindClick(_ button: String, to action: ButtonAction, in scope: ConfigScope = .global,
                                    inheriting: [ConfigScope] = [.global]) {
         if action == .gesture { return bindHoldAndMove(button, in: scope, inheriting: inheriting) }
         let own = ownBinding(button, in: scope)
         let wider = widerBinding(button, for: scope, inheriting: inheriting)
         if action == .standard, var mine = Self.table(own), Self.table(wider) != nil {
+            mine["click"] = nil
+            return settle(button, mine, in: scope, inheriting: inheriting)
+        }
+        let nativeClick = action == .mouseDefault || (action == .standard && scope == .global)
+        if nativeClick, var mine = Self.table(own), Self.table(wider)?["click"] == nil {
             mine["click"] = nil
             return settle(button, mine, in: scope, inheriting: inheriting)
         }
@@ -147,6 +153,11 @@ extension ConfigTree {
             return
         }
         if table.isEmpty {
+            // No click and no trigger: no entry, the bare default. Where a wider bare action or the
+            // default set's binding would apply instead, the button stays the mouse's own ("default").
+            let hidesBinding = scope == .global ? Self.defaultBinding(for: button) != nil
+                : Self.isSet(wider) && Self.table(wider) == nil
+            if hidesBinding { return bind(button, to: scope == .global ? .standard : .mouseDefault, in: scope) }
             for key in buttonAliases(button, in: scope) { set(nil, at: ["buttons", key], in: scope) }
             return
         }

@@ -134,7 +134,9 @@ extension ConfigTree {
         // is, so the object never mixes an action's keys with a table's (Kit rejects that).
         if let bare = self[entryPrefix(for: scope) + ["buttons", button]], !(bare is NSNull), Self.table(bare) == nil {
             guard binding != .standard else { return }
-            set(["click": (bare as? String) == Config.Binding.nativeValue ? "none" : bare], at: ["buttons", button], in: scope)
+            // Mouse Default has no click to carry over: the table names none, so a tap stays the mouse's.
+            let native = (bare as? String) == Config.Binding.nativeValue
+            set(native ? [String: Any]() : ["click": bare], at: ["buttons", button], in: scope)
         }
         let own = self[entryPrefix(for: scope) + ["buttons", button]] as? [String: Any]
         // A direction is Hold and Move, the hold form that replaces `hold`.

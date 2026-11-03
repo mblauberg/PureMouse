@@ -208,4 +208,96 @@ import Testing
         #expect(try tree("{}").doubleClickMilliseconds(systemSeconds: nil) == 500)
         #expect(try tree(#"{"doubleClickMs": 250}"#).doubleClickMilliseconds(systemSeconds: 0.4) == 250)
     }
+
+    // MARK: Mouse Default click
+
+    @Test func addingATriggerToAMouseDefaultButtonLeavesTheClickOutSoATapStaysTheMouses() throws {
+        var config = try tree("{}")
+        config.bindTrigger("top", "doubleClick", to: .named("missionControl"))
+        #expect(config[["buttons", "top"]] as? NSDictionary == ["doubleClick": "missionControl"])
+        let decoded = try #require(table(try decode(config).bindings[0x00C4]))
+        #expect(decoded.clickIsUnset && decoded.doubleClick == .missionControl)
+        // The row and picker still read Mouse Default, with Mouse Default on offer beside the trigger.
+        let state = config.scopedButton("top", in: .global)
+        #expect(state.click == .standard && state.click.label == "Mouse Default" && state.canLeaveClickToMouse)
+        config.bindTrigger("top", "hold", to: .named("mute"))
+        #expect(config[["buttons", "top"]] as? NSDictionary == ["doubleClick": "missionControl", "hold": "mute"])
+        // Removing the last trigger leaves no entry for the button, not {}.
+        config.bindTrigger("top", "hold", to: .named("none"))
+        config.bindTrigger("top", "doubleClick", to: .named("none"))
+        #expect(!config.contains(["buttons", "top"]))
+        // Where the default set binds the button (Back), the empty table is written back as Mouse Default.
+        var back = try tree(#"{"buttons": {"back": "default"}}"#)
+        back.bindTrigger("back", "hold", to: .named("mute"))
+        #expect(back[["buttons", "back"]] as? NSDictionary == ["hold": "mute"])
+        back.bindTrigger("back", "hold", to: .named("none"))
+        #expect(back.string(["buttons", "back"]) == "default")
+    }
+
+    @Test func holdAndMoveOnAMouseDefaultButtonAlsoLeavesTheClickOut() throws {
+        var config = try tree("{}")
+        config.bindHoldAndMove("top")
+        #expect(config[["buttons", "top", "click"]] == nil && config[["buttons", "top", "up"]] as? String == "missionControl")
+        #expect(config.scopedButton("top", in: .global).click == .standard)
+        var mouse = try tree(#"{"devices": {"\#(Self.mouse)": {"name": "MX", "buttons": {"forward": "default"}}}}"#)
+        mouse.bindHoldAndMove("forward", in: device)
+        #expect(mouse[["devices", Self.mouse, "buttons", "forward", "click"]] == nil)
+        #expect(mouse.scopedButton("forward", in: device).click == .mouseDefault)
+    }
+
+    @Test func onlyAnExplicitNoneWritesClickNone() throws {
+        var config = try tree(#"{"buttons": {"back": {"doubleClick": "missionControl"}}}"#)
+        config.bindClick("back", to: .named("none"))
+        #expect(config[["buttons", "back"]] as? NSDictionary == ["click": "none", "doubleClick": "missionControl"])
+        let state = config.scopedButton("back", in: .global)
+        #expect(state.click == .named("none") && !state.clickLeftToMouse)
+        // Mouse Default takes the key out again, rather than writing none.
+        config.bindClick("back", to: .standard)
+        #expect(config[["buttons", "back"]] as? NSDictionary == ["doubleClick": "missionControl"])
+        config.bindClick("back", to: .named("mute"))
+        config.bindClick("back", to: .mouseDefault)
+        #expect(config[["buttons", "back"]] as? NSDictionary == ["doubleClick": "missionControl"])
+    }
+
+    @Test func aMouseOrAppTableWithNoClickReadsMouseDefaultAndKeepsItWhenItsLastTriggerGoes() throws {
+        var config = try tree(#"{"buttons": {"back": "mute"}}"#)
+        config.bind("back", to: .mouseDefault, in: device)
+        config.bindTrigger("back", "doubleClick", to: .named("appExpose"), in: device)
+        #expect(config[["devices", Self.mouse, "buttons", "back"]] as? NSDictionary == ["doubleClick": "appExpose"])
+        let state = config.scopedButton("back", in: device)
+        #expect(state.click == .mouseDefault && state.click.label == "Mouse Default")
+        let kit = try #require(table(try decode(config).forDevice(Self.mouse).bindings[0x0053]))
+        #expect(kit.clickIsUnset && kit.doubleClick == .appExpose)
+        // Mouse Default over a bare wider action stays the mouse's own once the table is empty again.
+        config.bindTrigger("back", "doubleClick", to: .standard, in: device)
+        #expect(config.string(["devices", Self.mouse, "buttons", "back"]) == "default")
+        // Where nothing wider binds it, no entry at all.
+        var bare = try tree("{}")
+        bare.bindTrigger("back", "hold", to: .named("mute"), in: app)
+        #expect(bare[["apps", Self.app, "buttons", "back"]] as? NSDictionary == ["hold": "mute"])
+        #expect(bare.appButton(Self.app, button: "back").click == .mouseDefault)
+        bare.bindTrigger("back", "hold", to: .standard, in: app)
+        #expect(!bare.hasApp(Self.app))
+    }
+
+    @Test func mouseDefaultOnAMouseTableTakesTheClickOutUnlessAWiderClickWouldShowThrough() throws {
+        var config = try tree("{}")
+        config.bindClick("back", to: .named("mute"), in: device)
+        config.bindTrigger("back", "hold", to: .named("appExpose"), in: device)
+        #expect(config[["devices", Self.mouse, "buttons", "back"]] as? NSDictionary == ["click": "mute", "hold": "appExpose"])
+        config.bindClick("back", to: .mouseDefault, in: device)
+        #expect(config[["devices", Self.mouse, "buttons", "back"]] as? NSDictionary == ["hold": "appExpose"])
+        // A wider table that names a click would show through: the whole binding goes native instead.
+        var wider = try tree(#"{"buttons": {"back": {"click": "mute", "hold": "missionControl"}}}"#)
+        wider.bindTrigger("back", "doubleClick", to: .named("appExpose"), in: device)
+        #expect(!wider.scopedButton("back", in: device).canLeaveClickToMouse)
+        wider.bindClick("back", to: .mouseDefault, in: device)
+        #expect(wider.string(["devices", Self.mouse, "buttons", "back"]) == "default")
+    }
+
+    @Test func aDirectionOnAMouseDefaultBareBindingMakesATableWithNoClick() throws {
+        var config = try tree(#"{"devices": {"\#(Self.mouse)": {"name": "MX", "buttons": {"back": "default"}}}}"#)
+        config.bind("back", direction: "up", to: .named("launchpad"), in: device)
+        #expect(config[["devices", Self.mouse, "buttons", "back"]] as? NSDictionary == ["up": "launchpad"])
+    }
 }

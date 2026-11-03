@@ -54,7 +54,7 @@ struct TriggerRows: View {
         let othersApply = children.contains { $0.isSet }
         let click = pickerButton(state.click, target: clickTarget,
                                  inherited: source == nil ? nil : (state.clickInheritedLabel, state.clickInheritedSpokenLabel),
-                                 allowsDefault: offersMouseDefault && !othersApply, allowsGesture: true,
+                                 allowsDefault: offersMouseDefault && (!othersApply || state.canLeaveClickToMouse), allowsGesture: true,
                                  row: PickerEntry.Row(clickOwnsButton: state.effectiveClick.isWhileHeld, othersApply: othersApply))
         if children.isEmpty {
             LabeledContent { click } label: { RowLabel(title, help: help, note: note) }
