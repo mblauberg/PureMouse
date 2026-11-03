@@ -126,7 +126,7 @@ Config and the channel:
 - Status and control files, config writes and locks, login and lifecycle, low-battery
   notifications: [companion.md](docs/companion.md); ADRs 4, 9, 18.
 - Files written, the network request, what the log holds: [privacy.md](docs/privacy.md).
-- Update check: [ADR 21](docs/adr/0021-scheduled-update-check.md).
+- Update check: [ADR 21](docs/adr/0021-scheduled-update-check.md); one-click install: [ADR 22](docs/adr/0022-update-trust-is-the-signing-requirement.md).
 
 Settings and menu UI:
 

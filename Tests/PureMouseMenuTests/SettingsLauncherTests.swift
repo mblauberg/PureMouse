@@ -10,11 +10,14 @@ final class FakeSystem {
     final class Helper: RunningHelper {
         var isAlive: Bool
         var quitCount = 0
+        /// False: the quit is queued behind other events, and the helper exits later (`exit()`).
+        var exitsOnQuit = true
         init(alive: Bool) { isAlive = alive }
         func quit() {
             quitCount += 1
-            isAlive = false
+            if exitsOnQuit { isAlive = false }
         }
+        func exit() { isAlive = false }
     }
 
     let app = URL(fileURLWithPath: "/Applications/PureMouse.app/Contents/Helpers/PureMouse Settings.app")
