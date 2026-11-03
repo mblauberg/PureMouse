@@ -39,7 +39,7 @@ struct GeneralPane: View {
 
             Section {
                 Toggle(isOn: Binding(get: { openAtLogin.isOn }, set: { perform(.openAtLogin($0)) })) {
-                    RowLabel("Open at login", help: "Turning it off doesn't stop PureMouse.")
+                    RowLabel("Open at login")
                 }
                 .accessibilityLabel("Open at login")
                 .disabled(model.locations.daemon == nil)
@@ -96,6 +96,8 @@ struct GeneralPane: View {
 
     private var runState: RunState { RunState(daemonRunning: model.daemonRunning, paused: model.paused) }
 
+    /// Pause or resume is the switch, on the daemon's control (as the menu's item does); Start is
+    /// offered only while PureMouse is off, the recovery when it isn't running.
     private var runningRow: some View {
         let state = runState
         return LabeledContent {
@@ -104,11 +106,18 @@ struct GeneralPane: View {
                     .symbolRenderingMode(.multicolor)
                     .foregroundStyle(.secondary)
                     .labelStyle(StatusLabelStyle())
-                Button(state == .off ? "Start" : "Stop") { setRunning(state.button) }
-                    .disabled(changingRunning || model.locations.daemon == nil)
+                if let start = state.button {
+                    Button("Start") { setRunning(start) }
+                        .disabled(changingRunning || model.locations.daemon == nil)
+                } else {
+                    // The switch names itself; its state word sits beside it.
+                    Toggle("PureMouse", isOn: Binding(get: { state == .running }, set: { model.setPaused(!$0) }))
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                }
             }
         } label: {
-            RowLabel("PureMouse", help: "Stopping returns the mouse to normal. Open at login doesn't change.")
+            RowLabel("PureMouse")
         }
     }
 

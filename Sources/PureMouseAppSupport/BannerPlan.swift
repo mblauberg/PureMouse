@@ -114,7 +114,9 @@ extension BannerPlan.State {
     }
 }
 
-/// Whether PureMouse is running now, for General's Status row.
+/// Whether PureMouse is running now, for General's Status row. Running or paused, General's switch
+/// pauses and resumes it (`AppModel.setPaused`); only while off does the row offer Start. Settings
+/// never stops PureMouse, so Stop is not a control.
 public enum RunState: Equatable, Sendable {
     case running, paused, off
 
@@ -124,14 +126,15 @@ public enum RunState: Equatable, Sendable {
 
     public var word: String {
         switch self {
-        case .running: "Running"
+        case .running: "Active"
         case .paused: "Paused"
         case .off: "Off"
         }
     }
 
-    /// The Status row's button: Start while off, else Stop. Neither changes Open at login.
-    public var button: LoginAction { self == .off ? .running(true) : .running(false) }
+    /// The Status row's Start button, offered only while off; nil otherwise, where the switch is the
+    /// control. Start doesn't change Open at login.
+    public var button: LoginAction? { self == .off ? .running(true) : nil }
 }
 
 /// The question asked before Use Last Working Config replaces the config file.

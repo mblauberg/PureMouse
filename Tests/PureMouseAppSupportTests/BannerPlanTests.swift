@@ -95,16 +95,17 @@ import Testing
         #expect(Notice.off.loginAction?.command == .start)
         #expect(Notice.off.loginAction?.command.arguments == ["start"])
         for notice in Notice.allCases where notice != .off { #expect(notice.loginAction == nil) }
-        #expect(RunState.off.button.command == .start)
-        #expect(RunState.running.button.command == .stop)
-        #expect(RunState.paused.button.command == .stop)
+        // General's switch pauses and resumes; Start is the only run control Settings offers, and only while off.
+        #expect(RunState.off.button?.command == .start)
+        #expect(RunState.running.button == nil)
+        #expect(RunState.paused.button == nil)
     }
 
     @Test func theStatusRowNamesTheState() {
         #expect(RunState(daemonRunning: true, paused: false) == .running)
         #expect(RunState(daemonRunning: true, paused: true) == .paused)
         #expect(RunState(daemonRunning: false, paused: false) == .off)
-        #expect([RunState.running, .paused, .off].map(\.word) == ["Running", "Paused", "Off"])
+        #expect([RunState.running, .paused, .off].map(\.word) == ["Active", "Paused", "Off"])
     }
 
     @Test func useLastWorkingConfigSaysWhatItReplaces() {
