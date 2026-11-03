@@ -492,7 +492,7 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
   nothing on disk, so `AppModel.setDPI` sends `useConfiguredDPI` ([companion.md](companion.md)).
   The row says "Pointer speed", with Slow/Fast ends and no numeric readout beside the slider.
   Collapsed Exact value shows the current DPI in secondary text; expanding it reveals the numeric
-  field. Help says "Faster moves the pointer further for the same movement." The footer says
+  field (VoiceOver: "Exact pointer speed", distinct from the slider). Help says "Faster moves the pointer further for the same movement." The footer says
   "Tracking speed in System Settings applies on top." and **Open Mouse Settings** opens
   `x-apple.systempreferences:com.apple.Mouse-Settings.extension`.
 - **Presets.** The sheet edits numeric speeds in place. Return or focus loss snaps to the mouse's

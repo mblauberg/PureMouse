@@ -117,6 +117,7 @@ import Testing
                      "x-apple.systempreferences:com.apple.Mouse-Settings.extension"] {
             #expect(pane.contains(text), "Missing \(text)")
         }
+        #expect(pane.contains(#".accessibilityLabel("Exact pointer speed")"#))
         #expect(pane.contains("if !exactValue"))
         #expect(pane.contains("Text(reading.readout(live: live, configured: configured))"))
         let components = try source("Components")

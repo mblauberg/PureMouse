@@ -67,7 +67,7 @@ struct PointerPane: View {
                                     .multilineTextAlignment(.trailing)
                                     .labelsHidden()
                                     .onSubmit { commitTyped(steps) }
-                                    .accessibilityLabel("Pointer speed")
+                                    .accessibilityLabel("Exact pointer speed")
                                 Text("DPI").foregroundStyle(.secondary).accessibilityHidden(true)
                             }
                         } label: {
