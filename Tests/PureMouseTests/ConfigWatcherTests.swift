@@ -78,6 +78,27 @@ private final class WatchFixture {
     }
 }
 
+/// A descriptor and the file it was open on. Another test may open a file on the same number once
+/// it is closed, so "closed" is the number failing or naming a different file, never just open.
+private struct OpenFile {
+    let descriptor: Int32
+    let device: dev_t
+    let inode: ino_t
+
+    init?(_ descriptor: Int32) {
+        var info = stat()
+        guard fstat(descriptor, &info) == 0 else { return nil }
+        self.descriptor = descriptor
+        device = info.st_dev
+        inode = info.st_ino
+    }
+
+    var isClosed: Bool {
+        var info = stat()
+        return fstat(descriptor, &info) != 0 || info.st_dev != device || info.st_ino != inode
+    }
+}
+
 @MainActor
 @Suite(.quietLog) struct ConfigWatcherTests {
     @Test func aSaveInPlaceReloadsOnce() async throws {
@@ -253,14 +274,14 @@ private final class WatchFixture {
         let fixture = try WatchFixture()
         let first = try fixture.target("target-a")
         try fixture.link(to: first)
-        var descriptors: [Int32] = []
+        var files: [OpenFile] = []
         for _ in 0..<5 {
             let watcher = ConfigWatcher(url: fixture.config) {}
             watcher.start()
-            descriptors += watcher.descriptors
+            files += watcher.descriptors.compactMap { OpenFile($0) }
         }
-        #expect(descriptors.count >= 15)
-        try await eventually { descriptors.allSatisfy { fcntl($0, F_GETFD) == -1 } }
+        #expect(files.count >= 15)
+        try await eventually { files.allSatisfy(\.isClosed) }
     }
 
     @Test func stoppingAWatcherClosesItsDescriptorsAndEndsReloads() async throws {
@@ -269,11 +290,11 @@ private final class WatchFixture {
         var count = 0
         let watcher = ConfigWatcher(url: fixture.config) { count += 1 }
         watcher.start()
-        let descriptors = watcher.descriptors
-        #expect(descriptors.count >= 3)
+        let files = watcher.descriptors.compactMap { OpenFile($0) }
+        #expect(files.count >= 3)
         try fixture.rewriteInPlace("{\"dpi\": 800}")
         watcher.stop()
-        try await eventually { descriptors.allSatisfy { fcntl($0, F_GETFD) == -1 } }
+        try await eventually { files.allSatisfy(\.isClosed) }
         try await fixture.quiet()
         #expect(count == 0 && watcher.descriptors.isEmpty)
     }
