@@ -5,7 +5,7 @@ regions.json, which export.py writes.
 usage: swift_geometry.py <regions.json> <DeviceArtGeometry.swift>"""
 import json, sys
 
-CASES = {"mx": "mx", "compact-anywhere": "compactAnywhere", "compact-m750": "compactM750"}
+CASES = {"mx": "mx", "mx4": "mx4", "compact-anywhere": "compactAnywhere", "compact-m750": "compactM750"}
 HEADER = """// Hit cells and part outlines of the device drawings, in art units (the 100 x 124 page of each PDF:
 // origin top-left, y down, front of the mouse up). Data only: which control a part binds is
 // `DeviceArt.models`, and the drawings are `assets/silhouettes` (docs/adr/0013-silhouettes.md).

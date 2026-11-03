@@ -23,7 +23,7 @@ private let allButtons = Set(NamedButton.allCases)
     @Test func theKeysOfTheProbedMiceNameTheirModels() {
         #expect(DeviceArt.model(forKey: mx3s)?.family == .mx)
         #expect(DeviceArt.model(forKey: mx3)?.family == .mx)
-        #expect(DeviceArt.model(forKey: mx4)?.family == .mx)
+        #expect(DeviceArt.model(forKey: mx4)?.family == .mx4)
         #expect(DeviceArt.model(forKey: anywhere3s)?.family == .compactAnywhere)
         #expect(DeviceArt.model(forKey: m750)?.family == .compactM750)
     }
@@ -34,14 +34,26 @@ private let allButtons = Set(NamedButton.allCases)
             #expect(DeviceArt.model(forKey: key)?.name == DeviceArt.model(forKey: mx3s)?.name, "\(key)")
         }
         #expect(DeviceArt.model(forKey: mx3s) == DeviceArt.model(forKey: mx3), "the 3 and the 3S share one drawing and binds")
+        #expect(DeviceArt.model(forKey: mx4)?.family != DeviceArt.model(forKey: mx3s)?.family, "the 4 has its own drawing")
     }
 
-    @Test func theMX4BindsItsThumbRestToTheHapticPanelAndTheOthersToTheGestureButton() {
-        #expect(DeviceArt.model(forKey: mx4)?.binds[.thumbRest] == .button(.thumbPanel))
-        #expect(DeviceArt.model(forKey: mx3s)?.binds[.thumbRest] == .button(.gesture))
-        // The gesture button (0xC3) on the 4 is a row only: nothing on the drawing binds it.
+    @Test func theMX4BindsItsThumbRestToTheHapticPanelAndItsOwnGestureKey() {
         let four = DeviceArt.model(forKey: mx4)!
-        #expect(!four.binds.values.contains(.button(.gesture)))
+        #expect(four.binds[.thumbRest] == .button(.thumbPanel))
+        #expect(four.binds[.gesture] == .button(.gesture), "0x00C3 is the small key ahead of Forward and Back")
+        // The 3 and 3S have the gesture button on the thumb rest and no key of its own.
+        let three = DeviceArt.model(forKey: mx3s)!
+        #expect(three.binds[.thumbRest] == .button(.gesture))
+        #expect(three.binds[.gesture] == nil)
+        #expect(four.binds.values.filter { $0 == .button(.gesture) }.count == 1)
+    }
+
+    @Test func theGestureButtonIsANamedRowInTheOrderOfThe3S() {
+        // The MX Master 4's reported controls (Tests/Fixtures/probe/mx-master-4.txt).
+        let reported: Set<UInt16> = [0x50, 0x51, 0x52, 0x53, 0x56, 0xC3, 0xC4, 0x1A0, 0xD7]
+        let rows = ButtonRows.named(deviceCIDs: reported, configKeys: [])
+        #expect(rows == [.back, .forward, .middle, .top, .gesture, .thumbPanel])
+        #expect(ButtonRows.others(deviceCIDs: [0xC3, 0x1A0], configKeys: []).isEmpty, "0xC3 is no Other control")
     }
 
     @Test func eachFamilyHasOnlyTheButtonsItsMouseHas() {
@@ -50,7 +62,8 @@ private let allButtons = Set(NamedButton.allCases)
         let signature = DeviceArt.model(forKey: m750)!
         #expect(Set(signature.binds.keys) == [.middle, .forward, .back], "the M750 has no top button; its DPI button is a row only")
         let master = DeviceArt.model(forKey: mx3s)!
-        #expect(Set(master.binds.keys) == Set(DeviceArt.Part.allCases))
+        #expect(Set(master.binds.keys) == Set(DeviceArt.Part.allCases).subtracting([.gesture]))
+        #expect(Set(DeviceArt.model(forKey: mx4)!.binds.keys) == Set(DeviceArt.Part.allCases))
         #expect(master.binds[.middle] == .mainWheel(click: .middle))
         #expect(master.binds[.thumbWheel] == .thumbWheel)
     }
@@ -112,11 +125,12 @@ private let allButtons = Set(NamedButton.allCases)
         }
     }
 
-    @Test func everyTargetIsAtLeast20By20PointsAndOnThePage() {
+    @Test func everyTargetIsAtLeast20By20PointsAsDrawnAndOnThePage() {
+        // The card draws the art at DeviceCard.scale, and a target is at least 20 x 20 pt there (ADR 13).
         for family in DeviceArt.Family.allCases {
             for (part, geometry) in DeviceArt.geometry[family] ?? [:] {
                 let bounds = geometry.hit.bounds
-                #expect(bounds.width >= 20 && bounds.height >= 20, "\(family) \(part) \(bounds)")
+                #expect(bounds.width * DeviceCard.scale >= 20 && bounds.height * DeviceCard.scale >= 20, "\(family) \(part) \(bounds)")
                 #expect(Self.page.insetBy(dx: -0.01, dy: -0.01).contains(bounds), "\(family) \(part)")
             }
         }
@@ -153,10 +167,13 @@ private let allButtons = Set(NamedButton.allCases)
             let box = DeviceArt.geometry[.mx]![part]!.hit.bounds
             return CGPoint(x: box.midX, y: box.midY)
         }
-        for part in DeviceArt.Part.allCases {
+        for part in DeviceArt.Part.allCases where DeviceArt.geometry[.mx]![part] != nil {
             #expect(DeviceArt.part(at: centre(part), in: .mx, among: [part]) == part)
             #expect(DeviceArt.part(at: centre(part), in: .mx, among: Set(DeviceArt.Part.allCases).subtracting([part])) == nil)
         }
+        // On the MX Master 4 the gesture key is found where it is drawn, not as Forward or Back.
+        let key = DeviceArt.geometry[.mx4]![.gesture]!.outline.bounds
+        #expect(DeviceArt.part(at: CGPoint(x: key.midX, y: key.midY), in: .mx4, among: Set(DeviceArt.Part.allCases)) == .gesture)
         #expect(DeviceArt.part(at: CGPoint(x: -5, y: -5), in: .mx, among: Set(DeviceArt.Part.allCases)) == nil)
     }
 }
@@ -194,7 +211,8 @@ private let allButtons = Set(NamedButton.allCases)
         let plan = plan(mx4, thumbWheel: false)
         #expect(plan.target(.thumbWheel) == nil)
         #expect(plan.target(.thumbRest) == nil)
-        #expect(Set(plan.targets.map(\.part)) == [.middle, .top, .forward, .back])
+        #expect(Set(plan.targets.map(\.part)) == [.middle, .top, .forward, .back, .gesture])
+        #expect(plan.target(.gesture)?.destinations == [.row(.gesture)])
         // Listed, the MX 4's thumb rest is the haptic panel.
         let listed = self.plan(mx4, listed: allButtons)
         #expect(listed.target(.thumbRest)?.destinations == [.row(.thumbPanel)])
@@ -231,6 +249,7 @@ private let allButtons = Set(NamedButton.allCases)
         #expect(plan.part(for: .gesture) == .thumbRest)
         #expect(plan.part(for: .thumbPanel) == nil)
         #expect(self.plan(mx4, listed: allButtons).part(for: .thumbPanel) == .thumbRest)
+        #expect(self.plan(mx4, listed: allButtons).part(for: .gesture) == .gesture)
     }
 
     // MARK: Which mouse

@@ -247,7 +247,10 @@ series mouse and any unknown product get no card and keep every row in the list 
   set to Mouse Default") and a hint. A click on a button's part selects its row: the row scrolls
   into view and is marked, and a capture, or opening a row's picker, selects it too. The thumb
   wheel has no button, so it opens Scrolling > Thumb Wheel. The main wheel has two things to open,
-  so it is a two-item menu, Wheel Click and Scrolling Settings; VoiceOver gets both as actions.
+  so it is a two-item menu, Wheel Click and Scrolling Settings; VoiceOver gets both as actions. On
+  the MX Master 3 and 3S the thumb rest is the gesture button; on the MX Master 4 the gesture
+  button is a small key of its own ahead of Forward and Back and the thumb rest is the haptic
+  panel (a row only when the mouse reports it). Both list the gesture button in the same row order.
 - **Arriving.** A part that leaves the page goes through `MouseSelection.select`, then scrolls to
   its section, outlines it for about a second and a half and moves VoiceOver there. Under Reduce
   Motion the outline still shows for the same time: it appears and goes without the fade. Each

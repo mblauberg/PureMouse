@@ -5,8 +5,9 @@ import PureMouseAppSupport
 /// and rules: nothing here loads an image (`DeviceArtImages` does, only for the device card) or
 /// touches a setting. Docs: docs/ui-design.md, "Device card"; docs/adr/0013-silhouettes.md.
 ///
-/// The drawings are three family templates, each in a light and a dark PDF (`assets/silhouettes`):
-/// the MX Master shape, the MX Anywhere shape and the Signature M750's. A mouse is identified the
+/// The drawings are four family templates, each in a light and a dark PDF (`assets/silhouettes`):
+/// the MX Master 3 and 3S, the MX Master 4 (the same shape with its gesture button on the wing),
+/// the MX Anywhere shape and the Signature M750's. A mouse is identified the
 /// way the rest of Settings does, by its device key (`Status.Device.model`), never by its name. A
 /// mouse of no listed model, and every other form (vertical, trackball, G series), gets no drawing
 /// and no card.
@@ -14,6 +15,7 @@ enum DeviceArt {
     /// One drawing template.
     enum Family: String, CaseIterable, Sendable {
         case mx
+        case mx4
         case compactAnywhere = "compact-anywhere"
         case compactM750 = "compact-m750"
 
@@ -22,9 +24,10 @@ enum DeviceArt {
     }
 
     /// Something on the drawing a pointer can find. The wheels are named for what they are; the
-    /// control a part binds depends on the model (`Model.binds`).
+    /// control a part binds depends on the model (`Model.binds`). `gesture` is the small key ahead
+    /// of Forward and Back on the MX Master 4 (on the 3 and 3S the gesture button is the thumb rest).
     enum Part: String, CaseIterable, Sendable {
-        case middle, top, forward, back, thumbWheel, thumbRest
+        case middle, top, forward, back, thumbWheel, thumbRest, gesture
     }
 
     /// What a part stands for on one model: a button with a row on Buttons, the main wheel (its
@@ -67,8 +70,10 @@ enum DeviceArt {
         // The thumb rest is the gesture button.
         Model(name: "MX Master 3 and 3S", family: .mx, productIDs: [0xB023, 0x4082, 0xB034, 0x4091],
               binds: mxBinds(thumbRest: .gesture)),
-        // The thumb rest is the haptic panel; the gesture button (0xC3) is a row without a shape.
-        Model(name: "MX Master 4", family: .mx, productIDs: [0xB042], binds: mxBinds(thumbRest: .thumbPanel)),
+        // The thumb rest is the haptic panel; the gesture button (0xC3) is the small key ahead of
+        // Forward and Back.
+        Model(name: "MX Master 4", family: .mx4, productIDs: [0xB042],
+              binds: mxBinds(thumbRest: .thumbPanel).merging([.gesture: .button(.gesture)]) { $1 }),
         // The top button sits behind the wheel; the Anywhere has no thumb wheel or thumb rest.
         Model(name: "MX Anywhere 3S", family: .compactAnywhere, productIDs: [0xB037],
               binds: [.middle: .mainWheel(click: .middle), .top: .button(.top), .forward: .button(.forward),

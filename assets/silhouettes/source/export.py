@@ -17,7 +17,7 @@ def outline(d):
     return poly(simplify(flatten(d), every=4))
 
 NAMES = {"middle": "Wheel click", "top": "Top button", "forward": "Forward", "back": "Back",
-         "thumbWheel": "Thumb wheel", "thumbRest": "Thumb rest"}
+         "thumbWheel": "Thumb wheel", "thumbRest": "Thumb rest", "gesture": "Gesture button"}
 
 def regions(mod):
     P, C = mod.parts(), mod.hit_cells()
@@ -33,6 +33,11 @@ if __name__ == "__main__":
     for look in mx.PALETTE:
         write_art(mx.svg(look), f"{out}/mx-{look}")
     fams = {"mx": {"art": "mx", "regions": regions(mx)}}
+    mx.set_variant("mx4")
+    for look in mx.PALETTE:
+        write_art(mx.svg(look), f"{out}/mx4-{look}")
+    fams["mx4"] = {"art": "mx4", "regions": regions(mx)}
+    mx.set_variant("mx")
     for v in compact.VARIANTS:
         compact.set_variant(v)
         for look in compact.PALETTE:
@@ -41,14 +46,14 @@ if __name__ == "__main__":
 
     mx3 = {"middle": "0x0052", "top": "0x00C4", "forward": "0x0056", "back": "0x0053",
            "thumbWheel": "setting:thumbWheel", "thumbRest": "0x00C3"}
-    mx4 = dict(mx3, thumbRest="0x01A0")
+    mx4 = dict(mx3, thumbRest="0x01A0", gesture="0x00C3")
     any3 = {"middle": "0x0052", "top": "0x00C4", "forward": "0x0056", "back": "0x0053"}
     m750 = {"middle": "0x0052", "forward": "0x0056", "back": "0x0053"}
     models = [
         {"match": ["MX Master 3", "MX Master 3 for Mac", "MX Master 3S", "MX Master 3S for Mac"],
          "family": "mx", "bind": mx3, "listOnly": ["0x00D7"]},
         {"match": ["MX Master 4", "MX Master 4 for Mac"],
-         "family": "mx", "bind": mx4, "listOnly": ["0x00C3", "0x00D7"]},
+         "family": "mx4", "bind": mx4, "listOnly": ["0x00D7"]},
         {"match": ["MX Anywhere 3", "MX Anywhere 3 for Mac", "MX Anywhere 3S", "MX Anywhere 3S for Mac"],
          "family": "compact-anywhere", "bind": any3, "listOnly": ["0x00D7"], "fixture": False},
         {"match": ["Signature M750", "Signature M750 L", "Signature Plus M750"],

@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from geo4 import hobby, rounded_polygon, capsule, rrect, f, pt, flatten, inside, bbox, inset, clip, filleted_path, simplify, roller, roller_defs, roller_shape
 
 W, H = 100, 124
+NAME = "MX Master family"
 CX = 61            # centreline of the top shell (wheel, split, top button)
 
 # Body outline, clockwise from the front-left corner. (x, y, tangent in degrees; 0 = right, 90 = down)
@@ -67,21 +68,39 @@ def pad_path():
     if inner[0][1] > inner[-1][1]: inner = inner[::-1]   # and back along the inner edge
     return filleted_path(outer + inner, PAD_R)
 
+# Variants: "mx" is the MX Master 3 and 3S; "mx4" is the MX Master 4, which has its gesture button
+# (0x00C3) on the wing just ahead of Forward and Back (its thumb rest is the haptic panel). The 4's
+# column holds three keys in the wing's 40 points, so Forward and Back are a little shorter and the
+# gesture button is a small round key at the front. Everything else is drawn the same.
+VARIANT = "mx"
+SIDE_KEYS = {   # name: (top, length) of each key in the column
+    "mx":  {"forward": (KEYS_TOP, KEY_L), "back": (KEYS_TOP + KEY_L + KEY_GAP, KEY_L)},
+    "mx4": {"gesture": (55.5, 7), "forward": (64.5, 11), "back": (78, 11)},
+}
+# Cell boundaries down the column (y): the first cell runs from the wing's top edge.
+CELL_CUTS = {"mx": [KEYS_TOP + KEY_L + KEY_GAP / 2 - 20, KEYS_TOP + KEY_L + KEY_GAP / 2],
+             "mx4": [63.5, 77.5]}
+
+def set_variant(v):
+    global VARIANT, NAME
+    VARIANT = v
+    NAME = "MX Master 4" if v == "mx4" else "MX Master family"
+
 def keys():
-    fwd = rrect(KEY_X - KEY_W / 2, KEYS_TOP, KEY_W, KEY_L, KEY_W / 2)
-    back = rrect(KEY_X - KEY_W / 2, KEYS_TOP + KEY_L + KEY_GAP, KEY_W, KEY_L, KEY_W / 2)
-    return fwd, back
+    return {name: rrect(KEY_X - KEY_W / 2, top, KEY_W, length, KEY_W / 2) for name, (top, length) in SIDE_KEYS[VARIANT].items()}
 
 def parts():
-    fwd, back = keys()
-    return {
+    side = keys()
+    out = {
         "middle": roller_shape(WHEEL["cx"], WHEEL["cy"], WHEEL["len"], WHEEL["wid"]),
         "top": rrect(TOP["cx"] - TOP["size"] / 2, TOP["cy"] - TOP["size"] / 2, TOP["size"], TOP["size"], TOP["r"]),
-        "forward": fwd,
-        "back": back,
+        "forward": side["forward"],
+        "back": side["back"],
         "thumbWheel": roller_shape(THUMB["cx"], THUMB["cy"], THUMB["len"], THUMB["wid"]),
         "thumbRest": pad_path(),
     }
+    if "gesture" in side: out["gesture"] = side["gesture"]
+    return out
 
 # Hit cells (art points): a partition around the parts, inside the body, none overlapping, each
 # at least 20 x 20. Keys column x <= KC, thumb-wheel column KC..KC+20, thumb rest below REST_Y.
@@ -96,14 +115,17 @@ def body_cell(x1, y0, y1):
     return simplify(p)
 
 def hit_cells():
-    return {
+    cut = CELL_CUTS[VARIANT]
+    cells = {
         "middle":     [(51, 15), (71, 15), (71, 36.5), (51, 36.5)],
         "top":        [(51, 36.5), (71, 36.5), (71, 56.5), (51, 56.5)],
-        "forward":    body_cell(KC, KEY_SPLIT - 20, KEY_SPLIT),
-        "back":       body_cell(KC, KEY_SPLIT, REST_Y),
+        "forward":    body_cell(KC, cut[0], cut[1]),
+        "back":       body_cell(KC, cut[1], REST_Y),
         "thumbWheel": [(KC, 56.5), (KC + 20, 56.5), (KC + 20, REST_Y), (KC, REST_Y)],
         "thumbRest":  body_cell(58, REST_Y, 130),
     }
+    if VARIANT == "mx4": cells["gesture"] = body_cell(KC, 0, cut[0])
+    return cells
 
 def ridges(cx, cy, length, width, n):
     d = ""
@@ -131,7 +153,7 @@ def svg(look, hover=None, select=None, accent=None, cells=False):
     side = hobby(FLANK, closed=False) + "L-10 130L-10 30Z"
     above = f"M-10 -10L110 -10L110 {f(SEAM[-1][1])}" + "L" + hobby(list(reversed([(x, y, t + 180) for x, y, t in SEAM])), closed=False)[1:] + f"L-10 {f(SEAM[0][1])}Z"
     s = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">',
-         "<!-- MX Master family, plan view, front up. Original drawing for PureMouse. -->",
+         f"<!-- {NAME}, plan view, front up. Original drawing for PureMouse. -->",
          f'<defs><clipPath id="body"><path d="{body}"/></clipPath>{roller_defs(c)}</defs>']
     # one soft shadow: two faint offset copies of the silhouette
     s.append(f'<path d="{body}" transform="translate(0 1.5)" fill="{c["shadow"]}" fill-opacity="{c["shadow_o"]}"/>')
@@ -155,7 +177,8 @@ def svg(look, hover=None, select=None, accent=None, cells=False):
     s += roller(c, THUMB["cx"], THUMB["cy"], THUMB["len"], THUMB["wid"], THUMB["slot_len"], THUMB["slot_wid"], "part-thumbWheel")
     # thumb rest
     s.append(f'<path id="part-thumbRest" d="{P["thumbRest"]}" fill="{c["rest"]}" stroke="{c["seam"]}" stroke-width="0.5" stroke-opacity="0.7"/>')
-    for k in ("forward", "back"):
+    for k in ("gesture", "forward", "back"):
+        if k not in P: continue
         s.append(f'<path id="part-{k}" d="{P[k]}" fill="{c["key"]}"/>')
     if hover:
         s.append(f'<path d="{P[hover]}" fill="{accent}" fill-opacity="0.6"/>')
@@ -167,6 +190,8 @@ def svg(look, hover=None, select=None, accent=None, cells=False):
             s.append(f'<path d="{d}" fill="#FF2D55" fill-opacity="0.10" stroke="#FF2D55" stroke-width="0.4"/>')
     s.append("</svg>")
     return "\n".join(s) + "\n"
+
+MIN_CELL = 20 / 1.5   # the card draws the art at 1.5x and a target is at least 20 x 20 pt
 
 def check():
     body = flatten(hobby(BODY))
@@ -188,7 +213,7 @@ def check():
         flag = []
         if out > 0: flag.append(f"{out:.0%} outside body")
         if held < 0.98: flag.append(f"holds {held:.0%} of part")
-        if w < 20 or h < 20: flag.append("under 20x20")
+        if w < MIN_CELL or h < MIN_CELL: flag.append("under 20 pt at the card's 1.5x scale")
         ok &= not (out > 0 or held < 0.98)
         print(f"{k:11} cell {f(w)} x {f(h)}  {'; '.join(flag) or 'ok'}")
     keysl = list(CELLS)
@@ -209,7 +234,6 @@ if __name__ == "__main__":
     json.dump(hit_cells(), open(f"{out}/{tag}-regions.json", "w"))
     check()
 
-NAME = "MX Master 3S"
 STATES = [
     dict(id="rest", caption=""),
     dict(id="hover-back", hover="back", caption="Back: Back"),
