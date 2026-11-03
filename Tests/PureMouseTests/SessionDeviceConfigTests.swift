@@ -165,8 +165,9 @@ struct SessionDeviceConfigTests {
         defer { h.close() }
         h.daemon.handle(Control(paused: true))
         m750.announce(product: 0xB02C)
-        // The pause hands back everything the default set diverts, the wheel included.
-        try await eventually { m750.control(0x56)?.diverted == false && !m750.lowResWheelDiverted }
+        // The pause hands back everything the default set diverts, the wheel and the back button
+        // included; the writes are done once none is diverted.
+        try await eventually { m750.controls.allSatisfy { !$0.diverted } && !m750.lowResWheelDiverted }
         #expect(try await writes(to: m750) == 0)
         #expect(h.daemon.sessions.isEmpty)
         #expect(m750.control(0x53)?.diverted == false && m750.dpi != 800)
