@@ -56,6 +56,8 @@ The daemon rewrites `status.json` when anything in it changes:
 - each device adopted, lost, woken or asleep;
 - battery change;
 - DPI or wheel-mode change;
+- a mouse's settings starting to apply, being applied or failing to apply (`devices[].applied`),
+  and a firmware or Easy-Switch fact first read or changed after a configure;
 - Logi Options+ starting or stopping, seen at the next re-check (`logiOptionsRunning`);
 - permission grant (the restart then writes a fresh one);
 - a Bluetooth mouse seen without Input Monitoring (it joins `waitingForInputMonitoring`);
@@ -88,6 +90,12 @@ missing or stale file means "PureMouse Is Off".
   value: choosing the value already saved leaves the file unchanged, and a reload that leaves
   `dpi` alone keeps the cycled one. Every control write repeats the last token, so a later pause
   or capture cannot erase it unread; the daemon acts once per token.
+- `reapply: token`, when new, is Apply Settings Again: it starts a fresh `Session.configure()` on
+  every mouse whose settings are not applied, or on the one named by `device`, past the 30 s
+  offline guard (`Session.reapply()`). It does nothing for a mouse that is applied or applying.
+  The menu sends it from the attention row that shows while a mouse is not applied, and repeats
+  the last token on every control write, as for `useConfiguredDPI`, so the daemon acts once per
+  token.
 - A bare doorbell, with `control.json` unchanged, asks the daemon to look again at what it learns
   only by looking: whether Logi Options+ is running and which permissions are missing. The Settings
   helper rings it when its window is shown, and the apps ring it after asking Logi Options+ to quit.
@@ -128,8 +136,10 @@ Slider writes from the menu are debounced to about 300 ms.
 ## Versioning
 
 The menu and the daemon ship together in one bundle, so the status and control formats change with
-the bundle and nothing is kept for older versions. `schema` is bumped when they change; a menu that
-sees a higher `schema` shows "update PureMouse" (`AppModel.statusTooNew`). A capability member that
+the bundle and nothing is kept for older versions. `schema` is bumped when they change (3 with the
+applied state, firmware and Easy-Switch hosts, and the `reapply` request); a menu that
+sees a higher `schema` shows "update PureMouse" (`AppModel.statusTooNew`), also when it cannot decode
+a newer status. A capability member that
 is missing means unknown: a reader shows the option, and hiding needs an explicit `false`.
 
 ### Device identity and capabilities (Status)
@@ -143,6 +153,9 @@ All optional; nil members are left out of the JSON.
 | `devices[].kind` | String | A word such as `mouse`, `trackball` or `keyboard`. |
 | `devices[].capabilities` | object | What the mouse reports. Members: `dpi`, `smartShift`, `smoothScroll`, `thumbWheel`, `haptics` and `battery` (each Bool: true has it, false reported not to; absent unknown, e.g. a lookup that failed transiently). Absent until the mouse's first apply has finished |
 | `devices[].controls[].gestures` | Bool | The control can report raw XY movement. Absent when unknown |
+| `devices[].applied` | object | Whether the mouse's settings are on it: `{state, at}`. `state` is `applying` (a configure has started), `applied` (`Session.apply()` ran to its end for the current config; `at` is the wall-clock time, ISO 8601) or `notApplied` (the configure's three attempts failed). Absent before the first configure. Written on those transitions only |
+| `devices[].firmware` | String | The main firmware as the mouse names it, such as `RBM 22.01 B0015` (name, major.minor, build). Read once per mouse after its first successful configure, with 0x0003 function 1. Absent when the mouse does not report it |
+| `devices[].hosts` | object | The Easy-Switch hosts the mouse reports (HID++ 0x1814, with names from 0x1815): `{current, slots[]}`, `current` the zero-based index of this Mac's host, each slot `{name, paired}` with `name` the computer's name where the mouse gives one. Re-read after each successful configure. Absent for a mouse with one host or without the feature. Read only: PureMouse never sends the change-host command |
 | `capture.model` | String | The device key (`devices[].model`) of the mouse whose control was pressed |
 | `waitingForInputMonitoring[]` | array | Bluetooth mice the daemon has seen but cannot adopt because Input Monitoring is not allowed, each `{id, name}` (`WaitingDevice`). Absent or empty when none. Added without a `schema` bump: a reader treats absent as empty (`Status.waiting`), and an older menu ignores it |
 
@@ -152,6 +165,7 @@ All optional; nil members are left out of the JSON.
 |---|---|---|
 | `capture.device` | String | Listen on the mouse with this device key (`devices[].model`) only. Absent means every mouse |
 | `device` | String | Qualifies `useConfiguredDPI`: set only the mouse with this device key to the config's `dpi`. Absent means every mouse |
+| `reapply` | Int | A token: a new value is Apply Settings Again for every mouse that is not applied |
 
 Settings sets `capture.device` and `device` to the mouse chosen on Mouse (none for All Mice). The
 status menu sets neither and writes the top-level `dpi`. A press reports the mouse's key in

@@ -32,8 +32,9 @@ running now are separate: `login on|off` change the first, `start` and `stop` th
 ## Keeping the mouse in step
 
 The mouse forgets every setting PureMouse gives it whenever it sleeps, reconnects or switches
-between a receiver and Bluetooth. PureMouse reapplies them on every reconnect, after the Mac wakes
-and on each config reload.
+between a receiver and Bluetooth. PureMouse reapplies them on every reconnect, after the Mac wakes,
+when the mouse comes back to this Mac from another and on each config reload, within 2 seconds of
+the mouse answering ([Sessions](#sessions)), and says so when it could not.
 
 Which mouse it is decides which settings apply (a `devices` entry on top of the top level). If the
 mouse does not answer when asked who it is, it gets the top-level settings meanwhile, and is asked
@@ -210,8 +211,13 @@ touches.
   SIGTERM, before restoring the mouse).
 - Idle cost is zero CPU. The optional daily update check is run by the system's
   background-activity scheduler, not a timer of ours. The display link runs only while a scroll is
-  gliding. The bounded exceptions are the permission poll and the adoption retries below;
-  `IdleCostTests` fails on a new timer or poll in the daemon sources.
+  gliding. The bounded exceptions are the permission poll, the adoption retries and the reapply
+  retries below; `IdleCostTests` fails on a new timer or poll in the daemon sources.
+- The reapply retries are one `Session.configure`: 3 attempts, each request waiting at most 600 ms
+  (`SessionEnvironment.reapplyAttemptTimeout`), 200 ms apart (`reapplyRetryDelay`). It starts on
+  an event (wake, reconnect, link up, reload, adoption, Apply Settings Again) and ends after the
+  third attempt at about 2 s, so a mouse that never answers costs nothing more until its next
+  event. There is no heartbeat, and nothing re-checks a mouse that is applied.
 
 ### Sessions
 
@@ -219,6 +225,28 @@ touches.
   belongs in `Session.apply()`, which runs on adoption, reconnect, wake and reload. A newer
   `Session.configure()` supersedes one under way; only an offline mouse's other events
   (`Session.reconfigureIfOffline`) defer to a running one, and start one at most once per 30 s.
+- **Applied state.** A session is `applying` from the start of `configure()`, `applied` (with the
+  time, `Environment.date`) once `apply()` has run to its end for the current config, and
+  `notApplied` after the third attempt fails. It is published on those transitions only, so an idle
+  mouse writes nothing. A mouse that never answers is then also offline (`online` false). A
+  `notApplied` mouse shows "Settings not applied" in the menu and General even where it would
+  otherwise read "Asleep"; the menu's Apply Settings Again (`Control.reapply`, one token per
+  request) calls `Session.reapply()`, which starts a fresh configure at once, past the 30 s guard,
+  and does nothing for a session that is not `notApplied`.
+- **Bound.** Each attempt is short (above), so a request lost while the mouse was still waking
+  fails in time for the next, and a mouse answering at any point in the window has its settings
+  back within about a second of that moment. Wake (`Session.configureAfterWake`) starts every
+  session's configure at once; the daemon's other wake work (notifications, permissions, Logi
+  Options+, stragglers) follows 2 s later. A session whose receiver slot is known to be down
+  (`linkDown`: the mouse is on another computer or switched off) is left alone by a wake, so the
+  mouse is not reported as not applied for being away. A mouse that is asleep when the Mac wakes,
+  and does not answer within the window, is reported as not applied until its own reconnect
+  starts another configure; that is a known false alarm, and a bounded one.
+- **Facts for About This Mouse.** After a successful configure the session reads the mouse's
+  Easy-Switch hosts (HID++ 0x1814 `GetHostsInfo`, with names from 0x1815 where it reports them) and,
+  once per mouse, its firmware (0x0003 function 1, per entity). They are reads only: the change-host
+  command (0x1814 function 1) and every 0x1815 setter are never sent. A feature the mouse lacks
+  leaves its field out; a failed read keeps the last value and does not fail the apply.
 - Nothing may be persisted on the device or receiver: they must work normally without PureMouse. A
   persistent diversion (Logi Options+'s) is never written.
 - Feature absence is cached per endpoint in `HIDPPDevice` (`knownPresence`; only a definite
@@ -418,6 +446,10 @@ how the daemon fills them:
   every value (157 on an MX Master 3S). `controls` lists only divertable controls and leaves out
   virtual ones (flag 0x80, e.g. 0x00d7), which cannot be pressed; `gestures` follows the control's
   raw-XY flag. While paused, `devices` is empty: the sessions are dropped.
+- `Device.applied` is the applied state above (`applying`, `applied` with the time, `notApplied`),
+  `firmware` the main firmware as "RBM 22.01 B0015" and `hosts` the current Easy-Switch host and
+  each host's name or "not paired", all absent where unknown. A change of any of them is a status
+  change and a write; their absence from an idle daemon's status is what keeps it quiet.
 - Capabilities come only from lookups apply has already made (`HIDPPDevice.knownPresence`,
   `Session.capabilities`), so building them sends nothing, and are absent until the first apply.
   Haptics (0x19B0) is looked up only by a haptic action, so it is unknown until one runs; a
