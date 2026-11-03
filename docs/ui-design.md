@@ -7,6 +7,9 @@ from Apple's Human Interface Guidelines (HIG, revised June 2026) and macOS 27 un
 
 ## Principles
 
+The owner's bar: PureMouse is "reliable, lightweight, intuitive, modern, macOS native feeling,
+clean, minimalistic, configurable, flexible and easy to maintain".
+
 PureMouse should feel like part of macOS 27: simple and clear for everyone by default, with every
 advanced option one step away for the people who want it. Calm and minimal, never overwhelming,
 and no feature is dropped to get there. "Simple" is not "minimal": a setting earns its place by
@@ -181,7 +184,8 @@ Each level has one mechanism, and each label says what it reveals.
   to say something. Under Reduce Motion, no scale, zoom or bounce. No sounds.
 - Windows, panes, sheets and popovers open with nothing focused (house rule). Every control is
   reachable by Tab and by Full Keyboard Access, has a distinct accessibility label, and is at
-  least 20 × 20 pt. Tooltips are under 75 characters and never repeat the control's name.
+  least 20 × 20 pt. Tooltips are under 75 characters and never repeat the control's name. Check
+  focus with keyboard navigation (`AppleKeyboardUIMode`) both on and off.
 - **Fit.** Each default view fits within 600 pt of content height at the 600 pt window width,
   with one-mouse and two-mouse fixtures (and with a mouse chosen). A fresh install shows no advanced
   content.
@@ -189,7 +193,8 @@ Each level has one mechanism, and each label says what it reveals.
   Liquid Glass slider at both ends (clear and tinted); Reduce Motion; Show Borders; Full Keyboard
   Access; VoiceOver on every symbol-only control. Fix legibility with system settings, never by
   adding a background. A capture matrix needs the system settings changed by a person at the
-  Mac; light and dark captures of every default view and sheet run over SSH (AGENTS.md).
+  Mac; light and dark captures of every default view and sheet run over SSH
+  ([Development](development.md#dev-hooks)).
 - **Checks that run without a person.** `UIChromeScanTests` (above), `MenuPlanTests` (the status
   item's spoken label), and `PUREMOUSE_DEV_AX_DUMP=1` on a macOS 27 Mac, which lists every
   control's role, label and size for each tab, Mouse segment and (through the other
@@ -207,7 +212,8 @@ Each level has one mechanism, and each label says what it reveals.
 - About shows the icon, name, version, Check for Updates with the **Check for updates
   automatically** switch beside it, links and one **Support PureMouse**
   link to GitHub Sponsors. Support appears nowhere else: no prompts, badges or reminders.
-- The app icon is the Icon Composer document (`assets/AppIcon.icon`, AGENTS.md). Check it at 16
+- The app icon is the Icon Composer document (`assets/AppIcon.icon`,
+  [Development](development.md#icon)). Check it at 16
   to 1024 px in default, dark, clear and tinted, in the Dock, Finder, About and alerts.
 
 ## Where PureMouse goes further
@@ -234,6 +240,76 @@ Not adopted: a 3D or photographic mouse map with glowing callouts (the device ca
 line art with plain markers, #56); an acceleration curve editor (macOS owns acceleration, so it
 would duplicate System Settings); a floating per-app indicator (it polls and covers content);
 display-density DPI hints and live gesture highlighting (more text and motion than they earn).
+
+## Implementation
+
+Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMouseAppSupport`.
+
+- **Tabs.** `SettingsTab.shown` lists the tabs, so a new tab is one entry. Mouse is a fixed header
+  strip (segments, Find by Pressing… on Buttons, a leading slot for the mouse pop-up) over its
+  Buttons, Scrolling and Pointer segments (`MouseTab`), and holds only per-mouse settings. A
+  request for `buttons`, `scrolling` or `pointer` opens Mouse on that segment (`SettingsPane`,
+  `SettingsSelection`); a first run, or a stored tab not understood, opens Mouse (on Buttons the
+  first time).
+- **Sizing.** Tabs and segments are built the first time they show (`LazyPane`, `MouseTab`), and a
+  pane is no taller than the screen (`LazyPane.fitted`). A pane whose height changes while shown
+  calls `SettingsContext.refit()`: a nested `NSHostingController` updates its
+  `preferredContentSize` without telling the tab controller, so `SettingsTabs.refit()` copies it
+  across (through `MouseTab.fit()`, which adds the strip).
+- **Advanced.** `PaneFooter` (Restore Defaults, Advanced…) opens an `AdvancedSheet`, which never
+  opens another sheet. Hidden controls come from `ControlAvailability` over `MouseScope.deciding`,
+  and Scrolling's rows from `ScrollingLayout`.
+- **Scopes.** The mouse pop-up (`MousePopUp`, `AppModel.knownMice`, `MouseScope`) chooses the scope
+  the panes edit (`AppModel.scope`, `scopeTarget`, remembered per user in defaults). Panes read
+  `resolved` and write through `model.update(in: model.scopeTarget)`; a row uses its normal control
+  in every scope. Do not read `primaryDevice` in a pane: `devices(in:)`, `liveDevice(in:)` and
+  `primaryDevice(in:)` take the scope. Settings reads and writes a device through `ConfigScope`:
+  `.device(key)` exists only for a key Kit accepts (`Config.isDeviceKey`), `set(_:at:in:)` refuses a
+  section outside `Config.deviceSections`, writes `name` once when it creates an entry and prunes an
+  entry left with only a `name`. The thumb wheel is read by layering (`thumbWheel(in:)`), never from
+  the per-key merge, since its `action` resets `step` and replaces `left` and `right`.
+  `binding(_:in:)` is the scope's own binding, not the one that applies.
+- **Inherited and own values.** `InheritedValue` is the one type for any inherited value, for mice
+  and apps. A row the scope sets itself gets an `InheritedOverride` note from `InheritedValue.note`
+  (`RowLabel` or `DisclosureLabel` `note:`, `.overridable`); rows are `RowStanding`
+  (`InheritedValue.swift`), so the note, the link and the spoken ", same as All Mice" come from one
+  answer. The note text, link and VoiceOver wording are in [UI language](ui-language.md#glossary).
+  `ScopeEditing.swift` holds the per-section helpers (`removeOverrides`, `restore…Defaults(in:)`,
+  smooth scrolling, feel, presets).
+- **Mouse Default.** A mouse's or an app's button row chooses Mouse Default as its own value,
+  `"default"` (`Config.Binding.nativeValue`, `ButtonAction.mouseDefault`), beside "Same as …", which
+  removes the key; under All Mice it removes the key. Under All Mice it is offered for every
+  top-level button; on a mouse or in an app only for controls in `Config.nativeBehaviour(of:)`, the
+  one table the daemon also performs from, though a `"default"` already set on another control
+  stays in view (`PickerEntry.offersMouseDefault`).
+  `buttonKey`/`removeButton` (`ConfigKeys.swift`) follow Kit's alias rule.
+- **Global actions.** Reset All and the status menu stay global (`setDPI` without a target writes
+  the top level). Settings' Pointer pane passes the mouse, and Find by Pressing and "use configured
+  DPI" carry its key (`Control.device`, `Control.capture.device`), a press selecting that mouse's
+  scope.
+- **Buttons.** Mouse › Buttons and the Apps tab list a named button when a connected mouse reports it
+  or the config binds it; with no report, those in `NamedButton.listedByDefault` (not the MX Master
+  4's thumb panel) (`ButtonRows.named`). Haptic picker entries come from Kit's
+  `HapticWaveform.allCases`; the menu only words them (`ActionCatalog.hapticLabel`).
+- **Pointer speed.** The DPI the menu and Mouse › Pointer show is the mouse's live value (a
+  `cycleDPI` press changes it without touching the config), then the configured one; a change made
+  in the pane shows until the mouse reports it (`DPIReading`). Choosing the saved value changes
+  nothing on disk, so `AppModel.setDPI` sends `useConfiguredDPI` ([companion.md](companion.md)).
+- **Apps.** The Apps pane writes only `apps.<id>` keys (`AppSettings.swift`): each control's own key,
+  removed for "Same as Everywhere" (an emptied app entry is pruned). An added app is not written
+  until a setting is chosen; its row says so until Settings closes. Each app opens in a sheet
+  (`AppSheet`) over the list, and inside it the shortcut and command editors are popovers
+  (`EditorPresentation`, read by `ThumbWheelRows` and the button rows). Names are looked up without
+  icons (`AppIdentities`); an icon loads when its frame meets the scroll view's visible bounds
+  (`AppIcon`): a grouped form builds every row, so `onAppear` is not enough, and macOS 14 lacks
+  `onScrollVisibilityChange`. Applications is never listed; adding goes through an open panel or
+  the running apps.
+- **Notices.** `BannerPlan.items` gives them in order: config error, unsaved change, status too
+  new, PureMouse off, paused, Logi Options+, Accessibility on the panes that need it. A pane shows
+  only the first, with "N more notices" opening General, whose Status section lists them all as rows
+  (off is its PureMouse row). Use Last Working Config… asks before it replaces the file.
+- **Labels.** Settings controls carry their own accessibility label where a `RowLabel` (title plus
+  caption) leaves them unnamed. A shortcut binding's accessibility value is `Shortcut.spoken`.
 
 ## Layout
 
