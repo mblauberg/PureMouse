@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted, not built
+Accepted and built. `PureMouseAppSupport` holds the shared logic, tested in
+`Tests/PureMouseAppSupportTests`; `AppModel` composes `ConfigStore`, `DaemonLink` and
+`CaptureController`, and the status menu is built from `MenuPlan` (`MenuPlanTests`).
 
 ## Context
 

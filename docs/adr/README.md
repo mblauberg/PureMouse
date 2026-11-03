@@ -15,14 +15,14 @@ Consequences. Keep each to about 40 lines.
 | [2](0002-feature-absence-cache.md) | Accepted | Feature absence is cached per endpoint, and capabilities come from that cache |
 | [3](0003-feature-drivers.md) | Accepted, not built | Feature drivers: designed now, built with keyboard support |
 | [4](0004-device-identity-and-companion-contract.md) | Accepted | Device identity (`m<model>` / `p<pid>`); the status contract is versioned with the bundle |
-| [5](0005-config-v2-device-overrides.md) | Accepted (Settings does not write it yet) | Config v2 is per-device overrides on top-level defaults, with no migration |
+| [5](0005-config-v2-device-overrides.md) | Accepted | Config v2 is per-device overrides on top-level defaults, with no migration |
 | [6](0006-ble-input-value-matching.md) | Proposed | Bluetooth HID++ input through vendor-page value matching |
 | [7](0007-log-rotation.md) | Accepted | Size-capped log rotation in the daemon |
 | [8](0008-primary-buttons-reserved.md) | Accepted | The primary buttons are never bound or diverted |
 | [9](0009-settings-helper-app.md) | Accepted | Settings is an on-demand helper app |
 | [10](0010-menu-memory-budgets.md) | Accepted | Menu memory policy: measured budgets |
-| [11](0011-shared-logic-library.md) | Accepted, not built | A shared logic library and an `AppModel` split |
-| [12](0012-multi-device-settings-scopes.md) | Accepted, not built | Multi-device Settings: path-prefix scopes with per-leaf fallback |
+| [11](0011-shared-logic-library.md) | Accepted | A shared logic library and an `AppModel` split |
+| [12](0012-multi-device-settings-scopes.md) | Accepted | Multi-device Settings: path-prefix scopes with per-leaf fallback |
 | [13](0013-silhouettes.md) | Accepted, not built | Silhouettes as bundled vector PDFs plus a Swift callout table |
 | [14](0014-signing-identity-is-configuration.md) | Accepted (notarisation built, not yet run with real credentials) | Signing identity is configuration; hardened runtime always |
 | [15](0015-protected-release-workflow.md) | Accepted, not built | Releases are built by a protected GitHub Actions workflow |
