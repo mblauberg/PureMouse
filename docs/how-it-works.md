@@ -407,7 +407,10 @@ how the daemon fills them:
   take over, 0x2121 or 0x2130; false when the notched wheel refused), `battery` (0x1004, 0x1000,
   0x1001). They are kept across reloads.
 - The config file is watched as well as its directory, since editors that write in place leave the
-  directory unchanged. A reload that fails leaves the previous config in effect and reports
+  directory unchanged. While the directory is absent (deleted, renamed away or never created) the
+  nearest existing ancestor is watched instead, and every event re-arms both watches
+  (`ConfigWatcher.arm`); the config in effect stays until the directory returns, and then it
+  reloads once. Only file-system sources are used, so idle costs nothing. A reload that fails leaves the previous config in effect and reports
   `config.error` (`ConfigCheck.message`, which names the field); the next successful load clears
   it.
 
