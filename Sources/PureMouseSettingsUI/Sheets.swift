@@ -174,6 +174,7 @@ final class ShortcutRecorder {
     /// and their key often never reaches the app, so the sheet then offers to enter the text.
     private(set) var endedOnModifiers = false
     @ObservationIgnored private var monitor: Any?
+    @ObservationIgnored private var resignObservers: [any NSObjectProtocol] = []
 
     /// Whether a change from `held` to `now` ends a recording with no key: some modifiers were held
     /// and now none are.
@@ -195,24 +196,48 @@ final class ShortcutRecorder {
             }
             return result
         }
+        // A reserved shortcut that moves focus (⌘Space, ⌃←, Mission Control) deactivates the app
+        // while its modifier is down, so the release never arrives here.
+        let center = NotificationCenter.default
+        resignObservers = [NSApplication.didResignActiveNotification, NSWindow.didResignKeyNotification].map { name in
+            center.addObserver(forName: name, object: nil, queue: nil) { [weak self] _ in
+                MainActor.assumeIsolated { self?.resigned() }
+            }
+        }
     }
 
     func stop() {
         if let monitor { NSEvent.removeMonitor(monitor) }
         monitor = nil
+        resignObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        resignObservers = []
         recording = false
         held = []
+    }
+
+    /// The app or the window lost focus. With modifiers down the release will not arrive, so this
+    /// ends the recording as if they had been released: the sheet then offers the text field. With
+    /// none down, recording goes on.
+    func resigned() {
+        guard recording, !held.isEmpty else { return }
+        endedOnModifiers = true
+        stop()
+    }
+
+    /// The modifiers now held; a release of all of them with no key ends the recording.
+    func modifiersChanged(to modifiers: Shortcut.Modifiers) {
+        if Self.endsWithoutKey(held: held, now: modifiers) {
+            endedOnModifiers = true
+            stop()
+        } else {
+            held = modifiers
+        }
     }
 
     private func handle(_ event: NSEvent) -> NSEvent? {
         let modifiers = Self.modifiers(event.modifierFlags)
         if event.type == .flagsChanged {
-            if Self.endsWithoutKey(held: held, now: modifiers) {
-                endedOnModifiers = true
-                stop()
-                return nil
-            }
-            held = modifiers
+            modifiersChanged(to: modifiers)
             return nil
         }
         // Plain Escape stops recording (and leaves the sheet's Cancel to a second press).

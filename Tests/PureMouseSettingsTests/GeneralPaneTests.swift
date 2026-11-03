@@ -26,20 +26,26 @@ import Testing
         }
     }
 
-    /// Hiding the icon keeps the menu process running without a status item, so the low battery
-    /// switch is never disabled by it, and the update switch has no such dependency either.
-    /// General's PureMouse row is the pause switch (`AppModel.setPaused`), with Start only while off, and
-    /// Open at login has no caption (#146). The row is read up to the low battery row, which follows it.
+    /// General's PureMouse row is the pause switch (`AppModel.setPaused`, through `RunState`'s
+    /// mapping, tested in BannerPlanTests), with Start only while off, and Open at login has no
+    /// caption (#146). The row is read up to the low battery row, which follows it.
     @Test func thePureMouseRowPausesAndStartsAndOpenAtLoginHasNoCaption() throws {
         let general = try Self.source("GeneralPane.swift")
         let row = try #require(general.range(of: "private var runningRow").map { general[$0.lowerBound...] })
         let body = try #require(row.range(of: "/// The menu bar app posts the notifications").map { String(row[..<$0.lowerBound]) })
-        #expect(body.contains("model.setPaused(!$0)"))
+        #expect(body.contains("state.toggled(on)"))
+        #expect(body.contains("model.setPaused("))
+        #expect(body.contains(".accessibilityValue(state.word)"))
         #expect(body.contains(".toggleStyle(.switch)"))
         #expect(body.contains(#"Button("Start")"#))
         #expect(!body.contains("Stop"))
         #expect(general.contains(#"RowLabel("Open at login")"#))
         #expect(!general.contains(#"RowLabel("Open at login", help"#))
+    }
+
+    /// The notices below the PureMouse row leave out off and paused, which that row already shows.
+    @Test func generalListsNoticesThroughThePlanThatLeavesOutTheRowsOwn() throws {
+        #expect(try Self.source("GeneralPane.swift").contains("BannerPlan.generalItems(for:"))
     }
 
     /// No Stop button anywhere in Settings: no string literal in its sources starts "Stop".
@@ -51,6 +57,8 @@ import Testing
         }
     }
 
+    /// Hiding the icon keeps the menu process running without a status item, so the low battery
+    /// switch is never disabled by it, and the update switch has no such dependency either.
     @Test func hidingTheIconDisablesNothing() throws {
         let general = try Self.source("GeneralPane.swift")
         let row = try #require(general.range(of: "private var lowBatteryRow").map { String(general[$0.lowerBound...]) })

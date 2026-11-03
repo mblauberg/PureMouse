@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Testing
 @testable import PureMouseSettingsUI
@@ -21,6 +22,47 @@ import Testing
         #expect(!ShortcutRecorder.endsWithoutKey(held: [], now: [.command]), "pressing a modifier is not an end")
         #expect(!ShortcutRecorder.endsWithoutKey(held: [.command], now: [.command, .shift]), "holding another is not an end")
         #expect(!ShortcutRecorder.endsWithoutKey(held: [], now: []))
+    }
+
+    /// A reserved shortcut that moves focus deactivates the app while its modifier is down, so the
+    /// release never arrives: losing focus then ends the recording as a modifier-only one.
+    @Test(arguments: [NSApplication.didResignActiveNotification, NSWindow.didResignKeyNotification])
+    func losingFocusWithModifiersDownEndsTheRecording(notification: Notification.Name) {
+        let recorder = ShortcutRecorder()
+        recorder.start()
+        recorder.modifiersChanged(to: [.command])
+        #expect(recorder.recording)
+        NotificationCenter.default.post(name: notification, object: nil)
+        #expect(!recorder.recording)
+        #expect(recorder.endedOnModifiers, "the sheet reveals the text field")
+        #expect(recorder.held.isEmpty)
+    }
+
+    @Test func losingFocusWithNoModifierDownLeavesTheRecordingOn() {
+        let recorder = ShortcutRecorder()
+        recorder.start()
+        NotificationCenter.default.post(name: NSApplication.didResignActiveNotification, object: nil)
+        #expect(recorder.recording)
+        #expect(!recorder.endedOnModifiers)
+        recorder.stop()
+    }
+
+    @Test func aStoppedRecorderIgnoresLosingFocus() {
+        let recorder = ShortcutRecorder()
+        recorder.start()
+        recorder.modifiersChanged(to: [.command])
+        recorder.stop()
+        NotificationCenter.default.post(name: NSApplication.didResignActiveNotification, object: nil)
+        #expect(!recorder.endedOnModifiers, "the observers went with the recording")
+    }
+
+    @Test func releasingModifiersWithNoKeyStillEndsTheRecording() {
+        let recorder = ShortcutRecorder()
+        recorder.start()
+        recorder.modifiersChanged(to: [.control])
+        recorder.modifiersChanged(to: [])
+        #expect(!recorder.recording)
+        #expect(recorder.endedOnModifiers)
     }
 
     /// The recorder comes before the text field in the sheet, and the field sits inside the branch

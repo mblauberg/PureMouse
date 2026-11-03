@@ -513,7 +513,8 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
 - **Notices.** `BannerPlan.items` gives them in order: config error, unsaved change, status too
   new, PureMouse off, paused, Input Monitoring (a Bluetooth mouse is waiting), Logi Options+,
   Accessibility on the panes that need it, no mouse (General only; the Mouse panes say it in
-  place). The Logi Options+ notice offers Quit Logi Options+ as its only bordered button
+  place). General's list (`BannerPlan.generalItems`) leaves out off and paused: its PureMouse row
+  is those, with Start or the switch. The Logi Options+ notice offers Quit Logi Options+ as its only bordered button
   (`LogiOptionsAction.quit`: asks the app to quit through `NSRunningApplication.terminate()`,
   never a signal, and never starts it) and Open Login Items Settings… as a link-style button
   under its caption, in the banner, General's row and the menu. It appears and clears in

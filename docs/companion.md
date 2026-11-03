@@ -301,7 +301,7 @@ PureMouse under System Settings › General › Login Items, with a button that 
 The helper runs `menu on` and `menu off` itself. It is not in the menu agent's process group, so
 hiding the icon from Settings leaves Settings open. Turning on Open at login there runs `login on`,
 which restarts nothing. Quit PureMouse quits the helper first, which saves its edits and cancels a select by pressing
-still listening, then runs `stop`. Quit in the helper's own menu (⌘Q) quits only Settings.
+still listening, then runs `stop`. Quit Settings in the helper's own menu (⌘Q) quits only Settings and leaves PureMouse running.
 
 ## Low-battery notifications
 

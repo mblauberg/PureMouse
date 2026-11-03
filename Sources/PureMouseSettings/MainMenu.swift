@@ -33,7 +33,8 @@ enum MainMenu {
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Hide PureMouse", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Quit PureMouse", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        // Quits Settings only; the menu bar app's Quit PureMouse is the one that stops PureMouse (ADR 9, amendment).
+        appMenu.addItem(withTitle: "Quit Settings", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         main.addItem(submenu: appMenu)
 
         let edit = NSMenu(title: "Edit")

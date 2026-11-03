@@ -105,6 +105,20 @@ struct SettingsLauncherTests {
         #expect(done == 1)
     }
 
+    @Test func anOpenThatFailsIsReportedWithoutSystemText() {
+        struct Failure: Error, LocalizedError { var errorDescription: String? { "/private/var/secret: denied" } }
+        let fake = FakeSystem()
+        var done = 0
+        SettingsLauncher(system: fake.system).open { done += 1 }
+        #expect(fake.opens.count == 1)
+        fake.opens.removeFirst()(nil, Failure())
+        #expect(fake.alerts == ["PureMouse couldn't open Settings."])
+        #expect(fake.alerts == [SettingsAlert.couldNotOpen.title])
+        #expect(fake.alertBodies == ["Try again. If it keeps happening, restart your Mac."])
+        #expect(!fake.alertBodies.joined().contains("/"))
+        #expect(done == 1)
+    }
+
     @Test func aLiveHelperIsOpenedOnce() {
         let fake = FakeSystem()
         let launcher = SettingsLauncher(system: fake.system)

@@ -101,6 +101,33 @@ import Testing
         #expect(RunState.paused.button == nil)
     }
 
+    /// The switch is on while active, moves to active or paused, and is not offered while off.
+    @Test func theSwitchMapsToTheRunState() {
+        #expect(RunState.running.isOn)
+        #expect(!RunState.paused.isOn)
+        #expect(!RunState.off.isOn)
+        for state in [RunState.running, .paused] {
+            #expect(state.toggled(true) == .running)
+            #expect(state.toggled(false) == .paused)
+        }
+        #expect(RunState.off.toggled(true) == nil)
+        #expect(RunState.off.toggled(false) == nil)
+    }
+
+    /// Off and paused are General's PureMouse row, so its list of notices leaves them out; every other
+    /// notice still shows there, and a pane's banner still offers them.
+    @Test func generalListsNoNoticeThatItsPureMouseRowIs() {
+        let off = BannerPlan.State(daemonRunning: false, paused: false)
+        let paused = BannerPlan.State(daemonRunning: true, paused: true)
+        #expect(BannerPlan.items(for: off) == [.off])
+        #expect(BannerPlan.items(for: paused) == [.paused])
+        #expect(BannerPlan.generalItems(for: off).isEmpty)
+        #expect(BannerPlan.generalItems(for: paused).isEmpty)
+        let more = BannerPlan.State(daemonRunning: true, paused: true, logiOptionsRunning: true,
+                                    accessibilityMissing: true, needsAccessibility: true, noMouse: true)
+        #expect(BannerPlan.generalItems(for: more) == [.logiOptions, .accessibility, .noMouse])
+    }
+
     @Test func theStatusRowNamesTheState() {
         #expect(RunState(daemonRunning: true, paused: false) == .running)
         #expect(RunState(daemonRunning: true, paused: true) == .paused)

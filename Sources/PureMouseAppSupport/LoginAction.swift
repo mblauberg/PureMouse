@@ -5,17 +5,18 @@ import PureMouseKit
 /// (docs/companion.md, "Login and lifecycle"). "Opens at login" and "is running now" are separate
 /// axes, so the two controls never share a command: switching login off does not stop PureMouse,
 /// and Start does not change whether it opens at login. Settings pauses and resumes PureMouse through
-/// the daemon's control file (`AppModel.setPaused`), not through `running`.
+/// the daemon's control file (`AppModel.setPaused`), not through `start`.
 public enum LoginAction: Equatable, Sendable {
     /// The Open at login switch moved.
     case openAtLogin(Bool)
-    /// Start (`true`, offered while PureMouse is off) or Stop (`false`, which Settings doesn't offer).
-    case running(Bool)
+    /// Start, offered while PureMouse is off. Settings has no Stop (Quit PureMouse is the menu bar
+    /// app's, `Lifecycle.Command.stop`).
+    case start
 
     public var command: Lifecycle.Command {
         switch self {
         case .openAtLogin(let on): on ? .loginOn : .loginOff
-        case .running(let on): on ? .start : .stop
+        case .start: .start
         }
     }
 }

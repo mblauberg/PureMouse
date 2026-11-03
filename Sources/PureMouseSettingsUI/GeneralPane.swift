@@ -15,9 +15,10 @@ struct GeneralPane: View {
     @State private var deniedWatch: NotificationPermission.Watch?
     @State private var showingAdvanced = false
 
-    /// Every notice that applies, as rows. Off is the PureMouse row itself, with its Start button.
+    /// Every notice that applies, as rows. Off and paused are the PureMouse row itself (its Start
+    /// button and its switch).
     private var notices: [Notice] {
-        BannerPlan.items(for: BannerPlan.State(model: model, needsAccessibility: true)).filter { $0 != .off }
+        BannerPlan.generalItems(for: BannerPlan.State(model: model, needsAccessibility: true))
     }
 
     /// The mice the daemon knows, only while it runs: a status file outlives it.
@@ -106,14 +107,20 @@ struct GeneralPane: View {
                     .symbolRenderingMode(.multicolor)
                     .foregroundStyle(.secondary)
                     .labelStyle(StatusLabelStyle())
+                    // The switch speaks the state word, so it is heard once.
+                    .accessibilityHidden(state.button == nil)
                 if let start = state.button {
                     Button("Start") { setRunning(start) }
                         .disabled(changingRunning || model.locations.daemon == nil)
                 } else {
-                    // The switch names itself; its state word sits beside it.
-                    Toggle("PureMouse", isOn: Binding(get: { state == .running }, set: { model.setPaused(!$0) }))
+                    // The switch names itself; its state word sits beside it and is its VoiceOver
+                    // value: "PureMouse, switch, Active".
+                    Toggle("PureMouse", isOn: Binding(get: { state.isOn },
+                                                      set: { on in state.toggled(on).map { model.setPaused($0 == .paused) } }))
                         .labelsHidden()
                         .toggleStyle(.switch)
+                        .accessibilityLabel("PureMouse")
+                        .accessibilityValue(state.word)
                 }
             }
         } label: {

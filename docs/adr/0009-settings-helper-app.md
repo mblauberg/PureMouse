@@ -50,3 +50,8 @@ Identity stays separate. The bundle folder `PureMouse Settings.app`, the identif
 on the identifier, and no path in the daemon, moves. Only what macOS shows (the Dock, Cmd-Tab and the
 app menu) takes the display name. The name is set in `scripts/lib.zsh#write_info_plist` and checked
 by `scripts/tests/test_bundle.zsh`.
+
+The helper's app menu does not use the name for Quit. The menu bar app's "Quit PureMouse" stops
+PureMouse (`puremouse stop`), while ⌘Q in the helper only quits Settings and leaves PureMouse
+running, so two items of one name would do two things. The helper's item is "Quit Settings" (⌘Q
+kept), and "Quit PureMouse" is only the menu bar app's.
