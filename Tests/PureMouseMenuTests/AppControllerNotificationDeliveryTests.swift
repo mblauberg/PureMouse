@@ -27,8 +27,8 @@ struct AppControllerNotificationDeliveryTests {
                               companion: directory.appending(path: "companion", directoryHint: .isDirectory))
     }
 
-    private func controller(iconShown: Bool) -> AppController {
-        AppController(locations: locations, iconShown: iconShown,
+    private func controller(iconShown: Bool, resident: Bool? = nil) -> AppController {
+        AppController(locations: locations, iconShown: iconShown, resident: resident,
                       announce: { [spy] id, _, _ in spy.announced.append(id) },
                       withdraw: { [spy] ids in spy.withdrawn.append(ids) },
                       requestPermission: { [spy] in spy.permissionRequests += 1 },
@@ -77,7 +77,15 @@ struct AppControllerNotificationDeliveryTests {
         #expect(spy.announced == ["battery.unit:m000000000001:0a1b2c3d.low"])
     }
 
-    @Test func switchingTheSettingOnAsksForPermissionOnlyWhenTheIconIsShown() throws {
+    /// Hiding the icon keeps the resident menu process, so the alert still comes (one band, once).
+    @Test func theResidentRunWithTheIconHiddenAnnouncesAReconnectCrossingOnce() throws {
+        try drainedWhileAway { controller(iconShown: false, resident: true) }
+        #expect(spy.announced == ["battery.unit:m000000000001:0a1b2c3d.low"])
+        controller(iconShown: false, resident: true).model.reloadStatus()
+        #expect(spy.announced.count == 1)
+    }
+
+    @Test func switchingTheSettingOnAsksForPermissionOnlyInTheResidentRun() throws {
         for shown in [true, false] {
             try writeConfig(lowBattery: false)
             let controller = controller(iconShown: shown)
@@ -87,5 +95,12 @@ struct AppControllerNotificationDeliveryTests {
             #expect(spy.permissionRequests == (shown ? 1 : 0), "shown: \(shown)")
             spy.permissionRequests = 0
         }
+        // The resident run asks whether or not it shows an icon.
+        try writeConfig(lowBattery: false)
+        let hidden = controller(iconShown: false, resident: true)
+        try writeConfig(lowBattery: true)
+        hidden.model.reloadConfig()
+        hidden.statusChanged()
+        #expect(spy.permissionRequests == 1)
     }
 }

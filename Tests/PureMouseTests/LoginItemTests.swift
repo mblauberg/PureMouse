@@ -156,14 +156,16 @@ private final class Rig: @unchecked Sendable {
         #expect(rig.service.running == [.daemon, .menu])
     }
 
-    @Test func aHiddenMenuIsNotRegistered() throws {
+    /// A hidden icon is a menu process without a status item, not no menu process: the low-battery
+    /// notifications and the update check run in it.
+    @Test func aHiddenMenuIsStillRegisteredAndStarted() throws {
         let rig = Rig()
         try rig.hideMenu()
         let outcome = try rig.item.register()
-        #expect(rig.service.registered == [.daemon])
-        #expect(rig.service.running == [.daemon])
+        #expect(rig.service.registered == [.daemon, .menu])
+        #expect(rig.service.running == [.daemon, .menu])
         #expect(rig.service.calls == ["stop daemon", "register daemon", "start daemon",
-                                      "unregister menu", "stop menu"])
+                                      "stop menu", "register menu", "start menu"])
         #expect(outcome == "PureMouse is running and will start at login. The menu bar icon is hidden (`puremouse menu on` shows it).")
     }
 
@@ -226,7 +228,7 @@ private final class Rig: @unchecked Sendable {
         let rig = Rig()
         try rig.hideMenu()
         #expect(try rig.item.finderLaunch().settingsOpened)
-        #expect(rig.service.registered == [.daemon])
+        #expect(rig.service.registered == [.daemon, .menu])
         #expect(rig.opened.map(\.app) == [helperURL])
         #expect(rig.hidden)
     }
@@ -314,20 +316,33 @@ private final class Rig: @unchecked Sendable {
 
     // MARK: menu on|off
 
-    @Test func menuOffIsRememberedAndRemovesOnlyTheMenu() throws {
+    @Test func menuOffIsRememberedAndRestartsOnlyTheMenu() throws {
         let rig = Rig()
         _ = try rig.item.register()
         rig.forget()
         #expect(try rig.item.showMenu(false) == "The menu bar icon is hidden; `puremouse menu on` shows it again.")
         #expect(rig.hidden)
-        #expect(rig.service.calls == ["unregister menu", "stop menu"])
-        #expect(rig.service.registered == [.daemon])
-        #expect(rig.service.running == [.daemon])
+        // Restarted so it reads the marker and comes back without a status item; the daemon is untouched.
+        #expect(rig.service.calls == ["stop menu", "register menu", "start menu"])
+        #expect(rig.service.registered == [.daemon, .menu])
+        #expect(rig.service.running == [.daemon, .menu])
 
         rig.forget()
         #expect(try rig.item.showMenu(true) == "The menu bar icon is shown.")
         #expect(!rig.hidden)
         #expect(rig.service.calls == ["stop menu", "register menu", "start menu"])
+    }
+
+    /// Hide Menu Bar Icon is run by the menu bar app itself: it must not be restarted under its own
+    /// feet, so it only registers, and removes its own status item.
+    @Test func menuOffFromTheMenuLeavesTheRunningMenuJobAlone() throws {
+        let rig = Rig()
+        rig.menuIsCaller = true
+        rig.service.running = [.menu]
+        #expect(try rig.item.showMenu(false) == "The menu bar icon is hidden; `puremouse menu on` shows it again.")
+        #expect(rig.hidden)
+        #expect(rig.service.calls == ["register menu"])
+        #expect(rig.service.running == [.menu])
     }
 
     @Test func menuOnNeedsAMenuApp() throws {
@@ -364,7 +379,7 @@ private final class Rig: @unchecked Sendable {
     @Test(arguments: [false, true]) func eachCommandChangesOnlyItsOwnAxis(hidden: Bool) throws {
         let rig = Rig()
         if hidden { try rig.hideMenu() }
-        let menuShown = !hidden
+        let menuShown = true  // hidden or not, the menu process runs; hidden, without a status item
 
         // start: running on, login unchanged (off).
         #expect(try rig.item.start() == "PureMouse started.")
@@ -433,7 +448,7 @@ private final class Rig: @unchecked Sendable {
         _ = try rig.item.loginOn()
         #expect(rig.item.loginStatus() == LoginStatus(service: "fake", daemon: .enabled, menu: .enabled, hidden: false))
         _ = try rig.item.showMenu(false)
-        #expect(rig.item.loginStatus() == LoginStatus(service: "fake", daemon: .enabled, menu: .notRegistered, hidden: true))
+        #expect(rig.item.loginStatus() == LoginStatus(service: "fake", daemon: .enabled, menu: .enabled, hidden: true))
         let bare = Rig(menuApp: nil)
         #expect(bare.item.loginStatus().menu == .notFound)
     }

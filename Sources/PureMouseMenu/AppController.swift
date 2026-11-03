@@ -22,18 +22,23 @@ struct UpdateSetup {
 }
 
 /// The app delegate: owns the model and the status item. Settings is an app of its own
-/// (`SettingsLauncher`), so this process never holds a window.
+/// (`SettingsLauncher`), so this process never holds a window. With Show in menu bar off, the
+/// launchd-run process stays without a status item (windowless): low-battery notifications and
+/// the update check go on (docs/ui-design.md, "Show in menu bar").
 @MainActor
 final class AppController: NSObject, NSApplicationDelegate {
     let model: AppModel
-    /// Whether this run shows its icon: notifications run only then. A hidden-icon run gets no
-    /// notification callbacks, so it neither announces nor consumes a band (`BatteryAlertStore`),
-    /// and never asks for permission.
+    /// Whether this run shows its status item (Show in menu bar).
     private let iconShown: Bool
+    /// Whether this run is the resident menu process (launchd's, shown or not): only it announces
+    /// and consumes bands (`BatteryAlertStore`), asks for notification permission and checks for
+    /// updates. A copy started by hand without an icon opens Settings and ends with it; it gets no
+    /// notification callbacks, so it neither announces nor consumes a band.
+    private let resident: Bool
     private let requestPermission: @MainActor () -> Void
     private var statusMenu: StatusMenu?
     private var lowBatteryNotificationsOn: Bool
-    /// The daily update check and its reminders; runs only while the icon is shown.
+    /// The daily update check and its reminders; runs in the resident process, icon or not.
     let updates: UpdateReminders
     private let askAboutUpdates: @MainActor () -> Bool
     private var questionSettled = false
@@ -42,13 +47,16 @@ final class AppController: NSObject, NSApplicationDelegate {
     /// notification centre.
     init(locations: Locations = .live,
          iconShown: Bool = Locations.live.showsInMenuBar,
+         resident: Bool? = nil,
          announce: @escaping AppModel.Announce = Notifier.post,
          withdraw: @escaping AppModel.Withdraw = Notifier.removeDelivered,
          requestPermission: @escaping @MainActor () -> Void = { Task { await Notifier.requestIfNeeded() } },
          updates setup: UpdateSetup = .live) {
+        let resident = resident ?? (iconShown || Locations.launchedByLaunchd)
         model = AppModel(locations: locations, alert: Alerts.show,
-                         notifications: iconShown ? (announce, withdraw) : nil)
+                         notifications: resident ? (announce, withdraw) : nil)
         self.iconShown = iconShown
+        self.resident = resident
         self.requestPermission = requestPermission
         lowBatteryNotificationsOn = model.lowBatteryNotificationsOn
         updates = UpdateReminders(preferences: setup.preferences, current: setup.current, fetcher: setup.fetcher,
@@ -71,12 +79,12 @@ final class AppController: NSObject, NSApplicationDelegate {
         if iconShown { statusMenu = StatusMenu(model: model, app: self) }
         startUpdates()
         // Opened by hand, or asked for Settings while starting (`puremouse` opened from the Finder
-        // restarts this agent, then opens it), or with no icon to show: open Settings. With no
-        // icon there is nothing left to do once it is open.
+        // restarts this agent, then opens it): open Settings. A copy that is not resident has
+        // nothing left to do once it is open.
         let request = ShowRequest.consume()
-        if !Locations.launchedByLaunchd || statusMenu == nil || request != nil {
+        if !Locations.launchedByLaunchd || !resident || request != nil {
             showSettings(request) { [weak self] in
-                if self?.statusMenu == nil { NSApp.terminate(nil) }
+                if self?.resident != true { NSApp.terminate(nil) }
             }
         }
         #if DEBUG || DEVHOOKS
@@ -104,7 +112,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         // macOS asks per app, and this app posts the notifications: when the switch is turned on
         // in Settings (another app), ask for permission here.
         let on = model.lowBatteryNotificationsOn
-        if iconShown, NotificationPermission.shouldRequest(wasOn: lowBatteryNotificationsOn, isOn: on) {
+        if resident, NotificationPermission.shouldRequest(wasOn: lowBatteryNotificationsOn, isOn: on) {
             requestPermission()
         }
         lowBatteryNotificationsOn = on
@@ -114,9 +122,9 @@ final class AppController: NSObject, NSApplicationDelegate {
     // MARK: Updates
 
     /// Counts this launch, starts the schedule if automatic checks are on, and asks the question if
-    /// it is due. A run without the icon does none of it: it ends when Settings closes.
+    /// it is due. A copy that is not resident does none of it: it ends when Settings closes.
     func startUpdates() {
-        guard iconShown else { return }
+        guard resident else { return }
         updates.noteLaunch()
         updates.start()
         askAboutUpdatesIfDue()
@@ -128,7 +136,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     /// saying it stopped), and judges the permissions on that one. An alert, not a notification,
     /// since it needs an answer; the reminders that follow take no focus.
     private func askAboutUpdatesIfDue() {
-        guard iconShown, !questionSettled, updates.questionDue, model.status != nil, model.daemonRunning else { return }
+        guard resident, !questionSettled, updates.questionDue, model.status != nil, model.daemonRunning else { return }
         questionSettled = true
         let permissionsSetUp = !model.accessibilityMissing && !model.inputMonitoringNeeded
         guard permissionsSetUp else { return }
@@ -162,14 +170,14 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Hide Menu Bar Icon: removes the menu app's login agent, which ends this app; the daemon
-    /// keeps running.
+    /// Hide Menu Bar Icon: `menu off` remembers it and registers this agent, and this process takes
+    /// its status item away and goes on without one (low-battery notifications and the update
+    /// check keep working). It is not restarted: that would end the caller.
     func hideMenuBarIcon() {
         model.flush()
         model.perform(.menuOff) { [self] in
             statusMenu?.remove()
             statusMenu = nil
-            NSApp.terminate(nil)
         }
     }
 

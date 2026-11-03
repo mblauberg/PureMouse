@@ -82,11 +82,11 @@ clear the flag afterwards.
 |---|---|
 | `puremouse register` | Adds the login items and starts PureMouse (what opening the app does) |
 | `puremouse stop` | Stops PureMouse and the menu bar icon until the next login (**Quit PureMouse**) |
-| `puremouse start` | Starts PureMouse (and the menu bar icon, unless hidden) again after `stop`, without changing whether they start at login |
+| `puremouse start` | Starts PureMouse and the menu bar app again after `stop`, without changing whether they start at login |
 | `puremouse login on` / `off` | Starts PureMouse at login, or not, without starting or stopping it now. With login off it keeps running until you run `stop` or log out |
 | `puremouse login-status` | Prints whether PureMouse and the menu bar icon start at login, as JSON |
 | `puremouse unregister` | Stops both and removes the login items. Your config is kept |
-| `puremouse menu off` / `on` | Hides or shows the menu bar icon. PureMouse keeps working without it |
+| `puremouse menu off` / `on` | Hides or shows the menu bar icon. PureMouse keeps working without it, and so do low battery notifications and update checks (the menu bar app runs on without the icon) |
 
 ## Inspecting a mouse
 

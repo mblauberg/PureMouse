@@ -80,9 +80,6 @@ struct LoginItem {
     }
 
     private var menuHidden: Bool { FileManager.default.fileExists(atPath: host.hiddenMarker.path) }
-    /// The menu bar app, unless this build has none or `menu off` hid it.
-    private var shownMenuApp: URL? { menuHidden ? nil : host.menuApp }
-
     /// Runs `body` with this build's executable, once nothing else is changing what is registered
     /// or running. A build that cannot register itself fails before anything is locked or touched.
     private func exclusive<T>(_ body: (URL) throws -> T) throws -> T {
@@ -92,7 +89,7 @@ struct LoginItem {
 
     // MARK: Commands
 
-    /// Installs and starts the agents for this copy of the app (the menu's unless hidden). It writes
+    /// Installs and starts the agents for this copy of the app. It writes
     /// no config: a missing one means the default set. Agents already running (an older or
     /// moved copy) are stopped first. Returns a sentence describing the outcome.
     func register() throws -> String {
@@ -102,12 +99,10 @@ struct LoginItem {
             try service.start(.daemon, at: executable)
             var outcome = restarting ? "PureMouse restarted." : "PureMouse is running and will start at login."
             if let app = host.menuApp {
-                if menuHidden {
-                    try remove(.menu)
-                    outcome += " The menu bar icon is hidden (`puremouse menu on` shows it)."
-                } else {
-                    try installMenu(app)
-                }
+                // Hidden or not, the menu process runs: hidden, it has no status item but goes on
+                // with low-battery notifications and the update check (`AppController`).
+                try installMenu(app)
+                if menuHidden { outcome += " The menu bar icon is hidden (`puremouse menu on` shows it)." }
             }
             return outcome
         }
@@ -132,12 +127,11 @@ struct LoginItem {
         }
     }
 
-    /// Makes both agents (the menu's unless hidden) start at login, without starting or
-    /// restarting anything now.
+    /// Makes both agents start at login, without starting or restarting anything now.
     func loginOn() throws -> String {
         try exclusive { executable in
             try service.register(.daemon, at: executable)
-            if let app = shownMenuApp {
+            if let app = host.menuApp {
                 try service.register(.menu, at: app)
             }
             return "PureMouse will start at login."
@@ -157,13 +151,13 @@ struct LoginItem {
         }
     }
 
-    /// Starts the agents that are not running (the menu's unless hidden), without changing whether
+    /// Starts the agents that are not running, without changing whether
     /// they start at login. A job that is loaded but has no process (the menu after Quit) is
     /// started too; running ones are left alone.
     func start() throws -> String {
         try exclusive { executable in
             var started = try service.start(.daemon, at: executable)
-            if let app = shownMenuApp {
+            if let app = host.menuApp {
                 started = try service.start(.menu, at: app) || started
             }
             return started ? "PureMouse started." : "PureMouse is already running."
@@ -176,8 +170,11 @@ struct LoginItem {
                     menu: host.menuApp == nil ? .notFound : service.status(.menu), hidden: menuHidden)
     }
 
-    /// Shows or hides the menu bar icon by registering or removing the menu agent only. Hiding is
-    /// remembered (`hiddenMarker`) so a later `register` keeps it hidden.
+    /// Shows or hides the menu bar icon by restarting the menu agent only, which reads
+    /// `hiddenMarker` as it starts: hidden, the process runs without a status item. Hiding is
+    /// remembered so a later `register` keeps it hidden. Called from the menu bar app itself, the
+    /// agent is registered but not restarted (that would end the caller): on hiding it removes its
+    /// own status item and carries on (`AppController.hideMenuBarIcon`).
     func showMenu(_ show: Bool) throws -> String {
         try exclusive { _ in
             let files = FileManager.default
@@ -191,7 +188,7 @@ struct LoginItem {
             }
             try files.createDirectory(at: host.hiddenMarker.deletingLastPathComponent(), withIntermediateDirectories: true)
             try Data().write(to: host.hiddenMarker)
-            try remove(.menu)
+            if let app = host.menuApp { try installMenu(app) }
             return "The menu bar icon is hidden; `puremouse menu on` shows it again."
         }
     }

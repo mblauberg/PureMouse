@@ -60,12 +60,12 @@ struct AppControllerUpdateTests {
     }
 
     /// One launch of the menu app: a new controller over the same preferences.
-    private func launch(iconShown: Bool = true) -> AppController {
+    private func launch(iconShown: Bool = true, resident: Bool? = nil) -> AppController {
         let questions = questions
         let setup = UpdateSetup.inert(preferences: preferences, scheduler: scheduler,
                                       ask: { questions.asked += 1; return questions.answer })
         let withdrawn = withdrawn
-        let controller = AppController(locations: locations, iconShown: iconShown, announce: { _, _, _ in },
+        let controller = AppController(locations: locations, iconShown: iconShown, resident: resident, announce: { _, _, _ in },
                                        withdraw: { withdrawn.ids.append($0) }, requestPermission: {}, updates: setup)
         controller.startUpdates()
         return controller
@@ -153,6 +153,19 @@ struct AppControllerUpdateTests {
         for _ in 0..<4 { _ = launch(iconShown: false) }
         await settle { false }
         #expect(preferences.launches == 0 && questions.asked == 0 && scheduler.delays.isEmpty)
+    }
+
+    /// Show in menu bar off hides the status item, not the process: the launchd-run menu app goes on
+    /// counting launches, scheduling the check and asking the question (docs/ui-design.md).
+    @Test func theResidentRunWithoutTheIconStillCountsAsksAndSchedules() async throws {
+        try writeStatus()
+        _ = launch(iconShown: false, resident: true)
+        let second = launch(iconShown: false, resident: true)
+        await settle { questions.asked > 0 }
+        #expect(questions.asked == 1)
+        #expect(preferences.automatic == true)
+        #expect(!scheduler.delays.isEmpty)  // the check is scheduled, not run
+        _ = second
     }
 
     @Test func turningTheChecksOffTakesTheDeliveredReminderDown() {

@@ -41,7 +41,7 @@ struct GeneralPane: View {
                     }
                 }
                 Toggle(isOn: Binding(get: { showsInMenuBar }, set: { setShowsInMenuBar($0) })) {
-                    RowLabel("Show in menu bar", help: "When hidden, open PureMouse from Applications to get back here.")
+                    RowLabel("Show in menu bar", help: "Low battery notifications and update checks carry on when it's hidden. Open PureMouse from Applications to get back here.")
                 }
                 .accessibilityLabel("Show in menu bar")
                 .disabled(model.locations.daemon == nil)
@@ -103,15 +103,14 @@ struct GeneralPane: View {
         }
     }
 
-    /// Dimmed while the menu bar icon is hidden: the menu bar app posts the notifications.
+    /// The menu bar app posts the notifications, with or without its icon (it runs windowless when
+    /// the icon is hidden).
     private var lowBatteryRow: some View {
-        let needsIcon = !showsInMenuBar
-        let help = needsIcon ? "Needs the menu bar icon."
-            : notificationsDenied ? "Notifications are off for PureMouse in System Settings."
+        let help = notificationsDenied ? "Notifications are off for PureMouse in System Settings."
             : "Tells you when the battery falls to 20% and 5%."
         return LabeledContent {
             HStack {
-                if notificationsDenied, !needsIcon {
+                if notificationsDenied {
                     Button("Open System Settings") { NSWorkspace.shared.open(NotificationPermission.settingsURL) }
                         .accessibilityLabel("Allow notifications in System Settings")
                 }
@@ -124,7 +123,6 @@ struct GeneralPane: View {
         } label: {
             RowLabel("Low battery notification", help: help)
         }
-        .disabled(needsIcon)
     }
 
     // MARK: Actions

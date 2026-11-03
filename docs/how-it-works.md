@@ -19,7 +19,7 @@ The decisions behind this design, and the alternatives rejected, are recorded in
 - **The Settings helper** (`Contents/Helpers/PureMouse Settings.app`) is the Settings window, as an
   app of its own that runs only while the window is open. It edits the config.
 
-Either runs without the other: with the menu bar icon hidden or quit, the mouse behaves exactly as
+Either runs without the other: with the menu bar app quit, or its icon hidden, the mouse behaves exactly as
 configured. They talk through two small JSON files and a Darwin notification after each write, so
 neither polls. [companion.md](companion.md) is the contract.
 

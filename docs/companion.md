@@ -6,16 +6,17 @@ PureMouse is two resident processes in one app bundle, plus Settings on demand:
   (bundle ID `io.github.mblauberg.puremouse`, executable path, signature), so existing
   Accessibility and Input Monitoring grants keep matching. It alone talks to the mouse.
 - **The menu bar app** (`PureMouse.app/Contents/Library/LoginItems/PureMouse Menu.app`, bundle ID
-  `io.github.mblauberg.puremouse.menu`, `LSUIElement`): the status item and its menu. It needs no
-  privacy permissions and never opens HID devices.
+  `io.github.mblauberg.puremouse.menu`, `LSUIElement`): the status item and its menu, and the
+  low-battery notifications and update checks. It needs no privacy permissions and never opens HID
+  devices. With Show in menu bar off it still runs, without a status item (windowless).
 - **The Settings helper** (`PureMouse.app/Contents/Helpers/PureMouse Settings.app`, bundle ID
   `io.github.mblauberg.puremouse.settings`, a regular app with a Dock icon): the Settings window.
   The menu bar app opens it, and it quits when its window closes
   ([ADR 9](adr/0009-settings-helper-app.md)). It edits the config and sends control requests as
   the menu bar app does, under the same locks.
 
-Either works without the other. With the menu bar app quit or hidden, the mouse behaves exactly as
-configured; with the daemon stopped, the menu shows "PureMouse Is Off" and can start it.
+Either works without the other. With the menu bar app quit, or its icon hidden, the mouse behaves
+exactly as configured; with the daemon stopped, the menu shows "PureMouse Is Off" and can start it.
 
 The menu bar app and the Settings helper never open HID devices: they edit the config file and talk
 to the daemon only through this channel and the daemon CLI. Neither polls: they wake on
@@ -178,11 +179,17 @@ returns: `LaunchdAgentService` boots the job out and polls until launchd no long
 while the old daemon is still handing the wheels and controls back. Keep that wait in `stop`.
 
 "Hidden" is remembered by a `menu-hidden` file in `Companion.directory`, written by `menu off`
-and removed by `menu on`; `unregister` keeps it. The CLI calls `setsid()` and boots the menu agent
-out last, after removing its plist, because launchd kills the menu job's process group (which
-includes the CLI it spawned). When the menu bar app itself runs `register` or `menu on` and its
-agent is already loaded, the agent is left running (the plist is still rewritten); restarting it
-would quit the caller.
+and removed by `menu on`; `unregister` keeps it. Hidden does not stop the menu agent: it stays
+registered and running, reads the marker as it starts (`Locations.showsInMenuBar`) and shows no
+status item, so low-battery notifications and the update check go on
+([Footprint](#footprint) has the cost). `menu on` and `menu off` therefore restart the menu agent so it
+reads the marker. The CLI calls `setsid()` and boots the menu agent out last, after removing its
+plist, because launchd kills the menu job's process group (which includes the CLI it spawned).
+When the menu bar app itself runs `register`, `menu on` or `menu off` and its agent is already
+loaded, the agent is left running (the plist is still rewritten); restarting it would quit the
+caller. On `menu off` the app then removes its own status item and carries on
+(`AppController.hideMenuBarIcon`). `menu on` only comes from Settings (the windowless process has
+no menu), which can restart the agent.
 
 "Starts at login" and "is running now" are separate, and each command changes only the axis the
 table gives:
@@ -191,18 +198,18 @@ table gives:
 |---|---|---|
 | `puremouse login on` | on | unchanged |
 | `puremouse login off` | off | unchanged (a running job stays loaded until logout or `stop`) |
-| `puremouse start` | unchanged | on (daemon, and menu unless hidden) |
+| `puremouse start` | unchanged | on (daemon and menu) |
 | `puremouse stop` | unchanged | off |
 | `puremouse register` / `unregister` | on / off | restarted / off |
 
 | Command | Effect |
 |---|---|
-| `puremouse register` | writes and boots both agents (daemon `KeepAlive`; menu `RunAtLoad`, `KeepAlive: {SuccessfulExit: false}`, `MallocSpaceEfficient`), unless the menu is hidden. Prints the outcome |
+| `puremouse register` | writes and boots both agents (daemon `KeepAlive`; menu `RunAtLoad`, `KeepAlive: {SuccessfulExit: false}`, `MallocSpaceEfficient`), the menu hidden or not. Prints the outcome |
 | `puremouse unregister` | boots out both agents and removes both plists |
-| `puremouse login on` / `off` | writes both plists (the menu's unless hidden) without booting anything, or removes both without booting anything out. A running agent is left as it is |
-| `puremouse start` | starts the agents that have no process (the menu's unless hidden) and leaves running ones alone: a job that is not loaded is bootstrapped, one that is loaded without a process (the menu after Quit) is kickstarted, or booted out and bootstrapped again when the executable `launchctl print` shows for it is not this copy's. A registered job's plist is first rewritten for this copy of the app, so a moved app does not start from the old path; it stays registered. An agent that is not registered runs from a plist in `launchd/` under `Companion.directory`, which launchd does not load at the next login and which stays there until `stop` removes it |
+| `puremouse login on` / `off` | writes both plists without booting anything, or removes both without booting anything out. A running agent is left as it is |
+| `puremouse start` | starts the agents that have no process and leaves running ones alone: a job that is not loaded is bootstrapped, one that is loaded without a process (the menu after Quit) is kickstarted, or booted out and bootstrapped again when the executable `launchctl print` shows for it is not this copy's. A registered job's plist is first rewritten for this copy of the app, so a moved app does not start from the old path; it stays registered. An agent that is not registered runs from a plist in `launchd/` under `Companion.directory`, which launchd does not load at the next login and which stays there until `stop` removes it |
 | `puremouse stop` | boots out both agents but keeps their plists: **Quit PureMouse**. Both start again at login if registered |
-| `puremouse menu on` / `off` | writes and boots, or boots out and removes, the menu agent only: **Show in menu bar** / **Hide Menu Bar Icon** |
+| `puremouse menu on` / `off` | removes or writes the `menu-hidden` marker and restarts the menu agent only, so it comes back with or without its status item: **Show in menu bar** / **Hide Menu Bar Icon** |
 | `puremouse login-status` | prints one JSON object and changes nothing: `{"daemon":"enabled","hidden":false,"menu":"notRegistered","service":"launchd"}` |
 
 Every command that changes what is registered or running (`register`, `unregister`, `stop`, `start`,
@@ -241,8 +248,8 @@ request clears the stamp.
 
 Opening PureMouse.app from the Finder runs `register`, then `openSettings`: it writes `show-settings`
 and opens the Settings helper (`Contents/Helpers/PureMouse Settings.app`) itself, which reads the
-stamp at launch. The menu app is not opened: `register` already starts its agent unless the icon is
-hidden, and with the icon hidden Settings still opens and the icon stays hidden. `open` is tried
+stamp at launch. The menu app is not opened: `register` already starts its agent, and with the icon
+hidden Settings still opens and the icon stays hidden. `open` is tried
 twice, a second apart. `open` exiting 0 does not prove Settings opened (LaunchServices can answer with
 a helper that is quitting), so `openSettings` also rings the doorbell, so a running helper reads
 the request, and waits up to 2 s for the helper to remove the file (`ShowRequest` does when it reads
@@ -250,8 +257,8 @@ it). If it is still there, the request is written again and `open` is tried once
 PureMouse left a `settings-quit` stamp meanwhile: a new request would clear it and bring Settings back,
 so nothing more is done. If the build has no helper, or it will not open, the old alert is shown
 instead; registration has already happened by then. The menu app itself opens Settings when it was
-opened by hand rather than by launchd, when it finds a fresh stamp at launch, when its icon is
-hidden (it then quits once Settings is open), and when it is reopened
+opened by hand rather than by launchd (a copy that is neither launchd's nor showing an icon quits
+once Settings is open), when it finds a fresh stamp at launch, and when it is reopened
 (`applicationShouldHandleReopen`). It keeps a single instance: a second launch opens Settings and
 exits, and the running one keeps the icon. If the user has blocked the item under System Settings ›
 Menu Bar, opening the app still reaches Settings.
@@ -292,8 +299,10 @@ mouse, kept in `battery-alerts.json` in the companion directory so a restart can
   the switch is turned off. A post still waiting for permission is cancelled by a withdrawal of its
   id (`NotificationDelivery`).
 - The file is versioned; one in any other format is discarded and alerts start fresh.
-- Nothing runs while the icon is hidden: a hidden-icon run gets no notification callbacks, so it
-  neither posts nor consumes a band, and never asks for permission (`AppController`).
+- Hiding the icon changes nothing here: the launchd-run menu process (`AppController.resident`)
+  goes on without a status item and posts, consumes bands and asks for permission as before. Only
+  a copy opened by hand without an icon, which ends when Settings closes, gets no notification
+  callbacks, so it neither posts nor consumes a band.
 - Permission is requested lazily: at the first notification, or when the menu app sees the switch
   turned on in the config. macOS asks per app, so the helper cannot ask. The menu app records a
   denial in its own defaults domain as it learns it (`NotificationPermission`, read at launch and as

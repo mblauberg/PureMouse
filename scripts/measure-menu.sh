@@ -80,7 +80,8 @@ done
 
 # Every limit is a whole number, and the scenarios a change to the menu or the helper could regress
 # each have one: a gate must not pass for lack of a limit.
-budgeted=(fresh open-1 open-10 doorbells-200 helper-closed helper-closed-5 helper helper-cold-start)
+budgeted=(fresh open-1 open-10 doorbells-200 helper-closed helper-closed-5 helper helper-cold-start
+          hidden hidden-doorbells-200 hidden-helper-closed hidden-updates)
 check_budgets() {
     [[ -f $budgets ]] || fail "no budgets file at $budgets"
     local name limit
@@ -190,7 +191,7 @@ start_menu() {
     fx=$(mktemp -d "${TMPDIR:-/tmp}/puremouse-rig.XXXXXX")
     fx=${fx:A}
     fixtures+=($fx)
-    cp config.example.json $fx/config.json
+    print '{}' > $fx/config.json
     print '#!/bin/sh\nexit 0' > $fx/daemon; chmod +x $fx/daemon
     sleep 86400 &
     stub_pid=$!
@@ -296,11 +297,44 @@ run_helper() {
     stop_menu
 }
 
+# run_hidden RUN: the resident menu process with Show in menu bar off (PUREMOUSE_DEV_HIDDEN: no
+# status item, so no menu to open), which still checks for updates and posts low-battery
+# notifications. Its footprint fresh; after 200 status doorbells, the last of them a low battery
+# (the alert path); after the Settings helper has opened and quit once; and after an update check
+# (PUREMOUSE_RIG_UPDATES=check runs one at launch; its answer is in $fx/update-check).
+run_hidden() {
+    start_menu PUREMOUSE_DEV_HIDDEN=1
+    local i helper_pid
+    sleep $settle; sample hidden $1
+    for i in {1..200}; do
+        write_status $(( i == 200 ? 8 : 50 + i % 40 ))
+        notifyutil -p $status_bell
+        sleep 0.01
+    done
+    sleep $settle; sample hidden-doorbells-200 $1
+    rm -f $fx/settings-visible
+    rig settings
+    for i in {1..100}; do [[ -s $fx/settings-visible ]] && break; sleep 0.1; done
+    [[ -s $fx/settings-visible ]] || fail "hidden: the helper never wrote $fx/settings-visible (log: $fx/menu.log)"
+    helper_pid=$(<$fx/settings-visible)
+    rig settings-close
+    for i in {1..100}; do kill -0 $helper_pid 2>/dev/null || break; sleep 0.1; done
+    sleep $settle; sample hidden-helper-closed $1
+    stop_menu
+
+    start_menu PUREMOUSE_DEV_HIDDEN=1 PUREMOUSE_RIG_UPDATES=check
+    for i in {1..100}; do [[ -s $fx/update-check ]] && break; sleep 0.1; done
+    [[ -s $fx/update-check ]] || fail "hidden: the update check never reported (log: $fx/menu.log)"
+    sleep $settle; sample hidden-updates $1
+    stop_menu
+}
+
 for run in {1..$runs}; do
     print "run $run of $runs"
     run_menu_opens $run
     run_doorbells $run
     run_helper $run
+    run_hidden $run
 done
 
 # --- --blocks: which allocations does opening the menu leave behind --------------------------------

@@ -138,9 +138,11 @@ Each level has one mechanism, and each label says what it reveals.
 - Clicking the icon shows an `NSMenu`, never a popover.
 - The icon is a template image (black and clear, 18 pt), never coloured or badged. A changed state
   (paused, off) is a different shape, not a colour.
-- People choose whether the icon shows (General › Show in menu bar). Nothing depends on it
-  except low-battery notifications, which live in the menu app and stop while the icon is hidden.
-  With the icon hidden, opening PureMouse from the Finder opens Settings.
+- People choose whether the icon shows (General › Show in menu bar). Nothing depends on it: with
+  the icon hidden the menu app keeps running without a status item (windowless), so low-battery
+  notifications and the daily update check carry on, and both switches stay available. The
+  footprint of that process is budgeted ([ADR 10](adr/0010-menu-memory-budgets.md)). Opening
+  PureMouse from the Finder opens Settings, and Show in menu bar there brings the icon back.
 - Order: device header, attention rows (only while active), then the most used items, Settings…,
   "Settings for <app>…" (for the app in use, when there is one), Quit PureMouse. Separators between
   groups; submenus only for presets, one level deep.
