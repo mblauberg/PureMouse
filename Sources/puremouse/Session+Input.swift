@@ -150,20 +150,34 @@ extension Session {
 
     private func press(_ cid: UInt16) {
         Log.debug("\(name): press \(ControlNames.describe(cid))")
-        switch binding(for: cid) {
+        let binding = binding(for: cid)
+        // A control that is a gesture in some scope is diverted with raw pointer motion, which holds
+        // the pointer still. Where this press is not a gesture, the pointer must move.
+        if case .gesture? = binding {} else if bound[cid] == true { setPointerFree(cid, true) }
+        switch binding {
         case .action(let action):
             perform(action)
         case .gesture(let gesture):
             guard held.holdGesture(cid, gesture) else { return }
             recognizer.begin()
         case nil:
-            // Bound only in other apps, or set to "default" in this one: click as the mouse would
-            // without PureMouse.
-            held.clickNatively(cid)
+            performNative(cid)
+        }
+    }
+
+    /// Mouse Default: what the control does without PureMouse (`Config.nativeBehaviour`). A press
+    /// bound only in other apps, or set to "default" here, comes to this; a control with no
+    /// behaviour of its own does nothing.
+    private func performNative(_ cid: UInt16) {
+        switch Config.nativeBehaviour(of: cid) {
+        case .click: held.clickNatively(cid)
+        case .action(let action): perform(action)
+        case nil: break
         }
     }
 
     private func release(_ cid: UInt16) {
+        if pointerFree.contains(cid) { setPointerFree(cid, false) }
         guard let gesture = held.release(cid) else { return }
         if recognizer.end() { perform(gesture.click) }
     }
@@ -172,6 +186,8 @@ extension Session {
     /// and ends any thumb-wheel movement: for when the mouse's own releases may never come.
     func dropHeld() {
         held.drop()
+        // The mouse's own reporting flags are set again by the apply that follows.
+        pointerFree = []
         thumbLast = nil
     }
 

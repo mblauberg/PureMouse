@@ -432,6 +432,29 @@ public struct Config: Decodable, Sendable {
         }
     }
 
+    /// What a control does without PureMouse, for the controls the daemon can reproduce: Mouse
+    /// Default (`Binding.nativeValue`, or no binding where a press reaches the daemon anyway) does
+    /// this, and Settings offers Mouse Default on a mouse or in an app only for these. Every other
+    /// control has no behaviour of its own to give back.
+    public enum NativeBehaviour: Equatable, Sendable {
+        /// The ordinary mouse button, by its macOS number (middle 2, back 3, forward 4).
+        case click(button: Int)
+        /// What the mouse's own button does, as this action does it.
+        case action(Action)
+    }
+
+    /// The native behaviour of the control `cid`, or nil when it has none the daemon can reproduce.
+    public static func nativeBehaviour(of cid: UInt16) -> NativeBehaviour? {
+        switch cid {
+        case 0x0052: .click(button: 2)               // wheel press
+        case 0x0053: .click(button: 3)               // back
+        case 0x0056: .click(button: 4)               // forward
+        case 0x00C4: .action(.toggleScrollMode)      // mode shift: the wheel's ratchet / free spin
+        case 0x00FD: .action(.cycleDPI)              // DPI button
+        default: nil
+        }
+    }
+
     public static var defaultURL: URL {
         FileManager.default.homeDirectoryForCurrentUser.appending(path: ".config/puremouse/config.json")
     }

@@ -54,6 +54,19 @@ extension Session {
         try await ReprogControls.setDiverted(device, cid: cid, divert: divert, rawXY: rawXY)
     }
 
+    /// Turns the raw pointer motion of a diverted control off while it is pressed and not a gesture
+    /// (`free`), and on again when it is let go. The motion makes a gesture button hold the pointer
+    /// still, which only a gesture should do. Queued on the diversion chain, after any change asked
+    /// for before it; a failed write is made right by the next apply.
+    func setPointerFree(_ cid: UInt16, _ free: Bool) {
+        if free { pointerFree.insert(cid) } else { pointerFree.remove(cid) }
+        enqueueDiversion { session in
+            // Handed back while away, or no longer wanted: the apply that follows sets the control.
+            guard !session.away, session.bound[cid] == true else { return }
+            try await session.setDiverted(cid, true, rawXY: !free)
+        }
+    }
+
     /// Fresh adoption only, on the diversion chain. A control the device answers with an error
     /// is skipped; a timeout or transport failure leaves the scan pending, and controls already
     /// discovered still count toward restore even when a later read fails.
