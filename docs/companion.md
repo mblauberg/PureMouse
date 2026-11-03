@@ -279,7 +279,8 @@ failure alert if registering fails (the old menu app is gone by then and `open` 
 opened by hand rather than by launchd (a copy that is neither launchd's nor showing an icon quits
 once Settings is open), when it finds a fresh stamp at launch, and when it is reopened
 (`applicationShouldHandleReopen`). It keeps a single instance: a second launch opens Settings and
-exits, and the running one keeps the icon. If the user has blocked the item under System Settings ›
+exits, and the running one keeps the icon (a copy on an overridden channel, `PUREMOUSE_COMPANION_DIR`, is its own
+instance, so a dev run sits beside an installed one). If the user has blocked the item under System Settings ›
 Menu Bar, opening the app still reaches Settings.
 
 General's Startup section keeps the two axes apart, each control running one command
