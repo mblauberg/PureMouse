@@ -704,7 +704,7 @@ final class ScriptedResponse: URLProtocol, @unchecked Sendable {
 
     @Test func aBodyWithinTheLimitIsWrittenWhole() async throws {
         let body = Data((0..<200_000).map { UInt8($0 % 251) })
-        let result = try await run(declared: body.count, chunks: [body.prefix(70_000), body.dropFirst(70_000)].map(Data.init), limit: 300_000)
+        let result = try await run(declared: body.count, chunks: [body.prefix(70_000), body.dropFirst(70_000)].map { Data($0) }, limit: 300_000)
         defer { cleanup(result.file) }
         #expect(result.data == body)
     }
