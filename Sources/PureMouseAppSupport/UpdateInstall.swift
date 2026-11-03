@@ -19,6 +19,8 @@ public enum UpdateInstallFailure: Error, Equatable, Sendable {
     case wrongCertificate
     case modified
     case notNewer
+    /// A newer version, but not the one the release page announced.
+    case notTheRelease
     case installFailed
 
     /// One line, naming what failed. What to do next is the release page beside it.
@@ -38,6 +40,7 @@ public enum UpdateInstallFailure: Error, Equatable, Sendable {
         case .wrongCertificate: "The update wasn't signed by the same certificate"
         case .modified: "The update's files don't match its signature"
         case .notNewer: "The update isn't newer than this version"
+        case .notTheRelease: "The update isn't the release that was announced"
         case .installFailed: "Couldn't replace PureMouse"
         }
     }
@@ -67,9 +70,14 @@ public enum UpdateSignatureFault: Equatable, Sendable {
 
 // MARK: Seams
 
-/// Fetches a release asset into a file; throws unless it was answered with 200.
+/// A download passed its cap.
+public struct DownloadTooLarge: Error, Equatable, Sendable {}
+
+/// Fetches a release asset into a file; throws unless it was answered with 200, and throws
+/// `DownloadTooLarge`, deleting what it had written, as soon as more than `limit` bytes are promised
+/// or have arrived.
 public protocol UpdateDownloading: Sendable {
-    func download(_ url: URL, to file: URL) async throws
+    func download(_ url: URL, to file: URL, limit: Int) async throws
 }
 
 /// `hdiutil attach -nobrowse -readonly` and `detach`.
@@ -86,6 +94,10 @@ public protocol UpdateSignatureChecking: Sendable {
     func requirement() -> String?
     /// nil when `bundle` is validly signed and satisfies `requirement`.
     func check(_ bundle: URL, against requirement: String) -> UpdateSignatureFault?
+    /// nil when the disk image at `image` is validly signed by the certificate `requirement` pins. A
+    /// disk image's identifier is its own file name, so only the certificate part of the requirement
+    /// applies.
+    func checkImage(_ image: URL, against requirement: String) -> UpdateSignatureFault?
 }
 
 /// Whether PureMouse can replace the installed app without asking anyone for anything.
@@ -116,10 +128,14 @@ public protocol UpdateFiles: Sendable {
     /// `CFBundleShortVersionString` of the bundle at `url`.
     func bundleVersion(_ bundle: URL) -> String?
     func replaceability(of app: URL) -> UpdateReplaceability
-    func copy(_ source: URL, to destination: URL) throws
-    /// `FileManager.replaceItemAt`: one swap, the installed app kept if it fails.
+    /// A copy that keeps the bundle as it is, hard links included (`ditto`), and no quarantine flag.
+    func copy(_ source: URL, to destination: URL) async throws
+    /// `FileManager.replaceItemAt`: one swap. It can throw after the new app is in place, leaving the
+    /// old one at `staged`, so a throw says nothing about which is where.
     func replace(_ installed: URL, with staged: URL) throws
     func remove(_ url: URL)
+    /// What an install that was killed leaves: staged copies beside `app` and work folders.
+    func leftovers(besides app: URL) -> [URL]
 }
 
 public typealias UpdateHasher = @Sendable (URL) throws -> String
@@ -130,11 +146,12 @@ public typealias UpdateHasher = @Sendable (URL) throws -> String
 /// (docs/adr/0022-update-trust-is-the-signing-requirement.md).
 ///
 /// In order, stopping at the first failure with the installed app untouched: the disk image's
-/// SHA-256 against the release's `SHA256SUMS`; the image mounted read-only, holding exactly one
-/// `PureMouse.app`; that bundle's signature, validated against the requirement of the running
-/// process; a version strictly newer than the running one. Then the bundle is copied next to the
-/// installed app and swapped in with one `replaceItemAt`. The image is unmounted and the download
-/// deleted however it ends.
+/// SHA-256 against the release's `SHA256SUMS`; the image's own signature, by the certificate of the
+/// running process; the image mounted read-only, holding exactly one `PureMouse.app`; that bundle's
+/// signature, validated against the requirement of the running process; a version newer than the
+/// running one and equal to the release's. Then the bundle is copied next to the installed app and
+/// swapped in with one `replaceItemAt`; if that throws, the disk says which app is installed. The
+/// image is unmounted and the download deleted however it ends.
 ///
 /// Everything it touches is injected, so the tests give it fixtures. This runs in the menu bar app
 /// or the Settings helper, never in `puremouse` or PureMouseKit.
@@ -176,6 +193,7 @@ public struct UpdateInstaller: Sendable {
         }
         guard let requirement = signature.requirement() else { return .failed(.cannotInstallHere(.notSigned)) }
         guard let assets = UpdateAssets(release) else { return .failed(.downloadFailed) }
+        await sweep(besides: installedApp)
         let work: URL
         do { work = try files.makeWorkDirectory() } catch {
             log("update: no download location: \(error)")
@@ -197,11 +215,11 @@ public struct UpdateInstaller: Sendable {
         let sums = work.appending(path: "SHA256SUMS")
         let image = work.appending(path: assets.imageName)
         do {
-            try await downloader.download(assets.sums, to: sums)
+            try await downloader.download(assets.sums, to: sums, limit: Self.maxChecksumBytes)
             guard let sumsSize = files.size(of: sums), sumsSize <= Self.maxChecksumBytes else {
                 return await finish(.failed(.downloadFailed))
             }
-            try await downloader.download(assets.image, to: image)
+            try await downloader.download(assets.image, to: image, limit: Self.maxImageBytes)
             guard let imageSize = files.size(of: image), imageSize > 0, imageSize <= Self.maxImageBytes else {
                 return await finish(.failed(.downloadFailed))
             }
@@ -221,7 +239,10 @@ public struct UpdateInstaller: Sendable {
         }
         guard actual == expected else { return await finish(.failed(.checksumMismatch)) }
 
-        // 2. Mounted read-only and out of the Finder's sight, it holds exactly one PureMouse.app.
+        // 2. The image is signed by the certificate the running app is, before anything parses it.
+        if let fault = signature.checkImage(image, against: requirement) { return await finish(.failed(Self.failure(fault))) }
+
+        // 3. Mounted read-only and out of the Finder's sight, it holds exactly one PureMouse.app.
         let mount = work.appending(path: "image")
         mountPoint = mount
         do {
@@ -243,20 +264,21 @@ public struct UpdateInstaller: Sendable {
             return await finish(.failed(.imageUnreadable))
         }
 
-        // 3. Its signature satisfies the running app's requirement.
+        // 4. Its signature satisfies the running app's requirement.
         if let fault = signature.check(bundle, against: requirement) { return await finish(.failed(Self.failure(fault))) }
 
-        // 4. It is strictly newer.
+        // 5. It is newer than this version, and is the version the release announced.
         guard let found = files.bundleVersion(bundle).flatMap(UpdateCheck.Version.init), found > running else {
             return await finish(.failed(.notNewer))
         }
+        guard found == release.version else { return await finish(.failed(.notTheRelease)) }
 
         // Copy it next to the installed app, so the swap is one rename on one volume, check the copy
         // as well, and swap.
         let copy = installedApp.deletingLastPathComponent().appending(path: ".PureMouse-update-\(UUID().uuidString.prefix(8))")
         staged = copy
         do {
-            try files.copy(bundle, to: copy)
+            try await files.copy(bundle, to: copy)
         } catch {
             log("update: could not copy the update: \(error)")
             return await finish(.failed(.installFailed))
@@ -267,10 +289,47 @@ public struct UpdateInstaller: Sendable {
             try files.replace(installedApp, with: copy)
             staged = nil
         } catch {
-            log("update: could not replace the app: \(error)")
-            return await finish(.failed(.installFailed))
+            // The swap can throw after the new app is in place, with the old one left at the staged
+            // path. What is where is read from the disk, and nothing that might be the only good
+            // copy is deleted.
+            log("update: the replace threw: \(error)")
+            switch settle(installedApp, running: running, found: found, requirement: requirement) {
+            case .new:
+                log("update: the new app is in place; the old copy is left over")
+            case .old:
+                return await finish(.failed(.installFailed))
+            case .unknown:
+                log("update: can't tell which copy is installed; keeping \(copy.path)")
+                staged = nil
+                return await finish(.failed(.installFailed))
+            }
         }
         return await finish(.installed(found))
+    }
+
+    enum Settled { case new, old, unknown }
+
+    /// Which app is at the install path after a replace that threw. `.new` only for the announced
+    /// version with a signature that satisfies the requirement; `.old` for the version that was
+    /// running (the staged copy is then the new one, which a download brings back).
+    func settle(_ installedApp: URL, running: UpdateCheck.Version, found: UpdateCheck.Version, requirement: String) -> Settled {
+        guard let version = files.bundleVersion(installedApp).flatMap(UpdateCheck.Version.init) else { return .unknown }
+        if version == found, signature.check(installedApp, against: requirement) == nil { return .new }
+        if version == running { return .old }
+        return .unknown
+    }
+
+    /// What a killed install left: staged copies beside the app, and work folders (with an image
+    /// possibly still mounted in one). Only the installed app exists to be lost, and it is known to be
+    /// there, so none of this is the only good copy.
+    func sweep(besides installedApp: URL) async {
+        for stale in files.leftovers(besides: installedApp) {
+            if stale.lastPathComponent.hasPrefix("PureMouse-update-") {
+                await mounter.detach(stale.appending(path: "image"))
+            }
+            log("update: removing what an earlier install left: \(stale.lastPathComponent)")
+            files.remove(stale)
+        }
     }
 
     static func failure(_ fault: UpdateSignatureFault) -> UpdateInstallFailure {

@@ -14,7 +14,7 @@ import Foundation
 
 struct FolderDownloader: UpdateDownloading {
     let folder: URL
-    func download(_ url: URL, to file: URL) async throws {
+    func download(_ url: URL, to file: URL, limit: Int) async throws {
         FileHandle.standardError.write(Data("download \(url.lastPathComponent)\n".utf8))
         try FileManager.default.copyItem(at: folder.appending(path: url.lastPathComponent), to: file)
     }

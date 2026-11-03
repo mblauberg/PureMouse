@@ -20,7 +20,16 @@ final class World: @unchecked Sendable {
     var faults: [String: UpdateSignatureFault] = [:]   // "mount" or "copy"
     var replaceability = UpdateReplaceability.ok
     var copyFails = false
-    var replaceFails = false
+    /// What `replaceItemAt` does when it is asked.
+    enum Replace { case works, throwsBefore, throwsAfter, throwsAndLeavesNoApp }
+    var replace = Replace.works
+    /// The version of the app at the install path: nil when there is none.
+    var installedVersion: String? = "0.5.0"
+    /// Left by an install that was killed.
+    var stale: [URL] = []
+    /// A downloader that does not hold to the limit it is given.
+    var ignoresLimit = false
+    var limits: [String: Int] = [:]
 
     // What happened.
     var events: [String] = []
@@ -52,14 +61,17 @@ final class World: @unchecked Sendable {
 
     struct Downloader: UpdateDownloading {
         let world: World
-        func download(_ url: URL, to file: URL) async throws {
+        func download(_ url: URL, to file: URL, limit: Int) async throws {
             world.events.append("download \(url.lastPathComponent)")
+            world.limits[url.lastPathComponent] = limit
             if world.downloadFails.contains(url.lastPathComponent) { throw URLError(.badServerResponse) }
             if url.lastPathComponent == "SHA256SUMS" {
                 let line = world.sumsHash.map { "\($0)  PureMouse-0.6.0.dmg\n" } ?? "\(String(repeating: "f", count: 64))  Other.dmg\n"
                 world.disk[file] = Data(line.utf8)
             } else {
-                world.disk[file] = Data(count: world.oversize ? UpdateInstaller.maxImageBytes + 1 : 10)
+                let count = world.oversize ? UpdateInstaller.maxImageBytes + 1 : 10
+                if count > limit && !world.ignoresLimit { throw DownloadTooLarge() }
+                world.disk[file] = Data(count: count)
             }
         }
     }
@@ -81,10 +93,16 @@ final class World: @unchecked Sendable {
         let world: World
         func requirement() -> String? { world.requirement }
         func check(_ bundle: URL, against requirement: String) -> UpdateSignatureFault? {
-            let place = world.mounted.contains(where: { bundle.path.hasPrefix($0.path) }) ? "mount" : "copy"
+            let place = world.mounted.contains(where: { bundle.path.hasPrefix($0.path) }) ? "mount"
+                : bundle == World.installed ? "installed" : "copy"
             world.events.append("check \(place)")
             world.checkedAgainst.append(requirement)
             return world.faults[place]
+        }
+        func checkImage(_ image: URL, against requirement: String) -> UpdateSignatureFault? {
+            world.events.append("check image")
+            world.checkedAgainst.append(requirement)
+            return world.faults["image"]
         }
     }
 
@@ -103,22 +121,35 @@ final class World: @unchecked Sendable {
         }
         func entries(of directory: URL) throws -> [UpdateEntry] { world.entries }
         func bundleVersion(_ bundle: URL) -> String? {
-            bundle.path.hasPrefix(World.installed.deletingLastPathComponent().appending(path: ".PureMouse-update").path)
+            if bundle == World.installed { return world.installedVersion }
+            return bundle.path.hasPrefix(World.installed.deletingLastPathComponent().appending(path: ".PureMouse-update").path)
                 ? (world.copyVersion ?? world.version) : world.version
         }
         func replaceability(of app: URL) -> UpdateReplaceability { world.replaceability }
-        func copy(_ source: URL, to destination: URL) throws {
+        func copy(_ source: URL, to destination: URL) async throws {
             world.events.append("copy")
             if world.copyFails { throw CocoaError(.fileWriteOutOfSpace) }
             world.disk[destination] = Data()
         }
         func replace(_ installed: URL, with staged: URL) throws {
             world.events.append("replace")
-            if world.replaceFails { throw CocoaError(.fileWriteNoPermission) }
-            world.disk[staged] = nil
+            switch world.replace {
+            case .works:
+                world.installedVersion = world.copyVersion ?? world.version
+                world.disk[staged] = nil
+            case .throwsBefore:
+                throw CocoaError(.fileWriteNoPermission)
+            case .throwsAfter:   // Cocoa 513 with the new app in place and the old one left at `staged`
+                world.installedVersion = world.copyVersion ?? world.version
+                throw CocoaError(.fileWriteNoPermission)
+            case .throwsAndLeavesNoApp:
+                world.installedVersion = nil
+                throw CocoaError(.fileWriteNoPermission)
+            }
         }
+        func leftovers(besides app: URL) -> [URL] { world.stale }
         func remove(_ url: URL) {
-            world.events.append("remove \(url.lastPathComponent.hasPrefix(".PureMouse-update") ? "staged" : "work")")
+            world.events.append("remove \(url.lastPathComponent.hasPrefix(".PureMouse-update") ? "staged" : url.lastPathComponent.hasPrefix("stale") ? "stale" : "work")")
             world.disk = world.disk.filter { !$0.key.path.hasPrefix(url.path) }
         }
     }
@@ -133,10 +164,10 @@ final class World: @unchecked Sendable {
         let world = World()
         let outcome = await world.install()
         #expect(outcome == .installed(UpdateCheck.Version("0.6.0")!))
-        #expect(world.events == ["download SHA256SUMS", "download PureMouse-0.6.0.dmg", "hash", "attach", "check mount",
-                                 "copy", "check copy", "replace", "detach", "remove work"])
+        #expect(world.events == ["download SHA256SUMS", "download PureMouse-0.6.0.dmg", "hash", "check image", "attach",
+                                 "check mount", "copy", "check copy", "replace", "detach", "remove work"])
         // The requirement is the running app's, handed to both checks unchanged.
-        #expect(world.checkedAgainst == ["REQ", "REQ"])
+        #expect(world.checkedAgainst == ["REQ", "REQ", "REQ"])
         #expect(!world.leftovers)
     }
 
@@ -146,7 +177,7 @@ final class World: @unchecked Sendable {
         struct Spy: UpdateDownloading {
             let inner: UpdateDownloading
             let record: @Sendable (URL) -> Void
-            func download(_ url: URL, to file: URL) async throws { record(url); try await inner.download(url, to: file) }
+            func download(_ url: URL, to file: URL, limit: Int) async throws { record(url); try await inner.download(url, to: file, limit: limit) }
         }
         final class Box: @unchecked Sendable { var urls: [URL] = [] }
         let box = Box()
@@ -189,6 +220,46 @@ final class World: @unchecked Sendable {
         #expect(!world.events.contains("hash") && !world.events.contains("attach") && !world.leftovers)
     }
 
+    @Test func theCapsAreHandedToTheDownloaderToHoldDuringTheTransfer() async {
+        let world = World()
+        _ = await world.install()
+        #expect(world.limits == ["SHA256SUMS": UpdateInstaller.maxChecksumBytes, "PureMouse-0.6.0.dmg": UpdateInstaller.maxImageBytes])
+    }
+
+    @Test func aDownloaderThatIgnoresTheLimitIsStillStoppedByTheSizeCheck() async {
+        let world = World()
+        world.oversize = true
+        world.ignoresLimit = true
+        #expect(await world.install() == .failed(.downloadFailed))
+        #expect(!world.events.contains("hash") && !world.leftovers)
+    }
+
+    @Test(arguments: [UpdateSignatureFault.unsigned, .wrongCertificate, .modified])
+    func anImageNotSignedByTheRunningCertificateIsNeverMounted(_ fault: UpdateSignatureFault) async {
+        let world = World()
+        world.faults["image"] = fault
+        #expect(await world.install() == .failed(UpdateInstaller.failure(fault)))
+        #expect(!world.events.contains("attach") && !world.events.contains("check mount") && untouched(world))
+        #expect(!world.leftovers)
+    }
+
+    @Test func leftoversOfAnEarlierInstallAreSweptBeforeDownloading() async {
+        let world = World()
+        world.stale = [URL(fileURLWithPath: "/Applications/.PureMouse-update-abc12345"),
+                       URL(fileURLWithPath: "/tmp/stale-work")]
+        _ = await world.install()
+        let first = world.events.firstIndex(of: "download SHA256SUMS")!
+        #expect(world.events[..<first].filter { $0 == "remove staged" || $0 == "remove stale" }.count == 2)
+    }
+
+    @Test func aRunThatCannotInstallSweepsNothing() async {
+        let world = World()
+        world.stale = [URL(fileURLWithPath: "/tmp/stale-work")]
+        world.replaceability = .notWritable
+        _ = await world.install()
+        #expect(world.events.isEmpty)
+    }
+
     @Test func anImageThatWillNotMountIsDetachedAndForgotten() async {
         let world = World()
         world.attachFails = true
@@ -229,6 +300,13 @@ final class World: @unchecked Sendable {
         #expect(untouched(world) && !world.leftovers)
     }
 
+    @Test func aNewerBundleOfAnotherVersionIsNotTheRelease() async {
+        let world = World()
+        world.version = "0.7.0"
+        #expect(await world.install() == .failed(.notTheRelease))
+        #expect(untouched(world) && !world.leftovers)
+    }
+
     @Test func aBundleWithNoVersionIsNotNewer() async {
         let world = World()
         world.version = nil
@@ -264,11 +342,39 @@ final class World: @unchecked Sendable {
         #expect(!world.events.contains("replace") && !world.leftovers)
     }
 
-    @Test func aSwapThatFailsRemovesTheStagedCopyAndTheDownload() async {
+    @Test func aSwapThatFailsBeforeCommittingRemovesTheStagedCopyAndTheDownload() async {
         let world = World()
-        world.replaceFails = true
+        world.replace = .throwsBefore
         #expect(await world.install() == .failed(.installFailed))
         #expect(world.events.contains("remove staged") && !world.leftovers)
+        #expect(world.installedVersion == "0.5.0")
+    }
+
+    @Test func aSwapThatThrowsAfterCommittingIsAnInstallAndTheOldCopyIsSwept() async {
+        let world = World()
+        world.replace = .throwsAfter
+        #expect(await world.install() == .installed(UpdateCheck.Version("0.6.0")!))
+        // The disk was read: the app at the install path is the new one and verifies.
+        #expect(world.events.contains("check installed") && world.installedVersion == "0.6.0")
+        #expect(world.events.contains("remove staged") && !world.leftovers)
+    }
+
+    @Test func aSwapThatThrowsAfterCommittingButDoesNotVerifyKeepsTheStagedCopy() async {
+        let world = World()
+        world.replace = .throwsAfter
+        world.faults["installed"] = .modified
+        #expect(await world.install() == .failed(.installFailed))
+        #expect(!world.events.contains("remove staged"))
+        #expect(world.disk.keys.contains { $0.lastPathComponent.hasPrefix(".PureMouse-update") })
+    }
+
+    @Test func aSwapThatLeavesNoAppAtTheInstallPathKeepsTheOnlyCopyThereIs() async {
+        let world = World()
+        world.replace = .throwsAndLeavesNoApp
+        #expect(await world.install() == .failed(.installFailed))
+        #expect(!world.events.contains("remove staged"))
+        #expect(world.disk.keys.contains { $0.lastPathComponent.hasPrefix(".PureMouse-update") })
+        #expect(world.events.last == "remove work")
     }
 
     @Test func aSuccessfulSwapDoesNotDeleteTheNewApp() async {
@@ -311,7 +417,7 @@ final class World: @unchecked Sendable {
 
     @Test func onlyAFailureToInstallHereOpensThePageByItself() {
         let all: [UpdateInstallFailure] = [.downloadFailed, .checksumMissing, .checksumMismatch, .imageUnreadable, .imageContents,
-                                           .unsigned, .wrongCertificate, .modified, .notNewer, .installFailed]
+                                           .unsigned, .wrongCertificate, .modified, .notNewer, .notTheRelease, .installFailed]
         #expect(all.allSatisfy { !$0.opensReleasePage })
         #expect(all.allSatisfy { !$0.reason.contains("\n") && $0.reason.count < 60 })
     }
@@ -543,5 +649,267 @@ final class World: @unchecked Sendable {
                           isExecutable: { _ in true }).installedApp == nil)
         let bare = URL(fileURLWithPath: "/Users/someone/PureMouse/.build/debug/PureMouseMenu")
         #expect(Locations(environment: [:], home: home, bundle: bare, isExecutable: { _ in true }).installedApp == nil)
+    }
+}
+
+/// Answers every request from a script, so the real downloader runs without a network.
+final class ScriptedResponse: URLProtocol, @unchecked Sendable {
+    nonisolated(unsafe) static var status = 200
+    nonisolated(unsafe) static var declaredLength: Int?
+    nonisolated(unsafe) static var chunks: [Data] = []
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func stopLoading() {}
+    override func startLoading() {
+        var headers: [String: String] = [:]
+        if let length = Self.declaredLength { headers["Content-Length"] = String(length) }
+        let response = HTTPURLResponse(url: request.url!, statusCode: Self.status, httpVersion: "HTTP/1.1", headerFields: headers)!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        for chunk in Self.chunks { client?.urlProtocol(self, didLoad: chunk) }
+        client?.urlProtocolDidFinishLoading(self)
+    }
+}
+
+@Suite(.serialized) struct EphemeralDownloaderTests {
+    private let url = URL(string: "https://github.com/mblauberg/PureMouse/releases/download/v0.6.0/PureMouse-0.6.0.dmg")!
+
+    private func run(status: Int = 200, declared: Int? = nil, chunks: [Data], limit: Int) async throws -> (file: URL, data: Data?) {
+        ScriptedResponse.status = status
+        ScriptedResponse.declaredLength = declared
+        ScriptedResponse.chunks = chunks
+        let directory = FileManager.default.temporaryDirectory.appending(path: "pm-dl-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appending(path: "out")
+        try await EphemeralDownloader(protocols: [ScriptedResponse.self]).download(url, to: file, limit: limit)
+        return (file, try? Data(contentsOf: file))
+    }
+
+    private func cleanup(_ file: URL) { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+
+    @Test func aBodyWithinTheLimitIsWrittenWhole() async throws {
+        let body = Data((0..<200_000).map { UInt8($0 % 251) })
+        let result = try await run(declared: body.count, chunks: [body.prefix(70_000), body.dropFirst(70_000)].map(Data.init), limit: 300_000)
+        defer { cleanup(result.file) }
+        #expect(result.data == body)
+    }
+
+    @Test func aPromiseOfMoreThanTheLimitIsRefusedBeforeAnythingIsWritten() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "pm-dl-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        ScriptedResponse.status = 200
+        ScriptedResponse.declaredLength = 5_000
+        ScriptedResponse.chunks = [Data(count: 10)]
+        let file = directory.appending(path: "out")
+        await #expect(throws: DownloadTooLarge.self) {
+            try await EphemeralDownloader(protocols: [ScriptedResponse.self]).download(url, to: file, limit: 1_000)
+        }
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+    }
+
+    @Test func aBodyThatGrowsPastTheLimitIsCutOffAndItsPartialFileDeleted() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "pm-dl-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        ScriptedResponse.status = 200
+        ScriptedResponse.declaredLength = nil          // chunked: the length is not known up front
+        ScriptedResponse.chunks = Array(repeating: Data(count: 50_000), count: 6)
+        let file = directory.appending(path: "out")
+        await #expect(throws: DownloadTooLarge.self) {
+            try await EphemeralDownloader(protocols: [ScriptedResponse.self]).download(url, to: file, limit: 200_000)
+        }
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+    }
+
+    @Test func aBodyThatIsExactlyTheLimitIsAccepted() async throws {
+        let result = try await run(declared: 1_000, chunks: [Data(count: 1_000)], limit: 1_000)
+        defer { cleanup(result.file) }
+        #expect(result.data?.count == 1_000)
+    }
+
+    @Test func anythingButOKIsRefusedAndWritesNothing() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "pm-dl-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        ScriptedResponse.status = 404
+        ScriptedResponse.declaredLength = 10
+        ScriptedResponse.chunks = [Data(count: 10)]
+        let file = directory.appending(path: "out")
+        await #expect(throws: URLError.self) {
+            try await EphemeralDownloader(protocols: [ScriptedResponse.self]).download(url, to: file, limit: 1_000)
+        }
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+    }
+
+    @Test func plainHTTPIsRefused() async {
+        await #expect(throws: URLError.self) {
+            try await EphemeralDownloader().download(URL(string: "http://github.com/x")!, to: URL(fileURLWithPath: "/nonexistent/x"), limit: 10)
+        }
+    }
+}
+
+@Suite struct ImageRequirementTests {
+    private let leaf = #"certificate leaf = H"7664652a1e98aa55498d5b8394add64b6a67d463""#
+
+    @Test func aDiskImageIsHeldToTheCertificateAndNotTheAppsIdentifier() {
+        let requirement = "identifier \"\(SigningRequirement.appIdentifier)\" and (\(leaf))"
+        #expect(SigningRequirement.certificate(of: requirement) == "(\(leaf))")
+    }
+
+    @Test(arguments: ["", "identifier \"other\" and (certificate leaf = H\"ab\")", "certificate leaf = H\"ab\"",
+                      "identifier \"io.github.mblauberg.puremouse\" and certificate leaf = H\"ab\""])
+    func anyOtherTextHasNoCertificatePart(_ text: String) {
+        #expect(SigningRequirement.certificate(of: text) == nil)
+    }
+
+    @Test func anUnsignedOrMissingImageIsRefused() throws {
+        let checker = CodeSignatureChecker()
+        let requirement = "identifier \"\(SigningRequirement.appIdentifier)\" and (\(leaf))"
+        #expect(checker.checkImage(URL(fileURLWithPath: "/nonexistent/x.dmg"), against: requirement) != nil)
+        let file = FileManager.default.temporaryDirectory.appending(path: "pm-img-\(UUID().uuidString).dmg")
+        try Data(count: 4096).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        #expect(checker.checkImage(file, against: requirement) != nil)
+        #expect(checker.checkImage(file, against: "not a requirement") == .wrongCertificate)
+    }
+}
+
+@Suite struct LiveCommitPointTests {
+    private func temporary() throws -> URL {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "pm-commit-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }
+
+    /// A bundle with a version and one executable.
+    private func bundle(_ url: URL, version: String) throws {
+        try FileManager.default.createDirectory(at: url.appending(path: "Contents/MacOS"), withIntermediateDirectories: true)
+        try Data(version.utf8).write(to: url.appending(path: "Contents/MacOS/puremouse"))
+        try PropertyListSerialization.data(fromPropertyList: ["CFBundleShortVersionString": version], format: .xml, options: 0)
+            .write(to: url.appending(path: "Contents/Info.plist"))
+    }
+
+    /// Clears what a test set so its folder can be deleted.
+    private func clean(_ directory: URL) {
+        LiveUpdateFiles().remove(directory)
+    }
+
+    private func chmod(_ arguments: [String]) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/chmod")
+        process.arguments = arguments
+        try process.run()
+        process.waitUntilExit()
+        #expect(process.terminationStatus == 0)
+    }
+
+    /// The installer over the real file system, with the signature check always passing: only where
+    /// the disk says each app is, and what is deleted, are under test.
+    private var installer: UpdateInstaller {
+        var installer = World().installer
+        installer.files = LiveUpdateFiles()
+        return installer
+    }
+
+    private let old = UpdateCheck.Version("0.5.0")!
+    private let new = UpdateCheck.Version("0.6.0")!
+
+    /// Makes `PureMouse.app` (0.5.0) with its executable made impossible to delete, and a staged 0.6.0.
+    private func staged(_ harden: (URL) throws -> Void) throws -> (directory: URL, installed: URL, staged: URL) {
+        let directory = try temporary()
+        let installed = directory.appending(path: "PureMouse.app", directoryHint: .isDirectory)
+        let staged = directory.appending(path: ".PureMouse-update-x", directoryHint: .isDirectory)
+        try bundle(installed, version: "0.5.0")
+        try bundle(staged, version: "0.6.0")
+        try harden(installed.appending(path: "Contents/MacOS/puremouse"))
+        return (directory, installed, staged)
+    }
+
+    @Test func anImmutableResourceMakesTheSwapThrowAfterTheNewAppIsInPlaceAndTheDiskSaysSo() throws {
+        let world = try staged { try FileManager.default.setAttributes([.immutable: true], ofItemAtPath: $0.path) }
+        defer { clean(world.directory) }
+        let files = LiveUpdateFiles()
+        // Nothing before the swap notices: the folders are writable.
+        #expect(files.replaceability(of: world.installed) == .ok)
+        #expect(throws: (any Error).self) { try files.replace(world.installed, with: world.staged) }
+        // The new app is installed and the old one is left at the staged path.
+        #expect(files.bundleVersion(world.installed) == "0.6.0" && files.bundleVersion(world.staged) == "0.5.0")
+        #expect(installer.settle(world.installed, running: old, found: new, requirement: "REQ") == .new)
+        // Cleaning up the leftover old copy clears what held it.
+        installer.files.remove(world.staged)
+        #expect(!FileManager.default.fileExists(atPath: world.staged.path))
+        #expect(files.bundleVersion(world.installed) == "0.6.0")
+    }
+
+    @Test func aDenyDeleteACLDoesTheSame() throws {
+        let world = try staged { try chmod(["+a", "everyone deny delete", $0.path]) }
+        defer { clean(world.directory) }
+        let files = LiveUpdateFiles()
+        #expect(files.replaceability(of: world.installed) == .ok)
+        #expect(throws: (any Error).self) { try files.replace(world.installed, with: world.staged) }
+        #expect(files.bundleVersion(world.installed) == "0.6.0" && files.bundleVersion(world.staged) == "0.5.0")
+        #expect(installer.settle(world.installed, running: old, found: new, requirement: "REQ") == .new)
+        installer.files.remove(world.staged)
+        #expect(!FileManager.default.fileExists(atPath: world.staged.path))
+    }
+
+    @Test func aSwapThatFailsBeforeAnythingMovedLeavesTheOldAppAndTheDiskSaysSo() throws {
+        let world = try staged { _ in }
+        defer { clean(world.directory) }
+        #expect(throws: (any Error).self) {
+            try LiveUpdateFiles().replace(world.installed, with: world.directory.appending(path: "missing"))
+        }
+        #expect(installer.settle(world.installed, running: old, found: new, requirement: "REQ") == .old)
+    }
+
+    @Test func aMissingAppIsUnknownSoNothingIsDeleted() throws {
+        let world = try staged { _ in }
+        defer { clean(world.directory) }
+        try FileManager.default.removeItem(at: world.installed)
+        #expect(installer.settle(world.installed, running: old, found: new, requirement: "REQ") == .unknown)
+        // An app of some third version is unknown as well.
+        try bundle(world.installed, version: "0.9.9")
+        #expect(installer.settle(world.installed, running: old, found: new, requirement: "REQ") == .unknown)
+    }
+
+    @Test func swappingRemovesWhatWasInstalledAndLeavesNoHiddenFolderBehind() throws {
+        let world = try staged { _ in }
+        defer { clean(world.directory) }
+        try LiveUpdateFiles().replace(world.installed, with: world.staged)
+        #expect(LiveUpdateFiles().bundleVersion(world.installed) == "0.6.0")
+        #expect(try FileManager.default.contentsOfDirectory(atPath: world.directory.path) == ["PureMouse.app"])
+    }
+
+    @Test func copyKeepsHardLinksSoTheAssetCatalogShipsOnce() async throws {
+        let directory = try temporary()
+        defer { clean(directory) }
+        let source = directory.appending(path: "src", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: source.appending(path: "a"), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: source.appending(path: "b"), withIntermediateDirectories: true)
+        try Data("car".utf8).write(to: source.appending(path: "a/Assets.car"))
+        try FileManager.default.linkItem(at: source.appending(path: "a/Assets.car"), to: source.appending(path: "b/Assets.car"))
+        let copy = directory.appending(path: "dst", directoryHint: .isDirectory)
+        try await LiveUpdateFiles().copy(source, to: copy)
+        func inode(_ url: URL) throws -> UInt64 { (try FileManager.default.attributesOfItem(atPath: url.path))[.systemFileNumber] as! UInt64 }
+        #expect(try inode(copy.appending(path: "a/Assets.car")) == inode(copy.appending(path: "b/Assets.car")))
+        #expect(try inode(copy.appending(path: "a/Assets.car")) != inode(source.appending(path: "a/Assets.car")))
+        #expect(try String(contentsOf: copy.appending(path: "b/Assets.car"), encoding: .utf8) == "car")
+    }
+
+    @Test func leftoversAreStagedCopiesBesideTheAppAndWorkFoldersInTheBase() throws {
+        let directory = try temporary()
+        defer { clean(directory) }
+        let base = directory.appending(path: "tmp", directoryHint: .isDirectory)
+        let apps = directory.appending(path: "apps", directoryHint: .isDirectory)
+        for folder in ["tmp/PureMouse-update-AAA", "tmp/other", "apps/.PureMouse-update-1234abcd", "apps/PureMouse.app", "apps/.hidden"] {
+            try FileManager.default.createDirectory(at: directory.appending(path: folder), withIntermediateDirectories: true)
+        }
+        var files = LiveUpdateFiles()
+        files.base = base
+        let found = files.leftovers(besides: apps.appending(path: "PureMouse.app")).map(\.lastPathComponent).sorted()
+        #expect(found == [".PureMouse-update-1234abcd", "PureMouse-update-AAA"])
+        let work = try files.makeWorkDirectory()
+        #expect(work.deletingLastPathComponent().resolvingSymlinksInPath().path == base.resolvingSymlinksInPath().path)
     }
 }
