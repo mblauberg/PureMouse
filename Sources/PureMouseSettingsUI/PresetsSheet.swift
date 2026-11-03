@@ -20,6 +20,7 @@ struct PresetsSheet: View {
                 if presets.isEmpty {
                     ContentUnavailableView("No Presets", systemImage: "gauge.with.dots.needle.50percent",
                                            description: Text("Add a pointer speed with the plus button."))
+                        .frame(maxWidth: .infinity)
                 }
                 ForEach(presets, id: \.self) { preset in
                     row(preset, checked: preset == checked)

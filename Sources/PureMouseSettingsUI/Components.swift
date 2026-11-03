@@ -349,6 +349,8 @@ struct DisclosureLabel: View {
     /// (a gesture button's action pop-up).
     var spokenTitle: String?
     @Binding var isExpanded: Bool
+    /// The smallest hit target a control may have (docs/ui-design.md, Accessibility).
+    private static let target: CGFloat = 20
 
     var body: some View {
         // The note's button sits beside the disclosure button, not inside it: a button can't hold one.
@@ -373,8 +375,12 @@ struct DisclosureLabel: View {
             }
             .buttonStyle(.plain)
             // Preserve the separate form rows visually while exposing a native disclosure to AX.
+            // The representation lays out on its own, so it carries the 20 pt minimum too: without it
+            // VoiceOver's disclosure triangle was a 16 pt line of text.
             .accessibilityRepresentation {
-                DisclosureGroup(isExpanded: $isExpanded) {} label: { Text(spokenTitle ?? title) }
+                DisclosureGroup(isExpanded: $isExpanded) {} label: {
+                    Text(spokenTitle ?? title).frame(minWidth: Self.target, minHeight: Self.target)
+                }
             }
             if let note { OverrideLine(note: note, subject: spokenTitle ?? title).disclosedRow() }
         }
