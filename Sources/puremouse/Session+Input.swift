@@ -29,11 +29,13 @@ extension Session {
             if onConnection?(report) == true { return }
             if Receiver.isLinkEstablished(report) {
                 Log.info("\(name): link up")
+                linkDown = false
                 configure()
             } else {
                 // The mouse is off or out of range: its releases will not arrive.
                 scroll?.stop()
                 dropHeld()
+                linkWentDown()
                 if state.online {
                     state.online = false
                     changed()
@@ -41,6 +43,7 @@ extension Session {
             }
             return
         }
+        linkDown = false  // it is talking
         reconfigureIfOffline()
         let feature = device.feature(at: report.featureIndex)
         // Late wheel and button reports from before a handoff: the pointer is on another Mac.

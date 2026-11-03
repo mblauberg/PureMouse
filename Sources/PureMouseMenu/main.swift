@@ -3,14 +3,16 @@
 // helper). See docs/companion.md.
 import AppKit
 import PureMouseAppSupport
+import PureMouseKit
 
 MainActor.assumeIsolated {
     let app = NSApplication.shared
     app.setActivationPolicy(.accessory)
 
     // Single instance: a second launch (the Finder, `open`) opens Settings, then exits; the
-    // running copy keeps the icon.
-    if let bundleID = Bundle.main.bundleIdentifier,
+    // running copy keeps the icon. A copy on an overridden channel (`PUREMOUSE_COMPANION_DIR`, the dev
+    // runs and the footprint rig) is its own instance, beside an installed one.
+    if Companion.overrideDirectory == nil, let bundleID = Bundle.main.bundleIdentifier,
        NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
            // LaunchServices learns of an exit late: a copy that has just quit may still be listed.
            .contains(where: { $0.processIdentifier != getpid() && !$0.isTerminated && kill($0.processIdentifier, 0) == 0 }) {

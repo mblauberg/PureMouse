@@ -2,8 +2,8 @@
 
 ## Status
 
-Proposed. Gated by the SMAppService spike on a Developer ID build across an update. The seam itself,
-with launch agents behind it, needs no Developer ID and is implemented (`LoginService`,
+Proposed for the `SMAppService` migration only, which is gated by a spike on a Developer ID build
+across an update. The `LoginService` seam with launch agents is built (`LoginService`,
 `LaunchdAgentService`, `puremouse login-status`, `login on|off`, `start`).
 
 ## Context

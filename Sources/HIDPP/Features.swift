@@ -719,6 +719,177 @@ public enum DeviceIdentity {
     }
 }
 
+extension DeviceIdentity {
+    /// One firmware entity of 0x0003 function 1 (Solaar `get_firmware`): the main firmware, the
+    /// bootloader or the hardware revision, as the mouse reports them.
+    public struct Firmware: Equatable, Sendable {
+        public enum Kind: UInt8, Sendable { case firmware = 0, bootloader = 1, hardware = 2 }
+        public var kind: Kind
+        /// Three letters, such as "RBM".
+        public var name: String
+        public var major: UInt8
+        public var minor: UInt8
+        public var build: UInt16
+
+        public init(kind: Kind, name: String, major: UInt8, minor: UInt8, build: UInt16) {
+            self.kind = kind
+            self.name = name
+            self.major = major
+            self.minor = minor
+            self.build = build
+        }
+
+        /// "RBM 22.01 B0015": the name, the two version bytes as hex pairs, and the build when set.
+        public var text: String {
+            var text = "\(name) \(Self.pair(major)).\(Self.pair(minor))"
+            if build != 0 { text += " B" + Self.pad(String(build, radix: 16, uppercase: true), to: 4) }
+            return text
+        }
+
+        private static func pair(_ byte: UInt8) -> String { pad(String(byte, radix: 16, uppercase: true), to: 2) }
+        private static func pad(_ text: String, to width: Int) -> String {
+            String(repeating: "0", count: max(0, width - text.count)) + text
+        }
+    }
+
+    /// Function 1, the entity at `index`; nil for one this table does not name.
+    public static func firmware(_ d: HIDPPDevice, at index: Int) async throws -> Firmware? {
+        parseFirmware(try await d.call(id, 1, [UInt8(index)]))
+    }
+
+    /// The main firmware: entity kinds other than 0 are left out. Function 0 is not asked for the
+    /// entity count (the identity read owns that call): entities are read from 0 until the mouse
+    /// answers with an error for an index it does not have.
+    public static func mainFirmware(_ d: HIDPPDevice) async throws -> Firmware? {
+        for index in 0..<maxFirmwareEntities {
+            let entity: Firmware?
+            do {
+                entity = try await firmware(d, at: index)
+            } catch let error as HIDPPError where error.isDeviceAnswer {
+                return nil
+            }
+            guard let entity else { return nil }
+            if entity.kind == .firmware { return entity }
+        }
+        return nil
+    }
+
+    static let maxFirmwareEntities = 4
+
+    /// [kind, name x3, major, minor, build x2]; the kind is the low nibble of byte 0.
+    public static func parseFirmware(_ params: [UInt8]) -> Firmware? {
+        guard params.count >= 8, let kind = Firmware.Kind(rawValue: params[0] & 0x0F) else { return nil }
+        let name = String(decoding: params[1...3].filter { $0 >= 0x20 && $0 < 0x7F }, as: UTF8.self)
+        guard !name.isEmpty else { return nil }
+        return Firmware(kind: kind, name: name, major: params[4], minor: params[5],
+                        build: UInt16(params[6]) << 8 | UInt16(params[7]))
+    }
+}
+
+/// 0x1814 CHANGE_HOST: how many Easy-Switch hosts the mouse has and which one it is on. Only
+/// function 0 (read) is wrapped. Function 1 switches the mouse to another host and is never sent.
+public enum ChangeHost {
+    public static let id: UInt16 = 0x1814
+
+    public struct Info: Equatable, Sendable {
+        public var count: Int
+        /// Zero-based.
+        public var current: Int
+        public init(count: Int, current: Int) {
+            self.count = count
+            self.current = current
+        }
+    }
+
+    public static func info(_ d: HIDPPDevice) async throws -> Info {
+        guard let info = parseInfo(try await d.call(id, 0)) else { throw HIDPPError.malformedResponse }
+        return info
+    }
+
+    public static func parseInfo(_ params: [UInt8]) -> Info? {
+        guard params.count >= 2, params[0] > 0, params[1] < params[0] else { return nil }
+        return Info(count: Int(params[0]), current: Int(params[1]))
+    }
+}
+
+/// 0x1815 HOSTS_INFO: the paired state and name of each Easy-Switch host. Read-only: functions 0
+/// (counts), 1 (one host's entry) and 3 (a chunk of its name). The setters (2 and 4) are never sent.
+public enum HostsInfo {
+    public static let id: UInt16 = 0x1815
+
+    public struct Info: Equatable, Sendable {
+        public var count: Int
+        public var current: Int
+        /// The capability flag for host names (bit 0): without it the mouse keeps none.
+        public var hasNames: Bool
+        public init(count: Int, current: Int, hasNames: Bool = true) {
+            self.count = count
+            self.current = current
+            self.hasNames = hasNames
+        }
+    }
+
+    public struct Host: Equatable, Sendable {
+        public var index: Int
+        public var paired: Bool
+        /// The name the host gave the mouse; empty where it gave none or the mouse does not keep it.
+        public var name: String
+        public init(index: Int, paired: Bool, name: String) {
+            self.index = index
+            self.paired = paired
+            self.name = name
+        }
+    }
+
+    /// Hosts past this are not read: Easy-Switch mice have three.
+    static let maxHosts = 8
+
+    /// Function 0: [flags, reserved, host count, current host, ...] (Solaar `hidpp20.py`,
+    /// `get_host_info`).
+    public static func info(_ d: HIDPPDevice) async throws -> Info {
+        guard let info = parseInfo(try await d.call(id, 0)) else { throw HIDPPError.malformedResponse }
+        return info
+    }
+
+    public static func parseInfo(_ params: [UInt8]) -> Info? {
+        guard params.count >= 4, params[2] > 0, params[3] < params[2] else { return nil }
+        return Info(count: Int(params[2]), current: Int(params[3]), hasNames: params[0] & 0x01 != 0)
+    }
+
+    /// Function 1 for `index`, then function 3 for the name where the mouse keeps names
+    /// (`hasNames`) and the entry says it has one.
+    public static func host(_ d: HIDPPDevice, at index: Int, hasNames: Bool = true) async throws -> Host {
+        let entry = try await d.call(id, 1, [UInt8(index)])
+        guard let parsed = parseEntry(entry) else { throw HIDPPError.malformedResponse }
+        guard hasNames, parsed.paired, parsed.nameLength > 0 else { return Host(index: index, paired: parsed.paired, name: "") }
+        var bytes: [UInt8] = []
+        while bytes.count < parsed.nameLength {
+            let chunk = try await d.call(id, 3, [UInt8(index), UInt8(bytes.count)])
+            let text = parseNameChunk(chunk)
+            guard !text.isEmpty else { break }
+            bytes += text.prefix(parsed.nameLength - bytes.count)
+        }
+        return Host(index: index, paired: true, name: String(decoding: bytes, as: UTF8.self))
+    }
+
+    public static func hosts(_ d: HIDPPDevice, info: Info) async throws -> [Host] {
+        var hosts: [Host] = []
+        for index in 0..<min(info.count, maxHosts) { hosts.append(try await host(d, at: index, hasNames: info.hasNames)) }
+        return hosts
+    }
+
+    /// [host, status, bus type, _, name length]: status 0 is an empty slot (Solaar `get_host_names`).
+    static func parseEntry(_ params: [UInt8]) -> (paired: Bool, nameLength: Int)? {
+        guard params.count >= 5 else { return nil }
+        return (params[1] != 0, Int(params[4]))
+    }
+
+    /// [host, offset, characters...], without the padding.
+    static func parseNameChunk(_ params: [UInt8]) -> [UInt8] {
+        Array(params.dropFirst(2).prefix { $0 != 0 })
+    }
+}
+
 /// 0x1D4B WIRELESS_DEVICE_STATUS: the device announces that it has reconnected and that host
 /// software should re-apply its settings.
 public enum WirelessDeviceStatus {

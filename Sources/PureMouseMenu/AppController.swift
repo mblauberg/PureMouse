@@ -176,7 +176,12 @@ final class AppController: NSObject, NSApplicationDelegate {
         // restarts this agent, then opens it): open Settings. A copy that is not resident has
         // nothing left to do once it is open.
         let request = ShowRequest.consume()
-        if !Locations.launchedByLaunchd || !resident || request != nil {
+        var opensSettings = !Locations.launchedByLaunchd || !resident || request != nil
+        #if DEBUG
+        // `PUREMOUSE_DEV_MENU`: the menu alone, for a screenshot of it.
+        if DevHooks.opensMenuOnly { opensSettings = false }
+        #endif
+        if opensSettings {
             showSettings(request) { [weak self] in
                 if self?.resident != true { NSApp.terminate(nil) }
             }
@@ -241,6 +246,9 @@ final class AppController: NSObject, NSApplicationDelegate {
     /// saying it stopped), and judges the permissions on that one. An alert, not a notification,
     /// since it needs an answer; the reminders that follow take no focus.
     private func askAboutUpdatesIfDue() {
+        #if DEBUG
+        if DevHooks.opensMenuOnly { return }  // a menu screenshot has no question over it
+        #endif
         guard resident, !questionSettled, updates.questionDue, model.status != nil, model.daemonRunning else { return }
         questionSettled = true
         let permissionsSetUp = !model.accessibilityMissing && !model.inputMonitoringNeeded

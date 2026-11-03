@@ -91,7 +91,7 @@ public enum Companion {
 public struct Status: Codable, Equatable, Sendable {
     /// Bumped when the status or control shape changes; a reader seeing a newer version shows
     /// "update PureMouse".
-    public static let currentSchema = 2
+    public static let currentSchema = 3
 
     public var schema = Status.currentSchema
     public var pid: Int32
@@ -196,11 +196,19 @@ public struct Status: Codable, Equatable, Sendable {
         /// What the mouse reports it can do, once it has been configured; nil before. A member
         /// that is nil is unknown (not false), and a reader treats it as available.
         public var capabilities: Capabilities?
+        /// Whether PureMouse's settings are on the mouse now (docs/how-it-works.md, "Sessions").
+        /// Nil: the daemon does not say, and a reader shows nothing about it.
+        public var applied: Applied?
+        /// The main firmware as the mouse reports it ("RBM 22.01 B0015"); nil when it does not.
+        public var firmware: String?
+        /// The Easy-Switch hosts, where the mouse reports them; nil when it does not.
+        public var hosts: Hosts?
 
         public init(id: String, name: String, connection: Connection, online: Bool, battery: Battery?,
                     dpi: Int?, dpiSteps: [Int], wheelMode: WheelMode?, controls: [Control],
                     model: String? = nil, unit: String? = nil,
-                    kind: String? = nil, capabilities: Capabilities? = nil) {
+                    kind: String? = nil, capabilities: Capabilities? = nil,
+                    applied: Applied? = nil, firmware: String? = nil, hosts: Hosts? = nil) {
             self.id = id
             self.name = name
             self.connection = connection
@@ -214,6 +222,9 @@ public struct Status: Codable, Equatable, Sendable {
             self.unit = unit
             self.kind = kind
             self.capabilities = capabilities
+            self.applied = applied
+            self.firmware = firmware
+            self.hosts = hosts
         }
 
         /// Whether a setting that needs `capability` applies to this mouse: unless it is known to
@@ -236,6 +247,42 @@ public struct Status: Codable, Equatable, Sendable {
                 self.charging = charging
             }
             public enum Level: String, Codable, Sendable { case full, good, low, critical }
+        }
+
+        /// The applied state of one mouse. Written on a change of state only, never on a clock.
+        public struct Applied: Codable, Equatable, Sendable {
+            /// `applying`: an apply is under way and the mouse has answered it. `applied`: it finished for the current config.
+            /// `notApplied`: the retries are spent; Apply Settings Again starts a fresh one.
+            public var state: State
+            /// When the apply finished, for `applied`; nil otherwise.
+            public var at: Date?
+            public init(state: State, at: Date? = nil) {
+                self.state = state
+                self.at = at
+            }
+            public enum State: String, Codable, Sendable { case applying, applied, notApplied }
+        }
+
+        /// The Easy-Switch slots as the mouse reports them.
+        public struct Hosts: Codable, Equatable, Sendable {
+            /// Zero-based index into `slots`; nil when the mouse does not say.
+            public var current: Int?
+            public var slots: [Slot]
+            public init(current: Int?, slots: [Slot]) {
+                self.current = current
+                self.slots = slots
+            }
+
+            public struct Slot: Codable, Equatable, Sendable {
+                /// The name the computer gave the mouse; nil where the mouse does not report one.
+                public var name: String?
+                /// False for an empty slot; nil where the mouse does not say.
+                public var paired: Bool?
+                public init(name: String? = nil, paired: Bool? = nil) {
+                    self.name = name
+                    self.paired = paired
+                }
+            }
         }
 
         /// Each member is true (has it), false (reported not to) or nil (unknown or not asked yet:
@@ -309,13 +356,17 @@ public struct Control: Codable, Equatable, Sendable {
     /// leaving the others as they are. Nil means every mouse. Lowercased when set or decoded, as
     /// device keys are, so it compares exactly.
     public var device: String?
+    /// A new token starts a fresh apply on every mouse whose settings are not applied (Apply
+    /// Settings Again). `device` aims `useConfiguredDPI` only and never narrows this.
+    public var reapply: Int?
 
     public init(paused: Bool = false, capture: Capture? = nil, useConfiguredDPI: Int? = nil,
-                device: String? = nil) {
+                device: String? = nil, reapply: Int? = nil) {
         self.paused = paused
         self.capture = capture
         self.useConfiguredDPI = useConfiguredDPI
         self.device = device?.lowercased()
+        self.reapply = reapply
     }
 
     public init(from decoder: Decoder) throws {
@@ -323,7 +374,8 @@ public struct Control: Codable, Equatable, Sendable {
         self.init(paused: try c.decode(Bool.self, forKey: .paused),
                   capture: try c.decodeIfPresent(Capture.self, forKey: .capture),
                   useConfiguredDPI: try c.decodeIfPresent(Int.self, forKey: .useConfiguredDPI),
-                  device: try c.decodeIfPresent(String.self, forKey: .device))
+                  device: try c.decodeIfPresent(String.self, forKey: .device),
+                  reapply: try c.decodeIfPresent(Int.self, forKey: .reapply))
     }
 
     public struct Capture: Codable, Equatable, Sendable {
