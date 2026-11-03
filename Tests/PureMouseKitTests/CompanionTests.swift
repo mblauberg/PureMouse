@@ -90,6 +90,31 @@ private func fullStatus() -> Status {
         #expect(back.smartShift == nil && back.haptics == nil)
     }
 
+    @Test func appliedFirmwareAndHostsRoundTripAndNilIsLeftOut() throws {
+        var device = Status.Device(id: "1", name: "x", connection: .receiver, online: true, battery: nil, dpi: nil,
+                                   dpiSteps: [], wheelMode: nil, controls: [])
+        let bare = String(decoding: try Companion.encoder.encode(device), as: UTF8.self)
+        for key in ["applied", "firmware", "hosts"] { #expect(!bare.contains(key), "\(key)") }
+        let at = Date(timeIntervalSince1970: 1_700_000_000)
+        device.applied = .init(state: .applied, at: at)
+        device.firmware = "RBM 22.01 B0015"
+        device.hosts = .init(current: 0, slots: [.init(name: "Studio", paired: true), .init(paired: false)])
+        let back = try Companion.decoder.decode(Status.Device.self, from: try Companion.encoder.encode(device))
+        #expect(back == device)
+        let applying = String(decoding: try Companion.encoder.encode(Status.Device.Applied(state: .applying)),
+                              as: UTF8.self)
+        #expect(applying.contains("applying") && !applying.contains("\"at\""))
+        let notApplied = try Companion.decoder.decode(Status.Device.Applied.self, from: Data(#"{"state": "notApplied"}"#.utf8))
+        #expect(notApplied == .init(state: .notApplied))
+    }
+
+    @Test func aControlWithoutAReapplyTokenDecodes() throws {
+        let old = try Companion.decoder.decode(Control.self, from: Data(#"{"paused": false}"#.utf8))
+        #expect(old.reapply == nil)
+        let new = try Companion.decoder.decode(Control.self, from: try Companion.encoder.encode(Control(reapply: 4)))
+        #expect(new.reapply == 4)
+    }
+
     @Test func nilIdentityFieldsAreLeftOutOfADeviceToo() throws {
         let device = Status.Device(id: "1", name: "x", connection: .receiver, online: true, battery: nil, dpi: nil,
                                    dpiSteps: [], wheelMode: nil,
@@ -105,9 +130,9 @@ private func fullStatus() -> Status {
         #expect(!device.offers(\.smartShift) && device.offers(\.thumbWheel) && device.offers(\.dpi))
     }
 
-    @Test func theSchemaIsTwoAndTheOldFeatureFlagsAreGone() throws {
-        #expect(Status.currentSchema == 2)
-        #expect(fullStatus().schema == 2)
+    @Test func theSchemaIsThreeAndTheOldFeatureFlagsAreGone() throws {
+        #expect(Status.currentSchema == 3)
+        #expect(fullStatus().schema == 3)
         let text = String(decoding: try Companion.encoder.encode(fullStatus()), as: UTF8.self)
         #expect(!text.contains("hasSmartShift") && !text.contains("hasThumbWheel"))
     }

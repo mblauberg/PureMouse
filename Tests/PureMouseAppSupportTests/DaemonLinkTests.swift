@@ -111,6 +111,52 @@ private func link(_ sandbox: Sandbox, alive: Set<Int32> = [4242], tokens: [Int] 
     #expect(sandbox.control() == Control(paused: true, capture: nil, useConfiguredDPI: 102))
 }
 
+@MainActor @Test func applySettingsAgainIsANewTokenForEveryMouse() throws {
+    let sandbox = try Sandbox()
+    try sandbox.writeStatus(daemonStatus())
+    let daemon = link(sandbox)
+    daemon.reloadStatus()
+    daemon.requestReapply()
+    #expect(sandbox.control()?.reapply == 101)
+    daemon.requestReapply()
+    #expect(sandbox.control()?.reapply == 102)
+}
+
+@MainActor @Test func aReapplyRequestLeavesAPendingDPIRequestsMouseAlone() throws {
+    let sandbox = try Sandbox()
+    try sandbox.writeStatus(daemonStatus())
+    let daemon = link(sandbox)
+    daemon.reloadStatus()
+    daemon.requestConfiguredDPI(device: "mb03400000000")
+    daemon.requestReapply()
+    let control = sandbox.control()
+    #expect(control?.useConfiguredDPI == 101 && control?.device == "mb03400000000")  // still aimed at one mouse
+    #expect(control?.reapply == 102)
+}
+
+@MainActor @Test func aDPIRequestLeavesAPendingReapplyForEveryMouse() throws {
+    let sandbox = try Sandbox()
+    try sandbox.writeStatus(daemonStatus())
+    let daemon = link(sandbox)
+    daemon.reloadStatus()
+    daemon.requestReapply()
+    daemon.requestConfiguredDPI(device: "mb03400000000")
+    let control = sandbox.control()
+    #expect(control?.reapply == 101)  // the daemon reads it as every mouse not applied, whatever `device` says
+    #expect(control?.useConfiguredDPI == 102 && control?.device == "mb03400000000")
+}
+
+@MainActor @Test func aNewerStatusStillMeansUpdateWhateverItAddsToADevice() throws {
+    let sandbox = try Sandbox()
+    let daemon = link(sandbox)
+    // A later schema may give the applied state a value this build cannot decode.
+    try sandbox.write(#"""
+        {"schema": 4, "pid": 4242, "running": true, "devices": [{"id": "1", "applied": {"state": "somethingNew"}}]}
+        """#, to: sandbox.locations.status)
+    daemon.reloadStatus()
+    #expect(daemon.statusTooNew && daemon.status == nil)
+}
+
 @MainActor @Test func everyControlWriteRingsTheDaemon() throws {
     let sandbox = try Sandbox()
     var rings = 0

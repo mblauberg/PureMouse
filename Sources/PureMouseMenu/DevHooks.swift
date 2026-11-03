@@ -35,10 +35,50 @@ enum DevHooks {
             backdrop = plainBackdrop()
             // A status menu follows the menu bar's appearance, not the app's.
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { app.openMenuForTesting(appearance: NSApp.appearance) }
+            if let path = environment["PUREMOUSE_DEV_CAPTURE"] {
+                // The open menu's own windows, composited without Screen Recording permission, as the
+                // helper's capture does; then quit.
+                // A timer in the common modes: menu tracking runs its own loop, which a dispatched block
+                // waits out.
+                let timer = Timer(timeInterval: 3, repeats: false) { _ in
+                    MainActor.assumeIsolated {
+                        if !writeMenu(to: URL(filePath: path)) { FileHandle.standardError.write(Data("capture failed\n".utf8)) }
+                        exit(0)
+                    }
+                }
+                RunLoop.main.add(timer, forMode: .common)
+            }
         }
     }
 
+    /// This process's on-screen windows but the backdrop, composited into one PNG.
+    private static func writeMenu(to url: URL) -> Bool {
+        let pid = ProcessInfo.processInfo.processIdentifier
+        let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
+            as? [[String: Any]] ?? []
+        var ids: [UnsafeRawPointer?] = info
+            .filter { ($0[kCGWindowOwnerPID as String] as? Int).map(pid_t.init) == pid }
+            .compactMap { $0[kCGWindowNumber as String] as? Int }
+            .filter { $0 != backdrop?.windowNumber }
+            .compactMap { UnsafeRawPointer(bitPattern: UInt($0)) }
+        // Looked up at run time: deprecated for ScreenCaptureKit, which wants the permission.
+        typealias Create = @convention(c) (CGRect, CFArray, CGWindowImageOption) -> Unmanaged<CGImage>?
+        guard !ids.isEmpty, let windows = CFArrayCreate(nil, &ids, ids.count, nil),
+              let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CGWindowListCreateImageFromArray"),
+              let image = unsafeBitCast(symbol, to: Create.self)(.null, windows, [.boundsIgnoreFraming, .bestResolution])?
+                  .takeRetainedValue(),
+              let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
+        else { return false }
+        return (try? png.write(to: url)) != nil
+    }
+
     private static var backdrop: NSWindow?
+
+    /// `PUREMOUSE_DEV_MENU=1`: a hand-started copy opens only the menu, not Settings as well.
+    static var opensMenuOnly: Bool { ProcessInfo.processInfo.environment["PUREMOUSE_DEV_MENU"] != nil }
+
+    /// `PUREMOUSE_DEV_MENU_OPTION=1`: the menu builds as if ⌥ were held, for the detail line.
+    static var holdsOption: Bool { ProcessInfo.processInfo.environment["PUREMOUSE_DEV_MENU_OPTION"] != nil }
 
     private static func plainBackdrop() -> NSWindow? {
         guard let screen = NSScreen.main else { return nil }

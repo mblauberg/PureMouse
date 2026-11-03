@@ -1,10 +1,11 @@
 # Privacy
 
-PureMouse has no account and no telemetry, sends nothing about you anywhere, and stores nothing on
-the mouse. Its only network requests are the check for a new release (when you press **Check for Updates**,
-and once a day if you allow it) and, when you choose **Update to X.Y.Z…**, the download of that
-release. This page lists what it is allowed to do, every file it writes and those requests, each
-with the source file that shows it.
+PureMouse has no account and no telemetry, sends nothing about you or your settings, and stores
+nothing on the mouse. Its only network requests go to GitHub: the check for a new release (when you
+press **Check for Updates**, and once a day if you allow it) and, when you choose to install an
+update, the download of that release. GitHub sees your IP address and a standard user agent naming
+the app and system version, as with any web request. This page lists what it is allowed to do, every
+file it writes and those requests, each with the source file that shows it.
 
 ## Permissions
 
@@ -48,7 +49,9 @@ The Settings helper needs no permissions either.
 
 ## Files it writes
 
-All of them are in your home folder.
+The table lists the files it keeps, all in your home folder. Installing an update also writes to a
+private folder in the temporary directory and stages a copy beside the installed app, which then
+replaces it; both are deleted when the update ends.
 
 While it runs, the background process changes settings on the mouse that it forgets when it
 reconnects: which buttons it sends to PureMouse, how the wheels report, DPI and SmartShift. When it
@@ -61,7 +64,7 @@ reconnects. It stores nothing on the mouse or the receiver.
 | `~/Library/Logs/PureMouse.log`, and `PureMouse.log.1` once it passes 1 MiB | The background process ([`Sources/puremouse/Log.swift`](../Sources/puremouse/Log.swift)) | Always: a start line with the PureMouse and macOS versions; each mouse and receiver by the name macOS reports (for Bluetooth, the name in Bluetooth settings), product ID and device key (its model ID, [Configuration](configuration.md#per-device-settings)), with its features; permission state; config errors; Logi Options+ running; Universal Control, pause and wake events; and a failed `run` command's first 80 characters with its exit status. While you use **Find by Pressing…**: the control ID of the button you press. With `--verbose` only: the control ID of every press, gesture directions, and the bundle ID of the app whose settings apply. Never what you type, and never a `run` command's output |
 | `~/Library/LaunchAgents/io.github.mblauberg.puremouse.plist` and `….menu.plist` | `puremouse register`, which opening the app runs ([`Sources/puremouse/LoginItem.swift`](../Sources/puremouse/LoginItem.swift)) | Start-at-login entries naming the app's two programs. `puremouse unregister` removes them |
 | `~/Library/Application Support/PureMouse/launchd/<label>.plist` | `puremouse start`, for a job that is not registered ([`Sources/puremouse/LoginService.swift`](../Sources/puremouse/LoginService.swift)) | The same entry as the one in `LaunchAgents`, outside the folder launchd loads at login, so it runs now and not at the next login. `puremouse stop` removes it |
-| `~/Library/Application Support/PureMouse/status.json` | The background process ([`Sources/puremouse/Channel.swift`](../Sources/puremouse/Channel.swift)) | What the menu shows: connected mice (each with its device key, kind, what it supports and the unit ID it reports, a number that identifies that one mouse), battery, DPI, permission and config state |
+| `~/Library/Application Support/PureMouse/status.json` | The background process ([`Sources/puremouse/Channel.swift`](../Sources/puremouse/Channel.swift)) | What the menu shows: connected mice (each with its device key, kind, what it supports and the unit ID it reports, a number that identifies that one mouse), battery, DPI, whether its settings are applied and when, its firmware version, the names of the computers it is paired with (the mouse's Easy-Switch slots, where it reports them), permission and config state. Copy Details in About This Mouse puts a subset of this on the clipboard when you ask, without the unit ID |
 | `~/Library/Application Support/PureMouse/control.json` | The menu bar app and Settings ([`Sources/PureMouseAppSupport/AppModel.swift`](../Sources/PureMouseAppSupport/AppModel.swift)) | Requests to the background process: pause, select by pressing, use the configured DPI. Removed when the background process starts ([`Sources/puremouse/Channel.swift`](../Sources/puremouse/Channel.swift)) |
 | `~/Library/Application Support/PureMouse/battery-alerts.json` | The menu bar app ([`Sources/PureMouseAppSupport/BatteryAlert.swift`](../Sources/PureMouseAppSupport/BatteryAlert.swift)) | Which low-battery warning was last shown per mouse (a mouse that reports its unit ID is listed by its device key and that unit ID), so it is not repeated and can be taken down later |
 | `~/Library/Application Support/PureMouse/menu-hidden` | `puremouse menu off` ([`Sources/puremouse/LoginItem.swift`](../Sources/puremouse/LoginItem.swift)) | Empty; its presence keeps the menu bar icon hidden |
@@ -112,9 +115,10 @@ your IP address and a standard user agent naming the app and the system version.
 
 ### Installing an update
 
-**Update to X.Y.Z…** in the menu bar menu is the only thing that downloads a release, and only after
-you answer its alert ("Update to PureMouse X.Y.Z?", **Update and Relaunch**). It is never started by
-the daily check. PureMouse then makes two more HTTPS GETs, in the same kind of ephemeral session,
+The menu bar app downloads a release after you confirm **Update to PureMouse X.Y.Z?** with
+**Update and Relaunch**. The request can come from **Update to X.Y.Z…** in its menu or **Update and
+Relaunch** in Settings › About. The daily check never starts an install. PureMouse then makes two
+more HTTPS GETs, in the same kind of ephemeral session,
 to `github.com/mblauberg/PureMouse/releases/download/vX.Y.Z/`: `SHA256SUMS` (under 64 KB) and
 `PureMouse-X.Y.Z.dmg` (under 64 MB). GitHub sends the file from its own download servers. They send nothing beyond what any web request shows. The
 download goes to a private folder in the temporary directory, never into memory, and is deleted,
