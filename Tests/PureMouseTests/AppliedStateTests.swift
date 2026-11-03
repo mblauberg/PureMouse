@@ -244,6 +244,19 @@ struct AppliedStateTests {
         #expect(h.device.effectiveTimeout == h.device.timeout)
     }
 
+    @Test func aReapplyAlongsideADPIRequestForAnotherMouseStillReachesThisOne() async throws {
+        let h = try DaemonHarness(#"{"buttons":{"back":"none"}}"#)
+        defer { h.close() }
+        let fake = FakeDevice.mxMaster3S
+        fake.failures[.init(0x1B04, 3)] = .error(2)
+        #expect(await h.tryAdopting(fake) == .adopted)
+        let session = try await h.settled(fake)
+        #expect(session.status.applied?.state == .notApplied)
+        fake.failures.removeAll()
+        h.daemon.handle(Control(useConfiguredDPI: 5, device: "some-other-mouse", reapply: 9))
+        try await eventually { session.status.applied?.state == .applied && !session.isConfiguring }
+    }
+
     // MARK: The 2 s bound
 
     /// The live schedule's shape at a twentieth of its durations (30 ms a request, 10 ms between

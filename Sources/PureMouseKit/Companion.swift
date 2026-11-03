@@ -357,7 +357,7 @@ public struct Control: Codable, Equatable, Sendable {
     /// device keys are, so it compares exactly.
     public var device: String?
     /// A new token starts a fresh apply on every mouse whose settings are not applied (Apply
-    /// Settings Again), or on the one that `device` names.
+    /// Settings Again). `device` aims `useConfiguredDPI` only and never narrows this.
     public var reapply: Int?
 
     public init(paused: Bool = false, capture: Capture? = nil, useConfiguredDPI: Int? = nil,

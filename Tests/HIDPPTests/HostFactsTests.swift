@@ -55,14 +55,37 @@ import Testing
         let device = fake.endpoint()
         defer { device.close() }
         let info = try await HostsInfo.info(device)
-        #expect(info == .init(count: 3, current: 1))
-        let hosts = try await HostsInfo.hosts(device, count: info.count)
+        #expect(info == .init(count: 3, current: 1, hasNames: true))
+        let hosts = try await HostsInfo.hosts(device, info: info)
         #expect(hosts == [
             .init(index: 0, paired: true, name: "Studio"),
             .init(index: 1, paired: true, name: "MacBook Air with a long name"),
             .init(index: 2, paired: false, name: ""),
         ])
         #expect(fake.hostWrites.isEmpty)
+    }
+
+    /// The real reply is [flags, reserved, count, current] (Solaar `get_host_info`).
+    @Test func hostsInfoParsesTheRealLayout() {
+        #expect(HostsInfo.parseInfo([3, 0, 3, 1]) == .init(count: 3, current: 1, hasNames: true))
+        #expect(HostsInfo.parseInfo([2, 0, 3, 0]) == .init(count: 3, current: 0, hasNames: false))
+        #expect(HostsInfo.parseInfo([1, 0, 3, 3]) == nil)  // current past the count
+        #expect(HostsInfo.parseInfo([1, 0, 0, 0]) == nil)
+        #expect(HostsInfo.parseInfo([1, 0, 3]) == nil)
+    }
+
+    @Test func aMouseThatKeepsNoNamesIsNotAskedForThem() async throws {
+        let fake = FakeDevice(features: [1: 0x1815])
+        fake.hosts = ["Studio", "MacBook Air", nil]
+        fake.hostNames = false
+        let device = fake.endpoint()
+        defer { device.close() }
+        let info = try await HostsInfo.info(device)
+        #expect(!info.hasNames)
+        let hosts = try await HostsInfo.hosts(device, info: info)
+        #expect(hosts == [.init(index: 0, paired: true, name: ""), .init(index: 1, paired: true, name: ""),
+                          .init(index: 2, paired: false, name: "")])
+        #expect(fake.requests(feature: 0x1815, function: 3).isEmpty)
     }
 
     @Test func aFeatureErrorSurfacesAsAnError() async {

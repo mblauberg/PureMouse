@@ -820,9 +820,12 @@ public enum HostsInfo {
     public struct Info: Equatable, Sendable {
         public var count: Int
         public var current: Int
-        public init(count: Int, current: Int) {
+        /// The capability flag for host names (bit 0): without it the mouse keeps none.
+        public var hasNames: Bool
+        public init(count: Int, current: Int, hasNames: Bool = true) {
             self.count = count
             self.current = current
+            self.hasNames = hasNames
         }
     }
 
@@ -841,22 +844,24 @@ public enum HostsInfo {
     /// Hosts past this are not read: Easy-Switch mice have three.
     static let maxHosts = 8
 
-    /// Function 0: [capabilities, host count, current host, ...].
+    /// Function 0: [flags, reserved, host count, current host, ...] (Solaar `hidpp20.py`,
+    /// `get_host_info`).
     public static func info(_ d: HIDPPDevice) async throws -> Info {
         guard let info = parseInfo(try await d.call(id, 0)) else { throw HIDPPError.malformedResponse }
         return info
     }
 
     public static func parseInfo(_ params: [UInt8]) -> Info? {
-        guard params.count >= 3, params[1] > 0, params[2] < params[1] else { return nil }
-        return Info(count: Int(params[1]), current: Int(params[2]))
+        guard params.count >= 4, params[2] > 0, params[3] < params[2] else { return nil }
+        return Info(count: Int(params[2]), current: Int(params[3]), hasNames: params[0] & 0x01 != 0)
     }
 
-    /// Function 1 for `index`, then function 3 for the name where the entry says it has one.
-    public static func host(_ d: HIDPPDevice, at index: Int) async throws -> Host {
+    /// Function 1 for `index`, then function 3 for the name where the mouse keeps names
+    /// (`hasNames`) and the entry says it has one.
+    public static func host(_ d: HIDPPDevice, at index: Int, hasNames: Bool = true) async throws -> Host {
         let entry = try await d.call(id, 1, [UInt8(index)])
         guard let parsed = parseEntry(entry) else { throw HIDPPError.malformedResponse }
-        guard parsed.paired, parsed.nameLength > 0 else { return Host(index: index, paired: parsed.paired, name: "") }
+        guard hasNames, parsed.paired, parsed.nameLength > 0 else { return Host(index: index, paired: parsed.paired, name: "") }
         var bytes: [UInt8] = []
         while bytes.count < parsed.nameLength {
             let chunk = try await d.call(id, 3, [UInt8(index), UInt8(bytes.count)])
@@ -867,9 +872,9 @@ public enum HostsInfo {
         return Host(index: index, paired: true, name: String(decoding: bytes, as: UTF8.self))
     }
 
-    public static func hosts(_ d: HIDPPDevice, count: Int) async throws -> [Host] {
+    public static func hosts(_ d: HIDPPDevice, info: Info) async throws -> [Host] {
         var hosts: [Host] = []
-        for index in 0..<min(count, maxHosts) { hosts.append(try await host(d, at: index)) }
+        for index in 0..<min(info.count, maxHosts) { hosts.append(try await host(d, at: index, hasNames: info.hasNames)) }
         return hosts
     }
 

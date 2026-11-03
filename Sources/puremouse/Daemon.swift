@@ -247,7 +247,7 @@ final class Daemon {
         }
         if let token = control.reapply, token != lastReapplyToken {
             lastReapplyToken = token
-            sessions.values.filter { Self.targets(control.device, $0) }.forEach { $0.reapply() }
+            sessions.values.forEach { $0.reapply() }  // `device` aims the DPI request only
         }
     }
 

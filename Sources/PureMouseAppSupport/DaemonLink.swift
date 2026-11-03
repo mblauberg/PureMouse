@@ -167,15 +167,12 @@ public final class DaemonLink {
     }
 
     /// Asks the daemon to start a fresh apply on every mouse whose settings are not applied
-    /// (Apply Settings Again). A new token each time; the request names no device, so a device
-    /// left in the file by a DPI request does not narrow it.
+    /// (Apply Settings Again). A new token each time. It is a request of its own: it leaves
+    /// `device`, which a pending DPI request aims, as it is, and `device` never narrows it.
     @discardableResult
     public func requestReapply() -> Bool {
         let token = newToken()
-        return writeControl {
-            $0.reapply = token
-            $0.device = nil
-        }
+        return writeControl { $0.reapply = token }
     }
 
     /// One read-change-replace of `control.json` under `control.json.lock`, then the doorbell:

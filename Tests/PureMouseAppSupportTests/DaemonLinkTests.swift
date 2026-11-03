@@ -116,13 +116,34 @@ private func link(_ sandbox: Sandbox, alive: Set<Int32> = [4242], tokens: [Int] 
     try sandbox.writeStatus(daemonStatus())
     let daemon = link(sandbox)
     daemon.reloadStatus()
-    // A device left in the file by a DPI request must not narrow it.
+    daemon.requestReapply()
+    #expect(sandbox.control()?.reapply == 101)
+    daemon.requestReapply()
+    #expect(sandbox.control()?.reapply == 102)
+}
+
+@MainActor @Test func aReapplyRequestLeavesAPendingDPIRequestsMouseAlone() throws {
+    let sandbox = try Sandbox()
+    try sandbox.writeStatus(daemonStatus())
+    let daemon = link(sandbox)
+    daemon.reloadStatus()
     daemon.requestConfiguredDPI(device: "mb03400000000")
     daemon.requestReapply()
-    #expect(sandbox.control()?.reapply == 102 && sandbox.control()?.device == nil)
-    #expect(sandbox.control()?.useConfiguredDPI == 101)
+    let control = sandbox.control()
+    #expect(control?.useConfiguredDPI == 101 && control?.device == "mb03400000000")  // still aimed at one mouse
+    #expect(control?.reapply == 102)
+}
+
+@MainActor @Test func aDPIRequestLeavesAPendingReapplyForEveryMouse() throws {
+    let sandbox = try Sandbox()
+    try sandbox.writeStatus(daemonStatus())
+    let daemon = link(sandbox)
+    daemon.reloadStatus()
     daemon.requestReapply()
-    #expect(sandbox.control()?.reapply == 103)
+    daemon.requestConfiguredDPI(device: "mb03400000000")
+    let control = sandbox.control()
+    #expect(control?.reapply == 101)  // the daemon reads it as every mouse not applied, whatever `device` says
+    #expect(control?.useConfiguredDPI == 102 && control?.device == "mb03400000000")
 }
 
 @MainActor @Test func aNewerStatusStillMeansUpdateWhateverItAddsToADevice() throws {

@@ -496,7 +496,7 @@ final class Session {
             try ensureOpen()
             if try await device.hasFeature(HostsInfo.id) {
                 let info = try await HostsInfo.info(device)
-                let list = try await HostsInfo.hosts(device, count: info.count)
+                let list = try await HostsInfo.hosts(device, info: info)
                 hosts = .init(current: info.current, slots: list.map {
                     .init(name: $0.name.isEmpty ? nil : $0.name, paired: $0.paired)
                 })

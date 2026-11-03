@@ -54,6 +54,8 @@ public final class FakeDevice {
     /// use. Empty: the mouse answers neither feature with data (as the probe fixtures do).
     public var hosts: [String?] = []
     public var currentHost = 0
+    /// Whether 0x1815 says (capability flag, bit 0) that the mouse keeps host names.
+    public var hostNames = true
     /// 0x0003 function 1's replies, one per firmware entity; an index past them is an error.
     public var firmware: [[UInt8]] = []
     /// Features whose next root lookup goes unanswered (`dropFirstLookup`), and those dropped.
@@ -188,7 +190,8 @@ public final class FakeDevice {
             guard let i = p.first, Int(i) < firmware.count else { return FakeTransport.error(to: r, code: 2) }
             return reply(firmware[Int(i)])
         case (0x1814, 0) where !hosts.isEmpty: return reply([UInt8(hosts.count), UInt8(currentHost), 0])
-        case (0x1815, 0) where !hosts.isEmpty: return reply([0, UInt8(hosts.count), UInt8(currentHost), 0])
+        case (0x1815, 0) where !hosts.isEmpty:
+            return reply([hostNames ? 1 : 0, 0, UInt8(hosts.count), UInt8(currentHost)])  // flags, reserved, count, current
         case (0x1815, 1) where !hosts.isEmpty:
             guard let i = p.first, Int(i) < hosts.count else { return FakeTransport.error(to: r, code: 2) }
             let name = hosts[Int(i)]
