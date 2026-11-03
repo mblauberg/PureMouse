@@ -120,26 +120,26 @@ controls your mouse has. Fine tuning sits behind each pane's **Advanced…** but
     </td>
     <td width="50%" valign="top">
       <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-app-dark.png">
+        <img src="docs/images/settings-app-light.png" width="400" alt="Google Chrome's own settings in a sheet: Command-T on the top button and the thumb wheel switching tabs, with the other buttons the same as everywhere">
+      </picture>
+      <br><sub><b>One app.</b> Chrome's own buttons and thumb wheel, beside what it shares with everywhere else.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <picture>
         <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-pointer-dark.png">
         <img src="docs/images/settings-pointer-light.png" width="400" alt="Mouse › Pointer: pointer speed at 1,600 DPI with presets of 800, 1,600 and 3,200 DPI">
       </picture>
       <br><sub><b>Mouse › Pointer.</b> Pointer speed and the presets a button can cycle.</sub>
     </td>
-  </tr>
-  <tr>
     <td width="50%" valign="top">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-apps-dark.png">
         <img src="docs/images/settings-apps-light.png" width="400" alt="Apps: Chrome, Teams, Word, Preview and Safari, each with its own thumb wheel action or buttons">
       </picture>
       <br><sub><b>Apps.</b> Every app with settings of its own, and what each one changes.</sub>
-    </td>
-    <td width="50%" valign="top">
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-app-dark.png">
-        <img src="docs/images/settings-app-light.png" width="400" alt="Google Chrome's own settings in a sheet: Command-T on the top button and the thumb wheel switching tabs, with the other buttons the same as everywhere">
-      </picture>
-      <br><sub><b>One app.</b> Chrome's own buttons and thumb wheel, beside what it shares with everywhere else.</sub>
     </td>
   </tr>
   <tr>
@@ -194,10 +194,10 @@ way to get it supported.
 | Network | One small update check a day if you allow it, or when you press **Check for Updates** | By design |
 | Privacy | No account, no telemetry, nothing stored on the mouse | By design |
 
-Every figure was taken on macOS 27.0.1, the memory on Apple silicon. The sizes come from a release dry run
-(`scripts/release.sh --dry-run`), and the menu bar app and Settings from the
-[footprint rig](docs/development.md#footprint-rig), built from source; figures move with each
-release and each macOS, and are taken again for every minor release.
+All figures are from macOS 27.0.1, the memory figures on Apple silicon. The sizes come from a
+release dry run (`scripts/release.sh --dry-run`), and the menu bar app and Settings from the
+[footprint rig](docs/development.md#footprint-rig), built from source. They move with each release
+and each macOS, so they are taken again for every minor release.
 
 The background process uses only system frameworks and no UI toolkit. Settings is a separate app
 that runs only while its window is open (it shows in the Dock meanwhile, and quits when you close
