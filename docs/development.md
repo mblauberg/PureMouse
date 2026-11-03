@@ -257,12 +257,23 @@ signature from that team.
 
 1. For a minor release (X.Y.0), re-take the README's "Lightweight by design" figures first
    ("Footprint rig" above).
-2. Tag `vX.Y.Z` (or `vX.Y.Z-rc.N`) on a clean `main`; the bundle version is the tag without the `v`.
-3. Run `PUREMOUSE_SIGN_IDENTITY=PureMouse ./scripts/release.sh` on a Mac that holds the
-   `PureMouse` identity. Naming it matters: on a Mac that also holds a Developer ID, the build would
-   otherwise sign with that, and every user would have to grant permissions again.
-4. Attach `.build/dist/PureMouse-X.Y.Z.dmg` and `.build/dist/SHA256SUMS` to a GitHub release.
-   `shasum -a 256 -c SHA256SUMS` checks the download.
+2. Tag `vX.Y.Z` (or `vX.Y.Z-rc.N`) on a clean `main` and push the tag. The protected `release`
+   environment waits for the owner's approval. The workflow checks that the tagged commit is on
+   `main` before importing credentials, then signs, builds and attests the dmg.
+3. Review the draft GitHub release and publish it manually. It contains the dmg and `SHA256SUMS`;
+   `shasum -a 256 -c SHA256SUMS` checks the download. RC tags produce draft prereleases. Workflow
+   artefacts are kept for seven days; raw build and notary output is withheld to protect secrets.
+
+Stable releases require the configured identity and signing secrets. An RC with neither signing
+secret is explicitly signed ad hoc and says so in the job summary; partial credentials fail. The
+optional notary credentials must be supplied together. Before the first production release, the owner
+should approve a throwaway RC and inspect `gh release view <tag>`, verify its downloaded dmg with
+`gh attestation verify <dmg> -R mblauberg/PureMouse`, test an off-main tag, and inspect cleanup and
+job logs. Delete the throwaway draft and tag afterwards.
+
+For a break-glass local release, run `PUREMOUSE_SIGN_IDENTITY=PureMouse ./scripts/release.sh` on a
+Mac holding the existing `PureMouse` identity, then create a draft and attach both files in
+`.build/dist`. Naming the identity matters: another certificate makes users grant permissions again.
 
 `release.sh` takes no version: it refuses unless `HEAD` is tagged exactly `vX.Y.Z` or `vX.Y.Z-rc.N`
 (one such tag) on a clean tree, and rejects `--version` without `--dry-run`. It builds the universal
@@ -319,8 +330,18 @@ Only the owner changes these, and none needs a Developer ID. Check them with the
   (`gh api repos/mblauberg/PureMouse/actions/permissions --jq .sha_pinning_required`).
 - A `main` ruleset requiring the `test` check, and a `v*` tag ruleset that lets only the owner
   create release tags.
-- A `release` environment that requires the owner's review and accepts only `v*` tags. Its signing
-  secrets arrive with the release workflow ([ADR 15](adr/0015-protected-release-workflow.md)).
+- A `release` environment that requires the owner's review and accepts only `v*` tags. Export the
+  **existing** PureMouse identity and private key as a password-protected p12; never create a new
+  identity for this workflow. Set environment variable `SIGNING_IDENTITY_NAME` to `PureMouse` and
+  environment secrets `SIGNING_CERT_P12_BASE64` (base64 of the p12) and `SIGNING_CERT_PASSWORD`
+  (its export password). Use `gh variable set SIGNING_IDENTITY_NAME --env release --body PureMouse`
+  and `gh secret set SIGNING_CERT_P12_BASE64 --env release < <(base64 -i /path/to/identity.p12)`;
+  use `gh secret set SIGNING_CERT_PASSWORD --env release` and enter the password interactively.
+  Remove the exported p12 securely after provisioning. If notarisation is configured, also set all
+  three environment secrets `NOTARY_API_KEY_P8_BASE64`, `NOTARY_API_KEY_ID`, and
+  `NOTARY_API_ISSUER_ID`; supply the base64-encoded p8 to the first in the same way. The workflow
+  writes the key with restrictive permissions and removes its temporary files and keychain.
+  See [ADR 15](adr/0015-protected-release-workflow.md).
 - Discussions, for questions; the issue chooser links to it.
 
 ## Icon

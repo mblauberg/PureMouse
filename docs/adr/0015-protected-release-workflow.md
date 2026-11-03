@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted, not built
+Accepted
 
 ## Context
 
@@ -16,7 +16,13 @@ runs it on `v*` tags in the protected `release` environment (the owner as requir
 only), imports the signing p12 into a temporary keychain, attests the disk image and creates a
 draft release with the dmg and `SHA256SUMS`. The owner publishes the draft. Actions are pinned to
 full SHAs, each job's token has the least permissions it needs, and the workflow has no
-pull-request trigger. Pull-request CI runs the same script as a dry run.
+pull-request trigger. Pull-request CI runs the same script as a dry run. The job checks the tag
+commit against `origin/main` before reading credentials. Stable tags require the identity and both
+signing secrets; an RC with neither signing secret explicitly uses ad hoc signing. Partial signing
+or notary credentials fail. A temporary keychain and private notary key are removed on exit, with
+an unconditional cleanup step as a backstop. Raw build and notary output is withheld because it
+can contain secrets; failures retain the exit code. The release files are retained as a workflow
+artefact for seven days.
 
 ## Alternatives rejected
 
