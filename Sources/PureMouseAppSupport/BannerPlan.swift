@@ -23,7 +23,7 @@ public enum Notice: CaseIterable, Sendable {
 
     /// What a notice's own button does: Start PureMouse runs `start`, never `register`, so Open
     /// at login stays as it is (docs/adr/0018-login-service-seam.md).
-    public var loginAction: LoginAction? { self == .off ? .running(true) : nil }
+    public var loginAction: LoginAction? { self == .off ? .start : nil }
 }
 
 extension Notice {
@@ -51,7 +51,7 @@ extension Notice {
 }
 
 /// Which notices apply, highest priority first. A pane shows the first as its banner and offers
-/// the rest in General; General lists every one.
+/// the rest in General, which lists every one but off and paused (its PureMouse row is those).
 public enum BannerPlan {
     public struct State: Equatable, Sendable {
         public var configError = false
@@ -98,6 +98,12 @@ public enum BannerPlan {
         return items
     }
 
+    /// The notices General lists below its PureMouse row. Off and paused are that row (its Start
+    /// button and its switch), so they are not listed again.
+    public static func generalItems(for state: State) -> [Notice] {
+        items(for: state).filter { $0 != .off && $0 != .paused }
+    }
+
     /// "1 more notice", "3 more notices": what a banner says of the notices behind it.
     public static func moreText(_ count: Int) -> String? {
         count < 1 ? nil : count == 1 ? "1 more notice" : "\(count) more notices"
@@ -114,7 +120,9 @@ extension BannerPlan.State {
     }
 }
 
-/// Whether PureMouse is running now, for General's Status row.
+/// Whether PureMouse is running now, for General's Status row. Running or paused, General's switch
+/// pauses and resumes it (`AppModel.setPaused`); only while off does the row offer Start. Settings
+/// never stops PureMouse, so Stop is not a control.
 public enum RunState: Equatable, Sendable {
     case running, paused, off
 
@@ -124,14 +132,25 @@ public enum RunState: Equatable, Sendable {
 
     public var word: String {
         switch self {
-        case .running: "Running"
+        case .running: "Active"
         case .paused: "Paused"
         case .off: "Off"
         }
     }
 
-    /// The Status row's button: Start while off, else Stop. Neither changes Open at login.
-    public var button: LoginAction { self == .off ? .running(true) : .running(false) }
+    /// The PureMouse switch: on while PureMouse is active. Off (not running) has no switch, so it
+    /// reads off, and `toggled` ignores it.
+    public var isOn: Bool { self == .running }
+
+    /// What the switch makes of this state when it moves to `on`: active or paused. nil while off,
+    /// where Start is the control and the switch is not offered.
+    public func toggled(_ on: Bool) -> RunState? {
+        self == .off ? nil : on ? .running : .paused
+    }
+
+    /// The Status row's Start button, offered only while off; nil otherwise, where the switch is the
+    /// control. Start doesn't change Open at login.
+    public var button: LoginAction? { self == .off ? .start : nil }
 }
 
 /// The question asked before Use Last Working Config replaces the config file.

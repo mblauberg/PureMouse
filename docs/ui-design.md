@@ -135,6 +135,14 @@ answering a question people have, and a good default means most people never tou
   variable colour only for a changing value (battery).
 - **Typography.** Text styles only; macOS has no Dynamic Type, so nothing smaller than `.caption`.
 
+The main wheel's rows always show a concrete value (`WheelDefaults`): while nothing is set,
+Reverse direction is off, Wheel mode is the mode the mouse reports (Ratchet if it reports none)
+and SmartShift is on, with no "Using the mouse's own setting." caption (Switches at, in Advanced…,
+keeps it). A choice is always written (Reverse off as `false`, SmartShift on as 12), because the
+daemon leaves the mouse as it last set it: a removed key would not undo anything, and Settings
+would show a value the mouse does not have. Only a mouse's choice equal to an explicit All Mice
+value removes its key, since the daemon applies that value to it anyway.
+
 ## Disclosure
 
 Each level has one mechanism, and each label says what it reveals.
@@ -148,8 +156,15 @@ Each level has one mechanism, and each label says what it reveals.
   Settings › Mouse › Advanced… does the same; the HIG pairs Done with Cancel for sheets that hold
   edits). A sheet that holds edits until confirmed, such as the shortcut recorder, has Cancel and a
   verb. Each sheet has a fixed width and fits its content.
+- **Shortcut sheet** leads with the recorder (Record Shortcut, then Recording…) and teaches no
+  syntax. "Enter as Text…" shows the text field and its caption ("macOS keeps some shortcuts, such
+  as ⌃←. Enter those instead."). A recording that ends on modifiers alone, released with no key,
+  shows the same field: a shortcut macOS keeps often never reaches the app's key monitor.
+  `PUREMOUSE_DEV_SHORTCUT_TEXT=1` opens it with the field shown.
 - **Disclosure triangle** only for a control's own children (gesture directions, Exact value);
-  at most one per row.
+  at most one per row. `DisclosureLabel` exposes a native `DisclosureGroup` accessibility
+  representation (AXDisclosureTriangle); both pointer and accessibility activation respect Reduce
+  Motion and toggle without animation when it is on.
 - **⌥ alternates** only in the status menu, and each also has a home in Settings (see Status menu).
 - No sheet opens from a sheet; inside a sheet, use disclosures. The editors (keyboard shortcut,
   shell command) are always sheets, an app's page included: it is a page of the Apps tab, not a sheet.
@@ -246,7 +261,8 @@ Each level has one mechanism, and each label says what it reveals.
 
 - System animation only; nothing animates on frequent interactions, and nothing relies on motion
   to say something. Under Reduce Motion, no scale, zoom or bounce. No sounds.
-- Windows, panes, sheets and popovers open with nothing focused (house rule). Every control is
+- Windows, panes, sheets and popovers open with nothing focused (house rule). Adding a preset
+  focuses its new editable row. Every control is
   reachable by Tab and by Full Keyboard Access, has a distinct accessibility label, and is at
   least 20 × 20 pt. Tooltips are under 75 characters and never repeat the control's name. Check
   focus with keyboard navigation (`AppleKeyboardUIMode`) both on and off.
@@ -343,11 +359,23 @@ use. PureMouse goes further only where the HIG's own principles (feedback, forgi
 manipulation) lead and the system still draws everything: standard controls, no new chrome, no idle
 cost. Planned or built (epic #114):
 
-- **Try it.** A collapsed "Try it" disclosure under Feel and Speed on Scrolling reveals a short
-  plain-text scroll area, so smoothing is felt where it is set. Trackpad shows its gestures; Mouse
-  shows nothing.
-- **Undo.** ⌘Z and ⇧⌘Z undo and redo each settings change, named in the Edit menu ("Undo Pointer
-  Speed"). One slider drag is one step.
+- **Undo and redo** (built). ⌘Z and ⇧⌘Z undo and redo each settings change in Settings, named in
+  the Edit menu ("Undo Pointer Speed"). One slider drag is one step. The step's name is the control's
+  own title, read from the keys it changed after `devices.<key>.` or `apps.<id>.`:
+  `dpi` Pointer Speed; `dpiPresets` Presets; `smoothScroll.speed` Scrolling Speed;
+  `smoothScroll.acceleration` with `smoothingMs` Feel, and each alone Acceleration or Glide;
+  `smoothScroll.enabled` Smooth Scrolling; `scrollWheel.inverted` Reverse Direction;
+  `scrollWheel.mode` Wheel Mode; `scrollWheel.smartShiftThreshold` SmartShift; `thumbWheel.*` and
+  `smoothScroll.horizontalSpeed` Thumb Wheel; `buttons.*` Button Action; `gesture.*` Hold and Move;
+  `notifications.lowBattery` Low Battery Notification; `universalControl.handOff` Universal Control;
+  an app entry added or removed whole, App Settings; anything mixed or not listed, Changes. The
+  history lives only in the Settings helper: the menu bar app keeps none. Two different
+  sliders touched within the debounce are two steps. It clears when Settings sees the file change
+  under it (a hand edit, the file deleted or unreadable), after Reset All Settings or Use Last
+  Working Config, and when a write fails. A save that merges another writer's edit made since the
+  last load keeps it, and undo puts back only its own keys. While the config has an error, ⌘Z is
+  off. Text being edited, in a field or a text view, keeps its own undo. Undoing the first change
+  of a session that began with no config file leaves an empty `{}` file, not no file.
 - **Settings for the app in use** (built). The status menu offers "Settings for <app>…" below
   Settings… for the frontmost app (not Finder, the Dock or any PureMouse bundle, nor one without a
   bundle identifier), opening its page in Apps. `NSWorkspace.shared.frontmostApplication` is read
@@ -359,7 +387,9 @@ cost. Planned or built (epic #114):
 Not adopted: a 3D or photographic mouse map with glowing callouts (the device card stays original
 art, with no markers or callouts, #56); an acceleration curve editor (macOS owns acceleration, so it
 would duplicate System Settings); a floating per-app indicator (it polls and covers content);
-display-density DPI hints and live gesture highlighting (more text and motion than they earn).
+display-density DPI hints and live gesture highlighting (more text and motion than they earn); a
+"Try it" scroll sample on Scrolling (it broke the 600 pt pane, and people can try a setting by
+scrolling any window).
 
 ## Planned structure (#155)
 
@@ -491,6 +521,19 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
   one table the daemon also performs from, though a `"default"` already set on another control
   stays in view (`PickerEntry.offersMouseDefault`).
   `buttonKey`/`removeButton` (`ConfigKeys.swift`) follow Kit's alias rule.
+- **Undo.** `ConfigStore.update` registers each non-empty change on an `UndoHistory`
+  (`UndoHistory.swift`, Foundation only) wrapping the window's `UndoManager`, which only the Settings
+  helper gives its `AppModel` (`undoManager`; nil in the menu bar app, so nothing is registered).
+  The inverse is the diff of the file's own keys (without the default set under them, so undoing
+  puts the file back as it was, including a key held at its default value) replayed with
+  `ConfigTree.apply` by `ConfigStore.replay`, which appends to the pending changes, flushes and
+  registers the redo in turn; it does not go through `update`, which diffs the tree laid over the
+  defaults and would see no change. Debounced edits to the same keys that arrive before the flush
+  share one step, which keeps the name its first change gave it; edits to other keys close it. Each step is its own undo group
+  (`groupsByEvent` off). `SettingsWindowController.windowWillReturnUndoManager` returns the model's
+  manager unless any text responder (`NSText`: field editor or text view) is first responder, or
+  the config is read-only, when AppKit falls back to the window's own, so typing undoes first. Restore Defaults on a pane is an ordinary change and can be undone; Reset All
+  Settings and Use Last Working Config replace the file and clear the history.
 - **Global actions.** Reset All and the status menu stay global (`setDPI` without a target writes
   the top level). Settings' Pointer pane passes the mouse, and Find by Pressing and "use configured
   DPI" carry its key (`Control.device`, `Control.capture.device`), a press selecting that mouse's
@@ -503,6 +546,20 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
   `cycleDPI` press changes it without touching the config), then the configured one; a change made
   in the pane shows until the mouse reports it (`DPIReading`). Choosing the saved value changes
   nothing on disk, so `AppModel.setDPI` sends `useConfiguredDPI` ([companion.md](companion.md)).
+  The row says "Pointer speed", with Slow/Fast ends and no numeric readout beside the slider.
+  Collapsed Exact value shows the current DPI in secondary text; expanding it reveals the numeric
+  field (VoiceOver: "Exact pointer speed", distinct from the slider). Help says "Faster moves the pointer further for the same movement." The footer says
+  "Tracking speed in System Settings applies on top." and **Open Mouse Settings** opens
+  `x-apple.systempreferences:com.apple.Mouse-Settings.extension`.
+- **Presets.** The sheet edits numeric speeds in place. Return or focus loss snaps to the mouse's
+  steps (a multiple of 50 when none are reported), clamps to 50-25600, merges duplicates and sorts.
+  Each write targets the selected mouse scope. The checkmark button uses a saved speed. **+** adds
+  the current speed if unsaved, otherwise the next unsaved sensor step above it (below it, from the
+  top step), and focuses the new field. **-** removes the focused row; tabbing to the button clears
+  focus, so it then removes the row last edited, and the checked row when neither applies. Add is
+  disabled at eight entries or when no unsaved speed exists; remove is disabled without a target.
+  The editing logic is `PresetEditor` in AppSupport. In DEBUG, `PUREMOUSE_DEV_SHEET=presets-editing`
+  opens the sheet with its first row focused, writing nothing, for a spare-Mac capture.
 - **Apps.** The Apps pane writes only `apps.<id>` keys (`AppSettings.swift`): each control's own key,
   removed for "Same as Mouse Settings" (an emptied app entry is pruned). An added app is not written
   until a setting is chosen; its row says so until Settings closes. Each app opens as a page of the
@@ -521,7 +578,8 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
 - **Notices.** `BannerPlan.items` gives them in order: config error, unsaved change, status too
   new, PureMouse off, paused, Input Monitoring (a Bluetooth mouse is waiting), Logi Options+,
   Accessibility on the panes that need it, no mouse (General only; the Mouse panes say it in
-  place). The Logi Options+ notice offers Quit Logi Options+ as its only bordered button
+  place). General's list (`BannerPlan.generalItems`) leaves out off and paused: its PureMouse row
+  is those, with Start or the switch. The Logi Options+ notice offers Quit Logi Options+ as its only bordered button
   (`LogiOptionsAction.quit`: asks the app to quit through `NSRunningApplication.terminate()`,
   never a signal, and never starts it) and Open Login Items Settings… as a link-style button
   under its caption, in the banner, General's row and the menu. It appears and clears in
@@ -535,11 +593,11 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
 
 | Place | Shown by default | Advanced |
 |---|---|---|
-| General | Status (PureMouse running/paused/off, Start or Stop; one row per mouse the daemon knows, with its connection, battery and computer, or that its settings are being applied or were not, and an (i) that opens About This Mouse; active notices), Open at login, Show in menu bar, Low battery notifications (while macOS has them off, a disabled switch that keeps the choice, with Open Notification Settings… in the same row before it), Permissions (status only) | Advanced… sheet: Work with Universal Control, Config file, Log, Reset All Settings… |
+| General | Status (the PureMouse row: a Pause switch with Active or Paused beside it, or Off with a Start button; one row per mouse the daemon knows, with its connection, battery and computer, or that its settings are being applied or were not, and an (i) that opens About This Mouse; active notices), Open at login, Show in menu bar, Low battery notifications (while macOS has them off, Open Notification Settings… in place of the switch, whose choice is kept), Permissions (status only) | Advanced… sheet: Work with Universal Control, Config file, Log, Reset All Settings… |
 | Mouse header | Buttons, Scrolling, Pointer segments; mouse pop-up with two or more mice; Find by Pressing… and the device card on Buttons | — |
 | Mouse › Buttons | One row per button with its action | Gesture directions (disclosure, collapsed, caption summarises them; choosing Hold and Move expands it); Other controls (disclosure: named controls and bound ones, see Device card); Advanced… sheet, only while some button anywhere is Hold and Move: gesture Distance and Repeat |
 | Mouse › Scrolling | Smooth scrolling, Feel, Speed; Main Wheel: Reverse direction, Wheel mode, SmartShift; Thumb Wheel: Action (Turn left/right when Custom); each when the mouse has it | Advanced… sheet, each row only when it applies: Acceleration, Glide, Hold Shift to scroll sideways (dimmed while smooth scrolling is off); Switches at (while SmartShift is on); thumb wheel Reverse direction (when it scrolls here or in some app), Swap directions and Turn distance (when it has actions), Speed (when it scrolls) |
-| Mouse › Pointer | Pointer Speed slider with its value; Presets summary row; both only when the mouse can adjust its speed (else one "Not supported by this mouse." row, unless a value is set) | Exact value (disclosure); Edit Presets… sheet (also opened from the menu) |
+| Mouse › Pointer | Pointer speed slider (Slow/Fast, no readout); collapsed Exact value with secondary DPI; Presets summary row; all only when the mouse can adjust its speed (else one "Not supported by this mouse." row, unless a value is set) | Exact value (disclosure); Edit Presets… sheet (also opened from the menu) |
 | Apps | App list whose rows name the areas each app changes, Add App (bordered pull-down) in the footer, routing note; empty state with an Add App… button that opens the Applications panel | Each app opens as a page (‹ Apps, Buttons \| Scrolling); on it, gesture directions, other controls and more thumb wheel options are disclosures, and the editors are sheets |
 | About | Icon, name, version, Check for Updates, Check for updates automatically (switch), links, Support PureMouse | — |
 | Status menu | Device header, attention rows when active, Update to X.Y.Z… with Skip This Version under it (while a newer release is known), Smooth Scrolling, Pointer Speed, Start/Pause/Resume, Settings…, Settings for <app>… (the frontmost app, if any), Quit PureMouse | ⌥: detail line, Show Log in Finder, Hide Menu Bar Icon |

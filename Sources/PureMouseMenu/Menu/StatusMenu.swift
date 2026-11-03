@@ -115,6 +115,6 @@ extension MenuAction {
     /// The lifecycle command a row runs. Start PureMouse runs `start`, never `register`, so Open at
     /// login does not change as a side effect (docs/adr/0018-login-service-seam.md).
     var command: Lifecycle.Command? {
-        if case .start = self { LoginAction.running(true).command } else { nil }
+        if case .start = self { LoginAction.start.command } else { nil }
     }
 }

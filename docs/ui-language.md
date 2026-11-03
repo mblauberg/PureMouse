@@ -29,6 +29,12 @@ and a change to this page lands with the text it changes.
   explain something, it names the thing, not an action it doesn't take.
 - **Name things by what they do for the person**, and reuse Apple's names for Apple's things.
   One term per concept (Glossary).
+- **One name.** The menu bar app and the Settings helper are both PureMouse to the person: in the
+  app menu ("About PureMouse", "Hide PureMouse"), the Dock, Cmd-Tab and the alerts. The helper's
+  app menu quits with "Quit Settings" (⌘Q): that closes Settings and leaves PureMouse running, so it
+  does not share the menu bar app's "Quit PureMouse", which stops it.
+  "PureMouse Settings" is the helper's file name (`PureMouse Settings.app`) and is never shown
+  ([ADR 9, amendment](adr/0009-settings-helper-app.md#amendment-one-name)).
 - **No jargon.** No "daemon", "agent", "HID++", "status item" or file-system paths in UI text,
   except where the person asked for a path (General › Advanced…, the CLI). "DPI" appears only
   beside a number. Prefer "mouse" to "mice" where a sentence allows.
@@ -91,14 +97,15 @@ One term per concept. "Retire" lists words that must not appear in UI text for t
 | PureMouse's preferences window | Settings (menu item "Settings…"); "settings" lower case in prose ("pointer settings") | Preferences |
 | macOS preferences | System Settings; button "Open System Settings" | "Settings" alone for macOS, "Open Settings…" |
 | The menu bar presence | menu bar icon; "menu bar app" only for its version and updates | status item |
-| The background process | PureMouse: Running, Paused, Off | daemon, agent, "the running PureMouse" |
+| The background process | PureMouse's state in General's Status row: Active, Paused, Off | daemon, agent, "the running PureMouse", Running |
+| Pausing it | Pause and Resume (General's PureMouse switch; the menu's "Pause PureMouse" and "Resume PureMouse") | Stop, Stopping, Disable |
 | The JSON file | config file; button "Open Config File" | "Config" alone, "Settings" for the file |
-| Mouse resolution | Pointer Speed (row, menu, action); "DPI" beside a number; caption says it's this mouse's own speed, separate from System Settings › Mouse | Resolution, Tracking (except as System Settings' own name) |
+| Mouse resolution | Pointer speed (row), Pointer Speed (menu, action); Slow / Fast slider ends; "DPI" beside a number in Exact value; help "Faster moves the pointer further for the same movement."; footer "Tracking speed in System Settings applies on top." and "Open Mouse Settings" | Resolution, Tracking (except as System Settings' own name) |
 | Saved pointer speeds | presets; "Edit Presets…" (Pointer row, menu; "Add Presets…" in the menu when none), "Add Preset" (sheet "+") | chips, steps, Add Current |
-| A value left unset | "Using the mouse's own setting." (caption); "Mouse Default" (picker entry) | "Mouse default." fragment, "Works as Normal", bare "Default" |
+| A value left unset | "Using the mouse's own setting." (caption, only where no concrete value is shown, as on Switches at; the main wheel's rows show the default value instead); "Mouse Default" (picker entry) | "Mouse default." fragment, "Works as Normal", bare "Default" |
 | A per-tab reset | Restore Defaults (pane footer; resets everything on that tab, advanced rows included); "Restore Defaults…" when it asks first | Reset |
 | Settings moved off the default view | Advanced… (pane footer button, opens a sheet) | More, Fine-tuning, Expert |
-| Running now vs at login | Start / Stop change only whether PureMouse runs now; "Open at login" is the separate switch | Start that also turns on login |
+| Running now vs at login | Start (while off) and Pause and Resume change only whether PureMouse is running now; "Open at login" is the separate switch | Start that also turns on login, Stop |
 | Identify a button by pressing it | Find by Pressing… | Select by Pressing |
 | The whole reset | Reset All Settings… | — |
 | The last good config | Use Last Working Config… | Restore Last Working |
@@ -123,12 +130,13 @@ One term per concept. "Retire" lists words that must not appear in UI text for t
 | Thumb wheel steps per action | Turn distance; caption says what it does ("How far to turn before the action repeats.") | Turn per action, "wheel steps" |
 | Scroll acceleration | a strength, shown without a unit (Off … Strong) | "1.0×" |
 | A shell command bound to a control | Run Command (action and sheet title; "Run Command…" in the picker) | Run Shell Command |
-| Capturing a shortcut | Record Shortcut, then "Recording…" while it listens; "Or enter it" for typing | "Click to record" |
+| Capturing a shortcut | Record Shortcut, then "Recording…" while it listens; "Enter as Text…" (a button, which then shows the text field) for typing | "Click to record", "Or enter it" |
 | Thumb wheel actions the other way round | Swap directions ("Swaps what turning left and right does."); an app's page shows it as "Swap directions" under Scrolling | Reverse direction (for actions), Reversed, Normal direction |
 | SmartShift threshold | Switches at (Slower … Faster) | Threshold, Sooner/Later |
 | A control this mouse lacks, kept because it is set | "Not supported by this mouse." (caption) | — |
 | Checking for a new release | Check for Updates (button, on demand); "Check for updates automatically" (switch, About; sentence case); the question "Check for updates automatically?" with Check Automatically / Don't Check | Auto-update, Updater, "Look for updates", Check Now |
 | A newer release is known | "Update to 1.2.3…" (menu row; installs after an alert); "Update and Relaunch" (About button, same alert); "Skip This Version" (menu row under it); "View Release" (the page, About and the menu after a refusal); notification "PureMouse 1.2.3 is available" | Upgrade, Install Update, Download, "New version" |
+| Undoing a settings change | Edit › "Undo Pointer Speed" / "Redo Pointer Speed": the control's title, or Changes for a mix ([the names](ui-design.md#where-puremouse-goes-further)); Undo and Redo as macOS words | Revert, Rollback, Undo Change |
 | Support | Support PureMouse (About link); GitHub Sponsors (the destination) | Donate, Buy Me a Coffee, Pro, Free version |
 | Facts a mouse reports | About This Mouse (the sheet, opened by the (i) on the mouse's row in General › Status; titled with the mouse's name); rows Battery, Connection, Easy-Switch, Firmware, Model ID (the key the config uses, lowercase); Copy Details (plain text, no serial or unit number); a row the mouse does not report is hidden | Diagnostics, Device info, Properties |
 | Easy-Switch status | Easy-Switch; "Computer 1 · This Mac" (checkmark), "Computer 2 · MacBook Air", "Computer 3 · Not paired"; "Computer 1" on the mouse's row in General | host, channel, slot |
