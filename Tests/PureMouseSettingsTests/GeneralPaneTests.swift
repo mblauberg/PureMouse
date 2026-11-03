@@ -35,7 +35,8 @@ import Testing
         let body = try #require(row.range(of: "/// The menu bar app posts the notifications").map { String(row[..<$0.lowerBound]) })
         #expect(body.contains("state.toggled(on)"))
         #expect(body.contains("model.setPaused("))
-        #expect(body.contains(".accessibilityValue(state.word)"))
+        // A value would turn the switch into a plain toggle (the AX dump's "not the form's switch").
+        #expect(!body.contains(".accessibilityValue("))
         #expect(body.contains(".toggleStyle(.switch)"))
         #expect(body.contains(#"Button("Start")"#))
         #expect(!body.contains("Stop"))

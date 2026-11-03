@@ -107,20 +107,17 @@ struct GeneralPane: View {
                     .symbolRenderingMode(.multicolor)
                     .foregroundStyle(.secondary)
                     .labelStyle(StatusLabelStyle())
-                    // The switch speaks the state word, so it is heard once.
-                    .accessibilityHidden(state.button == nil)
                 if let start = state.button {
                     Button("Start") { setRunning(start) }
                         .disabled(changingRunning || model.locations.daemon == nil)
                 } else {
-                    // The switch names itself; its state word sits beside it and is its VoiceOver
-                    // value: "PureMouse, switch, Active".
+                    // The switch names itself; VoiceOver reads the state word beside it first. An
+                    // accessibility value on it would make it a plain toggle, not the form's switch.
                     Toggle("PureMouse", isOn: Binding(get: { state.isOn },
                                                       set: { on in state.toggled(on).map { model.setPaused($0 == .paused) } }))
                         .labelsHidden()
                         .toggleStyle(.switch)
                         .accessibilityLabel("PureMouse")
-                        .accessibilityValue(state.word)
                 }
             }
         } label: {
@@ -145,6 +142,8 @@ struct GeneralPane: View {
                             .fixedSize()
                         Toggle("Low battery notifications", isOn: isOn)
                             .labelsHidden()
+                            // Outside the form's own toggle row the style is not inherited.
+                            .toggleStyle(.switch)
                             .accessibilityLabel("Low battery notifications")
                             .disabled(true)
                     }
