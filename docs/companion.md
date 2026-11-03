@@ -289,7 +289,8 @@ General's Startup section keeps the two axes apart, each control running one com
 | Control | Reads | Runs |
 |---|---|---|
 | **Open at login** switch | `login-status` (`OpenAtLogin`: on when the daemon is `enabled` or `requiresApproval`) | `login on` / `login off`, with no confirmation; it never stops anything |
-| **PureMouse is running** Start / Stop | the status file's liveness (`AppModel.daemonRunning`) | `start` / `stop`; neither changes the login setting |
+| **PureMouse** switch (Active or Paused) | the status file's `paused`, or the request still pending (`AppModel.paused`) | the daemon's `paused` control, as the menu's Pause and Resume do; it never starts or stops PureMouse |
+| **Start** (shown only while PureMouse is off) | the status file's liveness (`AppModel.daemonRunning`) | `start`; it doesn't change the login setting. Settings has no Stop |
 | **Show in menu bar** | the `menu-hidden` marker | `menu on` / `menu off` |
 
 The switch reads `login-status` again after each command, so it shows what is so even if the
