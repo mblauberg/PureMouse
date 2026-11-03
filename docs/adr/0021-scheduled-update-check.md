@@ -66,4 +66,4 @@ pressed. The daemon has none, and must not.
 - The user agent and IP address reach GitHub once a day; the ETag sent back is GitHub's own.
 - A build whose version is not a release number (`dev`, the rig's) counts every release as newer,
   as the on-demand check does.
-- Installing was left manual here; [ADR 22](0022-update-trust-is-the-signing-requirement.md) adds it (#128), still only when the person chooses the menu row.
+- Installing was left manual here; [ADR 22](0022-update-trust-is-the-signing-requirement.md) adds it (#128), after the person chooses the menu row or Settings › About’s **Update and Relaunch**.

@@ -479,11 +479,11 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
   the top level). Settings' Pointer pane passes the mouse, and Find by Pressing and "use configured
   DPI" carry its key (`Control.device`, `Control.capture.device`), a press selecting that mouse's
   scope.
-- **Buttons.** Mouse › Buttons and the Apps tab list a named button when a connected mouse reports it
+- **Buttons.** the Mouse tab’s Buttons segment and the Apps tab list a named button when a connected mouse reports it
   or the config binds it; with no report, those in `NamedButton.listedByDefault` (not the MX Master
   4's thumb panel) (`ButtonRows.named`). Haptic picker entries come from Kit's
   `HapticWaveform.allCases`; the menu only words them (`ActionCatalog.hapticLabel`).
-- **Pointer speed.** The DPI the menu and Mouse › Pointer show is the mouse's live value (a
+- **Pointer speed.** The DPI the menu and Mouse tab’s Pointer segment shows is the mouse's live value (a
   `cycleDPI` press changes it without touching the config), then the configured one; a change made
   in the pane shows until the mouse reports it (`DPIReading`). Choosing the saved value changes
   nothing on disk, so `AppModel.setDPI` sends `useConfiguredDPI` ([companion.md](companion.md)).
@@ -521,9 +521,9 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
 |---|---|---|
 | General | Status (PureMouse running/paused/off, Start or Stop, active notices), Open at login, Show in menu bar, Low battery notifications (a disabled switch that keeps the choice, with Open Notification Settings…, while macOS has them off), Permissions (status only) | Advanced… sheet: Work with Universal Control, Config file, Log, Reset All Settings… |
 | Mouse header | Buttons, Scrolling, Pointer segments; mouse pop-up with two or more mice; Find by Pressing… and the device card on Buttons | — |
-| Mouse › Buttons | One row per button with its action | Gesture directions (disclosure, collapsed, caption summarises them; choosing Hold and Move expands it); Other controls (disclosure: named controls and bound ones, see Device card); Advanced… sheet, only while some button anywhere is Hold and Move: gesture Distance and Repeat |
-| Mouse › Scrolling | Smooth scrolling, Feel, Speed; Main Wheel: Reverse direction, Wheel mode, SmartShift; Thumb Wheel: Action (Turn left/right when Custom); each when the mouse has it | Advanced… sheet, each row only when it applies: Acceleration, Glide, Hold Shift to scroll sideways (dimmed while smooth scrolling is off); Switches at (while SmartShift is on); thumb wheel Reverse direction (when it scrolls here or in some app), Swap directions and Turn distance (when it has actions), Speed (when it scrolls) |
-| Mouse › Pointer | Pointer Speed slider with its value; Presets summary row; both only when the mouse can adjust its speed (else one "Not supported by this mouse." row, unless a value is set) | Exact value (disclosure); Edit Presets… sheet (also opened from the menu) |
+| Mouse tab: Buttons segment | One row per button with its action | Gesture directions (disclosure, collapsed, caption summarises them; choosing Hold and Move expands it); Other controls (disclosure: named controls and bound ones, see Device card); Advanced… sheet, only while some button anywhere is Hold and Move: gesture Distance and Repeat |
+| Mouse tab: Scrolling segment | Smooth scrolling, Feel, Speed; Main Wheel: Reverse direction, Wheel mode, SmartShift; Thumb Wheel: Action (Turn left/right when Custom); each when the mouse has it | Advanced… sheet, each row only when it applies: Acceleration, Glide, Hold Shift to scroll sideways (dimmed while smooth scrolling is off); Switches at (while SmartShift is on); thumb wheel Reverse direction (when it scrolls here or in some app), Swap directions and Turn distance (when it has actions), Speed (when it scrolls) |
+| Mouse tab: Pointer segment | Pointer Speed slider with its value; Presets summary row; both only when the mouse can adjust its speed (else one "Not supported by this mouse." row, unless a value is set) | Exact value (disclosure); Edit Presets… sheet (also opened from the menu) |
 | Apps | App list whose rows name the areas each app changes, Add App (bordered pull-down) in the footer, routing note; empty state with an Add App… button that opens the Applications panel | Each app opens as a page (‹ Apps, Buttons \| Scrolling); on it, gesture directions, other controls and more thumb wheel options are disclosures, and the editors are sheets |
 | About | Icon, name, version, Check for Updates, Check for updates automatically (switch), links, Support PureMouse | — |
 | Status menu | Device header, attention rows when active, Update to X.Y.Z… with Skip This Version under it (while a newer release is known), Smooth Scrolling, Pointer Speed, Start/Pause/Resume, Settings…, Settings for <app>… (the frontmost app, if any), Quit PureMouse | ⌥: detail line, Show Log in Finder, Hide Menu Bar Icon |

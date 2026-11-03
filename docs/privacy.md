@@ -1,10 +1,11 @@
 # Privacy
 
-PureMouse has no account and no telemetry, sends nothing about you anywhere, and stores nothing on
-the mouse. Its only network requests are the check for a new release (when you press **Check for Updates**,
-and once a day if you allow it) and, when you choose **Update to X.Y.Z…**, the download of that
-release. This page lists what it is allowed to do, every file it writes and those requests, each
-with the source file that shows it.
+PureMouse has no account and no telemetry, sends no personal identifier or config, and stores nothing
+on the mouse. Its update requests reach GitHub, which can see your IP address and a standard user
+agent naming the app and system version. Its other network requests are the check for a new release
+(when you press **Check for Updates**, and once a day if you allow it) and, when you choose to
+install an update, the download of that release. This page lists what it is allowed to do, every
+file it writes and those requests, each with the source file that shows it.
 
 ## Permissions
 
@@ -48,7 +49,9 @@ The Settings helper needs no permissions either.
 
 ## Files it writes
 
-All of them are in your home folder.
+The table lists persistent files in your home folder. Updating also writes temporary files in a private
+folder in the temporary directory. It stages a copy beside the installed app, replaces that app, then
+deletes its temporary files when the update ends.
 
 While it runs, the background process changes settings on the mouse that it forgets when it
 reconnects: which buttons it sends to PureMouse, how the wheels report, DPI and SmartShift. When it
@@ -112,9 +115,9 @@ your IP address and a standard user agent naming the app and the system version.
 
 ### Installing an update
 
-**Update to X.Y.Z…** in the menu bar menu is the only thing that downloads a release, and only after
-you answer its alert ("Update to PureMouse X.Y.Z?", **Update and Relaunch**). It is never started by
-the daily check. PureMouse then makes two more HTTPS GETs, in the same kind of ephemeral session,
+The menu bar app downloads a release after you confirm **Update to PureMouse X.Y.Z?** with
+**Update and Relaunch**. The request can come from **Update to X.Y.Z…** in its menu or **Update and
+Relaunch** in Settings › About. The daily check never starts an install. PureMouse then makes two more HTTPS GETs, in the same kind of ephemeral session,
 to `github.com/mblauberg/PureMouse/releases/download/vX.Y.Z/`: `SHA256SUMS` (under 64 KB) and
 `PureMouse-X.Y.Z.dmg` (under 64 MB). GitHub sends the file from its own download servers. They send nothing beyond what any web request shows. The
 download goes to a private folder in the temporary directory, never into memory, and is deleted,

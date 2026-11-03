@@ -139,13 +139,13 @@ the full list. The ones used most:
 | `PUREMOUSE_DEV_HIDDEN=1` | The menu app runs as if Show in menu bar were off: resident, no status item (`Locations.showsInMenuBar`) |
 | `PUREMOUSE_DEV_MENU=1` | Opens the status menu over a plain backdrop, since its glass shows whatever is behind it |
 | `PUREMOUSE_DEV_PANE=<pane>` | Opens a tab (`general`, `mouse`, `apps`, `about`) or a Mouse segment (`buttons`, `scrolling`, `pointer`) |
-| `PUREMOUSE_DEV_PICKER=<button>` | A button's action picker on Mouse › Buttons only |
-| `PUREMOUSE_DEV_SHORTCUT=<button>` | A button's shortcut sheet on Mouse › Buttons; with `PUREMOUSE_DEV_APP`, that button's shortcut editor sheet over the app's page (`AppPage.body`) |
+| `PUREMOUSE_DEV_PICKER=<button>` | A button's action picker in the Mouse tab’s Buttons segment only |
+| `PUREMOUSE_DEV_SHORTCUT=<button>` | A button's shortcut sheet in the Mouse tab’s Buttons segment; with `PUREMOUSE_DEV_APP`, that button's shortcut editor sheet over the app's page (`AppPage.body`) |
 | `PUREMOUSE_DEV_MOUSE=<device key>\|all` | Chooses that mouse on Mouse, or All Mice; `PUREMOUSE_DEV_OTHERS=1` opens Buttons' Other controls; `PUREMOUSE_DEV_MORE=1` opens an app page's More thumb wheel options |
 | `PUREMOUSE_DEV_APP=<bundle id>` | Opens Apps on that app's page, adding it without writing; `PUREMOUSE_DEV_APP_SEGMENT=buttons\|scrolling` picks the segment |
 | `PUREMOUSE_DEV_THEN_APP=<bundle id>` | After `PUREMOUSE_DEV_THEN_DELAY` seconds (default 1), asks for that app's page, as the menu's "Settings for <app>…" does with another page open |
 | `PUREMOUSE_DEV_KEY=esc\|cmd-[` | After `PUREMOUSE_DEV_KEY_DELAY` seconds (default 1.5), sends that key to the window, to test Esc and ⌘[ on an app's page |
-| `PUREMOUSE_DEV_SHEET=<name>` | A sheet: `presets` on Mouse › Pointer, or `advanced` on the pane shown (`DevSheet`) |
+| `PUREMOUSE_DEV_SHEET=<name>` | A sheet: `presets` in the Mouse tab’s Pointer segment, or `advanced` on the pane shown (`DevSheet`) |
 | `PUREMOUSE_DEV_CAPTURE=<file.png>` | Saves the helper's own windows to that file and quits (`DevCapture`). Needs no Screen Recording permission, so it works over SSH |
 | `PUREMOUSE_DEV_HOVER=<part>`, `PUREMOUSE_DEV_BUTTON=<button>`, `PUREMOUSE_DEV_FOUND=<button>` | Show the device card's hovered, selected and found-row states on Buttons (`middle`, `top`, `forward`, `back`, `thumbWheel`, `thumbRest`) |
 | `PUREMOUSE_DEV_ARRIVAL=thumbWheel\|mainWheel` | On Scrolling, arrives as the device card's part would; `PUREMOUSE_DEV_ARRIVAL_HOLD=1` keeps the outline |
