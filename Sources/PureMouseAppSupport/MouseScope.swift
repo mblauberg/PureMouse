@@ -10,6 +10,12 @@ public struct KnownMouse: Equatable, Identifiable, Sendable {
     public let reported: Bool
 
     public var id: String { key }
+
+    public init(key: String, name: String, reported: Bool) {
+        self.key = key
+        self.name = name
+        self.reported = reported
+    }
 }
 
 /// The scope a pane edits and the name a first write gives the mouse's entry.

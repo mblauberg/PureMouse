@@ -89,7 +89,10 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
                 tabs?.selectSegment($0)
                 context.refit()
             }
-            mouse.willLeaveButtons = { [weak model] in model?.cancelCapture() }
+            mouse.willLeaveButtons = { [weak model] in
+                model?.cancelCapture()
+                context.card.select(nil)
+            }
             tabs.mouse = mouse
             return mouse
         }
