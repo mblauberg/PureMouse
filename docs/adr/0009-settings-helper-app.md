@@ -38,3 +38,15 @@ exiting when its window closes. Pure logic and the file contract live in a share
 - A cold start at "Settings…" (budget 1 s), and two processes writing the config, which both take
   an advisory lock on `config.json.lock` for the whole read-merge-replace.
 - Opening the app from the Finder and `puremouse register` must open the helper.
+
+## Amendment: one name
+
+The helper's display name (`CFBundleDisplayName`, and the app menu's About, Hide and Quit items) is
+"PureMouse", the name people know the app by, not "PureMouse Settings" (#146). The menu bar app's
+launcher alerts say "PureMouse can't find Settings." and "PureMouse couldn't open Settings.".
+
+Identity stays separate. The bundle folder `PureMouse Settings.app`, the identifier
+`io.github.mblauberg.puremouse.settings` and `SettingsLookup.appName` do not change, so nothing keyed
+on the identifier, and no path in the daemon, moves. Only what macOS shows (the Dock, Cmd-Tab and the
+app menu) takes the display name. The name is set in `scripts/lib.zsh#write_info_plist` and checked
+by `scripts/tests/test_bundle.zsh`.

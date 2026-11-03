@@ -29,6 +29,10 @@ and a change to this page lands with the text it changes.
   explain something, it names the thing, not an action it doesn't take.
 - **Name things by what they do for the person**, and reuse Apple's names for Apple's things.
   One term per concept (Glossary).
+- **One name.** The menu bar app and the Settings helper are both PureMouse to the person: in the
+  app menu ("About PureMouse", "Hide PureMouse", "Quit PureMouse"), the Dock, Cmd-Tab and the alerts.
+  "PureMouse Settings" is the helper's file name (`PureMouse Settings.app`) and is never shown
+  ([ADR 9, amendment](adr/0009-settings-helper-app.md#amendment-one-name)).
 - **No jargon.** No "daemon", "agent", "HID++", "status item" or file-system paths in UI text,
   except where the person asked for a path (General › Advanced…, the CLI). "DPI" appears only
   beside a number. Prefer "mouse" to "mice" where a sentence allows.

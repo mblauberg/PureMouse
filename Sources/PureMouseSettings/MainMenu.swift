@@ -26,13 +26,14 @@ enum MainMenu {
     static func make(actions: Actions) -> NSMenu {
         let main = NSMenu()
 
-        let appMenu = NSMenu(title: "PureMouse Settings")
+        // The helper shows as PureMouse (docs/adr/0009-settings-helper-app.md, amendment).
+        let appMenu = NSMenu(title: "PureMouse")
         let about = appMenu.addItem(withTitle: "About PureMouse", action: #selector(Actions.about(_:)), keyEquivalent: "")
         about.target = actions
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Hide PureMouse Settings", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        appMenu.addItem(withTitle: "Hide PureMouse", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Quit PureMouse Settings", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(withTitle: "Quit PureMouse", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         main.addItem(submenu: appMenu)
 
         let edit = NSMenu(title: "Edit")

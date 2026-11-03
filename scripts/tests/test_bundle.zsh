@@ -139,7 +139,9 @@ test_settings_plist_is_a_regular_app_with_its_own_identifier() {
     [[ $(/usr/libexec/PlistBuddy -c "Print :LSEnvironment:MallocSpaceEfficient" "$settings") == 1 ]] || return 1
     [[ $(plist_value "$settings" CFBundleIdentifier) == io.github.mblauberg.puremouse.settings ]]
     [[ $(plist_value "$settings" LSUIElement) == false ]]
-    [[ $(plist_value "$settings" CFBundleDisplayName) == "PureMouse Settings" ]]
+    # One name: the helper shows as PureMouse; its folder and identifier stay as they are (ADR 0009).
+    [[ $(plist_value "$settings" CFBundleDisplayName) == "PureMouse" ]]
+    [[ $(plist_value "$settings" CFBundleName) == "PureMouse" ]]
     [[ $(settings_of $app) == "$app/Contents/Helpers/PureMouse Settings.app" ]]
     [[ -x "$(settings_of $app)/Contents/MacOS/$(plist_value "$settings" CFBundleExecutable)" ]]
     # The Dock draws its icon from Assets.car in every icon style, as it does PureMouse.app's.

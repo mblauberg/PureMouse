@@ -99,7 +99,7 @@ struct SettingsLauncherTests {
         fake.found = .failure(failure)
         var done = 0
         SettingsLauncher(system: fake.system).open { done += 1 }
-        #expect(fake.alerts == ["PureMouse Settings is missing."])
+        #expect(fake.alerts == ["PureMouse can't find Settings."])
         #expect(fake.alertBodies == ["Reinstall PureMouse to get it back."])
         #expect(!fake.alertBodies.joined().contains("/"))
         #expect(done == 1)
