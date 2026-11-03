@@ -106,7 +106,8 @@ struct PopUpMenu<Content: View>: View {
                 menu.fixedSize()
                 menu
             }
-            .frame(maxWidth: maxWidth)
+            // Leading, so a pop-up narrower than the room it is offered sits at the edge, not in the middle.
+            .frame(maxWidth: maxWidth, alignment: .leading)
         } else {
             menu.fixedSize()
         }
