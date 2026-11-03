@@ -315,7 +315,12 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
   `onScrollVisibilityChange`. Applications is never listed; adding goes through an open panel or
   the running apps.
 - **Notices.** `BannerPlan.items` gives them in order: config error, unsaved change, status too
-  new, PureMouse off, paused, Logi Options+, Accessibility on the panes that need it. A pane shows
+  new, PureMouse off, paused, Input Monitoring (a Bluetooth mouse is waiting), Logi Options+,
+  Accessibility on the panes that need it, no mouse (General only; the Mouse panes say it in
+  place). The Logi Options+ notice offers Quit Logi Options+ (`LogiOptionsAction.quit`: asks the
+  app to quit through `NSRunningApplication.terminate()`, never a signal, and never starts it) and
+  Open Login Items Settings, in the banner, General's row and the menu. It appears and clears in
+  place, as the daemon re-checks (see [How it works](how-it-works.md#permissions)). A pane shows
   only the first, with "N more notices" opening General, whose Status section lists them all as rows
   (off is its PureMouse row). Use Last Working Config… asks before it replaces the file.
 - **Labels.** Settings controls carry their own accessibility label where a `RowLabel` (title plus

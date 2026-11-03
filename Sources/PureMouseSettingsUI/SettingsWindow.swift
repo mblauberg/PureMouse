@@ -14,11 +14,13 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
     private static let segmentKey = "SettingsSegment"
 
     private let context: SettingsContext
+    private let model: AppModel
     private let tabs = SettingsTabs()
     /// Runs once the window has closed, unless it was shown again meanwhile.
     public var didClose: () -> Void = {}
 
     public init(model: AppModel) {
+        self.model = model
         let context = SettingsContext()
         context.tabs = tabs
         self.context = context
@@ -103,6 +105,8 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
     }
 
     public func show(_ request: ShowRequest?) {
+        // Someone is looking: let the daemon check what it only learns by looking (Logi Options+).
+        model.askDaemonToRecheck()
         if let pane = request?.pane { tabs.open(pane) }
         guard let window else { return }
         if !window.isVisible { window.center() }

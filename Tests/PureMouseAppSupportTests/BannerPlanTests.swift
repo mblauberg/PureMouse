@@ -38,6 +38,29 @@ import Testing
         #expect(BannerPlan.items(for: state).last == .noMouse)
     }
 
+    /// The Logi Options+ notice offers to ask the app to quit and to open Login Items; no other
+    /// notice carries these, and neither action signals or starts a process.
+    @Test func theLogiOptionsNoticeOffersQuitAndLoginItems() {
+        #expect(Notice.logiOptions.logiOptionsActions == [.quit, .openLoginItems])
+        for notice in Notice.allCases where notice != .logiOptions {
+            #expect(notice.logiOptionsActions.isEmpty, "\(notice)")
+        }
+        #expect(LogiOptionsAction.quit.title == "Quit Logi Options+")
+        #expect(LogiOptionsAction.quit.url == nil)
+        #expect(LogiOptionsAction.openLoginItems.title == "Open Login Items Settings")
+        #expect(LogiOptionsAction.openLoginItems.url == OpenAtLogin.settingsURL)
+    }
+
+    /// Quit asks the agent (the login item) and the app, by bundle identifier, and nothing else.
+    @Test func quitReachesLogiOptionsAppsOnly() {
+        #expect(LogiOptionsAction.isLogiOptions(bundleIdentifier: "com.logi.cp-dev-mgr"))
+        #expect(LogiOptionsAction.isLogiOptions(bundleIdentifier: "com.logi.optionsplus"))
+        #expect(LogiOptionsAction.isLogiOptions(bundleIdentifier: "com.logi.optionsplus.updater"))
+        #expect(!LogiOptionsAction.isLogiOptions(bundleIdentifier: "io.github.mblauberg.puremouse.menu"))
+        #expect(!LogiOptionsAction.isLogiOptions(bundleIdentifier: "com.logitech.manager"))
+        #expect(!LogiOptionsAction.isLogiOptions(bundleIdentifier: nil))
+    }
+
     /// General's Input Monitoring row says "Not needed" with no Bluetooth mouse, and offers the
     /// allow only when one needs it.
     @Test func aPermissionNobodyNeedsReadsNotNeeded() {

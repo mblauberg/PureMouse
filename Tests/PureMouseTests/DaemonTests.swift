@@ -93,6 +93,34 @@ struct DaemonTests {
         #expect(allowed.daemon.missingPermissions.isEmpty)
     }
 
+    /// Logi Options+ is looked up again as the daemon reloads (as it does at wake, on a control
+    /// change and at each permission check), so the status follows it starting and stopping.
+    @Test func theStatusFollowsLogiOptionsStartingAndStoppingAtTheNextRecheck() throws {
+        final class Processes: @unchecked Sendable { var names: [String] = [] }
+        let processes = Processes()
+        let h = try DaemonHarness("{}", logiOptions: { processes.names })
+        defer { h.close() }
+        h.daemon.recheckLogiOptions()
+        #expect(!h.daemon.status(running: true).logiOptionsRunning)
+
+        processes.names = ["logioptionsplus_agent"]
+        #expect(!h.daemon.status(running: true).logiOptionsRunning, "nothing looks until a moment comes")
+        h.daemon.reload()
+        #expect(h.daemon.status(running: true).logiOptionsRunning)
+
+        processes.names = []
+        h.daemon.reload()
+        #expect(!h.daemon.status(running: true).logiOptionsRunning)
+    }
+
+    /// The first look is at start, so a status written then already says so.
+    @Test func logiOptionsAlreadyRunningIsInTheFirstStatus() throws {
+        let h = try DaemonHarness("{}", logiOptions: { ["logioptionsplus_agent"] })
+        defer { h.close() }
+        h.daemon.recheckLogiOptions()
+        #expect(h.daemon.status(running: true).logiOptionsRunning)
+    }
+
     /// A keyboard on Bluetooth is not worth asking Input Monitoring for.
     @Test func aBluetoothKeyboardNeitherWaitsNorNeedsInputMonitoring() throws {
         #expect(Daemon.mayBeMouse(product: "MX Master 3S"))

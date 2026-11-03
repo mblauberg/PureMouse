@@ -262,7 +262,8 @@ struct MenuPlanTests {
             Allow Accessibility Access [attention, -> openPrivacy(PureMouseAppSupport.PrivacyPane.accessibility)]
             Allow Input Monitoring [attention, -> openPrivacy(PureMouseAppSupport.PrivacyPane.inputMonitoring)]
             Fix Config File… [attention, -> openSettings(Optional(PureMouseAppSupport.SettingsPane.tab(PureMouseAppSupport.SettingsTab.general)))]
-            Logi Options+ Is Running… [attention, -> openSettings(Optional(PureMouseAppSupport.SettingsPane.tab(PureMouseAppSupport.SettingsTab.general)))]
+            Quit Logi Options+ [attention, -> quitLogiOptions]
+            Open Login Items Settings… [-> openLoginItems]
             ---
             """))
     }

@@ -101,6 +101,10 @@ enum MenuAction {
     case openUpdate(URL)
     case skipUpdate
     case openPrivacy(PrivacyPane)
+    /// Asks Logi Options+ to quit (`LogiOptionsAction.quit`).
+    case quitLogiOptions
+    /// Opens Login Items in System Settings, where its login item is removed.
+    case openLoginItems
     case toggleSmoothScrolling
     case setDPI(Int)
     case start
@@ -212,7 +216,11 @@ enum MenuPlan {
             rows.append(attention("Allow Input Monitoring", .openPrivacy(.inputMonitoring)))
         }
         if state.configError { rows.append(attention("Fix Config File…", .openSettings(.tab(.general)))) }
-        if state.logiOptionsRunning { rows.append(attention("Logi Options+ Is Running…", .openSettings(.tab(.general)))) }
+        if state.logiOptionsRunning {
+            // Quit carries the warning; the login item is its follow-up, so a plain row under it.
+            rows.append(attention(LogiOptionsAction.quit.title, .quitLogiOptions))
+            rows.append(.item(MenuItem(title: LogiOptionsAction.openLoginItems.title + "…", action: .openLoginItems)))
+        }
         return rows
     }
 

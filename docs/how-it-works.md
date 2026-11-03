@@ -349,6 +349,17 @@ in `Status.waitingForInputMonitoring` (the name heuristic is `Daemon.mayBeMouse`
 not listed), and the menu, the Mouse pane and General each offer Allow Input Monitoring for it. This
 adds a status field and no timer or poll (`IdleCostTests`).
 
+### Logi Options+
+
+Whether Logi Options+ is running is looked up again, not once at start: `Daemon.recheckLogiOptions`
+scans the process table at start, wake, reload, a control doorbell and each permission check, and
+rewrites the status when the answer changed, so the notice appears or clears in place. A control
+doorbell with no change (`AppModel.askDaemonToRecheck`) is what the Settings helper rings when its
+window is shown (`SettingsWindowController.show`), and what the menu bar app or Settings rings when
+Logi Options+ has quit after Quit Logi Options+ (a KVO watch on the app's `isTerminated`). No timer and no polling were added (`IdleCostTests`); process
+launch notifications are not used, as they need AppKit in the daemon. The scan sees only this user's
+processes (see [Troubleshooting](troubleshooting.md#logi-options)).
+
 ### Battery and DPI
 
 - Events route only for features whose index is already resolved (`HIDPPDevice.feature(at:)`), so

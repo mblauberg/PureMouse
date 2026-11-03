@@ -55,6 +55,7 @@ The daemon rewrites `status.json` when anything in it changes:
 - each device adopted, lost, woken or asleep;
 - battery change;
 - DPI or wheel-mode change;
+- Logi Options+ starting or stopping, seen at the next re-check (`logiOptionsRunning`);
 - permission grant (the restart then writes a fresh one);
 - a Bluetooth mouse seen without Input Monitoring (it joins `waitingForInputMonitoring`);
 - config load or failure;
@@ -86,6 +87,10 @@ missing or stale file means "PureMouse Is Off".
   value: choosing the value already saved leaves the file unchanged, and a reload that leaves
   `dpi` alone keeps the cycled one. Every control write repeats the last token, so a later pause
   or capture cannot erase it unread; the daemon acts once per token.
+- A bare doorbell, with `control.json` unchanged, asks the daemon to look again at what it learns
+  only by looking: whether Logi Options+ is running and which permissions are missing. The Settings
+  helper rings it when its window is shown, and the apps ring it after asking Logi Options+ to quit.
+  The daemon acts on the file as it stands, so nothing repeats.
 
 ### Config (menu → daemon)
 

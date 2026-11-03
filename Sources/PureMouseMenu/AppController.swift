@@ -182,6 +182,11 @@ final class AppController: NSObject, NSApplicationDelegate {
         NSWorkspace.shared.open(pane.url)
     }
 
+    /// Asks Logi Options+ to quit; the daemon looks again when it has (`LogiOptionsQuit`).
+    func quitLogiOptions() {
+        LogiOptionsQuit.shared.ask { [model] in model.askDaemonToRecheck() }
+    }
+
     func openReleases() {
         NSWorkspace.shared.open(Links.releases)
     }

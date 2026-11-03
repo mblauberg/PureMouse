@@ -81,6 +81,8 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         case .openUpdate(let page): app.openUpdate(page)
         case .skipUpdate: app.skipUpdate()
         case .openPrivacy(let pane): app.openPrivacy(pane)
+        case .quitLogiOptions: app.quitLogiOptions()
+        case .openLoginItems: LogiOptionsAction.openLoginItems.url.map { NSWorkspace.shared.open($0) }
         case .toggleSmoothScrolling: model.update { $0.smoothScrollEnabled.toggle() }
         case .setDPI(let dpi): model.setDPI(dpi)
         case .start: action.command.map { model.perform($0) }

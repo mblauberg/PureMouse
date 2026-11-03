@@ -115,7 +115,7 @@ daily check off, switch **Check for updates automatically** off in Settings › 
 **Don't Check** when asked; to forget what it stored, `defaults delete io.github.mblauberg.puremouse.menu UpdatesAutomatic`
 and the other `Updates…` keys above.
 
-Buttons such as **View Releases**, **Update PureMouse**, **Update to X.Y.Z…** and **Learn More** open a GitHub page in your browser.
+Buttons such as **View Releases**, **Update PureMouse** and **Update to X.Y.Z…** open a GitHub page in your browser.
 
 ## Commands you set up
 

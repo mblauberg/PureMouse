@@ -39,7 +39,7 @@ extension Notice {
         case .inputMonitoring:
             Self.inputMonitoringMessage(waiting: model.waitingForInputMonitoring.map(\.name))
         case .noMouse: "Turn on your mouse or plug in its receiver. Its settings appear here once it connects."
-        case .logiOptions: "Only one app can control the buttons. Quit Logi Options+ or remove it."
+        case .logiOptions: "Only one app can control the buttons. Quit it, then remove its login item so it stays quit."
         case .accessibility:
             "Allow it in System Settings to use smooth scrolling and button actions. PureMouse restarts itself when you do."
         }
@@ -171,7 +171,12 @@ struct NoticeActions: View {
         case .paused:
             Button("Resume") { model.setPaused(false) }
         case .logiOptions:
-            Button("Learn More") { NSWorkspace.shared.open(Links.logiOptions) }
+            VStack(alignment: .trailing) {
+                Button(LogiOptionsAction.quit.title) { LogiOptionsQuit.shared.ask { model.askDaemonToRecheck() } }
+                Button(LogiOptionsAction.openLoginItems.title) {
+                    LogiOptionsAction.openLoginItems.url.map { NSWorkspace.shared.open($0) }
+                }
+            }
         case .accessibility:
             Button("Open System Settings") { NSWorkspace.shared.open(PrivacyPane.accessibility.url) }
                 .accessibilityLabel("Allow Accessibility in System Settings")

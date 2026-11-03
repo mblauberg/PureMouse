@@ -81,6 +81,7 @@ public final class AppModel {
     public var accessibilityMissing: Bool { link.accessibilityMissing }
     public var inputMonitoringMissing: Bool { link.inputMonitoringMissing }
     public var logiOptionsRunning: Bool { link.logiOptionsRunning }
+
     public var hasBluetoothDevice: Bool { link.hasBluetoothDevice }
     public var waitingForInputMonitoring: [Status.WaitingDevice] { link.waitingForInputMonitoring }
     public var inputMonitoringNeeded: Bool { link.inputMonitoringNeeded }
@@ -155,6 +156,9 @@ public final class AppModel {
 
     /// Asks the daemon to reload the config now (it also reloads on its own when the file changes).
     public func reloadDaemonConfig() { link.reloadDaemonConfig() }
+
+    /// See `DaemonLink.askDaemonToRecheck`.
+    public func askDaemonToRecheck() { link.askDaemonToRecheck() }
 
     // MARK: Config
 

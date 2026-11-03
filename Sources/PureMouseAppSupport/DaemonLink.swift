@@ -187,6 +187,13 @@ public final class DaemonLink {
         }
     }
 
+    /// Rings the control doorbell without changing `control.json`: the daemon looks at what it
+    /// otherwise learns only when something happens (Logi Options+ running, permissions) and
+    /// writes a fresh status if it changed. For Settings opening and Logi Options+ having quit.
+    public func askDaemonToRecheck() {
+        ring()
+    }
+
     /// Asks the daemon to reload the config now (it also reloads on its own when the file changes).
     public func reloadDaemonConfig() {
         guard daemonRunning, let pid = status?.pid else { return }
