@@ -54,6 +54,9 @@ public struct UpdatePreferences {
     private static let latestPageKey = "UpdatesLatestPage"
     private static let skippedKey = "UpdatesSkippedVersions"
     private static let notifiedKey = "UpdatesNotifiedVersions"
+    static let requestVersionKey = "UpdatesInstallRequestVersion"
+    private static let requestPageKey = "UpdatesInstallRequestPage"
+    static let statusKey = "UpdatesInstallStatus"
 
     public let defaults: UserDefaults
 
@@ -97,6 +100,29 @@ public struct UpdatePreferences {
         }
     }
 
+    /// Settings' About pane asks the menu bar app, which owns installing (ADR 22), to install this
+    /// release: the menu app asks the person, hears the write, and clears it. Any other process of
+    /// the user could write it too, which is why the menu app asks, and checks the release page and
+    /// the version, and the installer checks the signature.
+    public var installRequest: UpdateCheck.Release? {
+        get {
+            guard let text = defaults.string(forKey: Self.requestVersionKey), let version = UpdateCheck.Version(text),
+                  let page = defaults.string(forKey: Self.requestPageKey).flatMap(URL.init(string:)) else { return nil }
+            return UpdateCheck.Release(version: version, page: page)
+        }
+        nonmutating set {
+            set(newValue?.page.absoluteString, Self.requestPageKey)
+            set(newValue?.version.text, Self.requestVersionKey)   // last: this is the key that is watched
+        }
+    }
+
+    /// What the menu bar app is doing with the update it was asked for, in one line for About to
+    /// show: "Updating to 0.6.0…" while it runs, the reason when it did not install. nil otherwise.
+    public var installStatus: String? {
+        get { defaults.string(forKey: Self.statusKey) }
+        nonmutating set { set(newValue, Self.statusKey) }
+    }
+
     /// How many versions each list below keeps; the oldest are forgotten first.
     public static let remembered = 16
 
@@ -132,17 +158,26 @@ public struct UpdatePreferences {
     /// switch, for as long as it is kept). Key-value observing hears another process's writes;
     /// `UserDefaults.didChangeNotification` does not.
     public final class Watch: NSObject {
+        /// What can be watched.
+        public enum Key { case automatic, installRequest, installStatus }
+
         private let defaults: UserDefaults
         private let changed: @MainActor () -> Void
+        private let keys: [String]
 
-        public init(_ defaults: UserDefaults, changed: @escaping @MainActor () -> Void) {
+        public init(_ defaults: UserDefaults, _ key: Key = .automatic, changed: @escaping @MainActor () -> Void) {
             self.defaults = defaults
             self.changed = changed
+            switch key {
+            case .automatic: keys = [UpdatePreferences.automaticKey]
+            case .installRequest: keys = [UpdatePreferences.requestVersionKey]
+            case .installStatus: keys = [UpdatePreferences.statusKey]
+            }
             super.init()
-            defaults.addObserver(self, forKeyPath: UpdatePreferences.automaticKey, context: nil)
+            for key in keys { defaults.addObserver(self, forKeyPath: key, context: nil) }
         }
 
-        deinit { defaults.removeObserver(self, forKeyPath: UpdatePreferences.automaticKey) }
+        deinit { for key in keys { defaults.removeObserver(self, forKeyPath: key) } }
 
         override public func observeValue(forKeyPath keyPath: String?, of object: Any?,
                                           change: [NSKeyValueChangeKey: Any]?, context: UnsafeMutableRawPointer?) {

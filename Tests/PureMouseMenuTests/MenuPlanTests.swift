@@ -133,6 +133,14 @@ struct MenuPlanTests {
         #expect(!state.needsAttention)
     }
 
+    @Test func onceTheNewAppIsOnDiskTheUpdateRowsAreGone() {
+        var state = Self.running()
+        state.update = UpdateOffer(version: UpdateCheck.Version("0.6.0")!, page: URL(string: "https://example.com/r")!)
+        state.installing = .installed
+        let text = lines(state)
+        #expect(!text.contains("Update to") && !text.contains("Skip This Version") && !text.contains("View Release"))
+    }
+
     @Test func theUpdateRowsComeAfterTheWarningsAndLeaveTheStatusFormatRowAlone() throws {
         var state = Self.running()
         state.statusTooNew = true

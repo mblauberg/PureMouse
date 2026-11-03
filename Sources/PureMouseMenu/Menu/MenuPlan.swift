@@ -94,6 +94,8 @@ enum UpdateInstallState: Equatable {
     case idle
     /// Downloading, checking and swapping; the row is disabled.
     case installing
+    /// The new app is on disk. The row is gone, since the version it offers is installed.
+    case installed
     /// Nothing was replaced. `reason` is one line; `retry` is whether trying again could work.
     case failed(reason: String, retry: Bool)
 }
@@ -235,6 +237,8 @@ enum MenuPlan {
             return [.item(MenuItem(title: update.menuTitle, action: .installUpdate)), skip]
         case .installing:
             return [.item(MenuItem(title: update.installingTitle, enabled: false)), skip]
+        case .installed:
+            return []
         case .failed(let reason, let retry):
             var rows = [MenuRow.item(MenuItem(title: reason, enabled: false))]
             if retry { rows.append(.item(MenuItem(title: update.menuTitle, action: .installUpdate))) }

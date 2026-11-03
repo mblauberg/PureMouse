@@ -30,6 +30,8 @@ final class World: @unchecked Sendable {
     /// A downloader that does not hold to the limit it is given.
     var ignoresLimit = false
     var limits: [String: Int] = [:]
+    /// Runs inside the install at "hash" or "copy", where a test can cancel the task.
+    var at: [String: @Sendable () -> Void] = [:]
 
     // What happened.
     var events: [String] = []
@@ -46,6 +48,7 @@ final class World: @unchecked Sendable {
     var installer: UpdateInstaller {
         UpdateInstaller(downloader: Downloader(world: self), hasher: { [self] in
             events.append("hash")
+            at["hash"]?()
             return disk[$0] == nil ? "" : imageHash
         }, mounter: Mounter(world: self), signature: Signature(world: self), files: Files(world: self))
     }
@@ -128,6 +131,7 @@ final class World: @unchecked Sendable {
         func replaceability(of app: URL) -> UpdateReplaceability { world.replaceability }
         func copy(_ source: URL, to destination: URL) async throws {
             world.events.append("copy")
+            world.at["copy"]?()
             if world.copyFails { throw CocoaError(.fileWriteOutOfSpace) }
             world.disk[destination] = Data()
         }
@@ -375,6 +379,17 @@ final class World: @unchecked Sendable {
         #expect(!world.events.contains("remove staged"))
         #expect(world.disk.keys.contains { $0.lastPathComponent.hasPrefix(".PureMouse-update") })
         #expect(world.events.last == "remove work")
+    }
+
+    @Test(arguments: ["hash", "copy"])
+    func cancellingStopsBeforeTheSwapAndCleansUpEverything(_ step: String) async {
+        let world = World()
+        world.at[step] = { withUnsafeCurrentTask { $0?.cancel() } }
+        #expect(await world.install() == .failed(.cancelled))
+        #expect(untouched(world) || world.events.contains("copy"))
+        #expect(!world.events.contains("replace") && !world.leftovers)
+        #expect(world.events.last == "remove work")
+        if step == "hash" { #expect(!world.events.contains("attach")) }
     }
 
     @Test func aSuccessfulSwapDoesNotDeleteTheNewApp() async {

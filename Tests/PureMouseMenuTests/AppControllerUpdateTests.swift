@@ -28,6 +28,34 @@ extension UpdateSetup {
     }
 }
 
+/// Something an install waits on until the test lets it go; asking it to cancel lets it go too, as a
+/// cancelled download does.
+final class Suspended: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var released = false
+    private var cancelledFlag = false
+
+    var cancelled: Bool { lock.withLock { cancelledFlag } }
+
+    func wait() async {
+        await withCheckedContinuation { continuation in
+            lock.lock()
+            if released { lock.unlock(); continuation.resume() } else { self.continuation = continuation; lock.unlock() }
+        }
+    }
+
+    func release(cancelled: Bool = false) {
+        lock.lock()
+        released = true
+        if cancelled { cancelledFlag = true }
+        let waiting = continuation
+        continuation = nil
+        lock.unlock()
+        waiting?.resume()
+    }
+}
+
 /// What the install row did, recorded.
 @MainActor
 final class InstallSpy {
@@ -40,6 +68,11 @@ final class InstallSpy {
     var opened: [URL] = []
     var terminated = 0
     var alerts: [String] = []
+    var replies: [Bool] = []
+    /// When set, the install waits here until released or cancelled; then, if `cleanup` is set,
+    /// waits there too, as detaching the image and deleting the download do.
+    var gate: Suspended?
+    var cleanup: Suspended?
 }
 
 /// The question about automatic checks, asked of the person once.
@@ -231,12 +264,18 @@ struct AppControllerUpdateTests {
         setup.confirm = { spy.confirmed.append($0); return spy.confirm }
         setup.install = { release, current, app in
             await MainActor.run { spy.installs.append((release, current, app)) }
+            if let gate = await spy.gate {
+                await withTaskCancellationHandler { await gate.wait() } onCancel: { gate.release(cancelled: true) }
+                if let cleanup = await spy.cleanup { await cleanup.wait() }
+                if gate.cancelled { return .failed(.cancelled) }
+            }
             return await spy.outcome
         }
         setup.relaunch = { spy.relaunched.append($0); return spy.relaunchWorks }
         setup.openPage = { spy.opened.append($0) }
         setup.terminate = { spy.terminated += 1 }
         setup.alert = { title, _ in spy.alerts.append(title) }
+        setup.replyToTerminate = { spy.replies.append($0) }
         return AppController(locations: locations, iconShown: true, announce: { _, _, _ in },
                              withdraw: { _ in }, requestPermission: {}, updates: setup)
     }
@@ -309,6 +348,174 @@ struct AppControllerUpdateTests {
         controller.installUpdate()
         await settle { !spy.relaunched.isEmpty }
         #expect(spy.terminated == 0 && spy.alerts == ["PureMouse is updated."])
+        // The new app is on disk: the row that offered it is gone, not an invitation to install again.
+        #expect(controller.installState == .installed)
+    }
+
+    @Test func afterAFailedRelaunchSettingsStillOpens() {
+        let fake = FakeSystem()
+        let launcher = SettingsLauncher(system: fake.system)
+        var asked: [URL] = []
+        let opened = UpdateSetup.relaunchLive(Self.app, launcher: launcher) { asked.append($0); return false }
+        #expect(!opened && asked == [Self.app])
+        // Quitting for the relaunch is not Quit PureMouse: no stamp, and the next open goes ahead.
+        #expect(fake.quitMarks == 0)
+        launcher.open(ShowRequest())
+        #expect(fake.opens.count == 1 && fake.posts.count == 1)
+    }
+
+    @Test func theHelperIsQuitBeforeTheAppIsOpened() {
+        let fake = FakeSystem()
+        let helper = FakeSystem.Helper(alive: true)
+        fake.running = [helper]
+        var quitsWhenOpened = -1
+        _ = UpdateSetup.relaunchLive(Self.app, launcher: SettingsLauncher(system: fake.system)) { _ in
+            quitsWhenOpened = helper.quitCount
+            return true
+        }
+        #expect(quitsWhenOpened == 1)
+    }
+
+    // MARK: Lifecycle while installing
+
+    private func suspended(_ spy: InstallSpy) -> AppController {
+        spy.gate = Suspended()
+        let controller = offered(spy)
+        controller.installUpdate()
+        return controller
+    }
+
+    @Test func quitWaitsForAnInstallToCancelAndCleanUp() async {
+        let spy = InstallSpy()
+        spy.cleanup = Suspended()
+        let controller = suspended(spy)
+        await settle { false }
+        var ended = false
+        controller.afterInstallEnds { ended = true }
+        await settle { false }
+        #expect(spy.gate?.cancelled == true, "the install was told to stop")
+        #expect(!ended, "but quitting waits for its cleanup")
+        spy.cleanup?.release()
+        await settle { ended }
+        #expect(ended && controller.installState == .idle && spy.relaunched.isEmpty)
+    }
+
+    @Test func quitWithNothingInstallingGoesAtOnce() {
+        let controller = offered(InstallSpy())
+        var ended = false
+        controller.afterInstallEnds { ended = true }
+        #expect(ended)
+    }
+
+    @Test func terminationIsDeferredWhileInstallingAndAnsweredAfterTheCleanup() async {
+        let spy = InstallSpy()
+        spy.cleanup = Suspended()
+        let controller = suspended(spy)
+        await settle { false }
+        #expect(controller.applicationShouldTerminate(NSApplication.shared) == .terminateLater)
+        await settle { false }
+        #expect(spy.replies.isEmpty)
+        spy.cleanup?.release()
+        await settle { !spy.replies.isEmpty }
+        #expect(spy.replies == [true])
+    }
+
+    @Test func terminationIsImmediateWhenNothingIsInstalling() {
+        #expect(offered(InstallSpy()).applicationShouldTerminate(NSApplication.shared) == .terminateNow)
+    }
+
+    @Test func anInstallThatCommitsWhileQuittingDoesNotRelaunch() async {
+        let spy = InstallSpy()
+        spy.gate = Suspended()
+        spy.cleanup = nil
+        let controller = offered(spy)
+        controller.installUpdate()
+        await settle { false }
+        var ended = false
+        controller.afterInstallEnds { ended = true }
+        spy.outcome = .installed(UpdateCheck.Version("0.6.0")!)
+        // Cancelling lets the fake return .cancelled; make it commit instead, as one past the swap does.
+        spy.gate?.release()
+        await settle { ended }
+        #expect(ended && spy.relaunched.isEmpty && spy.terminated == 0)
+    }
+
+    @Test func aSecondInstallCannotStartOnceQuittingBegan() async {
+        let spy = InstallSpy()
+        let controller = offered(spy)
+        controller.afterInstallEnds {}
+        controller.installUpdate()
+        await settle { false }
+        #expect(spy.confirmed.isEmpty && spy.installs.isEmpty)
+    }
+
+    @Test func aCancelledInstallIsNotShownAsAFailure() async {
+        let spy = InstallSpy()
+        spy.outcome = .failed(.cancelled)
+        let controller = offered(spy)
+        controller.installUpdate()
+        await settle { controller.installState != .installing }
+        #expect(controller.installState == .idle && spy.opened.isEmpty && spy.terminated == 0)
+    }
+
+    // MARK: Asked for from About
+
+    private func aboutRequest(_ spy: InstallSpy, version: String = "0.6.0",
+                              page: String = "https://github.com/mblauberg/PureMouse/releases/tag/v0.6.0") -> AppController {
+        preferences.latest = nil   // nothing offered by the menu: About found it alone
+        let controller = offered(spy)
+        preferences.latest = nil
+        controller.startUpdates()
+        preferences.installRequest = UpdateCheck.Release(version: UpdateCheck.Version(version)!, page: URL(string: page)!)
+        return controller
+    }
+
+    @Test func aRequestFromAboutAsksTheSameQuestionThenInstallsAndClearsIt() async {
+        let spy = InstallSpy()
+        spy.gate = Suspended()
+        let controller = aboutRequest(spy)
+        await settle { !spy.installs.isEmpty }
+        #expect(spy.confirmed.map(\.version.text) == ["0.6.0"])
+        #expect(spy.installs.count == 1 && spy.installs[0].release.page == Self.page)
+        #expect(preferences.installRequest == nil)
+        #expect(preferences.installStatus == "Updating to 0.6.0…")
+        #expect(controller.installState == .installing)
+        spy.gate?.release()
+        await settle { spy.terminated > 0 }
+        #expect(spy.relaunched == [Self.app] && spy.terminated == 1)
+        #expect(preferences.installStatus == nil)
+    }
+
+    @Test func aRequestThatIsRefusedLeavesAboutItsReason() async {
+        let spy = InstallSpy()
+        spy.outcome = .failed(.wrongCertificate)
+        let controller = aboutRequest(spy)
+        defer { withExtendedLifetime(controller) {} }
+        await settle { preferences.installStatus != nil }
+        #expect(preferences.installStatus == "The update wasn't signed by the same certificate")
+        #expect(spy.relaunched.isEmpty && spy.terminated == 0)
+    }
+
+    @Test func aRequestThePersonDeclinesInstallsNothing() async {
+        let spy = InstallSpy()
+        spy.confirm = false
+        let controller = aboutRequest(spy)
+        defer { withExtendedLifetime(controller) {} }
+        await settle { false }
+        #expect(spy.confirmed.count == 1 && spy.installs.isEmpty && preferences.installStatus == nil)
+        #expect(preferences.installRequest == nil)
+    }
+
+    @Test(arguments: [("0.5.0", "https://github.com/mblauberg/PureMouse/releases/tag/v0.5.0"),
+                      ("0.4.0", "https://github.com/mblauberg/PureMouse/releases/tag/v0.4.0"),
+                      ("0.6.0", "https://example.com/mblauberg/PureMouse/releases/tag/v0.6.0"),
+                      ("0.6.0", "https://github.com/mblauberg/PureMouse/releases/latest")])
+    func aRequestForAnOldVersionOrAnotherPageIsIgnored(_ version: String, _ page: String) async {
+        let spy = InstallSpy()
+        let controller = aboutRequest(spy, version: version, page: page)
+        defer { withExtendedLifetime(controller) {} }
+        await settle { false }
+        #expect(spy.confirmed.isEmpty && spy.installs.isEmpty && preferences.installRequest == nil)
     }
 
     @Test func theConfirmationNamesTheVersionAndTheTwoChoices() throws {

@@ -22,6 +22,8 @@ public enum UpdateInstallFailure: Error, Equatable, Sendable {
     /// A newer version, but not the one the release page announced.
     case notTheRelease
     case installFailed
+    /// Quit or Hide ended it: nothing was replaced, and the person is not told of a failure.
+    case cancelled
 
     /// One line, naming what failed. What to do next is the release page beside it.
     public var reason: String {
@@ -42,6 +44,7 @@ public enum UpdateInstallFailure: Error, Equatable, Sendable {
         case .notNewer: "The update isn't newer than this version"
         case .notTheRelease: "The update isn't the release that was announced"
         case .installFailed: "Couldn't replace PureMouse"
+        case .cancelled: "The update was stopped"
         }
     }
 
@@ -151,7 +154,8 @@ public typealias UpdateHasher = @Sendable (URL) throws -> String
 /// signature, validated against the requirement of the running process; a version newer than the
 /// running one and equal to the release's. Then the bundle is copied next to the installed app and
 /// swapped in with one `replaceItemAt`; if that throws, the disk says which app is installed. The
-/// image is unmounted and the download deleted however it ends.
+/// image is unmounted and the download deleted however it ends. Cancelling the task stops it before
+/// the swap, with all of that cleaned up, and never during it.
 ///
 /// Everything it touches is injected, so the tests give it fixtures. This runs in the menu bar app
 /// or the Settings helper, never in `puremouse` or PureMouseKit.
@@ -179,6 +183,9 @@ public struct UpdateInstaller: Sendable {
     static let maxImageBytes = 64_000_000
     static let maxChecksumBytes = 65_536
     public static let appName = "PureMouse.app"
+
+    /// Whether the release names assets the installer can fetch: a tag page of this project.
+    public static func names(_ release: UpdateCheck.Release) -> Bool { UpdateAssets(release) != nil }
 
     /// `current`: the running version. `installedApp`: the app bundle to replace, nil when this
     /// process is not inside an installed one.
@@ -225,7 +232,7 @@ public struct UpdateInstaller: Sendable {
             }
         } catch {
             log("update: download failed: \(error)")
-            return await finish(.failed(.downloadFailed))
+            return await finish(.failed(Task.isCancelled ? .cancelled : .downloadFailed))
         }
         let expected: String?
         do { expected = Checksums.hash(for: assets.imageName, in: try files.contents(of: sums)) } catch {
@@ -239,8 +246,12 @@ public struct UpdateInstaller: Sendable {
         }
         guard actual == expected else { return await finish(.failed(.checksumMismatch)) }
 
+        if Task.isCancelled { return await finish(.failed(.cancelled)) }
+
         // 2. The image is signed by the certificate the running app is, before anything parses it.
         if let fault = signature.checkImage(image, against: requirement) { return await finish(.failed(Self.failure(fault))) }
+
+        if Task.isCancelled { return await finish(.failed(.cancelled)) }
 
         // 3. Mounted read-only and out of the Finder's sight, it holds exactly one PureMouse.app.
         let mount = work.appending(path: "image")
@@ -275,6 +286,7 @@ public struct UpdateInstaller: Sendable {
 
         // Copy it next to the installed app, so the swap is one rename on one volume, check the copy
         // as well, and swap.
+        if Task.isCancelled { return await finish(.failed(.cancelled)) }
         let copy = installedApp.deletingLastPathComponent().appending(path: ".PureMouse-update-\(UUID().uuidString.prefix(8))")
         staged = copy
         do {
@@ -285,6 +297,8 @@ public struct UpdateInstaller: Sendable {
         }
         if let fault = signature.check(copy, against: requirement) { return await finish(.failed(Self.failure(fault))) }
         guard files.bundleVersion(copy).flatMap(UpdateCheck.Version.init) == found else { return await finish(.failed(.modified)) }
+        // The last place to stop: past the swap the new app is installed, and that is reported.
+        if Task.isCancelled { return await finish(.failed(.cancelled)) }
         do {
             try files.replace(installedApp, with: copy)
             staged = nil

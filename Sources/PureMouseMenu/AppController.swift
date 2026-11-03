@@ -24,10 +24,12 @@ struct UpdateSetup {
     var confirm: @MainActor (UpdateOffer) -> Bool = Alerts.confirmUpdate
     /// Opens the installed app the way double-clicking it does, after quitting Settings; true if
     /// it was accepted.
-    var relaunch: @MainActor (URL) async -> Bool = UpdateSetup.relaunchLive
+    var relaunch: @MainActor (URL) async -> Bool = { UpdateSetup.relaunchLive($0) }
     var openPage: @MainActor (URL) -> Void = { NSWorkspace.shared.open($0) }
     var terminate: @MainActor () -> Void = { NSApp.terminate(nil) }
     var alert: @MainActor (String, String) -> Void = Alerts.show
+    /// Answers `applicationShouldTerminate` once an install that was ending has finished.
+    var replyToTerminate: @MainActor (Bool) -> Void = { NSApp.reply(toApplicationShouldTerminate: $0) }
 
     @MainActor static var live: UpdateSetup {
         UpdateSetup(preferences: UpdatePreferences(.standard),
@@ -35,10 +37,12 @@ struct UpdateSetup {
                     ask: Alerts.askAboutUpdates, announce: { Notifier.post($0) })
     }
 
-    @MainActor static func relaunchLive(_ app: URL) async -> Bool {
-        await withCheckedContinuation { continuation in
-            SettingsLauncher.shared.quit { continuation.resume(returning: UpdateRelaunch.open(app)) }
-        }
+    /// Quits Settings, then opens the installed app. The quit is the reversible one: if the app
+    /// does not open, this process stays and Settings opens again from its menu.
+    @MainActor static func relaunchLive(_ app: URL, launcher: SettingsLauncher = .shared,
+                                        open: @MainActor (URL) -> Bool = UpdateRelaunch.open) -> Bool {
+        launcher.quitRunning()
+        return open(app)
     }
 }
 
@@ -66,8 +70,20 @@ final class AppController: NSObject, NSApplicationDelegate {
     private let openPage: @MainActor (URL) -> Void
     private let terminate: @MainActor () -> Void
     private let alert: @MainActor (String, String) -> Void
-    /// Where an update chosen from the menu stands; the menu shows it.
-    private(set) var installState = UpdateInstallState.idle
+    private let replyToTerminate: @MainActor (Bool) -> Void
+    private let preferences: UpdatePreferences
+    /// Where an update chosen from the menu or from About stands; the menu shows it, and About is told
+    /// through the preferences (`UpdatePreferences.installStatus`).
+    private(set) var installState = UpdateInstallState.idle {
+        didSet { publishInstallStatus() }
+    }
+    /// The install under way, kept so that Quit and Hide wait for its cleanup.
+    private var installTask: Task<Void, Never>?
+    private var installingTitle: String?
+    /// Quit, Hide or a termination has been asked for: an install that finishes now is not followed
+    /// by a relaunch.
+    private var leaving = false
+    private var requestWatch: UpdatePreferences.Watch?
 
     /// The defaults are the live app; a test passes a sandbox and spies for what reaches the
     /// notification centre.
@@ -94,6 +110,8 @@ final class AppController: NSObject, NSApplicationDelegate {
         openPage = setup.openPage
         terminate = setup.terminate
         alert = setup.alert
+        replyToTerminate = setup.replyToTerminate
+        preferences = setup.preferences
         super.init()
     }
 
@@ -128,6 +146,14 @@ final class AppController: NSObject, NSApplicationDelegate {
         return false
     }
 
+    /// Not while an update is being installed: it is cancelled, and the app ends once the image is
+    /// detached and the download deleted.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard installTask != nil else { return .terminateNow }
+        afterInstallEnds { [replyToTerminate] in replyToTerminate(true) }
+        return .terminateLater
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         model.cancelCapture()
         model.flush()
@@ -155,6 +181,9 @@ final class AppController: NSObject, NSApplicationDelegate {
     /// Counts this launch, starts the schedule if automatic checks are on, and asks the question if
     /// it is due. A run without the icon does none of it: it ends when Settings closes.
     func startUpdates() {
+        // About asks for installs through the preferences, which a hidden-icon run hears as well.
+        preferences.installStatus = nil
+        requestWatch = UpdatePreferences.Watch(preferences.defaults, .installRequest) { [weak self] in self?.installRequested() }
         guard iconShown else { return }
         updates.noteLaunch()
         updates.start()
@@ -179,32 +208,76 @@ final class AppController: NSObject, NSApplicationDelegate {
         openPage(page)
     }
 
-    /// Update to 1.2.3…: asks, then downloads and checks the release and swaps it in
-    /// (`UpdateInstaller`), then relaunches. A refusal leaves the installed app untouched and the
-    /// menu says why. A copy that cannot be replaced without a password opens the release page.
+    /// Update to 1.2.3…: the menu row.
     func installUpdate() {
-        guard iconShown, installState != .installing, let offer = updates.offer, confirmUpdate(offer) else { return }
+        guard iconShown, let offer = updates.offer else { return }
+        startInstall(offer)
+    }
+
+    /// Settings' About pane asked for this release (`UpdatePreferences.installRequest`). The request
+    /// is cleared at once, and the same flow as the menu row follows: ask, install, relaunch.
+    func installRequested() {
+        guard let release = preferences.installRequest else { return }
+        preferences.installRequest = nil
+        guard UpdateInstaller.names(release), let running = UpdateCheck.Version(current), release.version > running else {
+            return
+        }
+        startInstall(UpdateOffer(version: release.version, page: release.page))
+    }
+
+    /// Asks, then downloads and checks the release and swaps it in (`UpdateInstaller`), then
+    /// relaunches. A refusal leaves the installed app untouched and says why. A copy that cannot be
+    /// replaced without a password opens the release page. One install at a time; none once
+    /// quitting has begun.
+    func startInstall(_ offer: UpdateOffer) {
+        guard installTask == nil, !leaving, confirmUpdate(offer) else { return }
+        installingTitle = offer.installingTitle
         installState = .installing
         let release = UpdateCheck.Release(version: offer.version, page: offer.page)
-        Task {
+        installTask = Task {
             let outcome = await install(release, current, installedApp)
             await finishInstall(outcome, offer)
+            installTask = nil
         }
     }
 
     private func finishInstall(_ outcome: UpdateInstallOutcome, _ offer: UpdateOffer) async {
         switch outcome {
+        case .failed(.cancelled):
+            installState = .idle
         case .failed(let failure):
             installState = .failed(reason: failure.reason, retry: !failure.opensReleasePage)
             if failure.opensReleasePage { openPage(offer.page) }
         case .installed:
-            installState = .idle
+            // The app on disk is the new one, and the menu stops offering it.
+            installState = .installed
             model.flush()
+            guard !leaving else { return }
             guard let installedApp, await relaunch(installedApp) else {
                 alert(UpdateOffer.relaunchFailed.title, UpdateOffer.relaunchFailed.body)
                 return
             }
             terminate()
+        }
+    }
+
+    private func publishInstallStatus() {
+        switch installState {
+        case .installing: preferences.installStatus = installingTitle
+        case .failed(let reason, _): preferences.installStatus = reason
+        case .idle, .installed: preferences.installStatus = nil
+        }
+    }
+
+    /// Runs `work` once no install is under way: one that is gets cancelled, and `work` follows its
+    /// cleanup (the image detached, the download deleted), since what comes next ends this process.
+    func afterInstallEnds(_ work: @escaping @MainActor () -> Void) {
+        leaving = true
+        guard let task = installTask else { return work() }
+        task.cancel()
+        Task {
+            await task.value
+            work()
         }
     }
 
@@ -219,6 +292,10 @@ final class AppController: NSObject, NSApplicationDelegate {
     /// restores the mouse) and this app. Both start again at login. `stop` boots out this app's
     /// agent too, so launchd may end us first.
     func quitAll() {
+        afterInstallEnds { [self] in quitNow() }
+    }
+
+    private func quitNow() {
         SettingsLauncher.shared.quit { [model] in
             model.flush()
             guard Locations.live.daemon != nil else { NSApp.terminate(nil); return }
@@ -234,11 +311,13 @@ final class AppController: NSObject, NSApplicationDelegate {
     /// Hide Menu Bar Icon: removes the menu app's login agent, which ends this app; the daemon
     /// keeps running.
     func hideMenuBarIcon() {
-        model.flush()
-        model.perform(.menuOff) { [self] in
-            statusMenu?.remove()
-            statusMenu = nil
-            NSApp.terminate(nil)
+        afterInstallEnds { [self] in
+            model.flush()
+            model.perform(.menuOff) { [self] in
+                statusMenu?.remove()
+                statusMenu = nil
+                NSApp.terminate(nil)
+            }
         }
     }
 
