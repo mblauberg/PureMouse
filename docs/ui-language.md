@@ -78,8 +78,9 @@ and a change to this page lands with the text it changes.
   symbol name aloud, and never give two controls in one window the same label. A shortcut is
   spoken in words ("Shift Command 4", `Shortcut.spoken`), never as its glyphs. The status item's
   label names the mouse's state in order (off; the mouse and its battery, spoken as a percentage
-  or, with only a level, "battery low" or "battery critical"; "paused" or "on another Mac"), and
-  says paused whether or not a mouse is listed. `PUREMOUSE_DEV_AX_DUMP=1` checks the Settings
+  or, with only a level, "battery low" or "battery critical"; "paused" or "on another Mac"; "2 mice
+  connected" from two mice online), and says paused whether or not a mouse is listed. A preset under
+  a mouse's section in Pointer Speed reads "1,600 DPI, MX Master 3S". `PUREMOUSE_DEV_AX_DUMP=1` checks the Settings
   labels (docs/ui-design.md, "Motion, sound and accessibility").
 
 ## Glossary
