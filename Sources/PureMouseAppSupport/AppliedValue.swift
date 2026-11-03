@@ -51,10 +51,14 @@ extension ConfigTree {
     }
 
     /// The thumb wheel differs between the mice: they choose differently, or the same kind of
-    /// choice (Custom) sets different actions. Reading two mice's `custom` as one choice would show
-    /// the first mouse's actions as shared.
+    /// choice (Custom) does different things. Reading two mice's `custom` as one choice would show
+    /// the first mouse's actions as shared. What each way of turning does counts as the wheel
+    /// turns, so one mouse's swapped directions differ from another's that are not.
     public func thumbWheelVaries(inheriting scopes: [ConfigScope]) -> Bool {
-        thumbWheelChoice(inheriting: scopes).varies || Applied(thumbWheelState(inheriting: scopes).values.map(\.pair)).varies
+        thumbWheelChoice(inheriting: scopes).varies
+            || Applied(thumbWheelState(inheriting: scopes).values.map { state in
+                state.pair.map { state.reversed ? [$0.right, $0.left] : [$0.left, $0.right] }
+            }).varies
     }
 
     /// What one way of turning the thumb wheel does on each of the mice (`key` is `left` or

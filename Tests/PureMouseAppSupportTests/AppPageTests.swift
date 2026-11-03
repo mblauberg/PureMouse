@@ -307,6 +307,54 @@ private func changed(_ before: ConfigTree, _ after: ConfigTree) -> Set<String> {
         #expect(step.thumbWheelKeysVarying(inheriting: mice, ownPath: own) == [])
     }
 
+    @Test func oppositeWheelDirectionsVaryEvenWithTheSameActions() throws {
+        // Both mice choose Custom with the same two actions, but one swaps them: turning left does
+        // a different thing on each.
+        let config = try tree("""
+            {"devices": {"\(mx)": {"name": "MX", "thumbWheel": {"left": "zoomOut", "right": "zoomIn", "reversed": true}},
+                         "\(m750)": {"name": "M750", "thumbWheel": {"left": "zoomOut", "right": "zoomIn"}}}}
+            """)
+        let mice = [mouse(mx), mouse(m750)]
+        #expect(!config.thumbWheelChoice(inheriting: mice).varies)
+        #expect(config.thumbWheelVaries(inheriting: mice))
+        // A swap that changes nothing (both ways do the same) is not a difference, nor is it on a
+        // wheel that scrolls.
+        let alike = try tree("""
+            {"devices": {"\(mx)": {"name": "MX", "thumbWheel": {"left": "mute", "right": "mute", "reversed": true}},
+                         "\(m750)": {"name": "M750", "thumbWheel": {"left": "mute", "right": "mute"}}}}
+            """)
+        #expect(!alike.thumbWheelVaries(inheriting: mice))
+        let scrolls = try tree(#"{"devices": {"\#(mx)": {"name": "MX", "thumbWheel": {"reversed": true}}}}"#)
+        #expect(!scrolls.thumbWheelVaries(inheriting: mice))
+    }
+
+    @Test func glideAppliesWhileAnyMouseSmoothScrolls() throws {
+        // Mouse A turns smooth scrolling off and B leaves it to the default set (on); the app sets its
+        // own speed and glide. Kit resolves the app on A as off and on B as on, so Glide applies.
+        let config = try tree("""
+            {"devices": {"\(mx)": {"name": "MX", "smoothScroll": {"enabled": false}}, "\(m750)": {"name": "M750"}},
+             "apps": {"a.b": {"smoothScroll": {"speed": 2, "smoothingMs": 50}}}}
+            """)
+        let kit = try decode(config)
+        #expect(kit.forDevice(mx).settings(forApp: "a.b")?.smoothScroll?.enabled == false)
+        #expect(kit.forDevice(m750).settings(forApp: "a.b")?.smoothScroll?.enabled == true)
+        #expect(config.scrollsSmoothly("a.b", inheriting: [mouse(mx), mouse(m750)]))
+        #expect(config.scrollsSmoothly("a.b", inheriting: [mouse(m750), mouse(mx)]))
+        // Off on every mouse it may run with, and off for an app that says so itself.
+        #expect(!config.scrollsSmoothly("a.b", inheriting: [mouse(mx)]))
+        let off = try tree("""
+            {"smoothScroll": {"enabled": false},
+             "devices": {"\(mx)": {"name": "MX"}, "\(m750)": {"name": "M750"}},
+             "apps": {"a.b": {"smoothScroll": {"speed": 2}}}}
+            """)
+        #expect(!off.scrollsSmoothly("a.b", inheriting: [mouse(mx), mouse(m750)]))
+        let own = try tree("""
+            {"devices": {"\(mx)": {"name": "MX", "smoothScroll": {"enabled": false}}},
+             "apps": {"a.b": {"smoothScroll": {"enabled": true}}}}
+            """)
+        #expect(own.scrollsSmoothly("a.b", inheriting: [mouse(mx)]))
+    }
+
     @Test func aResetSpeedVariesWhileTheMiceDiffer() throws {
         let config = try tree("""
             {"devices": {"\(mx)": {"name": "MX", "smoothScroll": {"speed": 2}},

@@ -127,28 +127,18 @@ extension ConfigTree {
         }
     }
 
-    /// Whether the app's scrolling glides: its own `smoothScroll.enabled`, else what the scopes it
-    /// inherits from do (on when any mouse that has a `smoothScroll` leaves it on). A `smoothScroll`
-    /// in the app turns it on where there is none wider (Kit's `decodeApps`).
+    /// Whether the app's scrolling glides on some mouse. Kit layers the app's `smoothScroll` over each
+    /// mouse's, so the app's own `enabled` wins, else the mouse's resolves (on unless it or All Mice
+    /// says `enabled: false`: the default set has smooth scrolling on). The app's glide applies, and
+    /// Glide is enabled, while it does on any of the mice it may run with.
     public func scrollsSmoothly(_ app: String, inheriting: [ConfigScope] = [.global]) -> Bool {
-        let own = Self.appScope(app).prefix + ["smoothScroll"]
-        if let enabled = bool(own + ["enabled"]) { return enabled }
-        let configured = inheriting.filter { resolved(["smoothScroll"], in: $0) != nil }
-        if !configured.isEmpty { return configured.contains { smoothScrollEnabled(in: $0) } }
-        return contains(own)
+        let own = bool(Self.appScope(app).prefix + ["smoothScroll", "enabled"])
+        return (inheriting.isEmpty ? [.global] : inheriting).contains { own ?? smoothScrollEnabled(in: $0) }
     }
 
-    /// The caption under "Custom scrolling": what the app's scrolling does. Off, it follows
-    /// Mouse Settings; on, it says whether the glide applies, since an app's `smoothScroll` turns smooth
-    /// scrolling on where there is none globally (`scrollsSmoothly`).
-    public func customScrollingCaption(_ app: String, inheriting: [ConfigScope] = [.global]) -> String {
-        if !overridesScrolling(app) { return "Uses the speed and glide from Mouse Settings." }
-        if !scrollsSmoothly(app, inheriting: inheriting) {
-            return "Smooth scrolling is off, so this app scrolls at its own speed without a glide."
-        }
-        if !inheriting.contains(where: { smoothScrollEnabled(in: $0) }) { return "Smooth scrolling is on in this app only." }
-        return "Uses its own speed and glide in this app."
-    }
+    /// The caption under "Custom scrolling": it describes the on state, whatever the other settings
+    /// are (docs/ui-language.md, Captions).
+    public static let customScrollingCaption = "Gives this app its own scrolling speed and glide."
 
     // MARK: Page
 

@@ -335,18 +335,10 @@ private func resolved(_ wheel: Config.ThumbWheel) -> Resolved {
     #expect(directions.appSummary("e.f") == "Scrolling")
 }
 
-@Test func customScrollingSaysWhatTheAppsScrollingDoes() throws {
-    // Off: the app follows Scrolling.
-    #expect(try tree(#"{"smoothScroll": {}}"#).customScrollingCaption("a.b") == "Uses the speed and glide from Mouse Settings.")
-    // On, smooth scrolling as everywhere.
-    #expect(try tree(#"{"smoothScroll": {}, "apps": {"a.b": {"smoothScroll": {"speed": 2}}}}"#).customScrollingCaption("a.b")
-        == "Uses its own speed and glide in this app.")
-    // On, and smooth scrolling is on nowhere else: the app's smoothScroll turns it on there.
-    let only = try tree(#"{"apps": {"a.b": {"smoothScroll": {"speed": 2}}}}"#)
-    #expect(only.customScrollingCaption("a.b") == "Smooth scrolling is on in this app only.")
-    // On, but smooth scrolling is off: no glide.
-    #expect(try tree(#"{"smoothScroll": {"enabled": false}, "apps": {"a.b": {"smoothScroll": {"speed": 2}}}}"#)
-        .customScrollingCaption("a.b") == "Smooth scrolling is off, so this app scrolls at its own speed without a glide.")
+@Test func customScrollingHasOneCaptionForTheOnState() throws {
+    // Captions describe the on state and stay true whatever else is set (docs/ui-language.md), so
+    // there is one, not a variant per smooth-scrolling state.
+    #expect(ConfigTree.customScrollingCaption == "Gives this app its own scrolling speed and glide.")
 }
 
 @Test func anInheritedGestureOffersItsDirectionsWithoutWriting() throws {
