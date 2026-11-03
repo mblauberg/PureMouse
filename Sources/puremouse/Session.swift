@@ -27,6 +27,9 @@ final class Session {
     /// Called with each connection notification before the session acts on it; true when the daemon
     /// dealt with it (it replaced this session, or is quitting or paused), so the session does not.
     var onConnection: ((Report) -> Bool)?
+    /// Called after a configure succeeds while the identity is `unresolved`: the daemon reads it
+    /// again, and replaces this session with one keyed by the answer. Once per configure.
+    var resolveIdentity: ((Session) async -> Void)?
     let config: Config
     let environment: SessionEnvironment
     /// What applies where no app entry matches.
@@ -34,6 +37,9 @@ final class Session {
     /// Controls bound globally or in any app, all diverted; true for those diverted with raw
     /// motion because some scope binds them to a gesture.
     let bound: [UInt16: Bool]
+    /// Controls left native because every binding of theirs posts events and PureMouse cannot
+    /// (no Accessibility); the next process, started when it is granted, diverts them.
+    let needsAccessibility: Set<UInt16>
     /// Controls some app binds its own way, and whether any app sets the thumb wheel: only then
     /// is the app looked up, at a press of one of them or a thumb-wheel movement. Scroll bursts
     /// look it up when `appProfiles` is not empty.
@@ -173,13 +179,21 @@ final class Session {
         self.global = global
         let scopes = [global] + Array(config.apps.values)
         var bound: [UInt16: Bool] = [:]
+        // A binding that cannot be performed without permission to post events leaves its control
+        // native (`Config.Binding.isPerformable`); a control some scope can still act on is diverted.
+        var native: Set<UInt16> = []
         for scope in scopes {
             for (cid, binding) in scope.bindings where Self.isDivertable(cid, in: controls) {
+                guard binding.isPerformable(canPostEvents: environment.canPostEvents) else {
+                    native.insert(cid)
+                    continue
+                }
                 let isGesture = if case .gesture = binding { true } else { false }
                 bound[cid] = (bound[cid] ?? false) || (isGesture && controls[cid]?.supportsRawXY == true)
             }
         }
         self.bound = bound
+        needsAccessibility = native.subtracting(bound.keys)
         appButtons = config.apps.values.reduce(into: []) { $0.formUnion($1.buttons) }
         appThumbWheel = config.apps.values.contains { $0.setsThumbWheel }
         globalProfile = Self.profile(global, config)
@@ -204,6 +218,9 @@ final class Session {
         device.onEvent = { [weak self] in self?.handle($0) }
         if !appProfiles.isEmpty {
             scroll?.profileForBurst = { [weak self] in self?.profileUnderPointer() ?? ScrollEngine.Profile() }
+        }
+        if !needsAccessibility.isEmpty {
+            Log.info("\(name): no Accessibility permission; leaving \(needsAccessibility.sorted().map(ControlNames.describe).joined(separator: ", ")) native")
         }
         // Config is shared by every mouse, so a binding this one cannot take is expected: noted once.
         let unbindable = config.boundControls.sorted().filter { controls[$0]?.isDivertable != true }
@@ -380,6 +397,7 @@ final class Session {
                     let features = (1...255).compactMap { device.feature(at: UInt8($0)) }.sorted()
                         .map { String(format: "%04x", $0) }
                     Log.info("\(name): configured; features(PureMouse)=\(features.joined(separator: " "))")
+                    if identity.unresolved, !finished { await resolveIdentity?(self) }
                     return
                 } catch is CancellationError {
                     return

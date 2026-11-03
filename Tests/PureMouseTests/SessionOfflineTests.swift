@@ -5,9 +5,13 @@ import Testing
 
 @Suite(.quietLog) @MainActor
 struct SessionOfflineTests {
-    private func offline() async throws -> (SessionHarness, TestTime) {
+    /// `onReceiver`: the mouse is in a receiver slot, the only place a short 0x41 connection
+    /// notification comes from.
+    private func offline(onReceiver: Bool = false) async throws -> (SessionHarness, TestTime) {
         let clock = TestTime()
-        let h = try await SessionHarness(config: SessionHarness.config(#"{"buttons":{"back":"none"}}"#),
+        let fake = FakeDevice.mxMaster3S
+        if onReceiver { fake.onReceiver(slot: 1) }
+        let h = try await SessionHarness(fake, config: SessionHarness.config(#"{"buttons":{"back":"none"}}"#),
             environment: .init(canPostEvents: true, configureRetryDelay: .milliseconds(1), now: { clock.now }))
         h.fake.failures[.init(0x1B04, 3)] = .error(2)
         h.session.configure()
@@ -27,14 +31,16 @@ struct SessionOfflineTests {
 
     /// The mouse returns (0x41 link up) while the last configure attempt sleeps before giving up.
     @Test func linkUpDuringFinalRetryIsNotLost() async throws {
-        let h = try await SessionHarness(config: SessionHarness.config(#"{"buttons":{"back":"none"}}"#),
+        let fake = FakeDevice.mxMaster3S
+        fake.onReceiver(slot: 1)
+        let h = try await SessionHarness(fake, config: SessionHarness.config(#"{"buttons":{"back":"none"}}"#),
             environment: .init(canPostEvents: true, configureRetryDelay: .milliseconds(300)))
         defer { h.close() }
         h.fake.failures[.init(0x1B04, 3)] = .error(2)
         h.session.configure()
         try await eventually { h.fake.controlWrites(cid: 0x53).count >= 3 }
         h.fake.failures.removeAll()
-        h.session.handle(Report(reportID: .short, deviceIndex: directDeviceIndex, featureIndex: 0x41,
+        h.session.handle(Report(reportID: .short, deviceIndex: h.device.index, featureIndex: 0x41,
                                 function: 0, softwareID: 0, params: [0x00]))
         try await eventually { h.session.status.online && !h.session.isConfiguring }
         // Outlast the superseded task's sleep: its end must not undo or clear the new configure.
@@ -97,11 +103,11 @@ struct SessionOfflineTests {
     }
 
     @Test func linkDownNeverStartsAConfigure() async throws {
-        let (h, clock) = try await offline()
+        let (h, clock) = try await offline(onReceiver: true)
         defer { h.close() }
         clock.now += Session.offlineReconfigureGap
         h.fake.transport.sent.removeAll()
-        h.session.handle(Report(reportID: .short, deviceIndex: directDeviceIndex,
+        h.session.handle(Report(reportID: .short, deviceIndex: h.device.index,
             featureIndex: 0x41, function: 0, softwareID: 0, params: [0x40]))
         #expect(!h.session.isConfiguring && h.fake.transport.sent.isEmpty)
     }

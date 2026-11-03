@@ -2,9 +2,10 @@ import Foundation
 import HIDPP
 import PureMouseKit
 
-/// Who a newly found mouse is, read once when it is adopted: its device key (`Config.deviceKey`:
+/// Who a newly found mouse is, read when it is adopted: its device key (`Config.deviceKey`:
 /// the config's `devices` key and `Status.Device.model`), its unit ID and its kind. A read that
-/// fails leaves its field nil and never fails the adoption.
+/// fails leaves its field nil and never fails the adoption; a read that did not get an answer
+/// is `unresolved`, and is read again after a later configure (`Daemon.resolveIdentity`).
 struct Identification: Equatable, Sendable {
     /// `m` plus the 0x0003 model ID, else `p` plus the product ID. Nil when 0x0003 did not answer
     /// (a timeout), so a mouse is never taken for another model it might not be, and nil while
@@ -17,6 +18,10 @@ struct Identification: Equatable, Sendable {
     /// The 0x0003 unit ID in 8 lowercase hex digits; nil when absent or a placeholder.
     var unit: String?
     var kind: DeviceName.Kind?
+    /// 0x0003 did not answer (a timeout, a transport failure or a cancellation), as opposed to
+    /// answering with an error or without a usable model ID, which are final. Retryable state:
+    /// the key is not known, so the mouse has the top-level settings meanwhile.
+    var unresolved = false
 
     /// `kind` is the type the daemon already read to decide adoption. `productID` is the one the
     /// daemon knows for the endpoint (the interface's, or the receiver slot's), the key's
@@ -32,7 +37,9 @@ struct Identification: Equatable, Sendable {
         } catch where Session.isDeviceAnswer(error) {
             result.keyedByProduct = true
             result.deviceKey = Config.deviceKey(modelID: nil, productID: productID)
-        } catch {}
+        } catch {
+            result.unresolved = true
+        }
         return result
     }
 
