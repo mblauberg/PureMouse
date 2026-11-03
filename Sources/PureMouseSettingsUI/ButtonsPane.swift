@@ -233,9 +233,8 @@ struct ButtonsPane: View {
         let inherits = sameAsEverywhere != nil
         return ActionButton(
             action: isDirection && action == .standard ? .named("none") : action,
-            // A mouse's rows take "Same as All Mice" in its place: Kit has no value for "native on this
-            // mouse while All Mice binds the button" (see DeviceScopeTests).
-            allowsDefault: !isDirection && !inherits,
+            // On a mouse, Mouse Default is its own value ("default") beside "Same as All Mice".
+            allowsDefault: !isDirection,
             allowsGesture: !isDirection,
             isPresented: Binding(get: { presented == id }, set: { presented = $0 ? id : nil }),
             choose: { entry in choose(entry, for: target, current: action) },

@@ -104,7 +104,8 @@ extension ConfigTree {
             guard !Config.reservedControls.contains(cid) else { return false }
             binding = Self.binding(for: cid, in: buttons)?.value
         } else {
-            binding = buttons[name].flatMap { $0 is NSNull ? nil : $0 }
+            // A name Kit has no control for cannot be set to Mouse Default: it is skipped either way.
+            binding = buttons[name].flatMap { $0 is NSNull || Self.isNative($0) ? nil : $0 }
         }
         guard let binding else { return false }
         guard path.count >= 3 else { return true }
@@ -218,6 +219,11 @@ extension ConfigTree {
         return node is NSNull ? nil : node
     }
 
+    /// Whether `value` is `"default"` (`Config.Binding.nativeValue`): no binding, the mouse's own.
+    private static func isNative(_ value: Any?) -> Bool {
+        (value as? String) == Config.Binding.nativeValue
+    }
+
     /// What a gesture object looks like to the decoder: some keys, all of them directions.
     private static func isGestureShape(_ value: Any?) -> [String: Any]? {
         guard let object = value as? [String: Any], !object.isEmpty,
@@ -273,7 +279,9 @@ extension ConfigTree {
             guard !Config.reservedControls.contains(cid) else { return nil }
             let base = global.flatMap { Self.binding(for: cid, in: $0) }?.value
             if let top = own.flatMap({ Self.binding(for: cid, in: $0) })?.value {
-                if let top = Self.isGestureShape(top), let base = Self.isGestureShape(base) {
+                if Self.isNative(top) {
+                    binding = nil  // Mouse Default: the top level's binding is cleared
+                } else if let top = Self.isGestureShape(top), let base = Self.isGestureShape(base) {
                     binding = base.merging(top) { base, top in top is NSNull ? base : top }
                 } else {
                     binding = top
@@ -281,8 +289,9 @@ extension ConfigTree {
             } else {
                 binding = base
             }
+            if Self.isNative(binding) { binding = nil }  // "default" at the top level is no binding
         } else {
-            binding = [own?[name], global?[name]].compactMap { $0 }.first { !($0 is NSNull) }
+            binding = [own?[name], global?[name]].compactMap { $0 }.first { !($0 is NSNull) && !Self.isNative($0) }
         }
         guard let binding = Self.normalised(binding) else { return nil }
         guard rest.count > 1 else { return binding }

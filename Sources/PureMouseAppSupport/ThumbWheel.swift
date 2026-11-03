@@ -125,7 +125,7 @@ extension ButtonAction {
         case .keys(let spec): ["keys": spec]
         case .run(let command): ["run": command]
         case .haptic(let waveform): ["haptic": waveform]
-        case .standard, .gesture: "none"
+        case .standard, .mouseDefault, .gesture: "none"
         }
     }
 }

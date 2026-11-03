@@ -206,7 +206,7 @@ struct AppSheet: View {
         let isDirection = target.direction != nil
         return ActionButton(
             action: action,
-            allowsDefault: false,
+            allowsDefault: !isDirection,
             allowsGesture: !isDirection,
             isPresented: Binding(get: { presented == id }, set: { presented = $0 ? id : nil }),
             choose: { entry in choose(entry, for: target, current: action) },

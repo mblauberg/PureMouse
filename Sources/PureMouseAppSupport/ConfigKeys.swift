@@ -1,4 +1,5 @@
 import Foundation
+import PureMouseKit
 
 /// Config settings with meaning beyond one key.
 extension ConfigTree {
@@ -71,8 +72,10 @@ extension ConfigTree {
 
     /// The binding `scope` itself sets for a button (`.standard` when it sets none), not what
     /// applies there: for that, `resolved(["buttons", button], in:)`.
+    /// `"default"` at the top level is the same as no key, so it reads as `.standard` there.
     public func binding(_ button: String, in scope: ConfigScope = .global) -> ButtonAction {
-        ButtonAction(json: self[entryPrefix(for: scope) + ["buttons", buttonKey(button, in: scope)]])
+        let action = ButtonAction(json: self[entryPrefix(for: scope) + ["buttons", buttonKey(button, in: scope)]])
+        return action == .mouseDefault && scope == .global ? .standard : action
     }
 
     public func gestureBinding(_ button: String, _ direction: String, in scope: ConfigScope = .global) -> ButtonAction {
@@ -88,6 +91,9 @@ extension ConfigTree {
         let path = ["buttons", button]
         switch binding {
         case .standard: set(nil, at: path, in: scope)
+        // Native on a mouse or in an app while a wider scope binds the button; the top level has
+        // no wider scope, so there the key is just removed.
+        case .mouseDefault: set(scope == .global ? nil : Config.Binding.nativeValue, at: path, in: scope)
         case .named(let name): set(name, at: path, in: scope)
         case .keys(let spec): set(["keys": spec], at: path, in: scope)
         case .run(let command): set(["run": command], at: path, in: scope)
@@ -100,7 +106,9 @@ extension ConfigTree {
                 if ButtonAction(json: inherited) == .gesture { return }
                 before = inherited
             }
-            let click: Any = before.flatMap { $0 is String || $0 is [String: Any] ? $0 : nil } ?? "none"
+            // A mouse set to Mouse Default clicks natively; the gesture's click then does nothing.
+            let click: Any = before.flatMap { ButtonAction(json: $0) == .mouseDefault ? nil : $0 }
+                .flatMap { $0 is String || $0 is [String: Any] ? $0 : nil } ?? "none"
             set(["click": click], at: path, in: scope)
         }
     }
@@ -127,7 +135,7 @@ extension ConfigTree {
         case .keys(let spec): set(["keys": spec], at: path, in: scope)
         case .run(let command): set(["run": command], at: path, in: scope)
         case .haptic(let waveform): set(["haptic": waveform], at: path, in: scope)
-        case .gesture: break
+        case .gesture, .mouseDefault: break
         }
     }
 }

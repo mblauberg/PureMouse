@@ -4,7 +4,7 @@ import Foundation
 /// directions do something ("Click: Mission Control, 4 directions set.").
 public enum GestureSummary {
     public static func text(click: ButtonAction, directionsSet: Int) -> String {
-        let click = click == .standard ? ActionCatalog.label(for: "none") : click.label
+        let click = click == .standard || click == .mouseDefault ? ActionCatalog.label(for: "none") : click.label
         let directions = switch directionsSet {
         case 0: "no directions set"
         case 1: "1 direction set"

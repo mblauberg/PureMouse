@@ -57,7 +57,8 @@ extension ConfigTree {
 
     // MARK: Buttons
 
-    /// Binds a button in one app. `.standard` removes the app's key, so the global binding applies.
+    /// Binds a button in one app. `.standard` removes the app's key, so the global binding applies;
+    /// `.mouseDefault` writes `"default"`, so the button is native in the app whatever is global.
     /// `.gesture` keeps the app's gesture, or starts one whose click does what the button did
     /// there, so its object is never empty.
     public mutating func bindInApp(_ app: String, button: String, to binding: ButtonAction) {
@@ -69,12 +70,14 @@ extension ConfigTree {
         if case .gesture = self.binding(button, in: scope) { return }
         let path = scope.prefix + ["buttons", buttonKey(button, in: scope)]
         let click: Any
-        if let own = self[path], own is String || own is [String: Any] {
+        if self.binding(button, in: scope) == .mouseDefault {
+            click = "none"  // native in this app: the gesture's click then does nothing
+        } else if let own = self[path], own is String || own is [String: Any] {
             click = own
         } else {
             let global = ["buttons", buttonKey(button)]
             switch self.binding(button) {
-            case .standard: click = "none"
+            case .standard, .mouseDefault: click = "none"
             case .gesture: click = self[global + ["click"]] ?? "none"
             default: click = self[global] ?? "none"
             }
@@ -93,7 +96,7 @@ extension ConfigTree {
         case .standard:
             let others = (self[path] as? [String: Any])?.keys.filter { $0 != direction } ?? []
             set(nil, at: others.isEmpty ? path : path + [direction])
-        case .gesture:
+        case .gesture, .mouseDefault:
             break
         default:
             set(binding.json, at: path + [direction])

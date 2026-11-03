@@ -16,8 +16,9 @@ struct PickerEntry: Identifiable, Equatable {
     var symbol: String?
 
     /// The picker's entries, in order. Gesture directions get neither Mouse Default nor Hold and
-    /// Move. In an app, `inherited` (what applies elsewhere, and where from) adds the entry that
-    /// removes the app's own binding, worded by its source. `haptics`: whether to list the haptic waveforms (`ControlAvailability`).
+    /// Move. On a mouse or in an app, `inherited` (what applies elsewhere, and where from) adds the
+    /// entry that removes the own binding, worded by its source, and Mouse Default then writes
+    /// `"default"` as the scope's own value. `haptics`: whether to list the haptic waveforms (`ControlAvailability`).
     static func all(allowsDefault: Bool, allowsGesture: Bool, inherited: InheritedValue<String>? = nil,
                     haptics: Bool = true) -> [PickerEntry] {
         var entries: [PickerEntry] = []
@@ -26,7 +27,10 @@ struct PickerEntry: Identifiable, Equatable {
                                        kind: .set(.standard), symbol: "globe"))
         }
         if allowsDefault {
-            entries.append(PickerEntry(id: "default", label: ButtonAction.standard.label, group: nil, kind: .set(.standard)))
+            // Where something wider applies, Mouse Default is a value of its own ("default") and
+            // "Same as …" above is the entry that removes the key; at the top level they are one.
+            entries.append(PickerEntry(id: "default", label: ButtonAction.standard.label, group: nil,
+                                       kind: .set(inherited == nil ? .standard : .mouseDefault)))
         }
         entries.append(PickerEntry(id: "none", label: "Do Nothing", group: nil, kind: .set(.named("none")),
                                    symbol: ActionCatalog.symbol(for: "none")))

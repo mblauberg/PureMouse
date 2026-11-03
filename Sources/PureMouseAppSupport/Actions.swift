@@ -3,8 +3,13 @@ import PureMouseKit
 
 /// What a button (or a gesture direction) is bound to, as the config JSON says.
 public enum ButtonAction: Equatable, Sendable {
-    /// No key: the button works as the mouse does without PureMouse.
+    /// No key: the button works as the mouse does without PureMouse; on a mouse or in an app, the
+    /// wider scope's binding applies.
     case standard
+    /// The key `"default"` (`Config.Binding.nativeValue`) on a mouse or in an app: the button works
+    /// as the mouse does without PureMouse there, whatever the wider scope binds. At the top
+    /// level it is the same as `.standard`, and is never written.
+    case mouseDefault
     case named(String)
     case keys(String)
     case run(String)
@@ -14,7 +19,7 @@ public enum ButtonAction: Equatable, Sendable {
     public init(json: Any?) {
         switch json {
         case nil: self = .standard
-        case let name as String: self = .named(name)
+        case let name as String: self = name == Config.Binding.nativeValue ? .mouseDefault : .named(name)
         case let object as [String: Any]:
             if let spec = object["keys"] as? String {
                 self = .keys(spec)
@@ -34,7 +39,7 @@ public enum ButtonAction: Equatable, Sendable {
     /// The label on a button's pop-up.
     public var label: String {
         switch self {
-        case .standard: "Mouse Default"
+        case .standard, .mouseDefault: "Mouse Default"
         case .named(let name): ActionCatalog.label(for: name)
         case .keys(let spec): Shortcut.display(spec) ?? spec
         case .run(let command): command.isEmpty ? "Run Command" : command
