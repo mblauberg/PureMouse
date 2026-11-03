@@ -574,7 +574,8 @@ final class Daemon {
     /// Routes an endpoint's events to the daemon, as when no session owns it.
     private func watch(_ device: HIDPPDevice) {
         device.onEvent = { [weak self, weak device] report in
-            guard let self, let device, report.featureIndex == Receiver.connectionNotification else { return }
+            guard let self, let device,
+                  Receiver.isConnectionNotification(report, onReceiver: device.interface.isReceiver) else { return }
             self.slotAnnounced(device, report)
         }
     }
@@ -625,6 +626,33 @@ final class Daemon {
         let device = replaceEndpoint(session.device)
         if Receiver.isLinkEstablished(report) { Task { await adoptRetrying(device) } }
         return true
+    }
+
+    /// Reads again the identity of a session whose 0x0003 read got no answer, once after a
+    /// configure that succeeded (`Session.resolveIdentity`). An answer, an error among them, ends
+    /// it and replaces the session with one on the settings for the key it gives, as a slot
+    /// announcement does; no answer leaves it for the next configure or reload. No timer, no loop.
+    private func resolveIdentity(of session: Session) async {
+        let key = Key(session.device)
+        var identity = await Identification.read(session.device, kind: session.kind, productID: productID(of: session.device))
+        guard !identity.unresolved, !session.finished, accepting, sessions[key] === session else { return }
+        // The slot may have announced its product while we were asking.
+        identity = current(identity, on: session.device)
+        Log.info("\(session.name): model=\(identity.deviceKey ?? "unknown") read after the first attempt failed")
+        replace(session, at: key, identity: identity, keepingLiveDPI: Self.keepsLiveDPI(
+            config.forDevice(session.deviceKey), config.forDevice(identity.deviceKey)))
+    }
+
+    /// `identity` completed with the product its slot has announced since it was read, so an
+    /// answer that arrived before the announcement is not left without its key.
+    private func current(_ identity: Identification, on device: HIDPPDevice) -> Identification {
+        productID(of: device).map { identity.keyed(byProduct: $0) } ?? identity
+    }
+
+    /// The product ID `Identification` keys by when the mouse has no model ID: the slot's for a
+    /// receiver, else the interface's.
+    private func productID(of device: HIDPPDevice) -> UInt16? {
+        device.interface.isReceiver ? slotProducts[Key(device)] : UInt16(exactly: device.interface.productID)
     }
 
     /// Records the wireless product ID announced in a slot; true when it names a different device
@@ -722,14 +750,14 @@ final class Daemon {
         } catch {
             return .noAnswer
         }
-        let pid: UInt16? = device.interface.isReceiver
-            ? slotProducts[key] : UInt16(exactly: device.interface.productID)
+        let pid = productID(of: device)
         let name = (try? await DeviceName.get(device)).flatMap { $0.isEmpty ? nil : $0 } ?? "device \(device.index)"
-        let identity = await Identification.read(device, kind: kind, productID: pid)
+        var identity = await Identification.read(device, kind: kind, productID: pid)
         let pidLabel = pid.map { String(format: "0x%04x", $0) } ?? "unknown"
         // The device may have gone, or the daemon paused or begun quitting, while we were asking.
         guard accepting else { return .stopped }
         guard endpoints[key] === device, sessions[key] == nil else { return .noAnswer }
+        identity = current(identity, on: device)
         Log.info("adopting \(name) pid=\(pidLabel) model=\(identity.deviceKey ?? "unknown") on \(device.interface.product) index \(device.index)")
         let session = Session(device: device, name: name, identity: identity, id: deviceID(key), controls: controls,
                               config: config.forDevice(identity.deviceKey),
@@ -758,6 +786,7 @@ final class Daemon {
     private func add(_ session: Session, _ key: Key) {
         sessions[key] = session
         session.onChange = { [weak self] in self?.statusChanged() }
+        session.resolveIdentity = { [weak self] in await self?.resolveIdentity(of: $0) }
         if session.device.interface.isReceiver {
             session.onConnection = { [weak self, unowned session] in self?.sessionSlotAnnounced(session, $0) ?? false }
         }

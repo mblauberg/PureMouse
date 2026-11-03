@@ -2,6 +2,35 @@ import CoreGraphics
 import Foundation
 import PureMouseKit
 
+extension Action {
+    /// Whether performing it posts synthetic events (clicks, keys, scrolls, swipes), which needs
+    /// Accessibility. Device actions, `run` (a shell command) and `none` do not.
+    var postsEvents: Bool {
+        switch self {
+        case .none, .toggleScrollMode, .cycleDPI, .haptic, .run: false
+        default: true
+        }
+    }
+}
+
+extension Config.Binding {
+    /// Whether a press of a control bound this way can do something now. Without permission to
+    /// post events, a posted action cannot, so its control stays native instead of going dead.
+    /// A gesture needs one direction that can act: otherwise its raw motion would only freeze the
+    /// pointer.
+    func isPerformable(canPostEvents: Bool) -> Bool {
+        if canPostEvents { return true }
+        switch self {
+        case .action(let action):
+            return !action.postsEvents
+        case .gesture(let gesture):
+            return [gesture.click, gesture.up, gesture.down, gesture.left, gesture.right].contains {
+                if case .none = $0 { false } else { !$0.postsEvents }
+            }
+        }
+    }
+}
+
 /// Performs actions that only touch the system (no device state).
 @MainActor
 enum SystemActions {
