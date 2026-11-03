@@ -22,12 +22,6 @@ public struct ConfigTree {
         root = object
     }
 
-    /// Objects that mean something even when empty: `smoothScroll: {}` turns smooth scrolling on,
-    /// at the top level and in a device entry (`devices.<key>.smoothScroll`).
-    static func keptWhenEmpty(_ path: [String]) -> Bool {
-        path == ["smoothScroll"] || (path.count == 3 && path[0] == "devices" && path[2] == "smoothScroll")
-    }
-
     public subscript(path: [String]) -> Any? {
         var node: Any = root
         for key in path {
@@ -40,8 +34,8 @@ public struct ConfigTree {
     public func contains(_ path: [String]) -> Bool { self[path] != nil }
 
     /// Sets the value at `path`, or removes it when `value` is nil. Intermediate values that are
-    /// not objects are replaced by objects. Objects left empty by a removal are pruned, except
-    /// those `keptWhenEmpty` names. Removing a key that is not there changes nothing, so it cannot
+    /// not objects are replaced by objects. Objects left empty by a removal are pruned.
+    /// Removing a key that is not there changes nothing, so it cannot
     /// prune an empty object it passes through (which `changes(to:)` would then record).
     public mutating func set(_ value: Any?, at path: [String]) {
         guard !path.isEmpty, value != nil || contains(path) else { return }
@@ -59,7 +53,7 @@ public struct ConfigTree {
         let child = dict[key] as? [String: Any]
         if child == nil, value == nil { return dict }
         let updated = setting(value, at: path.dropFirst(), in: child ?? [:], prefix: prefix + [key])
-        if updated.isEmpty, !keptWhenEmpty(prefix + [key]) {
+        if updated.isEmpty {
             dict[key] = nil
         } else {
             dict[key] = updated
@@ -113,8 +107,7 @@ public struct ConfigTree {
     /// onto a newer tree, they change only those keys, so a hand edit elsewhere survives. A new
     /// object is added key by key too, so it merges into one a hand edit added meanwhile (an empty
     /// one is set whole). An object that disappeared is removed key by key (it may only have been
-    /// pruned as empty), except one that means something when empty (`keptWhenEmpty`) or that was
-    /// empty, which is removed whole. A device entry that disappeared leaves its `name` out of
+    /// pruned as empty), except one that was empty, which is removed whole. A device entry that disappeared leaves its `name` out of
     /// that: `apply` removes the name with the entry's last other key, so an entry a hand edit gave
     /// other keys meanwhile keeps its name.
     func changes(to after: ConfigTree) -> [Change] {
@@ -144,7 +137,7 @@ public struct ConfigTree {
             switch (before[key], after[key]) {
             case let (old as [String: Any], new as [String: Any]):
                 diff(old, new, path: path, vanishing: false, into: &out)
-            case let (old as [String: Any], nil) where !old.isEmpty && !keptWhenEmpty(path):
+            case let (old as [String: Any], nil) where !old.isEmpty:
                 diff(old, [:], path: path, vanishing: path.count == 2 && path[0] == "devices" && old.keys.contains { $0 != "name" }, into: &out)
             case let (nil, new as [String: Any]) where !new.isEmpty:
                 diff([:], new, path: path, vanishing: false, into: &out)

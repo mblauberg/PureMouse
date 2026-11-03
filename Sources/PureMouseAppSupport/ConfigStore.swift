@@ -5,9 +5,14 @@ import PureMouseKit
 /// The config file as Settings and the menu edit it: the tree (re-read when the file or its
 /// directory changes), edits not yet saved, and the last config that loaded. No timers and no
 /// polling: file and directory sources wake it, and a reload compares bytes.
+///
+/// `config` is the tree the daemon would decode: the file laid over the default set
+/// (`ConfigTree.layered()`), so a missing file, `{}` and Reset All Settings all read as the
+/// defaults. An edit is saved as the keys it changes, so a setting left at its default stays out
+/// of the file.
 @MainActor @Observable
 public final class ConfigStore {
-    public private(set) var config = ConfigTree()
+    public private(set) var config = ConfigTree.defaults
     /// Why the file on disk cannot be used (unreadable, not JSON, or rejected by the decoder).
     private(set) var configProblem: String?
     /// Why the last change could not be saved.
@@ -63,9 +68,9 @@ public final class ConfigStore {
                 if diskBytes != nil { flush() }
                 return
             }
-            // No file: the daemon runs with every default.
-            if diskBytes != nil || configProblem != nil || !config.root.isEmpty {
-                config = ConfigTree()
+            // No file: the daemon runs with the default set.
+            if diskBytes != nil || configProblem != nil || JSON.encode(config.root) != JSON.encode(ConfigTree.defaults.root) {
+                config = ConfigTree.defaults
                 configProblem = nil
                 diskBytes = nil
                 lastGood = Data("{}\n".utf8)
@@ -83,7 +88,7 @@ public final class ConfigStore {
             return
         }
         diskBytes = data
-        if let tree = try? ConfigTree(data: data) { config = tree }
+        if let tree = try? ConfigTree(data: data) { config = tree.layered() }
         do {
             try ConfigCheck.validate(data)
             configProblem = nil
@@ -105,7 +110,7 @@ public final class ConfigStore {
         var tree = config
         change(&tree)
         pendingChanges += config.changes(to: tree)
-        config = tree
+        config = tree.layered()
         if debounce {
             cancelPendingWrite?()
             cancelPendingWrite = clock.after(Self.debounce) { [weak self] in self?.flush() }
@@ -125,7 +130,7 @@ public final class ConfigStore {
         pendingChanges = []
         do {
             let saved = try file.save(changes)
-            config = saved.tree
+            config = saved.tree.layered()
             diskBytes = saved.data
             if let data = saved.data { lastGood = data }
             writeError = nil
@@ -138,7 +143,7 @@ public final class ConfigStore {
         }
     }
 
-    /// Replaces the whole file with `{}` (every setting back to the mouse's own), keeping the
+    /// Replaces the whole file with `{}` (every setting back to the default set), keeping the
     /// previous file as `config.json.bak` (`ConfigFile.replace`).
     public func resetAll() {
         replace(with: ConfigTree().data())
@@ -159,7 +164,7 @@ public final class ConfigStore {
         do {
             guard let data = try file.createIfMissing() else { return }
             if pendingChanges.isEmpty {
-                config = ConfigTree()
+                config = ConfigTree.defaults
                 configProblem = nil
                 lastGood = data
             }
@@ -178,7 +183,7 @@ public final class ConfigStore {
         pendingChanges = []
         do {
             try file.replace(with: data, keepingBackup: true)
-            config = tree
+            config = tree.layered()
             configProblem = nil
             diskBytes = data
             lastGood = data

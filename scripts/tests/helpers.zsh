@@ -47,13 +47,12 @@ menu_of() {
 
 # script_repo: a git repository in $tmp/repo holding a copy of the scripts (not the tests), so a
 # test can swap one for a stub, run another from a tagged commit and leave this checkout alone.
-# The assets and config.example.json are linked in for assemble_bundle. Prints its path.
+# The assets are linked in for assemble_bundle. Prints its path.
 script_repo() {
     local repo=$tmp/repo
     mkdir -p $repo/scripts
     cp $root/scripts/*.(sh|zsh|env) $repo/scripts/
     ln -s $root/assets $repo/assets
-    ln -s $root/config.example.json $repo/config.example.json
     print -r -- $repo
 }
 

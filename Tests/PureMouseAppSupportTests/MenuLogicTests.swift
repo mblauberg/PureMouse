@@ -23,11 +23,11 @@ private func text(_ tree: ConfigTree) -> String { String(decoding: tree.data(), 
     #expect(config.root.isEmpty)
 }
 
-@Test func emptySmoothScrollIsKept() throws {
+@Test func smoothScrollGoesWithItsLastKeyAndStaysOn() throws {
     var config = try tree(#"{"smoothScroll": {"speed": 2}}"#)
     config.set(nil, at: ["smoothScroll", "speed"])
-    #expect(config.contains(["smoothScroll"]))
-    #expect(config.smoothScrollEnabled)
+    #expect(!config.contains(["smoothScroll"]))
+    #expect(config.smoothScrollEnabled)  // on is the default
 }
 
 @Test func removingAMissingPathChangesNothing() throws {
@@ -132,17 +132,30 @@ private func text(_ tree: ConfigTree) -> String { String(decoding: tree.data(), 
     #expect(config.binding("gesture") == .gesture)
     config.bind("gesture", direction: "up", to: .named("spaceLeft"))
     config.bind("gesture", direction: "click", to: .standard)
-    #expect(config.self[["buttons", "gesture", "click"]] == nil)
+    #expect(config.string(["buttons", "gesture", "click"]) == "none")  // the default set sets it, so it is written
     config.bind("gesture", direction: "up", to: .standard)
     #expect(config.string(["buttons", "gesture", "up"]) == "none")
     #expect(config.binding("gesture") == .gesture)
 }
 
-@Test func bindingDefaultRemovesTheKey() {
+@Test func bindingDefaultRemovesTheKeyWhereTheDefaultSetBindsNothing() {
+    var config = ConfigTree()
+    config.bind("middle", to: .keys("cmd+["))
+    #expect(config.binding("middle") == .keys("cmd+["))
+    config.bind("middle", to: .standard)
+    #expect(config.root.isEmpty)
+}
+
+@Test func bindingDefaultWritesDefaultWhereTheDefaultSetBinds() {
     var config = ConfigTree()
     config.bind("back", to: .keys("cmd+["))
-    #expect(config.binding("back") == .keys("cmd+["))
     config.bind("back", to: .standard)
+    #expect(config.root as NSDictionary == ["buttons": ["back": "default"]] as NSDictionary)
+    #expect(config.binding("back") == .standard)
+    // A binding over it replaces it, and Restore Defaults removes the key.
+    config.bind("back", to: .named("mute"))
+    #expect(config.string(["buttons", "back"]) == "mute")
+    config.restoreButtonDefaults()
     #expect(config.root.isEmpty)
 }
 
@@ -284,9 +297,11 @@ private func mouse(_ id: String, online: Bool, dpi: Int?, steps: [Int] = []) -> 
 
 @Test func smoothScrollToggleKeepsTuning() throws {
     var config = ConfigTree()
-    #expect(!config.smoothScrollEnabled)
+    #expect(config.smoothScrollEnabled)  // on in the default set
+    config.smoothScrollEnabled = false
+    #expect(config.bool(["smoothScroll", "enabled"]) == false)
     config.smoothScrollEnabled = true
-    #expect(text(config).contains(#""smoothScroll": {}"#))
+    #expect(config.root.isEmpty)  // on is the default, so the key goes
 
     config = try tree(#"{"smoothScroll": {"speed": 1.5}}"#)
     config.smoothScrollEnabled = false
@@ -334,7 +349,7 @@ private func mouse(_ id: String, online: Bool, dpi: Int?, steps: [Int] = []) -> 
     // Meanwhile the file gained a binding for forward and a new speed, and back was rebound.
     var fresh = try tree(#"{"buttons": {"back": "appExpose", "forward": "showDesktop"}, "dpi": 800, "smoothScroll": {"speed": 2}}"#)
     fresh.apply(changes)
-    #expect(fresh[["buttons", "back"]] == nil)
+    #expect(fresh.string(["buttons", "back"]) == "default")  // Mouse Default over the default set's binding
     #expect(fresh.string(["buttons", "forward"]) == "showDesktop")
     #expect(fresh.int(["dpi"]) == 1600)
     #expect(fresh.double(["smoothScroll", "speed"]) == 2)
@@ -359,7 +374,9 @@ private func mouse(_ id: String, online: Bool, dpi: Int?, steps: [Int] = []) -> 
     #expect(config.string(["buttons", "0x0053"]) == "showDesktop")
     #expect(config.binding("0x00c5") == .named("appExpose"))
     config.bind("back", to: .standard)
-    #expect((config[["buttons"]] as? [String: Any])?.keys.sorted() == ["c5"])
+    // Every spelling goes; the default set binds back, so Mouse Default is written under its name.
+    #expect((config[["buttons"]] as? [String: Any])?.keys.sorted() == ["back", "c5"])
+    #expect(config.string(["buttons", "back"]) == "default")
 }
 
 @Test func otherControlsSkipNamedOnesAndDuplicates() {

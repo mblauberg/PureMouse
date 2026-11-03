@@ -114,6 +114,11 @@ Each level has one mechanism, and each label says what it reveals.
 - No sheet opens from a sheet; inside a sheet, use disclosures, and an editor that is a sheet
   elsewhere (keyboard shortcut, shell command) opens as a popover anchored to its row.
 - Every advanced control has a safe default that the pane's Restore Defaults covers.
+- **Restore Defaults** returns the pane's own keys to the one default set
+  ([docs/configuration.md#defaults](configuration.md#defaults)), which a first run, Reset All
+  Settings and `{}` also give: Scrolling's leaves smooth scrolling on at Balanced, Buttons' leaves
+  Back, Forward and the gesture bound as the set says, Pointer's leaves the mouse's own DPI. A
+  pane never offers a different "default" of its own; Feel shows Balanced on a fresh config.
 - **Hide or dim.** Dim a row when a switch above turns its feature off. Hide rows that do not apply
   to the current mode or mouse. A control is hidden for the mouse only when the mice it describes (the chosen mouse; for All Mice
   every known mouse, once all are connected), online with PureMouse running, report every capability

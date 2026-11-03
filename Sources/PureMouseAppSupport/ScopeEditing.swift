@@ -28,9 +28,9 @@ extension ConfigTree {
 
     /// Whether the config holds a value at `path` in `scope`, which keeps a control shown for a mouse
     /// that lacks it (`ControlAvailability`). A mouse counts only its own value: one All Mice sets
-    /// is not a reason to show a control the mouse does not have.
+    /// is not a reason to show a control the mouse does not have, nor is one the default set gives.
     public func holds(_ path: [String], in scope: ConfigScope) -> Bool {
-        scope.deviceKey == nil ? contains(path) : isOverridden(path, in: scope)
+        scope.deviceKey == nil ? holdsBeyondDefaults(path) : isOverridden(path, in: scope)
     }
 
     /// A number at `path` as it applies in `scope`, or `fallback`.
@@ -47,23 +47,21 @@ extension ConfigTree {
 
     // MARK: Smooth scrolling
 
-    /// Smooth scrolling as it applies in `scope`. A device's `smoothScroll` turns it on where the
-    /// top level has none, unless it says `enabled: false`.
+    /// Smooth scrolling as it applies in `scope`: on unless the mouse or All Mice says
+    /// `enabled: false` (the default set has it on).
     public func smoothScrollEnabled(in scope: ConfigScope) -> Bool {
         guard scope.deviceKey != nil else { return smoothScrollEnabled }
-        return resolved(["smoothScroll"], in: scope) != nil && resolvedBool(["smoothScroll", "enabled"], in: scope) != false
+        return resolvedBool(["smoothScroll", "enabled"], in: scope) != false
     }
 
-    /// What the mouse itself says about smooth scrolling: its `enabled`, or on when it has a
-    /// `smoothScroll` and the top level has none. nil leaves it to All Mice.
+    /// What the mouse itself says about smooth scrolling: its `enabled`. nil leaves it to All Mice.
     public func smoothScrollOwn(in scope: ConfigScope) -> Bool? {
         guard scope.deviceKey != nil else { return smoothScrollEnabled }
-        if isOverridden(["smoothScroll", "enabled"], in: scope) { return resolvedBool(["smoothScroll", "enabled"], in: scope) }
-        return !contains(["smoothScroll"]) && isOverridden(["smoothScroll"], in: scope) ? true : nil
+        return isOverridden(["smoothScroll", "enabled"], in: scope) ? resolvedBool(["smoothScroll", "enabled"], in: scope) : nil
     }
 
-    /// Sets smooth scrolling in `scope`; nil (a mouse only) gives it back to All Mice. With the top
-    /// level off, that removes the mouse's whole `smoothScroll`, since one left there turns it on.
+    /// Sets smooth scrolling in `scope`; nil (a mouse only) gives it back to All Mice by removing
+    /// the mouse's `enabled`, and its `smoothScroll` when that leaves it empty.
     public mutating func setSmoothScroll(_ on: Bool?, in scope: ConfigScope) {
         guard scope.deviceKey != nil else {
             if let on { smoothScrollEnabled = on }
@@ -71,14 +69,12 @@ extension ConfigTree {
         }
         if let on {
             set(on, at: ["smoothScroll", "enabled"], in: scope)
-        } else if contains(["smoothScroll"]) {
+        } else {
             set(nil, at: ["smoothScroll", "enabled"], in: scope)
             // What is left empty says nothing next to the top level's own `smoothScroll`.
             if (self[entryPrefix(for: scope) + ["smoothScroll"]] as? [String: Any])?.isEmpty == true {
                 set(nil, at: ["smoothScroll"], in: scope)
             }
-        } else {
-            set(nil, at: ["smoothScroll"], in: scope)
         }
     }
 
@@ -124,7 +120,8 @@ extension ConfigTree {
 
     // MARK: Restore Defaults
 
-    /// Restore Defaults on Pointer: `dpi` and `dpiPresets` in `scope`. A mouse's keep its `name`.
+    /// Restore Defaults on Pointer: `dpi` and `dpiPresets` in `scope`, which the default set leaves
+    /// unset. A mouse's keep its `name`.
     public mutating func restorePointerDefaults(in scope: ConfigScope = .global) {
         for key in ["dpi", "dpiPresets"] { set(nil, at: [key], in: scope) }
     }

@@ -66,7 +66,6 @@ private let installedExecutable = URL(fileURLWithPath: "/Applications/PureMouse.
 private final class Rig: @unchecked Sendable {
     let service = FakeLoginService()
     let directory = FileManager.default.temporaryDirectory.appending(path: "pm-login-\(UUID().uuidString)")
-    var seeded = 0
     var menuIsCaller = false
     /// Settings requests made, and apps opened with their attempts, in order with the service's calls.
     var requests = 0
@@ -98,7 +97,7 @@ private final class Rig: @unchecked Sendable {
     lazy var item = LoginItem(service: service, host: .init(
         executable: executable, menuApp: menuApp, hiddenMarker: directory.appending(path: Companion.menuHiddenName),
         lockFile: directory.appending(path: "lifecycle.lock"), lockTimeout: lockTimeout,
-        calledFromMenu: { [unowned self] _ in menuIsCaller }, seedConfig: { [unowned self] in seeded += 1 },
+        calledFromMenu: { [unowned self] _ in menuIsCaller },
         settingsApp: settingsApp,
         requestSettings: { [unowned self] in requests += 1; pending = true; quitStamp = false; service.calls.append("request settings") },
         requestPending: { [unowned self] in pending },
@@ -130,13 +129,21 @@ private final class Rig: @unchecked Sendable {
 // MARK: - Ordering
 
 @Suite struct LoginItemTests {
+    /// A first register leaves no config behind: a missing file is the default set.
+    @Test func registerAndLoginOnWriteNoConfig() throws {
+        let rig = Rig()
+        _ = try rig.item.register()
+        _ = try rig.item.loginOn()
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: rig.directory.path)) ?? []
+        #expect(!names.contains { $0.hasPrefix("config") })
+    }
+
     @Test func registerRegistersTheDaemonBeforeTheMenu() throws {
         let rig = Rig()
         let outcome = try rig.item.register()
         #expect(rig.service.calls == ["stop daemon", "register daemon", "start daemon",
                                       "stop menu", "register menu", "start menu"])
         #expect(outcome == "PureMouse is running and will start at login.")
-        #expect(rig.seeded == 1)
         #expect(rig.service.registeredAt == [.daemon: installedExecutable, .menu: appURL])
         #expect(rig.service.startedAt == [.daemon: installedExecutable, .menu: appURL])
         #expect(rig.service.running == [.daemon, .menu])
@@ -342,7 +349,6 @@ private final class Rig: @unchecked Sendable {
         #expect(throws: LoginItem.Failure.notInBundle) { try rig.item.showMenu(false) }
         #expect(throws: LoginItem.Failure.notInBundle) { try rig.item.showMenu(true) }
         #expect(rig.service.calls.isEmpty)
-        #expect(rig.seeded == 0)
         #expect(!rig.hidden)
         #expect(!FileManager.default.fileExists(atPath: rig.item.host.lockFile.path))
     }

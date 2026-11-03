@@ -14,7 +14,7 @@ struct ButtonsPane: View {
     @State private var showOthers = false
     @State private var showingAdvanced = false
 
-    static let restoreMessage = "Buttons and gestures return to the mouse's defaults. App settings don't change."
+    static let restoreMessage = "Buttons and gestures return to PureMouse's defaults. App settings don't change."
 
     /// What Restore Defaults says for one mouse: its own values go, and it follows All Mice.
     static func restoreMessage(for mouse: String) -> String {

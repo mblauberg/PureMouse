@@ -40,8 +40,6 @@ struct LoginItem {
         var lockTimeout: TimeInterval
         /// Whether this process was started by the menu bar app whose executable is given.
         var calledFromMenu: (URL) -> Bool
-        /// Copies the bundled example config unless one is there.
-        var seedConfig: () -> Void
         /// The bundled Settings helper, absent from builds that do not include it.
         var settingsApp: URL?
         /// Asks for Settings to open: writes the request (`SettingsRequest`) and rings the doorbell,
@@ -61,7 +59,7 @@ struct LoginItem {
             Host(executable: LoginItem.liveExecutable, menuApp: LoginItem.menuApp,
                  hiddenMarker: Companion.directory.appending(path: Companion.menuHiddenName),
                  lockFile: FileLock.url(for: Companion.directory.appending(path: "lifecycle")), lockTimeout: 30,
-                 calledFromMenu: LoginItem.parentIsMenu, seedConfig: LoginItem.seedConfig,
+                 calledFromMenu: LoginItem.parentIsMenu,
                  settingsApp: LoginItem.settingsApp, requestSettings: LoginItem.requestSettings,
                  requestPending: { FileManager.default.fileExists(atPath: Companion.showSettingsURL.path) },
                  quitStamped: { SettingsRequest.quitUnderWay() },
@@ -94,12 +92,11 @@ struct LoginItem {
 
     // MARK: Commands
 
-    /// Installs and starts the agents for this copy of the app (the menu's unless hidden), first
-    /// giving the user a config to edit if they have none. Agents already running (an older or
+    /// Installs and starts the agents for this copy of the app (the menu's unless hidden). It writes
+    /// no config: a missing one means the default set. Agents already running (an older or
     /// moved copy) are stopped first. Returns a sentence describing the outcome.
     func register() throws -> String {
         try exclusive { executable in
-            host.seedConfig()
             let restarting = try service.stop(.daemon)
             try service.register(.daemon, at: executable)
             try service.start(.daemon, at: executable)
@@ -139,7 +136,6 @@ struct LoginItem {
     /// restarting anything now.
     func loginOn() throws -> String {
         try exclusive { executable in
-            host.seedConfig()
             try service.register(.daemon, at: executable)
             if let app = shownMenuApp {
                 try service.register(.menu, at: app)
@@ -311,16 +307,6 @@ struct LoginItem {
         guard length > 0 else { return false }
         let parent = URL(fileURLWithPath: String(decoding: buffer.prefix(length), as: UTF8.self)).resolvingSymlinksInPath()
         return parent == Job.menuExecutable(in: app).resolvingSymlinksInPath()
-    }
-
-    /// Copies the bundled example to `Config.defaultURL` unless a config is already there.
-    private static func seedConfig() {
-        let target = Config.defaultURL
-        guard !FileManager.default.fileExists(atPath: target.path),
-              let example = Bundle.main.url(forResource: "config.example", withExtension: "json") else { return }
-        try? FileManager.default.createDirectory(at: target.deletingLastPathComponent(),
-                                                 withIntermediateDirectories: true)
-        try? FileManager.default.copyItem(at: example, to: target)
     }
 
     /// Shows a system alert and waits for it to be dismissed. CoreFoundation's user notifications

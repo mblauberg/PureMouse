@@ -200,7 +200,7 @@ assemble_bundle() {
     rm -rf $app
     mkdir -p $app/Contents/{MacOS,Resources}
     cp $bin/puremouse $app/Contents/MacOS/puremouse
-    cp $root/config.example.json $root/assets/{Assets.car,AppIcon.icns} $app/Contents/Resources/
+    cp $root/assets/{Assets.car,AppIcon.icns} $app/Contents/Resources/
     write_info_plist $app/Contents/Info.plist $label puremouse $version $build daemon
 
     make_menu_bundle $bin/$(component_executable "$(menu_component)") $menu_app $menu_label $version $build

@@ -115,7 +115,7 @@ final class Daemon {
     init(configURL: URL, environment: SessionEnvironment = .live) {
         self.configURL = configURL
         self.environment = environment
-        config = .empty
+        config = .defaults
         if !loadConfig() {
             // Stay up with nothing configured rather than crash-loop under launchd; fixing the
             // file reloads it.
@@ -138,6 +138,8 @@ final class Daemon {
         }
     }
 
+    /// The file's bytes, or the default set's when there is no file: a new install has none, and
+    /// that is the defaults, not an error. A file that exists but cannot be read still fails.
     private func readConfig() throws -> Data {
         do {
             let data = try Data(contentsOf: configURL)
@@ -145,6 +147,9 @@ final class Daemon {
             return data
         } catch {
             configBytes = nil
+            if !FileManager.default.fileExists(atPath: configURL.path) {
+                return Data(Config.defaultSetJSON.utf8)
+            }
             throw error
         }
     }

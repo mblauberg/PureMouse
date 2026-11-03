@@ -60,8 +60,7 @@ one. This file covers how to work on it safely.
   API goes inside `#if compiler(>=6.4)`. Never pass a method as a SwiftUI closure argument
   (`Binding(get:set: select)`): Swift 6.3 crashes in IRGen on its `@isolated(any)` thunk, so write
   `set: { select($0) }`.
-- The user's live config is `~/.config/puremouse/config.json`; keep `config.example.json` in step
-  with it (its test checks shape, not values). Config changes apply on save (`ConfigWatcher`
+- The user's live config is `~/.config/puremouse/config.json`. Config changes apply on save (`ConfigWatcher`
   watches the file and its directory, reloading when the bytes change) or with
   `launchctl kill HUP gui/$UID/io.github.mblauberg.puremouse`, no rebuild. Never edit the live
   config to test: run a dev daemon against a copy.

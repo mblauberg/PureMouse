@@ -25,7 +25,7 @@ struct ConfigFileBackupTests {
         store.resetAll()
         #expect(try sandbox.read(sandbox.backup) == previous)
         #expect(try Data(contentsOf: sandbox.config) == empty)
-        #expect(store.config.root.isEmpty)
+        #expect(store.config.root as NSDictionary == ConfigTree.defaults.root as NSDictionary)
         #expect(store.writeError == nil)
     }
 

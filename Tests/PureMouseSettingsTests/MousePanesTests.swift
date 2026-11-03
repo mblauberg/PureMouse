@@ -139,9 +139,9 @@ import Testing
     }
 
     @MainActor @Test func restoreDefaultsAsksFirstOnBothSegments() throws {
-        #expect(ButtonsPane.restoreMessage == "Buttons and gestures return to the mouse's defaults. App settings don't change.")
+        #expect(ButtonsPane.restoreMessage == "Buttons and gestures return to PureMouse's defaults. App settings don't change.")
         #expect(ScrollingPane.restoreMessage
-            == "Scrolling and thumb wheel settings return to the mouse's defaults. App settings don't change.")
+            == "Scrolling and thumb wheel settings return to PureMouse's defaults. App settings don't change.")
         for (file, restore) in [("ButtonsPane.swift", "restoreButtonDefaults(in:"), ("ScrollingPane.swift", "restoreScrollingDefaults(in:")] {
             let text = try Self.source(file)
             // The only call is PaneFooter's, which runs it from its confirmation's button.

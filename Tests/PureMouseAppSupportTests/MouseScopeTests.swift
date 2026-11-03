@@ -225,13 +225,13 @@ private func makeModel(config: String = "{}", devices: [Status.Device], defaults
     config.setSmoothScroll(nil, in: scope(mx))
     #expect(config.smoothScrollOwn(in: scope(mx)) == nil && !config.smoothScrollEnabled(in: scope(mx)))
     #expect(!config.contains(["devices", mx]))
-    // With All Mice off by having no smoothScroll, giving back removes a mouse's whole object,
-    // whose presence would otherwise turn it on.
-    var bare = try tree(#"{"devices": {"\#(mx)": {"name": "MX", "smoothScroll": {"speed": 2}, "dpi": 800}}}"#)
-    #expect(bare.smoothScrollEnabled(in: scope(mx)) && bare.smoothScrollOwn(in: scope(mx)) == true)
+    // Tuning on a mouse says nothing about on or off: it follows All Mice (on in the default set).
+    // Giving back removes only the mouse's `enabled`, so its tuning stays.
+    var bare = try tree(#"{"devices": {"\#(mx)": {"name": "MX", "smoothScroll": {"speed": 2, "enabled": false}, "dpi": 800}}}"#)
+    #expect(!bare.smoothScrollEnabled(in: scope(mx)) && bare.smoothScrollOwn(in: scope(mx)) == false)
     bare.setSmoothScroll(nil, in: scope(mx))
-    #expect(!bare.smoothScrollEnabled(in: scope(mx)))
-    #expect(!bare.contains(["devices", mx, "smoothScroll"]) && bare.int(["devices", mx, "dpi"]) == 800)
+    #expect(bare.smoothScrollEnabled(in: scope(mx)) && bare.smoothScrollOwn(in: scope(mx)) == nil)
+    #expect(bare.double(["devices", mx, "smoothScroll", "speed"]) == 2 && bare.int(["devices", mx, "dpi"]) == 800)
 }
 
 @Test func feelOnAMouseIsReadFromItsValuesOverAllMices() throws {

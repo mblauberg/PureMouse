@@ -5,6 +5,25 @@ import Testing
 
 @MainActor
 struct DaemonTests {
+    /// A new install has no config file, and that means the default set: not an error, and the
+    /// file is not created. Removing the file later returns to the defaults the same way.
+    @Test func aMissingConfigFileIsTheDefaultSetNotAnError() throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "puremouse-none-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let daemon = Daemon(configURL: url, environment: SessionEnvironment(canPostEvents: true))
+        #expect(daemon.status(running: true).config.error == nil)
+        daemon.reload()
+        #expect(daemon.status(running: true).config.error == nil)
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+
+        try Data("{".utf8).write(to: url)
+        daemon.reload()
+        #expect(daemon.status(running: true).config.error != nil)
+        try FileManager.default.removeItem(at: url)
+        daemon.reload()
+        #expect(daemon.status(running: true).config.error == nil)
+    }
+
     @Test func legacyPingIsIgnoredAndSilenceRetried() {
         #expect(Daemon.adoption(for: .hidpp10) == .notAMouse)
         #expect(Daemon.adoption(for: .noAnswer) == .noAnswer)
@@ -52,8 +71,12 @@ struct DaemonTests {
 
     /// Accessibility is needed when any device entry, not only the top level, posts events.
     @Test func aDeviceEntryThatPostsEventsNeedsAccessibility() throws {
-        #expect(!Daemon.postsEvents(.empty))
-        #expect(!Daemon.postsEvents(try config(#"{"devices": {"pb02c": {"dpi": 800}}}"#)))
+        #expect(!Daemon.postsEvents(SessionHarness.nothing))
+        #expect(!Daemon.postsEvents(try config("""
+            {"smoothScroll": {"enabled": false}, "buttons": {"back": "default", "forward": "default", "gesture": "default"},
+             "devices": {"pb02c": {"dpi": 800}}}
+            """)))
+        #expect(Daemon.postsEvents(.defaults))
         #expect(Daemon.postsEvents(try config(#"{"devices": {"pb02c": {"smoothScroll": {}}}}"#)))
         #expect(Daemon.postsEvents(try config(#"{"devices": {"pb02c": {"buttons": {"back": "none"}}}}"#)))
         #expect(Daemon.postsEvents(try config(#"{"devices": {"pb02c": {"thumbWheel": {"action": "tabs"}}}}"#)))

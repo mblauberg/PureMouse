@@ -1,8 +1,10 @@
 # Configuration
 
 Settings and hand edits share one file, `~/.config/puremouse/config.json`. Every field is optional;
-anything left out keeps the mouse's existing setting. A short example
-([`config.example.json`](../config.example.json) has more):
+anything left out takes its value from the [default set](#defaults). PureMouse creates no file: with
+none, it runs the default set, and a file holds only what you changed. A short example
+([`config.example.json`](../config.example.json) documents the format and is checked to decode, but is not a
+recommended setup):
 
 ```json
 {
@@ -29,6 +31,33 @@ changed. To reload by hand:
 launchctl kill HUP gui/$UID/io.github.mblauberg.puremouse
 ```
 
+## Defaults
+
+One default set, defined once (`Config.defaultSetJSON` in PureMouseKit), is what PureMouse does with
+no file, with `{}`, after Reset All Settings, and after a pane's Restore Defaults for that pane's
+own keys. A file is laid over it, so a key left out means the default set's value, not "unchanged".
+
+| Setting | Default |
+|---|---|
+| Smooth scrolling | On, Balanced (`speed` 1, `acceleration` 1, `smoothingMs` 125) |
+| Wheel direction, wheel mode, SmartShift, DPI | Not set: the mouse keeps its own |
+| Wheel press (`middle`), top button | Mouse Default |
+| `back`, `forward` | `navigateBack`, `navigateForward` |
+| `gesture` | Click Mission Control, up Mission Control, down App Exposé, left and right Spaces |
+| Thumb wheel | Scrolls sideways, not reversed |
+| `universalControl.handOff` | On |
+
+The set needs the Accessibility permission, since it posts scrolls and keystrokes. To turn a piece
+off, say so in the file: `"smoothScroll": {"enabled": false}`, `"back": "default"` (the mouse's own
+button) or `"gesture": "default"`. A gesture written in the file keeps the default directions it does
+not name; set a direction to `"none"` to drop it.
+
+PureMouse never rewrites an existing config to apply a new default set. A setting that the file leaves
+out takes the default set's value, so upgrading can change what such a file does for the keys it omits
+(smooth scrolling, Back and Forward, the gesture); keys the file sets are unchanged. Settings writes only
+the keys you change, so Restore Defaults and Reset All Settings return keys to this set (Reset All also
+saves the file as `config.json.bak`).
+
 ## Fields
 
 | Field | Meaning |
@@ -40,8 +69,8 @@ launchctl kill HUP gui/$UID/io.github.mblauberg.puremouse
 | `scrollWheel.smartShiftThreshold` | 1–50 enables SmartShift's automatic free-spin; 255 disables it. Must be 1–255. Requires 0x2110 or 0x2111 |
 | `thumbWheel.inverted` | Invert the thumb wheel's scrolling: in hardware, or in software while PureMouse handles the wheel. Scrolling only: actions follow `reversed`. Global only |
 | `thumbWheel.action`, `left`, `right`, `step`, `reversed` | What turning the thumb wheel does, and which way ([below](#thumb-wheel)) |
-| `buttons` | Button → action or gesture, including play-only haptics, or `"default"` for no binding: the mouse's own behaviour ([below](#buttons-actions-and-gestures)). The left and right buttons cannot be bound |
-| `smoothScroll` | If present, PureMouse scrolls both wheels itself ([below](#smooth-scrolling)). If absent, or `enabled` is false, the wheels scroll normally |
+| `buttons` | Button → action or gesture, including play-only haptics, or `"default"` for no binding: the mouse's own behaviour ([below](#buttons-actions-and-gestures)). `back`, `forward` and `gesture` are bound by the [default set](#defaults). The left and right buttons cannot be bound |
+| `smoothScroll` | PureMouse scrolls both wheels itself unless `enabled` is false, when they scroll normally ([below](#smooth-scrolling)). On by default |
 | `gesture.distanceMm` | How far the mouse moves before a gesture fires, in millimetres, 0.5–50. Default 4 |
 | `gesture.repeatIntervalMs` | Minimum gap between repeated gestures in one hold, 0–5000. Default 400 |
 | `notifications.lowBattery` | Default true. The menu bar app posts a macOS notification when a mouse's battery falls through 20% and again through 5% (level-only mice: when they report low and critical). A mouse that reconnects already below 20% warns once, if PureMouse can tell it is the same mouse as before (it reports its unit ID) and had not already warned at that level. The warning goes away when the mouse is charging or back at 25% or more, when the 5% warning replaces it, and when you switch this off. Needs the menu bar icon shown; the daemon ignores it. Settings › General switches it; macOS asks for permission the first time |
@@ -114,8 +143,9 @@ for a pair written by hand). Its Advanced… sheet has **Reverse direction** (`i
 scrolls here or in some app), **Swap directions** (`reversed`, a switch) and **Turn distance** (`step`) while
 the action in effect (the scope's own, else the wider scope's) is not scrolling, and **Speed** (`smoothScroll.horizontalSpeed`) while it scrolls. Custom's rows name
 the way the wheel turns, so with `reversed` the **Turn left** row sets `right`. Scrolling's Restore
-Defaults removes `smoothScroll`, `scrollWheel` and these thumb wheel keys; Buttons' removes
-`buttons` and `gesture`. Neither touches `apps`.
+Defaults removes `smoothScroll`, `scrollWheel` and these thumb wheel keys, which leaves the
+[default set](#defaults) (smooth scrolling on at Balanced); Buttons' removes `buttons` and `gesture`,
+leaving the set's Back, Forward and gesture. Neither touches `apps`.
 
 ## Per-app settings
 
@@ -203,11 +233,12 @@ that spells the key in other case (`MB03400000000`) is edited in place and gets 
 with several spellings, the last in sorted order is the one edited. The first value for a mouse
 creates its entry with a `name` (the mouse's name, else its key), written once. Putting a control
 back to "All Mice" removes its key there (Mouse Default is a value, not a removal: it writes
-`"default"` under the mouse's entry, and under All Mice it removes the key; for a gesture direction, its key in the gesture, and the
+`"default"` under the mouse's entry, and under All Mice it removes the key, or writes `"default"` where
+the default set binds the button, Back for example, so the set does not return; for a gesture direction, its key in the gesture, and the
 whole binding with the last direction), and removing the last override removes the entry, so an entry
 with only a `name` is not kept (keys Settings does not know are kept, and keep the entry and its
 `name`). "Do Nothing" is a value, not a removal: on a mouse it hides the top level's action. A
-`smoothScroll` left empty stays, since an empty one means on. Only per-device sections are
+mouse's `smoothScroll` goes with its last key, as it means the same left out. Only per-device sections are
 written: a section the decoder would skip is refused, though inside a section a key is written
 as given. A JSON `null` in an entry or at the top level reads as absent, as the decoder reads it.
 
@@ -233,8 +264,7 @@ whether or not All Mice has a gesture. A section's Restore Defaults removes that
 keys for the section, never its `name`. The Presets row of a mouse that uses All Mice's presets reads
 as All Mice's does (the list), and a mouse's own empty `dpiPresets: []` is kept, as it means
 no presets for that mouse. Giving back the mouse's Smooth scrolling removes the mouse's
-`enabled`, and with no top-level `smoothScroll` its whole `smoothScroll` (an empty one means on); the
-generic edit leaves an emptied one in place. A mouse's rows are hidden by what it reports: a capability
+`enabled`, and its whole `smoothScroll` once no other key is left in it. A mouse's rows are hidden by what it reports: a capability
 reported `false` hides its rows, an omitted one is unknown and shows them, and a value the mouse itself
 sets keeps its row with "Not supported by this mouse." (a value only All Mice sets does not). For All Mice a section shows if
 any known mouse has the feature; while a mouse is not connected, or a `devices` entry names a mouse the
