@@ -37,11 +37,11 @@ pressed. The daemon has none, and must not.
   A 304 keeps that release.
 - **Reminders.** A release newer than the running version posts one quiet notification per version
   (clicking it opens the release page), and the menu shows **Update to X.Y.Z…** and **Skip This
-  Version** until the running version is at least X.Y.Z. Skipping hides both for that version and any lower one; a notification is posted only for a version above the highest already notified, so a release withdrawn on GitHub and republished is not announced twice. A newer release's reminder replaces the earlier one, turning the
+  Version** until the running version is at least X.Y.Z. Skipping hides both for exactly that version (the last 16 skipped are kept); a version is notified once (the last 16 notified are kept), so a release that goes 0.6.0, 0.7.0, 0.6.0 is not announced twice. Any notification for a version that is not on offer (replaced, skipped, installed, or higher than a rolled-back release) is taken down at each check, skip, switch-off and launch. A newer release's reminder replaces the earlier one, turning the
   check off takes it down, and only a release page under `github.com/mblauberg/PureMouse/releases` is accepted from the response.
   Nothing is downloaded or installed, and no window takes focus (the question is the one alert).
 - **Stored** in the menu app's preferences, listed in [Privacy](../privacy.md): the answer, launch
-  count, last request, ETag, latest release, skipped version and notified version. Settings writes
+  count, last request, ETag, latest release, skipped versions and notified versions (the last 16 of each). Settings writes
   the answer there and the menu app hears it (key-value observing), as it hears the notification answer.
 - **Once per run.** The question waits for a status from a running daemon (a stale file from the
   last run may say it stopped), and then judges the permissions on that status once per run of the

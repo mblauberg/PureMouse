@@ -261,7 +261,7 @@ final class UpdateHarness {
         #expect(h.announced.map(\.version.text) == ["0.6.0", "0.7.0"])
     }
 
-    @Test func skippingTwoVersionsKeepsARollbackHidden() async {
+    @Test func aSkippedVersionStaysSkippedWhenARollbackBringsItBack() async {
         h.preferences.automatic = true
         var reminders = h.reminders()
         for version in ["0.6.0", "0.7.0"] {
@@ -282,6 +282,47 @@ final class UpdateHarness {
         h.date = h.date.addingTimeInterval(25 * 3600)
         await after.check()
         #expect(after.offer?.version.text == "0.8.0")
+    }
+
+    @Test func skippingOneVersionHidesThatVersionOnly() async {
+        h.preferences.automatic = true
+        h.answer(version: "0.7.0", etag: "\"a\"")
+        let reminders = h.reminders()
+        await reminders.check()
+        reminders.skip()
+        #expect(reminders.offer == nil)
+        h.answer(version: "0.6.0", etag: "\"b\"")  // first seen after 0.7.0 was skipped
+        h.date = h.date.addingTimeInterval(25 * 3600)
+        await reminders.check()
+        #expect(reminders.offer?.version.text == "0.6.0")
+        #expect(h.announced.map(\.version.text) == ["0.7.0", "0.6.0"])
+    }
+
+    @Test func aRollbackLeavesNoStaleNotificationBehind() async {
+        h.preferences.automatic = true
+        var reminders = h.reminders()
+        for version in ["0.6.0", "0.7.0", "0.6.0"] {
+            h.answer(version: version, etag: "\"\(version)\"")
+            h.date = h.date.addingTimeInterval(25 * 3600)
+            reminders = h.reminders()
+            await reminders.check()
+        }
+        // 0.7.0 is not on offer any more, though it was delivered; 0.6.0 is.
+        #expect(h.withdrawn.last == "update.0.7.0")
+        reminders.skip()
+        #expect(h.withdrawn.suffix(2).sorted() == ["update.0.6.0", "update.0.7.0"])
+        // Installing 0.7.0 takes down whatever is left, at the next launch.
+        h.withdrawn = []
+        h.reminders(current: "0.7.0").start()
+        #expect(Set(h.withdrawn) == ["update.0.6.0", "update.0.7.0"])
+    }
+
+    @Test func theRememberedVersionsAreBounded() {
+        let versions = (0..<40).compactMap { UpdateCheck.Version("0.\($0 + 1).0") }
+        h.preferences.skipped = versions
+        h.preferences.notified = versions
+        #expect(h.preferences.skipped == Array(versions.suffix(UpdatePreferences.remembered)))
+        #expect(h.preferences.notified.count == UpdatePreferences.remembered)
     }
 
     @Test func aCallbackAtTheEarliestTheSchedulerMayRunItStillChecks() async {
@@ -444,7 +485,7 @@ final class UpdateHarness {
         #expect(reminders.offer == nil)
         #expect(h.withdrawn == ["update.0.6.0"])
         // The same release found again, even after a relaunch, stays quiet.
-        h.preferences.notified = nil
+        h.preferences.notified = []
         h.date += 86_400
         h.answer(version: "0.6.0")
         let relaunched = h.reminders()
@@ -462,7 +503,7 @@ final class UpdateHarness {
         let reminders = h.reminders()
         reminders.setAutomatic(true)
         reminders.skip()
-        #expect(h.preferences.skipped == nil && h.withdrawn.isEmpty)
+        #expect(h.preferences.skipped.isEmpty && h.withdrawn.isEmpty)
     }
 
     @Test func aVersionNotARealNumberCountsAsOlderThanAnyRelease() async {
@@ -541,6 +582,10 @@ final class UpdateHarness {
                         "https://evil@github.com/mblauberg/PureMouse/releases/tag/v0.6.0",
                         "https://github.com:8443/mblauberg/PureMouse/releases/tag/v0.6.0",
                         "https://github.com/someone/else/releases/tag/v0.6.0",
+                        "https://github.com/mblauberg/PureMouse/releases/../../issues",
+                        "https://github.com/mblauberg/PureMouse/releases/%2e%2e/%2e%2e/issues",
+                        "https://github.com/mblauberg/PureMouse/releases-evil",
+                        "https://github.com/mblauberg/PureMouse-evil/releases/tag/v0.6.0",
                         "https://github.com/mblauberg/PureMouse",
                         "http://github.com/mblauberg/PureMouse/releases/tag/v0.6.0",
                         "file:///etc/passwd"] {

@@ -158,7 +158,7 @@ struct AppControllerUpdateTests {
     @Test func turningTheChecksOffTakesTheDeliveredReminderDown() {
         preferences.automatic = true
         preferences.latest = UpdateCheck.Release(version: UpdateCheck.Version("0.6.0")!, page: URL(string: "https://github.com/mblauberg/PureMouse/releases/tag/v0.6.0")!)
-        preferences.notified = UpdateCheck.Version("0.6.0")  // the reminder was delivered
+        preferences.notified = [UpdateCheck.Version("0.6.0")!]  // the reminder was delivered
         let controller = launch()
         controller.updates.setAutomatic(false)
         #expect(controller.updates.offer == nil)

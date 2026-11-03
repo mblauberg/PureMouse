@@ -109,7 +109,7 @@ private final class RecordingScheduler: UpdateScheduling {
         for _ in 0..<1000 where scheduler.delays.isEmpty { await Task.yield() }
         #expect(about.isOn && scheduler.delays == [0])  // armed, not run
 
-        preferences.notified = UpdateCheck.Version("0.6.0")
+        preferences.notified = [UpdateCheck.Version("0.6.0")!]
         let cancelled = scheduler.cancelled
         about.set(false)
         for _ in 0..<1000 where scheduler.cancelled == cancelled { await Task.yield() }

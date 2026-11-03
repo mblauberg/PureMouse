@@ -41,8 +41,8 @@ public struct UpdatePreferences {
     private static let etagKey = "UpdatesETag"
     private static let latestKey = "UpdatesLatestVersion"
     private static let latestPageKey = "UpdatesLatestPage"
-    private static let skippedKey = "UpdatesSkippedVersion"
-    private static let notifiedKey = "UpdatesNotifiedVersion"
+    private static let skippedKey = "UpdatesSkippedVersions"
+    private static let notifiedKey = "UpdatesNotifiedVersions"
 
     public let defaults: UserDefaults
 
@@ -86,16 +86,31 @@ public struct UpdatePreferences {
         }
     }
 
-    /// The version whose reminders the person turned off.
-    public var skipped: UpdateCheck.Version? {
-        get { defaults.string(forKey: Self.skippedKey).flatMap(UpdateCheck.Version.init) }
-        nonmutating set { set(newValue?.text, Self.skippedKey) }
+    /// How many versions each list below keeps; the oldest are forgotten first.
+    public static let remembered = 16
+
+    /// The versions whose reminders the person turned off, exactly those and no others.
+    public var skipped: [UpdateCheck.Version] {
+        get { versions(Self.skippedKey) }
+        nonmutating set { store(newValue, Self.skippedKey) }
     }
 
-    /// The newest version a notification was posted for.
-    public var notified: UpdateCheck.Version? {
-        get { defaults.string(forKey: Self.notifiedKey).flatMap(UpdateCheck.Version.init) }
-        nonmutating set { set(newValue?.text, Self.notifiedKey) }
+    /// The versions a notification was posted for, so none is announced twice, even if the latest
+    /// release goes 0.6.0, 0.7.0, 0.6.0.
+    public var notified: [UpdateCheck.Version] {
+        get { versions(Self.notifiedKey) }
+        nonmutating set { store(newValue, Self.notifiedKey) }
+    }
+
+    private func versions(_ key: String) -> [UpdateCheck.Version] {
+        (defaults.stringArray(forKey: key) ?? []).compactMap(UpdateCheck.Version.init)
+    }
+
+    private func store(_ versions: [UpdateCheck.Version], _ key: String) {
+        var kept: [UpdateCheck.Version] = []
+        for version in versions where !kept.contains(version) { kept.append(version) }
+        if kept.isEmpty { defaults.removeObject(forKey: key) }
+        else { defaults.set(kept.suffix(Self.remembered).map(\.text), forKey: key) }
     }
 
     private func set(_ value: Any?, _ key: String) {
@@ -206,7 +221,7 @@ public final class UpdateReminders {
             self?.arm()
             self?.changed()
         }
-        if let latest = preferences.latest, !isNewer(latest.version) { withdraw(UpdateOffer(latest).notificationID) }
+        withdrawStale()
         arm()
     }
 
@@ -232,7 +247,7 @@ public final class UpdateReminders {
     private func arm() {
         guard automatic else {
             scheduler.cancel()
-            withdrawReminder()
+            withdrawStale()
             return
         }
         scheduler.schedule(after: delay(now())) { [weak self] done in
@@ -269,37 +284,40 @@ public final class UpdateReminders {
         UpdateCheck.Version(current).map { version > $0 } ?? true
     }
 
-    /// The release to offer: found by a check, newer than the running app, above the highest version
-    /// skipped (skipping 0.7.0 hides 0.6.0 too, if a rollback brings it back), and only while
-    /// automatic checks are on.
+    /// The release to offer: found by a check, newer than the running app, not one the person
+    /// skipped (that version only), and only while automatic checks are on.
     public var offer: UpdateOffer? {
         guard automatic, let latest = preferences.latest, isNewer(latest.version),
-              preferences.skipped.map({ latest.version > $0 }) ?? true else { return nil }
+              !preferences.skipped.contains(latest.version) else { return nil }
         return UpdateOffer(latest)
     }
 
     private func remind() {
-        // Only a version above the highest already notified is announced, so a release that goes
-        // 0.6.0, 0.7.0, 0.6.0 (a rollback) is not announced twice.
-        guard let offer, preferences.notified.map({ offer.version > $0 }) ?? true else { return }
-        // A newer release replaces the reminder for the one before it.
-        if let previous = preferences.notified { withdraw(UpdateOffer.notificationID(for: previous)) }
-        preferences.notified = offer.version
+        defer { withdrawStale() }
+        // A version is announced once, even if the latest release goes 0.6.0, 0.7.0, 0.6.0.
+        guard let offer, !preferences.notified.contains(offer.version) else { return }
+        preferences.notified += [offer.version]
         announce(offer)
         changed()
     }
 
-    /// With checks off, no reminder stays on screen.
-    private func withdrawReminder() {
-        if let notified = preferences.notified { withdraw(UpdateOffer.notificationID(for: notified)) }
+    /// Takes down the notification of every version notified but not on offer: an older release
+    /// replaced by a newer one, a version skipped or installed, a rollback's higher version, or
+    /// all of them while checks are off. Taking down one that is not delivered does nothing.
+    private func withdrawStale() {
+        let offered = offer?.version
+        for version in preferences.notified where version != offered {
+            withdraw(UpdateOffer.notificationID(for: version))
+        }
     }
 
     /// Skip This Version: the row and the reminders for this version go, and a newer version
     /// brings them back.
     public func skip() {
         guard let offer else { return }
-        preferences.skipped = offer.version
-        withdraw(offer.notificationID)
+        preferences.skipped += [offer.version]
+        if !preferences.notified.contains(offer.version) { withdraw(offer.notificationID) }  // no record, maybe delivered
+        withdrawStale()
         changed()
     }
 }

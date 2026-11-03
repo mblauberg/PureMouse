@@ -215,7 +215,7 @@ one. This file covers how to work on it safely.
   one GET of the latest GitHub release per press. The menu app also checks once a day when the
   person has said yes (ADR 0021, `docs/privacy.md`): `UpdateReminders` (PureMouseAppSupport) keeps
   the answer, the last request time (recorded before the request, so a failure waits for the next
-  window), the release's ETag and the skipped and notified versions in the menu's defaults
+  window), the release's ETag and the skipped and notified versions (the last 16 of each) in the menu's defaults
   domain; `BackgroundActivity` hands the wait to `NSBackgroundActivityScheduler` (one shot, re-armed;
   its tolerance must stay shorter than its interval, or it raises), so the app owns no timer; the
   scheduled request refuses constrained and expensive networks and sends `If-None-Match`

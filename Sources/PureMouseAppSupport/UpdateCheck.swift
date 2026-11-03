@@ -73,10 +73,14 @@ public enum UpdateCheck {
         return Release(version: version, page: page)
     }
 
-    /// Only this project's own release pages are trusted to be opened, whatever the response says.
+    /// Only this project's own release pages are trusted to be opened, whatever the response says:
+    /// `/mblauberg/PureMouse/releases` and what lies below it, with no `.` or `..` component to climb out.
     static func isReleasePage(_ url: URL) -> Bool {
-        url.scheme == "https" && url.host?.lowercased() == "github.com" && url.port == nil
-            && url.user == nil && url.password == nil && url.path.hasPrefix("/mblauberg/PureMouse/releases")
+        guard url.scheme == "https", url.host?.lowercased() == "github.com", url.port == nil,
+              url.user == nil, url.password == nil else { return false }
+        let components = url.pathComponents  // "/" first; percent-encoding is already decoded
+        return components.count >= 4 && Array(components[0..<4]) == ["/", "mblauberg", "PureMouse", "releases"]
+            && !components.contains { $0 == ".." || $0 == "." }
     }
 
     static func outcome(current: String, data: Data) -> Outcome {
