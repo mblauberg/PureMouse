@@ -346,8 +346,19 @@ cost. Planned or built (epic #114):
 - **Try it.** A collapsed "Try it" disclosure under Feel and Speed on Scrolling reveals a short
   plain-text scroll area, so smoothing is felt where it is set. Trackpad shows its gestures; Mouse
   shows nothing.
-- **Undo.** ⌘Z and ⇧⌘Z undo and redo each settings change, named in the Edit menu ("Undo Pointer
-  Speed"). One slider drag is one step.
+- **Undo and redo** (built). ⌘Z and ⇧⌘Z undo and redo each settings change in Settings, named in
+  the Edit menu ("Undo Pointer Speed"). One slider drag is one step. The step's name is the control's
+  own title, read from the keys it changed after `devices.<key>.` or `apps.<id>.`:
+  `dpi` Pointer Speed; `dpiPresets` Presets; `smoothScroll.speed` Scrolling Speed;
+  `smoothScroll.acceleration` with `smoothingMs` Feel, and each alone Acceleration or Glide;
+  `smoothScroll.enabled` Smooth Scrolling; `scrollWheel.inverted` Reverse Direction;
+  `scrollWheel.mode` Wheel Mode; `scrollWheel.smartShiftThreshold` SmartShift; `thumbWheel.*` and
+  `smoothScroll.horizontalSpeed` Thumb Wheel; `buttons.*` Button Action; `gesture.*` Hold and Move;
+  `notifications.lowBattery` Low Battery Notification; `universalControl.handOff` Universal Control;
+  an app entry added or removed whole, App Settings; anything mixed or not listed, Changes. The
+  history lives only in the Settings helper: the menu bar app keeps none. It clears when the file
+  changes under it (a hand edit, another writer), after Reset All Settings or Use Last Working
+  Config, and when a write fails. A text field keeps its own undo while it is being edited.
 - **Settings for the app in use** (built). The status menu offers "Settings for <app>…" below
   Settings… for the frontmost app (not Finder, the Dock or any PureMouse bundle, nor one without a
   bundle identifier), opening its page in Apps. `NSWorkspace.shared.frontmostApplication` is read
@@ -478,6 +489,17 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
   one table the daemon also performs from, though a `"default"` already set on another control
   stays in view (`PickerEntry.offersMouseDefault`).
   `buttonKey`/`removeButton` (`ConfigKeys.swift`) follow Kit's alias rule.
+- **Undo.** `ConfigStore.update` registers each non-empty change on an `UndoHistory`
+  (`UndoHistory.swift`, Foundation only) wrapping the window's `UndoManager`, which only the Settings
+  helper gives its `AppModel` (`undoManager`; nil in the menu bar app, so nothing is registered).
+  The inverse is the diff of the file's own keys (without the default set under them, so undoing
+  puts the file back as it was) replayed with `ConfigTree.apply` through `update`, the one write
+  path, which registers the redo in turn. Debounced edits that arrive before the flush share one
+  step, which keeps the name its first change gave it. Each step is its own undo group
+  (`groupsByEvent` off). `SettingsWindowController.windowWillReturnUndoManager` returns the model's
+  manager unless a field editor is first responder, when AppKit falls back to the window's own, so
+  typing undoes first. Restore Defaults on a pane is an ordinary change and can be undone; Reset All
+  Settings and Use Last Working Config replace the file and clear the history.
 - **Global actions.** Reset All and the status menu stay global (`setDPI` without a target writes
   the top level). Settings' Pointer pane passes the mouse, and Find by Pressing and "use configured
   DPI" carry its key (`Control.device`, `Control.capture.device`), a press selecting that mouse's
