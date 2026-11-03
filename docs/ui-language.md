@@ -102,16 +102,19 @@ One term per concept. "Retire" lists words that must not appear in UI text for t
 | Identify a button by pressing it | Find by Pressing… | Select by Pressing |
 | The whole reset | Reset All Settings… | — |
 | The last good config | Use Last Working Config… | Restore Last Working |
-| App scope | Same as Everywhere (entry), everywhere (prose) | global |
-| A value left to a wider scope (an app to everywhere, a mouse to all mice) | the row exactly as in the wider scope: same control, full contrast, its usual help, no caption; a pop-up's first entry "Same as Everywhere (Mission Control)" ("Same as All Mice (…)") removes the own value; VoiceOver adds ", same as All Mice" to the value of every control of the row (a pop-up, switch, segmented control or slider) | Dimmed value, "Same as Everywhere" as a caption, "Everywhere: …" caption |
-| A value a mouse or app sets itself | the caption "Set for this mouse." ("Set for this app."), then on the same line a link "Use All Mice Setting" ("Use Everywhere Setting"); the row's help moves to its tooltip, except Feel's "Custom. Adjust in Advanced." when no preset matches; VoiceOver names the row in the link ("Use All Mice Setting for Speed"), and the link's hit target is at least 20 pt | Overridden, Custom value, a mark on inherited rows |
+| App scope | Mouse Settings (an app's source: "Same as Mouse Settings", "Use Mouse Setting"); "Varies by Mouse" when the known mice differ ("Varies" in the readout beside a slider or stepper, where the whole phrase would move the track; VoiceOver still says "Varies by Mouse") | global, Everywhere |
+| A value left to a wider scope (an app to the mice's settings, a mouse to all mice) | the row exactly as in the wider scope: same control, full contrast, its usual help, no caption; for an app, the value that applies for the mouse's own setting, else "Varies by Mouse" when the mice differ; a pop-up's first entry "Same as Mouse Settings (Mission Control)" ("Same as All Mice (…)", "Same as Mouse Settings (Varies by Mouse)") removes the own value; VoiceOver adds ", same as All Mice" to the value of every control of the row (a pop-up, switch, segmented control or slider) | Dimmed value, "Same as Mouse Settings" as a caption, "Everywhere: …" caption, the top level's value shown for a mouse that has its own |
+| A value a mouse or app sets itself | the caption "Set for this mouse." ("Set for this app."), then on the same line a link "Use All Mice Setting" ("Use Mouse Setting"); the row's help moves to its tooltip, except Feel's "Custom. Adjust in Advanced." when no preset matches; VoiceOver names the row in the link ("Use All Mice Setting for Speed"), and the link's hit target is at least 20 pt | Overridden, Custom value, a mark on inherited rows |
 | The one explanation of a mouse's rows | Settings you don't change follow All Mice. (in the mouse pop-up's menu, once) | The same sentence on each pane or row |
 | The mouse pop-up and its entries | Mouse (its label); All Mice, then each mouse's name; "Unknown mouse <key>" for an entry no mouse has | Device, Profile, Default mouse |
 | Giving a mouse's value back | Use All Mice Setting (the row's link, context menu item and VoiceOver action); the row then looks as it does under All Mice | Reset to default, Inherit |
 | The pop-up's Apps note | Apps are the same for every mouse. | Apps are global |
 | An app's own speed and glide | Custom scrolling (switch and row summary) | Own scrolling speed, Scrolling speed (summary) |
 | An app with nothing set yet | No custom settings (row summary) | "No settings yet, so not saved" |
-| One app's settings from the status menu | "Settings for <app name>…" (opens its sheet in Apps) | App Settings…, Configure <app>… |
+| The areas an app changes | its Apps row names them in words, separated by commas: "Buttons", "Scrolling", "Buttons, Scrolling" | counts ("2 buttons changed"), "Thumb wheel: …", colour or a badge alone |
+| Leaving an app's page | ‹ Apps (button; "Back to Apps" to VoiceOver), ⌘[, Esc | Done, Back, Close |
+| Removing an app's settings | Remove App… (footer, leading edge; asks first) | Delete, Remove… |
+| One app's settings from the status menu | "Settings for <app name>…" (opens its page in Apps) | App Settings…, Configure <app>… |
 | Adding an app | Add App (a pull-down menu, so no ellipsis; its "Choose from Applications…" entry opens the panel); the empty state's button, which opens the panel, is Add App… | Add Application, "+" alone |
 | Scroll animation | glide (slider), Smooth Scrolling (feature) | smoothing |
 | Wheel modes | Ratchet, Free Spin | free-spin, ratchet (lower case in a label) |
@@ -121,7 +124,7 @@ One term per concept. "Retire" lists words that must not appear in UI text for t
 | Scroll acceleration | a strength, shown without a unit (Off … Strong) | "1.0×" |
 | A shell command bound to a control | Run Command (action and sheet title; "Run Command…" in the picker) | Run Shell Command |
 | Capturing a shortcut | Record Shortcut, then "Recording…" while it listens; "Or enter it" for typing | "Click to record" |
-| Thumb wheel actions the other way round | Swap directions ("Swaps what turning left and right does."); an app row summary says "directions swapped" or "directions not swapped" | Reverse direction (for actions), Reversed, Normal direction |
+| Thumb wheel actions the other way round | Swap directions ("Swaps what turning left and right does."); an app's page shows it as "Swap directions" under Scrolling | Reverse direction (for actions), Reversed, Normal direction |
 | SmartShift threshold | Switches at (Slower … Faster) | Threshold, Sooner/Later |
 | A control this mouse lacks, kept because it is set | "Not supported by this mouse." (caption) | — |
 | Checking for a new release | Check for Updates (button, on demand); "Check for updates automatically" (switch, About; sentence case); the question "Check for updates automatically?" with Check Automatically / Don't Check | Auto-update, Updater, "Look for updates", Check Now |

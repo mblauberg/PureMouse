@@ -82,6 +82,17 @@ private func makeModel(config: String = "{}", devices: [Status.Device], defaults
     #expect(both.map(\.name) == ["MX"])
 }
 
+@Test func aReportedMouseWithoutAUsableKeyIsUnidentifiedAndNeverChoosable() throws {
+    let identified = mouse("MX", key: mx)
+    #expect(!MouseScope.hasUnidentified(devices: []))
+    #expect(!MouseScope.hasUnidentified(devices: [identified, mouse("MX again", key: mx.uppercased())]))
+    #expect(MouseScope.hasUnidentified(devices: [identified, mouse("No key", key: nil)]))
+    #expect(MouseScope.hasUnidentified(devices: [identified, mouse("Bad key", key: "not a key")]))
+    // It adds nothing to choose from: no scope can be selected for it.
+    let devices = [identified, mouse("No key", key: nil)]
+    #expect(MouseScope.known(devices: devices, config: ConfigTree()).map(\.key) == [mx])
+}
+
 @MainActor @Test func theChoiceIsRememberedPerUserAndDefaultsToAllMice() throws {
     let defaults = UserDefaults(suiteName: "pm-\(UUID().uuidString)")!
     let (first, sandbox) = try makeModel(devices: [mxMaster, m750], defaults: defaults)

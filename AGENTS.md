@@ -135,6 +135,7 @@ Settings and menu UI:
 - Layout, controls, disclosure, accessibility: [ui-design.md](docs/ui-design.md).
 - Code-level UI rules (tabs, sizing, scopes, Apps, notices):
   [ui-design.md, Implementation](docs/ui-design.md#implementation).
+- Device card on Mouse > Buttons (`DeviceCard`, `DeviceArt`): [ui-design.md, Device card](docs/ui-design.md#device-card).
 - Words, casing and the glossary: [ui-language.md](docs/ui-language.md).
 
 Build, release and memory:

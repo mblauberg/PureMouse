@@ -50,7 +50,7 @@ import Testing
     #expect(NamedButton.title(forKey: "gesture") == "Gesture button")
     #expect(NamedButton.title(forKey: "0x00fd") == "DPI button")
     #expect(NamedButton.title(forKey: "0x00FD") == "DPI button")
-    #expect(NamedButton.title(forKey: "0x1234") == "Control 0x1234")
-    #expect(NamedButton.title(forKey: "0x00e5") == "Control 0x00E5")
-    #expect(NamedButton.title(forKey: "nonsense") == "Control nonsense")
+    #expect(NamedButton.title(forKey: "0x1234") == "Button 4660", "an unnamed control is a plain button, never a hex ID")
+    #expect(NamedButton.title(forKey: "0x00e5") == "Button 229")
+    #expect(NamedButton.title(forKey: "nonsense") == "Other button")
 }

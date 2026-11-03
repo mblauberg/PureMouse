@@ -140,11 +140,15 @@ the full list. The ones used most:
 | `PUREMOUSE_DEV_MENU=1` | Opens the status menu over a plain backdrop, since its glass shows whatever is behind it |
 | `PUREMOUSE_DEV_PANE=<pane>` | Opens a tab (`general`, `mouse`, `apps`, `about`) or a Mouse segment (`buttons`, `scrolling`, `pointer`) |
 | `PUREMOUSE_DEV_PICKER=<button>` | A button's action picker on Mouse › Buttons only |
-| `PUREMOUSE_DEV_SHORTCUT=<button>` | A button's shortcut sheet on Mouse › Buttons; with `PUREMOUSE_DEV_APP`, that button's shortcut editor popover on the app sheet (`AppSheet.body`) |
-| `PUREMOUSE_DEV_MOUSE=<device key>\|all` | Chooses that mouse on Mouse, or All Mice; `PUREMOUSE_DEV_OTHERS=1` opens Buttons' Other controls |
-| `PUREMOUSE_DEV_APP=<bundle id>` | Opens Apps on that app's sheet, adding it without writing |
+| `PUREMOUSE_DEV_SHORTCUT=<button>` | A button's shortcut sheet on Mouse › Buttons; with `PUREMOUSE_DEV_APP`, that button's shortcut editor sheet over the app's page (`AppPage.body`) |
+| `PUREMOUSE_DEV_MOUSE=<device key>\|all` | Chooses that mouse on Mouse, or All Mice; `PUREMOUSE_DEV_OTHERS=1` opens Buttons' Other controls; `PUREMOUSE_DEV_MORE=1` opens an app page's More thumb wheel options |
+| `PUREMOUSE_DEV_APP=<bundle id>` | Opens Apps on that app's page, adding it without writing; `PUREMOUSE_DEV_APP_SEGMENT=buttons\|scrolling` picks the segment |
+| `PUREMOUSE_DEV_THEN_APP=<bundle id>` | After `PUREMOUSE_DEV_THEN_DELAY` seconds (default 1), asks for that app's page, as the menu's "Settings for <app>…" does with another page open |
+| `PUREMOUSE_DEV_KEY=esc\|cmd-[` | After `PUREMOUSE_DEV_KEY_DELAY` seconds (default 1.5), sends that key to the window, to test Esc and ⌘[ on an app's page |
 | `PUREMOUSE_DEV_SHEET=<name>` | A sheet: `presets` on Mouse › Pointer, or `advanced` on the pane shown (`DevSheet`) |
 | `PUREMOUSE_DEV_CAPTURE=<file.png>` | Saves the helper's own windows to that file and quits (`DevCapture`). Needs no Screen Recording permission, so it works over SSH |
+| `PUREMOUSE_DEV_HOVER=<part>`, `PUREMOUSE_DEV_BUTTON=<button>`, `PUREMOUSE_DEV_FOUND=<button>` | Show the device card's hovered, selected and found-row states on Buttons (`middle`, `top`, `forward`, `back`, `thumbWheel`, `thumbRest`) |
+| `PUREMOUSE_DEV_ARRIVAL=thumbWheel\|mainWheel` | On Scrolling, arrives as the device card's part would; `PUREMOUSE_DEV_ARRIVAL_HOLD=1` keeps the outline |
 | `PUREMOUSE_DEV_AX_DUMP=1` | Prints each control's accessibility role, label and size for every tab and Mouse segment (with `PUREMOUSE_DEV_PANE`, for what the sheet, picker and shortcut hooks open), and exits 1 on an unlabelled or duplicate control or one under 20 × 20 pt (`DevAXDump`). Run it on the spare Mac, not the one in use |
 
 A release build carries none of this; with `-DDEVHOOKS` it carries only the rig's part
@@ -338,8 +342,14 @@ running checks.
   (`.github/dependabot.yml`) proposes updates weekly. Look up a pin with
   `gh api repos/<owner>/<repo>/git/ref/tags/<tag>`, and dereference an annotated tag to its commit.
 - The size budgets are `INSTALLED_MAX_BYTES` (the app) and `DMG_MAX_BYTES` (the dmg) in
-  `scripts/size-budget.env`, each measured from the universal build plus 15%. Raising one is a
-  reviewed change that says what grew.
+  `scripts/size-budget.env`, each the measured size of the latest release plus 15%, rounded up to
+  0.1 MB, plus an allowance (`INSTALLED_EXTRA_BYTES`, `DMG_EXTRA_BYTES`) while a change in flight
+  needs one. An allowance is the overshoot of CI's largest figure (`INSTALLED_CI_BYTES`,
+  `DMG_CI_BYTES`, taken from the test and compatibility jobs) past the 15% budget, rounded up to
+  0.1 MB, so it leaves under 0.1 MB of headroom. The file says what grew, and the next release's
+  re-measure (`INSTALLED_MEASURED_BYTES`, `DMG_MEASURED_BYTES`) clears the allowance. Raising a
+  budget is a reviewed change that says what grew; `scripts/tests/test_size.zsh` holds the
+  arithmetic.
 - When the app grows past a budget, re-measure and raise the budget by that rule rather than shrink
   the app at the cost of functionality or polish worth keeping (the owner's rule).
 

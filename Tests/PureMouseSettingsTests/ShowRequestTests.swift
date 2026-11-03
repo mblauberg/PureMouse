@@ -58,7 +58,7 @@ private func requestFile() -> URL {
     let request = try #require(ShowRequest.consume(from: file, now: Date()))
     #expect(request.app == "com.apple.Safari" && request.pane == .tab(.apps) && request.sheet == nil)
     #expect(request == ShowRequest(app: "com.apple.Safari"))
-    // Whatever pane is named, an app's sheet is in Apps; an empty app is no app.
+    // Whatever pane is named, an app's page is in Apps; an empty app is no app.
     try Data("pointer:a.b\n".utf8).write(to: file)
     #expect(ShowRequest.consume(from: file, now: Date()) == ShowRequest(app: "a.b"))
     try Data("apps:".utf8).write(to: file)

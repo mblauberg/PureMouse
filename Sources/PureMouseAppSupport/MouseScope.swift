@@ -10,6 +10,12 @@ public struct KnownMouse: Equatable, Identifiable, Sendable {
     public let reported: Bool
 
     public var id: String { key }
+
+    public init(key: String, name: String, reported: Bool) {
+        self.key = key
+        self.name = name
+        self.reported = reported
+    }
 }
 
 /// The scope a pane edits and the name a first write gives the mouse's entry.
@@ -47,6 +53,15 @@ public enum MouseScope {
             mice.append(KnownMouse(key: key, name: names[key] ?? unknownName(key), reported: false))
         }
         return mice
+    }
+
+    /// Some reported mouse has no usable device key, so it is not in `known` (nothing can be chosen
+    /// for it) yet still counts as a mouse: under All Mice, one model's drawing would not describe it.
+    public static func hasUnidentified(devices: [Status.Device]) -> Bool {
+        devices.contains { device in
+            guard let key = device.model?.lowercased() else { return true }
+            return !Config.isDeviceKey(key)
+        }
     }
 
     /// The pop-up shows with two or more mice known, or with any `devices` entry in the config: a

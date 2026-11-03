@@ -105,7 +105,7 @@ Settings has four tabs, General, Mouse, Apps and About, and each change applies 
     <td width="50%" valign="top">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-app-dark.png">
-        <img src="docs/images/settings-app-light.png" width="400" alt="Google Chrome's own settings in a sheet: Command-T on the top button and the thumb wheel switching tabs, with the other buttons the same as everywhere">
+        <img src="docs/images/settings-app-light.png" width="400" alt="Google Chrome's own settings page: Command-T on the top button and the thumb wheel switching tabs, with the other buttons the same as everywhere">
       </picture>
       <br><sub><b>One app.</b> Chrome's own buttons and thumb wheel, beside what it shares with everywhere else.</sub>
     </td>

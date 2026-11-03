@@ -93,7 +93,7 @@ private func mouse() throws -> ConfigScope { try #require(ConfigScope.device(mou
     let app = ConfigTree.appScope("com.example.x")
     let path = app.prefix + ["thumbWheel"]
     let presentation = ThumbWheelPresentation(config: config, path: path, base: config.thumbWheel(at: ["thumbWheel"]),
-                                              inherited: .preset("tabs"), source: InheritedScope.everywhere, scope: .global)
+                                              inherited: .preset("tabs"), source: InheritedScope.mouseSettings, scope: .global)
     #expect(!presentation.showsDirections && presentation.effective == .preset("tabs"))
     #expect(presentation.standing(of: "step").note?.caption == "Set for this app.")
     #expect(ThumbWheelRows.advancedRows(config, path: path, base: presentation.base).contains(.turnDistance))
@@ -131,8 +131,8 @@ private func mouse() throws -> ConfigScope { try #require(ConfigScope.device(mou
     let config = try tree(#"{"apps": {"com.example.x": {"buttons": {"back": {"left": "mute"}}}}}"#)
     let state = config.appButton("com.example.x", button: "back")
     let left = try #require(state.directions.first { $0.name == "left" })
-    #expect(ActionButton.inherited(left, source: InheritedScope.everywhere).caption == "Set for this app.")
-    #expect(ActionButton.inherited(left, source: InheritedScope.everywhere).resetTitle == "Use Everywhere Setting")
+    #expect(ActionButton.inherited(left, source: InheritedScope.mouseSettings).caption == "Set for this app.")
+    #expect(ActionButton.inherited(left, source: InheritedScope.mouseSettings).resetTitle == "Use Mouse Setting")
 }
 
 // MARK: Mouse Default
@@ -156,12 +156,12 @@ private func mouse() throws -> ConfigScope { try #require(ConfigScope.device(mou
 }
 
 @MainActor @Test func theMouseDefaultEntryIsHiddenWhereTheWiderScopeAlreadyIsMouseDefault() {
-    let wideDefault = ActionButton.inherited(.standard, everywhere: ButtonAction.standard.label, source: InheritedScope.allMice)
+    let wideDefault = ActionButton.inherited(.standard, inheriting: ButtonAction.standard.label, source: InheritedScope.allMice)
     let entries = PickerEntry.all(allowsDefault: true, allowsGesture: true, inherited: wideDefault)
     #expect(entries.first?.label == "Same as All Mice" && entries.first?.detail == "(Mouse Default)")
     #expect(!entries.contains { $0.id == "default" })
     // Where the wider scope binds something, both stay: they write different things.
-    let wideMute = ActionButton.inherited(.standard, everywhere: "Mute", source: InheritedScope.allMice)
+    let wideMute = ActionButton.inherited(.standard, inheriting: "Mute", source: InheritedScope.allMice)
     #expect(PickerEntry.all(allowsDefault: true, allowsGesture: true, inherited: wideMute).contains { $0.id == "default" })
     // A "default" the scope already holds keeps its entry, so the row shows what is chosen.
     #expect(PickerEntry.all(allowsDefault: true, allowsGesture: true, inherited: wideDefault, current: .mouseDefault)

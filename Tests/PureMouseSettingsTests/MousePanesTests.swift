@@ -158,21 +158,21 @@ import Testing
 
 @MainActor @Test func aMouseAndAnAppShowAnInheritedValueThroughTheSameType() {
     // One type, one rule: an inherited value has no caption and no mark; an own one says "Set for <owner>."
-    let app = InheritedValue<String>(own: nil, inherited: "Mute", source: InheritedScope.everywhere)
+    let app = InheritedValue<String>(own: nil, inherited: "Mute", source: InheritedScope.mouseSettings)
     let mouse = InheritedValue<String>(own: nil, inherited: "Mute", source: InheritedScope.allMice)
     #expect(type(of: app) == type(of: mouse))
     #expect(app.effective == mouse.effective && app.caption == nil && mouse.caption == nil)
     let notes = [app.note {}, mouse.note {}]
     #expect(notes.allSatisfy { $0 == nil })
-    let ownApp = InheritedValue<String>(own: "Volume Up", inherited: "Mute", source: InheritedScope.everywhere)
+    let ownApp = InheritedValue<String>(own: "Volume Up", inherited: "Mute", source: InheritedScope.mouseSettings)
     let ownMouse = InheritedValue<String>(own: "Volume Up", inherited: "Mute", source: InheritedScope.allMice)
     #expect(ownApp.effective == "Volume Up" && ownMouse.effective == "Volume Up")
     #expect(ownApp.caption == "Set for this app." && ownMouse.caption == "Set for this mouse.")
-    #expect(ownApp.resetTitle == "Use Everywhere Setting" && ownMouse.resetTitle == "Use All Mice Setting")
+    #expect(ownApp.resetTitle == "Use Mouse Setting" && ownMouse.resetTitle == "Use All Mice Setting")
     // The Buttons list builds both from the same function.
-    let button = ActionButton.inherited(.standard, everywhere: "Mission Control", source: InheritedScope.allMice)
+    let button = ActionButton.inherited(.standard, inheriting: "Mission Control", source: InheritedScope.allMice)
     #expect(button.caption == nil && button.effective == "Mission Control")
-    #expect(ActionButton.inherited(.named("mute"), everywhere: "Mission Control", source: InheritedScope.allMice).caption
+    #expect(ActionButton.inherited(.named("mute"), inheriting: "Mission Control", source: InheritedScope.allMice).caption
         == "Set for this mouse.")
 }
 
@@ -218,7 +218,7 @@ import Testing
         try String(contentsOf: ui.appending(path: name), encoding: .utf8)
     }
 
-    private static let files = ["PointerPane", "ScrollingPane", "ButtonsPane", "ThumbWheelRows", "AppSheet", "Components", "PresetsSheet"]
+    private static let files = ["PointerPane", "ScrollingPane", "ButtonsPane", "ThumbWheelRows", "AppPage", "Components", "PresetsSheet"]
 
     @Test func nothingDimsAnInheritedValueOrHidesATrailingSlot() throws {
         let everything = try (Self.files + ["InheritedValue", "ActionPicker"]).map { try Self.source($0 + ".swift") }.joined(separator: "\n")
@@ -326,6 +326,26 @@ private let swappedVolume = #"{"thumbWheel":{"action":"volume","reversed":true},
     #expect(ThumbWheelRows.base(config, .global).reversed == false)
 }
 
+@MainActor @Test func anAppsThumbWheelRowsAreDecidedAcrossEveryMouseItMayRunWith() throws {
+    // Mouse 1 scrolls sideways and mouse 2 zooms; the app leaves the wheel to them. The first mouse
+    // alone has no advanced rows, but zooming on the second has Swap directions and Turn distance.
+    let m2 = "pb02c"
+    let config = try ConfigTree(data: Data(#"""
+        {"devices": {"mb03400000000": {"name": "MX", "thumbWheel": {"action": "scroll"}},
+                     "pb02c": {"name": "M750", "thumbWheel": {"action": "zoom"}}}}
+        """#.utf8))
+    let mice = [try #require(ConfigScope.device(wheelMouse)), try #require(ConfigScope.device(m2))]
+    let path = ["apps", "a.b", "thumbWheel"]
+    let states = config.thumbWheelState(inheriting: mice)
+    #expect(states.values.map(\.scrolls) == [true, false])
+    #expect(ThumbWheelRows.advancedRows(config, path: path, base: states.first).isEmpty, "the first mouse alone")
+    #expect(ThumbWheelRows.advancedRows(config, path: path, base: states.first, bases: states.values) == [.swapDirections, .turnDistance])
+    // Order of the mice does not matter, and mice that agree show what one shows.
+    #expect(ThumbWheelRows.advancedRows(config, path: path, base: states.values[1], bases: states.values.reversed()) == [.swapDirections, .turnDistance])
+    let alike = states.values[0]
+    #expect(ThumbWheelRows.advancedRows(config, path: path, base: alike, bases: [alike, alike]).isEmpty)
+}
+
 @Test func bothThumbWheelSectionsOfScrollingBuildOnAllMicesWheel() throws {
     let source = try String(contentsOf: URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -345,4 +365,14 @@ private let swappedVolume = #"{"thumbWheel":{"action":"volume","reversed":true},
     // A lone caption stands as written, and nothing gives none.
     #expect(RowLabel.caption(["Reverses this wheel.", nil, nil]) == "Reverses this wheel.")
     #expect(RowLabel.caption([nil, nil, nil]) == nil)
+}
+
+@Test func theMousePopUpFitsItsNameUpToACapAndOnlyThenFillsTheRoom() throws {
+    #expect(MousePopUp.maxWidth > 0 && MousePopUp.maxWidth < .infinity)
+    let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    let tab = try String(contentsOf: root.appending(path: "Sources/PureMouseSettingsUI/MouseTab.swift"), encoding: .utf8)
+    #expect(tab.contains("PopUpMenu(text: closedText, maxWidth: Self.maxWidth)") && !tab.contains("flexible"))
+    let components = try String(contentsOf: root.appending(path: "Sources/PureMouseSettingsUI/Components.swift"), encoding: .utf8)
+    // The fitting one first; the one that fills the room (and truncates) only when that does not fit.
+    #expect(components.contains("ViewThatFits(in: .horizontal) {\n                menu.fixedSize()\n                menu\n            }"))
 }

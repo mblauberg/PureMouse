@@ -19,7 +19,7 @@ final class MouseSelection {
 /// cost nothing. Its preferred size is the strip's height plus the pane's, which `fit()` brings up
 /// to date; the tabs call it when they refit.
 @MainActor
-final class MouseTab: NSViewController {
+final class MouseTab: NSViewController, IdealSized {
     let selection: MouseSelection
     /// Called when the segment changes, after its pane shows, so the window can refit to it.
     var didSelect: (MouseSegment) -> Void = { _ in }
@@ -100,10 +100,18 @@ final class MouseTab: NSViewController {
 
     /// Brings the preferred size up to date: the strip, then the pane at its own height.
     func fit() {
-        guard let shown, let header else { return }
-        let pane = shown.preferredContentSize
+        let size = idealSize(maxHeight: LazyPane.maxHeight(on: view.window?.screen))
+        if preferredContentSize != size { preferredContentSize = size }
+    }
+
+    /// The strip plus the pane, no taller than `maxHeight`: the pane is measured now (not read
+    /// from a stale `preferredContentSize`) and given what the strip leaves, so its form scrolls
+    /// inside that and the two together never pass the cap.
+    func idealSize(maxHeight: CGFloat) -> NSSize {
+        guard let shown, let header else { return preferredContentSize }
         let strip = header.fittingSize
-        preferredContentSize = NSSize(width: max(pane.width, strip.width), height: strip.height + pane.height)
+        let pane = shown.measuredSize(maxHeight: max(maxHeight - strip.height, 0))
+        return NSSize(width: max(pane.width, strip.width), height: min(strip.height + pane.height, maxHeight))
     }
 
     override func preferredContentSizeDidChange(for viewController: NSViewController) {
@@ -185,6 +193,9 @@ struct MouseHeader: View {
 struct MousePopUp: View {
     @Environment(AppModel.self) private var model
 
+    /// The widest the closed pop-up draws; a longer name is cut with an ellipsis (in the middle, so the chevron stays).
+    static let maxWidth: CGFloat = 240
+
     static let appsNote = "Apps are the same for every mouse."
     /// Said once, here: rows that match All Mice carry no mark of it.
     static let followNote = "Settings you don't change follow All Mice."
@@ -194,7 +205,7 @@ struct MousePopUp: View {
     }
 
     var body: some View {
-        PopUpMenu(text: closedText, flexible: true) {
+        PopUpMenu(text: closedText, maxWidth: Self.maxWidth) {
             Picker("Mouse", selection: Binding<String?>(get: { model.selectedMouse?.key }, set: { model.selectMouse($0) })) {
                 Text(InheritedScope.allMice).tag(nil as String?)
                 Divider()

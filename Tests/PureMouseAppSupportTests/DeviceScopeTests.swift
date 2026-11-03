@@ -1283,7 +1283,7 @@ private func kitBinding(_ config: ConfigTree, _ cid: UInt16 = 0x0053, app: Strin
     #expect(config.binding("back", in: app) == .mouseDefault)
     #expect(config.isOverridden(["buttons", "back"], in: app))
     #expect(config.appButton("com.example.x", button: "back").own == .mouseDefault)
-    #expect(config.appSummary("com.example.x") == "1 button changed")
+    #expect(config.appSummary("com.example.x") == "Buttons")
     // Kit: native in the app while the global scope binds the button.
     let decoded = try decode(config)
     let settings = try #require(decoded.settings(forApp: "com.example.x"))

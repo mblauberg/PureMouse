@@ -19,12 +19,12 @@ public enum ThumbWheelChoice: Hashable, Identifiable, Sendable {
     /// Kit's preset names in the order the pop-up lists them.
     static let presetOrder = ["zoom", "volume", "tabs", "spaces"]
 
-    /// The pop-up's choices after "Same as Everywhere".
+    /// The pop-up's choices after "Same as Mouse Settings".
     public static let menu: [ThumbWheelChoice] = [.scroll] + presetOrder.map(ThumbWheelChoice.preset) + [.custom]
 
     public var label: String {
         switch self {
-        case .inherit: "Same as Everywhere"
+        case .inherit: "Same as Mouse Settings"
         case .scroll: "Scroll Sideways"
         case .preset("zoom"): "Zoom"
         case .preset("volume"): "Volume"
