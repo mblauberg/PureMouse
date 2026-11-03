@@ -128,10 +128,17 @@ extension ConfigTree {
                 return
             }
             var before = self[entryPrefix(for: scope) + path]
-            if before == nil, scope.deviceKey != nil {
-                let inherited = resolved(path, in: scope)
-                if ButtonAction(json: inherited) == .gesture { return }
-                before = inherited
+            if before == nil {
+                // A mouse inherits the wider binding through `resolved`; an app does not, so the top
+                // level's gesture is read for it. Kit merges a scope's gesture over the global one,
+                // so a seeded direction would hide that gesture's own.
+                if scope.deviceKey != nil {
+                    let inherited = resolved(path, in: scope)
+                    if ButtonAction(json: inherited) == .gesture { return }
+                    before = inherited
+                } else if self.binding(button) == .gesture {
+                    return
+                }
             }
             // A mouse set to Mouse Default clicks natively; the gesture's click then does nothing.
             let click: Any = before.flatMap { ButtonAction(json: $0) == .mouseDefault ? nil : $0 }
