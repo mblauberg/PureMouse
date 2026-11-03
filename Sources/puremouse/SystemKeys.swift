@@ -15,6 +15,21 @@ enum AuxKey {
     static let brightnessUp = NX_KEYTYPE_BRIGHTNESS_UP, brightnessDown = NX_KEYTYPE_BRIGHTNESS_DOWN
     static let play = NX_KEYTYPE_PLAY, nextTrack = NX_KEYTYPE_FAST, previousTrack = NX_KEYTYPE_REWIND
 
+    /// The auxiliary key an action presses, or nil for an action that is not one.
+    static func key(for action: Action) -> Int32? {
+        switch action {
+        case .volumeUp: soundUp
+        case .volumeDown: soundDown
+        case .mute: mute
+        case .brightnessUp: brightnessUp
+        case .brightnessDown: brightnessDown
+        case .playPause: play
+        case .nextTrack: nextTrack
+        case .previousTrack: previousTrack
+        default: nil
+        }
+    }
+
     private typealias PostEvent = @convention(c) (io_connect_t, UInt32, IOGPoint, UnsafePointer<NXEventData>?,
                                                   UInt32, IOOptionBits, IOOptionBits) -> kern_return_t
     /// IOHIDPostEvent is deprecated (since macOS 11) without a replacement for auxiliary keys,

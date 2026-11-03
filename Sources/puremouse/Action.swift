@@ -35,6 +35,10 @@ extension Config.Binding {
 @MainActor
 enum SystemActions {
     static func perform(_ action: Action) {
+        if let key = AuxKey.key(for: action) {
+            AuxKey.press(key)
+            return
+        }
         switch action {
         case .none, .toggleScrollMode, .cycleDPI, .haptic:
             break
@@ -54,24 +58,10 @@ enum SystemActions {
             NavigationSwipe.post(back: true)
         case .navigateForward:
             NavigationSwipe.post(back: false)
-        case .volumeUp:
-            AuxKey.press(AuxKey.soundUp)
-        case .volumeDown:
-            AuxKey.press(AuxKey.soundDown)
-        case .mute:
-            AuxKey.press(AuxKey.mute)
-        case .playPause:
-            AuxKey.press(AuxKey.play)
-        case .nextTrack:
-            AuxKey.press(AuxKey.nextTrack)
-        case .previousTrack:
-            AuxKey.press(AuxKey.previousTrack)
+        case .volumeUp, .volumeDown, .mute, .playPause, .nextTrack, .previousTrack, .brightnessUp, .brightnessDown:
+            break  // posted by `AuxKey.key(for:)` above
         case .middleClick:
             NativeButton.postMiddleClick()
-        case .brightnessUp:
-            AuxKey.press(AuxKey.brightnessUp)
-        case .brightnessDown:
-            AuxKey.press(AuxKey.brightnessDown)
         case .nextTab:
             Keystroke(key: 48, modifiers: .maskControl).post()
         case .previousTab:
