@@ -33,8 +33,10 @@ answering a question people have, and a good default means most people never tou
 - Opened by Settings… (⌘,) in the app menu and the status menu, never from a toolbar button.
 - A non-customisable toolbar of tabs, General, Mouse, Apps and About, that always shows the active
   tab. The window title is the tab's name. Minimise and zoom are dimmed; the window has no resize
-  handle and sizes to the pane, never taller than the screen.
-- It reopens on the last tab and segment (`SettingsSelection`) and remembers its position.
+  handle and sizes to the pane: content at most 600 pt, never taller than the screen
+  ([Sizing](#implementation)).
+- It reopens on the last tab and segment (`SettingsSelection`) and remembers its position, not its
+  size: the size always comes from the pane (no frame autosave).
 - Mouse's header strip has a leading slot for the mouse pop-up (`MousePopUp`: All Mice, then each
   known mouse), shown with two or more mice known or any `devices` entry. Its closed text is the
   mouse's name, truncated at the tail by the width the strip leaves it (one line, never over the
@@ -323,11 +325,20 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
   request for `buttons`, `scrolling` or `pointer` opens Mouse on that segment (`SettingsPane`,
   `SettingsSelection`); a first run, or a stored tab not understood, opens Mouse (on Buttons the
   first time).
-- **Sizing.** Tabs and segments are built the first time they show (`LazyPane`, `MouseTab`), and a
-  pane is no taller than the screen (`LazyPane.fitted`). A pane whose height changes while shown
-  calls `SettingsContext.refit()`: a nested `NSHostingController` updates its
-  `preferredContentSize` without telling the tab controller, so `SettingsTabs.refit()` copies it
-  across (through `MouseTab.fit()`, which adds the strip).
+- **Sizing.** Tabs and segments are built the first time they show (`LazyPane`, `MouseTab`). Content
+  is never taller than 600 pt (`SettingsWindowController.maxContentHeight`, the one number),
+  or the screen's visible height less 80 pt where that is less (`LazyPane.maxHeight(on:)`, for the
+  window's own screen, else the main one). The strip and the form together fit it: `PaneForm` is
+  as tall as its rows up to `paneMaxHeight`, then scrolls (the cap is a bound on the form, not left
+  to its content: an unbounded form has measured as tall as the screen, a blank 2400 pt window).
+  The window asks each pane for its size when it fits (`IdealSized`: `PaneHost` answers with
+  `sizeThatFits`, `MouseTab` adds the strip and gives the form what the strip leaves) and never reads
+  `preferredContentSize` for it, which is only as fresh as the pane's last layout. Fitting the
+  same content twice gives the same size. A pane whose height changes while shown calls
+  `SettingsContext.refit()` (a nested `NSHostingController` updates its `preferredContentSize`
+  without telling the tab controller), and `fitWindow` ignores a size that is zero or not finite.
+  A disclosure opened on a full pane scrolls rather than growing the window. `AppPage` and
+  `AdvancedSheet` take their form caps from the same number.
 - **Advanced.** `PaneFooter` (Restore Defaults, Advanced…) opens an `AdvancedSheet`, which never
   opens another sheet. Hidden controls come from `ControlAvailability` over `MouseScope.deciding`,
   and Scrolling's rows from `ScrollingLayout`.
