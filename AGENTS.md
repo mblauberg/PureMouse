@@ -408,6 +408,9 @@ one. This file covers how to work on it safely.
   one still queued behind another (`HIDPPDevice.acquire` removes its entry). Only events
   reach `onEvent` (`Report.isEvent`): software ID 0, or a short HID++ 1.0 notification (sub-ID
   0x40-0x7F); a long report at those indices with another software ID is another program's reply.
+  A connection notification is only a short report with sub-ID 0x41 heard on a receiver endpoint
+  (`Receiver.isConnectionNotification`, used by `Session.handle` and `Daemon.watch`): a long event
+  at feature index 0x41, on a receiver slot or a Bluetooth mouse, routes to its feature.
 - A slot whose ping gets a HID++ 1.0 answer (invalid sub-ID) is ignored, like a keyboard, and
   not retried (`Daemon.adoption(for:)`).
 - A freshly adopted mouse (`Inherited.fresh`) is scanned once for temporary diversions a previous

@@ -504,7 +504,8 @@ final class Daemon {
     /// Routes an endpoint's events to the daemon, as when no session owns it.
     private func watch(_ device: HIDPPDevice) {
         device.onEvent = { [weak self, weak device] report in
-            guard let self, let device, report.featureIndex == Receiver.connectionNotification else { return }
+            guard let self, let device,
+                  Receiver.isConnectionNotification(report, onReceiver: device.interface.isReceiver) else { return }
             self.slotAnnounced(device, report)
         }
     }
