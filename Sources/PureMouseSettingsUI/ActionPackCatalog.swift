@@ -167,13 +167,16 @@ public final class ActionPackCatalog: Sendable {
            let data = try? Data(contentsOf: url) {
             return data
         }
-        // Test fallback relative to source file
+        #if DEBUG
+        // Tests and a SwiftPM debug run have no app bundle: read the catalogue beside this source file.
+        // A release build has only the bundle's copy (scripts/build-app.sh), so it carries no build path.
         let fallback = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .appending(path: "Resources/ActionPacks.json")
         if let data = try? Data(contentsOf: fallback) {
             return data
         }
+        #endif
         return Data()
     }
 
