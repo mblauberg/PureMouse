@@ -68,6 +68,22 @@ private func requestFile() -> URL {
     #expect(ShowRequest(sheet: .presets).app == nil && ShowRequest(body: "pointer.presets").app == nil)
 }
 
+@Test func aRequestCanNameTheMouseWhoseScopeOpens() throws {
+    let file = requestFile()
+    let key = "mb03400000000"
+    ShowRequest.write(ShowRequest(sheet: .presets, device: key), to: file)
+    #expect(try String(contentsOf: file, encoding: .utf8) == "pointer.presets@\(key)")
+    let request = try #require(ShowRequest.consume(from: file, now: Date()))
+    #expect(request.device == key && request.sheet == .presets && request.pane == .mouse(.pointer))
+    // The key is folded, and one Kit would not accept is none.
+    #expect(ShowRequest(body: "pointer.presets@MB03400000000").device == key)
+    #expect(ShowRequest(body: "pointer.presets@sideways").device == nil)
+    #expect(ShowRequest(body: "pointer.presets@").device == nil)
+    // Without one, as before; an app's page after its colon is unaffected.
+    #expect(ShowRequest(body: "pointer.presets").device == nil && ShowRequest(sheet: .presets).body == "pointer.presets")
+    #expect(ShowRequest(body: "apps:a@b.c").app == "a@b.c" && ShowRequest(body: "apps:a@b.c").device == nil)
+}
+
 @Test func aRequestOlderThanFiveSecondsIsDroppedAndRemoved() throws {
     let file = requestFile()
     ShowRequest.write(ShowRequest(pane: .tab(.apps)), to: file)

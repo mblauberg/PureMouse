@@ -138,6 +138,9 @@ the full list. The ones used most:
 | `PUREMOUSE_DEV_APPEARANCE=light\|dark` | Overrides the appearance (menu and helper) |
 | `PUREMOUSE_DEV_HIDDEN=1` | The menu app runs as if Show in menu bar were off: resident, no status item (`Locations.showsInMenuBar`) |
 | `PUREMOUSE_DEV_MENU=1` | Opens the status menu over a plain backdrop, since its glass shows whatever is behind it, without Settings or the updates question beside it; `PUREMOUSE_DEV_MENU_OPTION=1` builds it as if ⌥ were held, its alternates standing in for the items they replace |
+| `PUREMOUSE_DEV_MICE=2` | The menu shows two mice online (a fixture, over whatever the daemon reports), so Pointer Speed has two sections; its preset rows and Edit Presets… do nothing, so they can never write `devices.mb034…` into a live config |
+| `PUREMOUSE_DEV_SUBMENU=pointer` | The menu shows Pointer Speed's rows as the menu itself, to capture the submenu without hovering (with `PUREMOUSE_DEV_MENU=1`, and `PUREMOUSE_DEV_MICE=2` for the sections) |
+| `PUREMOUSE_DEV_ICON=<directory>` | Writes the menu bar icon's running, paused, off, attention and paused-attention states as `<state>@1x.png` and `<state>@2x.png` and exits, before reading a config or a status (`DevHooks.writeIcons`) |
 | `PUREMOUSE_DEV_PANE=<pane>` | Opens a tab (`general`, `mouse`, `apps`, `about`) or a Mouse segment (`buttons`, `scrolling`, `pointer`) |
 | `PUREMOUSE_DEV_PICKER=<button>` | A button's action picker on Mouse › Buttons; with `PUREMOUSE_DEV_APP`, on the app's Buttons page |
 | `PUREMOUSE_DEV_SHORTCUT=<button>` | A button's shortcut sheet on Mouse › Buttons; with `PUREMOUSE_DEV_APP`, that button's shortcut editor sheet over the app's page (`AppPage.body`) |

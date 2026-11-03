@@ -37,8 +37,10 @@ root=${0:A:h:h}
 # `all-views` has no pane, so its one dump walks every tab and Mouse segment.
 #
 # `FIXTURES=a,b` (not a setting, and not passed on) limits a row to those fixtures, for a screen
-# that needs a mouse to open. About This Mouse opens from a device row; Scrolling's Advanced…
-# needs a layout with that section, which a mouse gives. Every other row runs with every fixture.
+# that needs a mouse to open. About This Mouse opens from a device row; the Advanced… sheets on
+# Buttons and Scrolling need a layout with that section, Pointer's presets a mouse that offers DPI,
+# and the shortcut sheet a button to edit, all of which a mouse gives. Every other row runs with
+# every fixture.
 matrix=(
     "general             shots  PANE=general"
     "buttons             shots  PANE=buttons"
@@ -49,11 +51,11 @@ matrix=(
     "buttons-all-mice    shots  PANE=buttons MOUSE=all"
     "advanced-general    shots  PANE=general SHEET=advanced"
     "about-mouse         shots  PANE=general SHEET=aboutMouse FIXTURES=one-mouse,two-mice,paused"
-    "advanced-buttons    shots  PANE=buttons SHEET=advanced"
+    "advanced-buttons    shots  PANE=buttons SHEET=advanced FIXTURES=one-mouse,two-mice,paused"
     "advanced-scrolling  shots  PANE=scrolling SHEET=advanced FIXTURES=one-mouse,two-mice,paused"
-    "presets             shots  PANE=pointer SHEET=presets"
+    "presets             shots  PANE=pointer SHEET=presets FIXTURES=one-mouse,two-mice,paused"
     "picker              shots  PANE=buttons PICKER=middle"
-    "shortcut            shots  PANE=buttons SHORTCUT=middle"
+    "shortcut            shots  PANE=buttons SHORTCUT=middle FIXTURES=one-mouse,two-mice,paused"
     "other-controls      shots  PANE=buttons OTHERS=1"
     "hover-thumb-wheel   shots  PANE=buttons HOVER=thumbWheel"
     "app-page            shots  PANE=apps APP=com.apple.Safari"
