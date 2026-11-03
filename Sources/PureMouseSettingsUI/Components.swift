@@ -369,8 +369,8 @@ struct DisclosureLabel: View {
                         if let help, note == nil { Text(help).font(.subheadline).foregroundStyle(.secondary) }
                     }
                 }
-                // A line of text is 16 pt tall; the padding takes the hit target to the 20 pt minimum.
-                .padding(.vertical, 2)
+                // A line of text is 16 pt tall: the hit target is held to the 20 pt minimum.
+                .frame(minHeight: Self.target)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -378,9 +378,8 @@ struct DisclosureLabel: View {
             // The representation lays out on its own, so it carries the 20 pt minimum too: without it
             // VoiceOver's disclosure triangle was a 16 pt line of text.
             .accessibilityRepresentation {
-                DisclosureGroup(isExpanded: $isExpanded) {} label: {
-                    Text(spokenTitle ?? title).frame(minWidth: Self.target, minHeight: Self.target)
-                }
+                DisclosureGroup(isExpanded: $isExpanded) {} label: { Text(spokenTitle ?? title) }
+                    .frame(minWidth: Self.target, minHeight: Self.target)
             }
             if let note { OverrideLine(note: note, subject: spokenTitle ?? title).disclosedRow() }
         }
