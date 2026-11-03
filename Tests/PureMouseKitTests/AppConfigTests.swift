@@ -256,4 +256,24 @@ import Testing
             #expect(ConfigCheck.message(for: error) == "apps.com.apple.Safari.buttons.back: unknown action “explode”")
         }
     }
+
+    @Test func appEnabledDecodesAndAbsentMeansOn() throws {
+        let on = try decode(#"{"apps": {"a": {"enabled": true}}}"#)
+        #expect(try #require(on.settings(forApp: "a")).enabled == true)
+
+        let off = try decode(#"{"apps": {"b": {"enabled": false}}}"#)
+        #expect(try #require(off.settings(forApp: "b")).enabled == false)
+
+        let absent = try decode(#"{"apps": {"c": {"buttons": {"back": "none"}}}}"#)
+        #expect(try #require(absent.settings(forApp: "c")).enabled == true)
+    }
+
+    @Test func appEnabledNonBooleanIsRejectedByConfigCheckNamingField() {
+        do {
+            _ = try decode(#"{"apps": {"com.valvesoftware.dota2": {"enabled": "false"}}}"#)
+            Issue.record("accepted non-boolean enabled")
+        } catch {
+            #expect(ConfigCheck.message(for: error) == "apps.com.valvesoftware.dota2.enabled: expected true or false")
+        }
+    }
 }

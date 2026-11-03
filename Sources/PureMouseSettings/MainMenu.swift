@@ -12,14 +12,21 @@ enum MainMenu {
     final class Actions: NSObject {
         let showAbout: @MainActor () -> Void
         let open: @MainActor (URL) -> Void
+        let exportSettings: @MainActor () -> Void
+        let importSettings: @MainActor () -> Void
 
-        init(showAbout: @escaping @MainActor () -> Void, open: @escaping @MainActor (URL) -> Void) {
+        init(showAbout: @escaping @MainActor () -> Void, open: @escaping @MainActor (URL) -> Void,
+             exportSettings: @escaping @MainActor () -> Void = {}, importSettings: @escaping @MainActor () -> Void = {}) {
             self.showAbout = showAbout
             self.open = open
+            self.exportSettings = exportSettings
+            self.importSettings = importSettings
         }
 
         @objc func about(_ sender: Any?) { showAbout() }
         @objc func help(_ sender: Any?) { open(MainMenu.helpURL) }
+        @objc func exportSettings(_ sender: Any?) { exportSettings() }
+        @objc func importSettings(_ sender: Any?) { importSettings() }
     }
 
     /// `actions` is retained by the menu items' targets only weakly, so the caller keeps it.
@@ -34,6 +41,11 @@ enum MainMenu {
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Quit PureMouse Settings", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         main.addItem(submenu: appMenu)
+
+        let file = NSMenu(title: "File")
+        file.addItem(withTitle: "Export Settings…", action: #selector(Actions.exportSettings(_:)), keyEquivalent: "").target = actions
+        file.addItem(withTitle: "Import Settings…", action: #selector(Actions.importSettings(_:)), keyEquivalent: "").target = actions
+        main.addItem(submenu: file)
 
         let edit = NSMenu(title: "Edit")
         edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")

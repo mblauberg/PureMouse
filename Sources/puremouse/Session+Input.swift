@@ -7,11 +7,17 @@ extension Session {
     // MARK: Scrolling
 
     func profileUnderPointer() -> ScrollEngine.Profile {
-        guard let app = ForegroundApp.shared.underPointer(), let profile = appProfiles[app.lowercased()] else {
-            return globalProfile
+        if let app = environment.appUnderPointer(), let scoped = config.settings(forApp: app) {
+            if !scoped.enabled {
+                Log.debug("\(name): scrolling off in \(app)")
+                return offProfile
+            }
+            if let profile = appProfiles[app.lowercased()] {
+                Log.debug("\(name): scrolling with \(app)'s settings")
+                return profile
+            }
         }
-        Log.debug("\(name): scrolling with \(app)'s settings")
-        return profile
+        return globalProfile
     }
 
     // MARK: Events
@@ -127,9 +133,14 @@ extension Session {
 
     private func beginThumbMovement() {
         var settings = global.thumbWheel
-        if appThumbWheel, let app = ForegroundApp.shared.underPointer(), let scoped = config.settings(forApp: app) {
-            settings = scoped.thumbWheel
-            Log.debug("\(name): thumb wheel with \(app)'s settings")
+        if (appThumbWheel || hasDisabledApps), let app = environment.appUnderPointer(), let scoped = config.settings(forApp: app) {
+            if !scoped.enabled {
+                settings = Config.ThumbWheel()
+                Log.debug("\(name): thumb wheel off in \(app)")
+            } else if appThumbWheel && scoped.setsThumbWheel {
+                settings = scoped.thumbWheel
+                Log.debug("\(name): thumb wheel with \(app)'s settings")
+            }
         }
         thumbSettings = settings
         thumbStepper.reset()
@@ -141,12 +152,20 @@ extension Session {
     }
 
     /// The binding for a press: the frontmost app's when an app entry names it, else the global one.
-    /// Only a control some app names needs the lookup. An app that sets the control to `"default"`
-    /// names it (`AppSettings.buttons`) but has no binding for it, so the press is `nil` here.
+    /// Only a control some app names needs the lookup, unless some app has PureMouse turned off.
+    /// An app that sets the control to `"default"` names it (`AppSettings.buttons`) but has no binding
+    /// for it, so the press is `nil` here. An app that is turned off is also `nil` here (native click
+    /// or do nothing).
     private func binding(for cid: UInt16) -> Config.Binding? {
-        if appButtons.contains(cid), let app = ForegroundApp.shared.frontmost(), let scoped = config.settings(forApp: app) {
-            Log.debug("\(name): buttons with \(app)'s settings")
-            return scoped.bindings[cid]
+        if (appButtons.contains(cid) || hasDisabledApps), let app = environment.frontmostApp(), let scoped = config.settings(forApp: app) {
+            if !scoped.enabled {
+                Log.debug("\(name): buttons off in \(app)")
+                return nil
+            }
+            if appButtons.contains(cid) {
+                Log.debug("\(name): buttons with \(app)'s settings")
+                return scoped.bindings[cid]
+            }
         }
         return global.bindings[cid]
     }

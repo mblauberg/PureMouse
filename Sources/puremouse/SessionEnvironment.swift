@@ -21,6 +21,9 @@ struct SessionEnvironment {
     var attemptTimeout: Duration?
     /// The wall clock, for the time settings were applied.
     var date: () -> Date = { Date() }
+    /// The frontmost app and the app under the pointer, looked up without observers.
+    var frontmostApp: @MainActor () -> String? = { ForegroundApp.shared.frontmost() }
+    var appUnderPointer: @MainActor () -> String? = { ForegroundApp.shared.underPointer() }
 
     /// Three attempts, `retryDelay` apart, each request of which waits at most `attemptTimeout`
     /// (per request, not per attempt). A mouse answering from any moment in the window has its

@@ -74,7 +74,7 @@ saves the file as `config.json.bak`).
 | `gesture.distanceMm` | How far the mouse moves before a gesture fires, in millimetres, 0.5–50. Default 4 |
 | `gesture.repeatIntervalMs` | Minimum gap between repeated gestures in one hold, 0–5000. Default 400 |
 | `notifications.lowBattery` | Default true. The menu bar app posts a macOS notification when a mouse's battery falls through 20% and again through 5% (level-only mice: when they report low and critical). A mouse that reconnects already below 20% warns once, if PureMouse can tell it is the same mouse as before (it reports its unit ID) and had not already warned at that level. The warning goes away when the mouse is charging or back at 25% or more, when the 5% warning replaces it, and when you switch this off. Works with the menu bar icon hidden (the menu bar app then runs without an icon); the daemon ignores it. Settings › General switches it; macOS asks for permission the first time |
-| `apps` | Buttons, thumb wheel and smooth scrolling for particular apps ([below](#per-app-settings)) |
+| `apps` | Buttons, thumb wheel and smooth scrolling for particular apps, or PureMouse turned off in one ([below](#per-app-settings)) |
 | `devices` | Settings for one model of mouse, over the ones above ([below](#per-device-settings)) |
 | `universalControl.handOff` | While the pointer is on another Mac (Universal Control), hand the wheels and buttons back to macOS so they scroll and click there natively; take them again when the pointer returns. Default true; false keeps PureMouse's behaviour, which does nothing on the other Mac |
 
@@ -156,7 +156,7 @@ leaving the set's Back, Forward and gesture. Neither touches `apps`.
 
 ## Per-app settings
 
-`apps` maps an app's bundle ID to the settings that differ in that app. Only `buttons`,
+`apps` maps an app's bundle ID to the settings that differ in that app. Only `enabled`, `buttons`,
 `thumbWheel` (`action`, `left`, `right`, `step` and `reversed`; not `inverted`) and `smoothScroll`
 can differ; the rest write to the mouse and stay global. An app's `reversed` defaults to the global
 one; Settings › Apps shows it as the **Swap directions** switch, which reads as Everywhere's until the app sets it
@@ -191,6 +191,24 @@ thumb wheel action. Keys it does not show, unknown ones included, stay as writte
 An app may set a button to `"default"`: while that app is frontmost the button does what the mouse
 does without PureMouse, even where the global settings bind it (see [Mouse Default](#buttons-actions-and-gestures)).
 
+`enabled` is a Boolean; absent means on. `"enabled": false` leaves the app to macOS, for games and
+remote desktops:
+
+```json
+"apps": { "com.valvesoftware.dota2": { "enabled": false } }
+```
+
+Off beats every scope (Everywhere, the mouse and the app's own settings). In that app Back, Forward
+and the wheel press click as the mouse would without PureMouse, other controls do nothing, a gesture
+button does not hold the pointer still, and the wheel and thumb wheel scroll as the mouse sends them:
+no smoothing, speed, acceleration or Shift effect (the wheels' `inverted` is the mouse's own setting,
+so it stays). Pointer speed and wheel mode belong to the mouse and are unchanged. The app's own
+`buttons`, `thumbWheel` and `smoothScroll` stay in the file and apply again when `enabled` is
+removed or true. As for every per-app setting, buttons follow the frontmost app and scrolling the
+app under the pointer. Settings › Apps shows it as the first row of the app's page, **Use PureMouse
+in this app**, which writes `false` when turned off and removes the key when turned on; the Apps list
+reads "Off" for such an app, and the menu's header reads "Off in <App>" while it is frontmost.
+
 A button bound only in some apps is still taken over everywhere. Elsewhere the wheel press, back
 and forward buttons click as usual; other controls do nothing. A button that is a gesture anywhere
 holds the pointer still while pressed in every app. An app may turn on smooth scrolling that is off
@@ -200,6 +218,23 @@ smooth scrolling is off it scrolls without the glide at the given `speed`.
 A per-app key that cannot be per-app (such as `dpi`) and an unknown button are skipped and
 reported in the log; a bad value fails the load as anywhere else. Bundle IDs that differ only in
 case name the same app: the log warns, and the entry last in sorted key order applies.
+
+## Export and import
+
+General › Advanced… has **Export Settings…** and **Import Settings…**, and the Settings app's File
+menu has the same two items.
+
+- **Export** saves a copy of `config.json` to a file you choose (a config that does not load is not
+  exported, so a saved file is always valid).
+- **Import** reads a chosen file and checks it as the daemon would load it. A file that fails is
+  refused, the config is left as it was, and the error names the field. A valid file asks "Replace
+  all settings?" and, when it holds `run` commands, says so ("This file runs commands: 3"), since
+  they run as you when a button is pressed. Confirmed, it replaces the whole file atomically under
+  the config lock and keeps the previous one as `config.json.bak`, as Reset All Settings does; the
+  daemon reloads as for any save. Cancel changes nothing.
+
+Neither asks a device anything: a config holds no pairing and no device state. Per-app export and
+import, and sync, do not exist.
 
 ## Per-device settings
 

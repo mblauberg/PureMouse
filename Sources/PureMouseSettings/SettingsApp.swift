@@ -14,7 +14,9 @@ final class SettingsApp: NSObject, NSApplicationDelegate {
     private var showToken: Int32 = -1
     private lazy var menuActions = MainMenu.Actions(
         showAbout: { [weak self] in self?.show(ShowRequest(pane: .tab(.about))) },
-        open: { NSWorkspace.shared.open($0) })
+        open: { NSWorkspace.shared.open($0) },
+        exportSettings: { [weak self] in self.map { ConfigTransferActions.exportSettings($0.model) } },
+        importSettings: { [weak self] in self.map { ConfigTransferActions.importSettings($0.model) } })
     private var terminateSignal: DispatchSourceSignal?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -38,6 +40,7 @@ final class SettingsApp: NSObject, NSApplicationDelegate {
         show(ShowRequest.consume())
         #if DEBUG
         DevHooks.run { [weak self] in self?.show($0) }
+        if DevTransfer.run(model) { NSApp.terminate(nil) }
         #endif
     }
 

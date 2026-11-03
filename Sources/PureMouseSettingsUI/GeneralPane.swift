@@ -216,6 +216,14 @@ private struct GeneralAdvancedSheet: View {
                 }
                 LabeledContent {
                     HStack {
+                        Button("Export Settings…") { ConfigTransferActions.exportSettings(model) }
+                        Button("Import Settings…") { ConfigTransferActions.importSettings(model) }
+                    }
+                } label: {
+                    RowLabel("Copy settings", help: "Save them to a file, or replace them from one.")
+                }
+                LabeledContent {
+                    HStack {
                         Button("Open") { openLog() }
                             .accessibilityLabel("Open log")
                         Button("Show in Finder") { showLogInFinder() }

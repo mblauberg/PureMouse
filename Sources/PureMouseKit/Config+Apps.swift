@@ -9,6 +9,8 @@ import Foundation
 extension Config {
     /// What applies in one app (or everywhere): bindings, thumb wheel and smooth scrolling.
     public struct AppSettings: Sendable {
+        /// Whether PureMouse applies in this app; absent means on. Off leaves the app to macOS.
+        public var enabled = true
         public var bindings: [UInt16: Binding]
         public var thumbWheel: ThumbWheel
         public var smoothScroll: SmoothScroll?
@@ -38,7 +40,7 @@ extension Config {
     }
 
     /// The sections an app may set; anything else in an app entry is ignored with a warning.
-    static let appSections: Set = ["buttons", "thumbWheel", "smoothScroll"]
+    static let appSections: Set = ["enabled", "buttons", "thumbWheel", "smoothScroll"]
 
     mutating func decodeApps(_ c: KeyedDecodingContainer<AnyKey>) throws {
         let base = global
@@ -48,6 +50,9 @@ extension Config {
             var app = base
             for section in entry.allKeys.map(\.stringValue).sorted() where !Self.appSections.contains(section) {
                 warnings.append("apps.\(id).\(section) is not a per-app setting; ignored")
+            }
+            if entry.contains(AnyKey("enabled")) {
+                app.enabled = try entry.decode(Bool.self, forKey: AnyKey("enabled"))
             }
             if entry.contains(AnyKey("buttons")) {
                 app.setsButtons = true

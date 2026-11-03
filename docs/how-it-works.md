@@ -129,10 +129,20 @@ scrolling (`Session.notchedRefused`). The display link never runs with `smoothin
 
 ## Per-app settings
 
-Buttons, the thumb wheel and smooth scrolling can differ per app. Nothing watches app switches:
-PureMouse asks which app is frontmost when a button some app binds is pressed, and which is under
-the pointer when a scroll or a thumb-wheel movement starts, and only when some app has settings of
-that kind. Each answer costs microseconds to a millisecond, and an idle mouse still costs nothing.
+Buttons, the thumb wheel and smooth scrolling can differ per app, and an app can be turned off
+(`apps.<id>.enabled: false`). Nothing watches app switches:
+PureMouse asks which app is frontmost when a button some app binds (or, while any app is off, any
+diverted button) is pressed, and which is under the pointer when a scroll or a thumb-wheel movement
+starts, and only when some app has settings of that kind.
+
+**Off beats every scope** (`Session.hasDisabledApps`). In an off app the frontmost lookup yields no
+binding, so the press does what the mouse does without PureMouse (`Config.nativeBehaviour(of:)`:
+the wheel press, back and forward click, anything else does nothing) and a gesture button frees the
+pointer (`Session.pointerFree`). The scroll burst takes `Session.offProfile` (speed 1, no
+acceleration, no smoothing, no Shift effect; the hardware invert bits stay, as they are the mouse's)
+and the thumb wheel scrolls with the default settings. The app's own `buttons`, `thumbWheel` and
+`smoothScroll` are ignored, not deleted. Pointer speed and wheel mode are applied to the mouse and
+do not change. The lookup is the same one per press and per burst, with no watcher and no timer. Each answer costs microseconds to a millisecond, and an idle mouse still costs nothing.
 
 `ForegroundApp` does the lookups, AppKit-free and on demand (`Session.appButtons`, `appThumbWheel`,
 `appProfiles`, `ScrollEngine.profileForBurst`); the Universal Control work reuses it.

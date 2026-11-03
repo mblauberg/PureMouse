@@ -234,6 +234,13 @@ public final class AppModel {
 
     public func createConfigIfMissing() { store.createIfMissing() }
 
+    /// Export Settings…: a copy of the config at `url`. Returns why it failed, or nil.
+    public func exportSettings(to url: URL) -> String? { store.exportSettings(to: url) }
+
+    /// Import Settings…, once confirmed: replaces the whole config with a file `ConfigTransfer.read`
+    /// accepted, keeping the previous one as `backupName`. Returns why it failed, or nil.
+    public func importSettings(_ candidate: ConfigTransfer.Candidate) -> String? { store.importSettings(candidate) }
+
     /// The file Reset All Settings and Restore Last Working keep the previous config in.
     public var backupName: String { store.backupName }
 

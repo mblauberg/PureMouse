@@ -11,7 +11,10 @@ import Testing
     private final class Spy {
         var aboutCount = 0
         var opened: [URL] = []
-        lazy var actions = MainMenu.Actions(showAbout: { self.aboutCount += 1 }, open: { self.opened.append($0) })
+        var transfers: [String] = []
+        lazy var actions = MainMenu.Actions(showAbout: { self.aboutCount += 1 }, open: { self.opened.append($0) },
+                                            exportSettings: { self.transfers.append("export") },
+                                            importSettings: { self.transfers.append("import") })
     }
 
     private func menu(_ spy: Spy) -> NSMenu {
@@ -42,6 +45,15 @@ import Testing
         choose(item)
         #expect(spy.opened == [URL(string: "https://github.com/mblauberg/PureMouse/blob/main/docs/troubleshooting.md")!])
         #expect(spy.aboutCount == 0)
+    }
+
+    @Test func theFileMenuHasExportAndImportSettings() throws {
+        let spy = Spy()
+        let file = try #require(menu(spy).items.first { $0.submenu?.title == "File" }?.submenu)
+        #expect(file.items.map(\.title) == ["Export Settings…", "Import Settings…"])
+        file.items.forEach(choose)
+        #expect(spy.transfers == ["export", "import"])
+        #expect(spy.aboutCount == 0 && spy.opened.isEmpty)
     }
 
     @Test func quitAndHideStayInTheAppMenu() throws {

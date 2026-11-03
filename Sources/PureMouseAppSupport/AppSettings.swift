@@ -55,6 +55,22 @@ extension ConfigTree {
         set(nil, at: [], in: Self.appScope(appKey(bundleID)))
     }
 
+    /// The caption under Use PureMouse in this app, and the note once it is off.
+    public static let useInAppCaption = "Applies your buttons and scrolling here. Turn off for games and remote desktops."
+    public static let useInAppOffNote = "Pointer speed and wheel mode stay, because they belong to the mouse."
+
+    /// Whether PureMouse applies in this app (a bundle ID matched regardless of case); absent means on.
+    public func isAppEnabled(_ app: String) -> Bool {
+        bool(Self.appScope(appKey(app)).prefix + ["enabled"]) ?? true
+    }
+
+    /// Turns PureMouse on or off in an app. Absent means on: on removes the key (or writes
+    /// nothing); off writes `false`.
+    public mutating func setAppEnabled(_ app: String, _ on: Bool) {
+        let path = Self.appScope(app).prefix + ["enabled"]
+        set(on ? nil : false, at: path)
+    }
+
     // MARK: Buttons
 
     /// Binds a button in one app. `.standard` removes the app's key, so the wider binding applies;
@@ -188,8 +204,10 @@ extension ConfigTree {
         return areas
     }
 
-    /// What an app changes, for its row in the list: the areas, by name ("Buttons, Scrolling").
+    /// What an app changes, for its row in the list: the areas, by name ("Buttons, Scrolling"),
+    /// or "Off" when turned off.
     public func appSummary(_ app: String) -> String {
+        guard isAppEnabled(app) else { return "Off" }
         let areas = appAreas(app)
         return areas.isEmpty ? AppList.noCustomSettings : areas.map(\.title).joined(separator: ", ")
     }

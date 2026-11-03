@@ -29,6 +29,8 @@ struct MenuState {
     var dpiSteps: [Int] = []
     /// The app in front as the menu opened (read once, never watched); nil when not read.
     var frontmost: FrontmostApp?
+    /// The frontmost app is turned off (`apps.<id>.enabled`), read from the config as the menu opens.
+    var frontmostIsOff = false
     /// A newer release found by the daily check (`UpdateReminders.offer`), not skipped.
     var update: UpdateOffer?
     /// What the Update row is doing (`AppController.installUpdate`).
@@ -179,7 +181,8 @@ enum MenuPlan {
             }
             for device in state.devices {
                 let prefix = Standby(paused: state.paused, away: state.away).map { "\($0.title) · " } ?? ""
-                rows += header(title: device.name, subtitle: prefix + StatusText.subtitle(device),
+                let off = state.frontmostIsOff && !state.away ? state.frontmost?.title : nil
+                rows += header(title: device.name, subtitle: prefix + StatusText.subtitle(device, offIn: off),
                                detail: StatusText.detail(device, version: state.version))
             }
         }

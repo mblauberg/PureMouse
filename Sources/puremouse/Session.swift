@@ -45,9 +45,19 @@ final class Session {
     /// look it up when `appProfiles` is not empty.
     let appButtons: Set<UInt16>
     let appThumbWheel: Bool
+    /// Some app has PureMouse turned off (`enabled: false`).
+    let hasDisabledApps: Bool
     /// Smooth scrolling profiles of the apps that set it, by lowercased bundle ID.
     let appProfiles: [String: ScrollEngine.Profile]
     let globalProfile: ScrollEngine.Profile
+    /// Scrolling in an app that is turned off: no speed, acceleration, smoothing or Shift effect.
+    /// The wheels' invert bits are the mouse's own setting, as pointer speed and wheel mode are,
+    /// so they stay.
+    var offProfile: ScrollEngine.Profile {
+        ScrollEngine.Profile(speed: 1, horizontalSpeed: 1, acceleration: 0, smoothing: .zero,
+                             shiftScrollsHorizontally: false, invertVertical: globalProfile.invertVertical,
+                             invertHorizontal: globalProfile.invertHorizontal)
+    }
     /// Controls a previous session diverted that this one no longer binds; released on apply.
     var releasing: Set<UInt16>
     var needsDiversionScan: Bool
@@ -220,6 +230,7 @@ final class Session {
         needsAccessibility = native.subtracting(bound.keys)
         appButtons = config.apps.values.reduce(into: []) { $0.formUnion($1.buttons) }
         appThumbWheel = config.apps.values.contains { $0.setsThumbWheel }
+        hasDisabledApps = config.apps.values.contains { !$0.enabled }
         globalProfile = Self.profile(global, config)
         appProfiles = config.apps.filter { $0.value.setsSmoothScroll }.mapValues { Self.profile($0, config) }
         thumbSettings = global.thumbWheel
@@ -240,7 +251,7 @@ final class Session {
             threshold: GestureRecognizer.counts(millimetres: config.gesture.distanceMm, dpi: config.dpi ?? 1000),
             repeatInterval: .milliseconds(config.gesture.repeatIntervalMs))
         device.onEvent = { [weak self] in self?.handle($0) }
-        if !appProfiles.isEmpty {
+        if !appProfiles.isEmpty || hasDisabledApps {
             scroll?.profileForBurst = { [weak self] in self?.profileUnderPointer() ?? ScrollEngine.Profile() }
         }
         if !needsAccessibility.isEmpty {
