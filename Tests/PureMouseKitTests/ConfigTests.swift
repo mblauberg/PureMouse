@@ -19,6 +19,18 @@ import Testing
         #expect(config.bindings.values.contains { if case .gesture = $0 { true } else { false } })
     }
 
+    @Test func mediaAndMiddleClickDecodeAsNamedActions() throws {
+        let config = try decode(#"{"buttons": {"back": "playPause", "forward": "nextTrack", "top": "previousTrack", "middle": "middleClick"}}"#)
+        func isAction(_ cid: UInt16, _ action: Action) -> Bool {
+            guard case .action(let decoded)? = config.bindings[cid] else { return false }
+            return decoded == action
+        }
+        #expect(isAction(Config.Button.back.cid, .playPause))
+        #expect(isAction(Config.Button.forward.cid, .nextTrack))
+        #expect(isAction(Config.Button.top.cid, .previousTrack))
+        #expect(isAction(Config.Button.middle.cid, .middleClick))
+    }
+
     @Test func noFileAndAnEmptyObjectAreTheDefaultSet() throws {
         let config = try decode("{}")
         expectDefaultSet(config)
