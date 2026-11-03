@@ -34,7 +34,7 @@
   </picture>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-buttons-dark.png">
-    <img src="docs/images/settings-buttons-light.png" width="460" align="middle" alt="Settings, Mouse tab, Buttons segment: a gesture button with Mission Control on click, and actions for the side buttons, top button and wheel click">
+    <img src="docs/images/settings-buttons-light.png" width="460" align="middle" alt="Settings, Mouse › Buttons: a gesture button with Mission Control on click, and actions for the side buttons, top button and wheel click">
   </picture>
 </p>
 
@@ -59,7 +59,7 @@ Smooth where you want it, native where you don't.
 - Smooth, accelerated scrolling on both wheels: Precise, Balanced, Gliding or your own feel.
 - The thumb wheel scrolls sideways, or switches tabs, changes the volume, zooms or moves between
   Spaces.
-- The main wheel has its own direction setting, separate from the trackpad; choose ratchet or free spin, and set SmartShift.
+- Wheel direction (separate from the trackpad's), ratchet or free spin, and SmartShift.
 
 ### Per app
 
@@ -98,9 +98,9 @@ Pointer segments. Each change applies as you make it.
     <td width="50%" valign="top">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-scrolling-dark.png">
-        <img src="docs/images/settings-scrolling-light.png" width="400" alt="Mouse tab, Scrolling segment: smooth scrolling with its feel and speed, the main wheel direction and mode, SmartShift, and the thumb wheel action">
+        <img src="docs/images/settings-scrolling-light.png" width="400" alt="Mouse › Scrolling: smooth scrolling with its feel and speed, the main wheel direction and mode, SmartShift, and the thumb wheel action">
       </picture>
-      <br><sub><b>Mouse tab · Scrolling.</b> Feel and speed, wheel mode, SmartShift and the thumb wheel.</sub>
+      <br><sub><b>Mouse › Scrolling.</b> Feel and speed, wheel mode, SmartShift and the thumb wheel.</sub>
     </td>
     <td width="50%" valign="top">
       <picture>
@@ -114,9 +114,9 @@ Pointer segments. Each change applies as you make it.
     <td width="50%" valign="top">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-pointer-dark.png">
-        <img src="docs/images/settings-pointer-light.png" width="400" alt="Mouse tab, Pointer segment: pointer speed at 1,600 DPI with presets of 800, 1,600 and 3,200 DPI">
+        <img src="docs/images/settings-pointer-light.png" width="400" alt="Mouse › Pointer: pointer speed at 1,600 DPI with presets of 800, 1,600 and 3,200 DPI">
       </picture>
-      <br><sub><b>Mouse tab · Pointer.</b> Pointer speed and the presets a button can cycle.</sub>
+      <br><sub><b>Mouse › Pointer.</b> Pointer speed and the presets a button can cycle.</sub>
     </td>
     <td width="50%" valign="top">
       <picture>
@@ -188,7 +188,7 @@ its features.
 | Privacy | No account, no telemetry, no settings saved permanently on the mouse | By design |
 
 The sizes are the published 0.5.1 release: the dmg as downloaded, and the app inside it counted
-file by file (`scripts/check-size.sh`). The measured memory figures above show its idle footprint. The memory figures are from macOS 27.0.1 on Apple silicon,
+file by file (`scripts/check-size.sh`). The memory figures are measured at idle, from macOS 27.0.1 on Apple silicon,
 the menu bar app and Settings from the [footprint rig](docs/development.md#footprint-rig), built
 from source. Figures move with each release and each macOS, so they are taken again for every
 minor release.
@@ -252,8 +252,8 @@ Run the command below, then move the app to the Bin. Your config stays in `~/.co
 
 ## Privacy and security
 
-PureMouse stores your settings and support files in your home folder. Updating also uses temporary
-files and replaces the installed app. It goes online only to check for updates (once a day if you
+No account and no telemetry. PureMouse keeps its settings and support files in your home folder;
+updating also uses temporary files and replaces the installed app. It goes online only to check for updates (once a day if you
 allow it, or when you press **Check for Updates**) and to download one you choose to install.
 [Privacy](docs/privacy.md) lists every permission, file and request; [Security](SECURITY.md) says
 how to report a vulnerability.

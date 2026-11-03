@@ -2,9 +2,8 @@
 
 ## Status
 
-The `LoginService` seam with launch agents is built (`LoginService`, `LaunchdAgentService`,
-`puremouse login-status`, `login on|off`, `start`). The proposed `SMAppService` migration is gated
-by a spike on a Developer ID build across an update.
+Proposed for the `SMAppService` migration only. The `LoginService` seam with launch agents is built (`LoginService`, `LaunchdAgentService`,
+`puremouse login-status`, `login on|off`, `start`). The migration is gated by a spike on a Developer ID build across an update.
 
 ## Context
 

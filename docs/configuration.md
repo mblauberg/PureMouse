@@ -138,7 +138,7 @@ Thumb-wheel actions need the Accessibility permission, as smooth scrolling does.
 the thumb wheel over even without `smoothScroll`; where it still scrolls, it scrolls without
 smoothing.
 
-In Settings, the Mouse tab’s Scrolling segment, Thumb Wheel sets `action`, or **Custom** for `left` and `right` (also shown
+Settings › Mouse › Scrolling › Thumb Wheel sets `action`, or **Custom** for `left` and `right` (also shown
 for a pair written by hand). Its Advanced… sheet has **Reverse direction** (`inverted`, while it
 scrolls here or in some app), **Swap directions** (`reversed`, a switch) and **Turn distance** (`step`) while
 the action in effect (the scope's own, else the wider scope's) is not scrolling, and **Speed** (`smoothScroll.horizontalSpeed`) while it scrolls. Custom's rows name
@@ -287,7 +287,7 @@ the last one applies. A cycled DPI (`cycleDPI`) is kept on reload unless that mo
 
 **Buttons:** `gesture` (thumb), `back`, `forward`, `top` (behind the wheel), `middle` (wheel
 press), `thumbPanel` (MX Master 4 haptic/Actions Ring panel, 0x01A0), or any hex control ID such
-as `"0x00c4"`. Names apply only when the mouse has that control. **Find by Pressing…** in the Mouse tab’s Buttons segment in Settings, or
+as `"0x00c4"`. Names apply only when the mouse has that control. **Find by Pressing…** in Settings › Mouse › Buttons, or
 `puremouse probe`, finds a control's ID. The shared library also holds a table of display names for
 common mouse controls, apart from these config names (for example 0x00fd is the "DPI button");
 the log and the menu adopt it in later changes. Any control works by its hex ID whether or not it
