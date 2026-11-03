@@ -212,15 +212,33 @@ public final class HIDPPDevice {
     /// caller compares it before and after to tell a device that answered from one that did not.
     public private(set) var repliesReceived = 0
 
-    /// Called as each reply arrives (see `repliesReceived`), for a caller that acts on the first
-    /// answer of a silent device. One observer; setting it replaces the last.
-    public var onReply: (() -> Void)?
+    private var replyObservers: [Int: () -> Void] = [:]
+    private var nextObserver = 0
+
+    /// Calls `body` once, when the next reply arrives (see `repliesReceived`): for a caller that
+    /// acts on the first answer of a silent device. The registration is numbered, like a timeout
+    /// lease, so each owner removes only its own (`stopObserving`) however the work around it was
+    /// superseded.
+    public func observeNextReply(_ body: @escaping () -> Void) -> Int {
+        nextObserver += 1
+        replyObservers[nextObserver] = body
+        return nextObserver
+    }
+
+    /// Drops a registration that has not fired yet; one already fired or removed is not an error.
+    public func stopObserving(_ token: Int) { replyObservers[token] = nil }
+
+    private func replyArrived() {
+        let due = replyObservers.sorted { $0.key < $1.key }.map(\.value)
+        replyObservers.removeAll()
+        due.forEach { $0() }
+    }
 
     private func handle(_ report: Report) {
         if let p = pending {
             if p.request.isAnswered(by: report) {
                 repliesReceived += 1
-                onReply?()
+                replyArrived()
                 pending = nil
                 p.deadline?.cancel()
                 p.continuation.resume(returning: report.params)
@@ -228,7 +246,7 @@ public final class HIDPPDevice {
             }
             if let error = report.error(for: p.request) {
                 repliesReceived += 1
-                onReply?()
+                replyArrived()
                 failPending(error)
                 return
             }

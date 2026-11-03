@@ -69,6 +69,22 @@ struct HIDPPDeviceTests {
         #expect(device.effectiveTimeout == .seconds(3))
     }
 
+    @Test func aReplyObserverFiresOnceAndOnlyItsOwnerRemovesIt() async throws {
+        let fake = FakeDevice()
+        let device = fake.endpoint()
+        defer { device.close() }
+        var fired: [String] = []
+        let first = device.observeNextReply { fired.append("first") }
+        _ = device.observeNextReply { fired.append("second") }
+        device.stopObserving(first)  // its owner leaves; the other registration stands
+        device.stopObserving(first)  // and a second removal is harmless
+        _ = try await device.hasFeature(0x2121)
+        #expect(fired == ["second"])
+        _ = try await device.hasFeature(0x1004)
+        #expect(fired == ["second"])  // once
+        #expect(device.repliesReceived >= 2)
+    }
+
     @Test func aLentTimeoutIsWhatARequestWaits() async throws {
         let fake = FakeDevice()
         fake.transport.timing = .never

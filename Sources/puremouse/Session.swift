@@ -100,6 +100,10 @@ final class Session {
     /// Attempts begun by every configure of this session, so a test can count them rather than
     /// time them.
     private(set) var attemptsMade = 0
+    /// Called as each attempt begins, with the count so far: tests decide what the fake mouse does
+    /// by the attempt, not by watching the clock.
+    var attemptStarting: (@MainActor (Int) -> Void)?
+    private var replyObserver: Int?
     static let offlineReconfigureGap: Duration = .seconds(30)
     /// Device actions (toggle scroll mode, cycle DPI, haptics) and `apply`'s DPI and scroll mode
     /// writes, one at a time in the order asked, each reading what is wanted (`liveDPI`,
@@ -146,7 +150,12 @@ final class Session {
         var applied = false
         /// Whether the settings are on the mouse now (`Status.Device.applied`); nil until a
         /// configure first starts. Moves only on a configure starting, ending or failing.
-        var appliedStatus: Status.Device.Applied?
+        var appliedStatus: Status.Device.Applied? {
+            didSet { if appliedStatus?.state != .applying { settledApplied = appliedStatus } }
+        }
+        /// The last applied state that is not the transient `applying`: what a superseded configure
+        /// goes back to, and what a replacement session inherits in its place.
+        var settledApplied: Status.Device.Applied?
         /// The main firmware, read once per mouse (`readFacts`).
         var firmware: String?
         /// The firmware has been asked for and answered, with a version or without one.
@@ -396,23 +405,29 @@ final class Session {
         dropHeld()
         configureGeneration &+= 1
         let generation = configureGeneration
+        // A superseded configure's "applying" goes with it: until this one is answered the mouse
+        // shows what it showed before that.
+        if state.appliedStatus?.state == .applying { setApplied(state.settledApplied) }
         let repliesAtStart = device.repliesReceived
         // "Applying settings…" is for a mouse that is answering: until the first reply it keeps what
-        // it showed (Asleep, or its last state), so a silent mouse never flashes it.
-        device.onReply = { [weak self] in
-            guard let self, configureGeneration == generation else { return }
-            device.onReply = nil
+        // it showed (Asleep, or its last state), so a silent mouse never flashes it. The
+        // registration is this configure's own, so a replacement's (or another session's, after a
+        // reload) is never removed by it.
+        replyObserver.map { device.stopObserving($0) }
+        let observer = device.observeNextReply { [weak self] in
+            guard let self, !finished, configureGeneration == generation else { return }
             setApplied(.init(state: .applying))
         }
+        replyObserver = observer
         configuring = Task {
             // The short wait lent to this task's requests. Returning it ends only this lend: a
             // replacement's, or a restore's, stands (`HIDPPDevice.returnTimeout`).
             var lease: Int?
             defer {
                 if let lease { device.returnTimeout(lease) }
+                device.stopObserving(observer)
                 // A superseded task ends after its replacement started; leave the replacement's handle.
                 if configureGeneration == generation {
-                    device.onReply = nil
                     configuring = nil
                     lastConfigureEnded = environment.now()
                 }
@@ -421,6 +436,7 @@ final class Session {
             for attempt in 1...3 {
                 guard !Task.isCancelled else { return }
                 attemptsMade += 1
+                attemptStarting?(attemptsMade)
                 if let timeout = environment.attemptTimeout { lease = device.lendTimeout(timeout) }
                 do {
                     try await apply()

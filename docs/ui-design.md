@@ -535,8 +535,8 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
 whatever Mouse scope is chosen, only while PureMouse runs. Its (i) is a plain button with a 20 pt
 hit target at the row's trailing edge, like the switches, named "About <name>". While the mouse's
 settings are not applied, its line leads with a multicolour warning symbol ("Settings not applied
-· USB receiver") and an Apply Settings Again bordered button sits left of the (i); the row's height
-does not change. The sheet is an `AdvancedSheet` titled with the mouse's name:
+· USB receiver") and an Apply Settings Again bordered button sits left of the (i), spoken as "Apply Settings Again to <name>" so two failed
+mice are not two identical buttons; the row's height does not change. The sheet is an `AdvancedSheet` titled with the mouse's name:
 Done is the default button, Copy Details sits at the bottom-leading edge, and nothing opens from
 it. Its rows are read from status alone (the app never opens HID devices); a fact the mouse does
 not report has no row. Values are leading-aligned, and the current Easy-Switch computer is marked

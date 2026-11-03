@@ -234,8 +234,11 @@ touches.
   `Session.configure()` supersedes one under way; only an offline mouse's other events
   (`Session.reconfigureIfOffline`) defer to a running one, and start one at most once per 30 s.
 - **Applied state.** A session is `applying` from the first reply to a request in the current `configure()`
-  (`HIDPPDevice.onReply`), and until then keeps what it showed before (its last applied state, or
-  nothing for an asleep or fresh mouse), so a silent mouse never flashes it; `applied` (with the
+  (`HIDPPDevice.observeNextReply`, a registration each configure owns and removes itself, as it does its
+  timeout lease), and until then keeps what it showed before (its last applied state, or nothing for an
+  asleep or fresh mouse), so a silent mouse never flashes it. A configure that supersedes one already
+  showing `applying` puts the state back to the last settled one first, and so does a reload's
+  replacement (it inherits the state) when its own configure starts; `applied` (with the
   time, `Environment.date`) once `apply()` has run to its end for the current config, and
   `notApplied` after the third attempt fails **for a mouse that answered**: at least one reply
   (`HIDPPDevice.repliesReceived`) arrived during the configure and `apply()` still did not finish.

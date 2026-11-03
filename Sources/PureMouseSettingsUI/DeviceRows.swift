@@ -21,6 +21,8 @@ struct DeviceRow: View {
                 if notApplied {
                     Button("Apply Settings Again") { model.applySettingsAgain() }
                         .buttonStyle(.bordered)
+                        // Two mice can both be failed: each button is named for its own row.
+                        .accessibilityLabel("Apply Settings Again to \(device.name)")
                 }
                 Button { showingDetails = true } label: {
                     // Vertical padding only: the glyph's trailing edge is the row's, like the switches'.

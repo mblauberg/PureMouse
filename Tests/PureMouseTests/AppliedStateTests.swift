@@ -261,21 +261,25 @@ struct AppliedStateTests {
 
     /// The live schedule's shape, shortened (60 ms a request, 10 ms between
     /// attempts), so a silent mouse costs a fraction of a second. The tests count attempts
-    /// instead of timing them: a mouse that starts answering as attempt `k` begins is applied by
-    /// attempt `k + 1` (so `k` is 1 or 2: a third silent attempt leaves nothing to apply by, and the
-    /// request in flight when the mouse starts answering may be one whose timeout fails it), whatever else is running on the machine. The live durations, and
+    /// instead of timing them: a mouse that starts answering as attempt `k + 1` begins is applied by
+    /// attempt `k + 1` (so `k` is 1 or 2: a third silent attempt leaves nothing to apply by), whatever else is running on the machine. The live durations, and
     /// wall-clock figures, are the constants' test below and the rig's
     /// (`scripts/measure-reconnect.sh`).
     private static let scaled = SessionEnvironment(canPostEvents: true, configureRetryDelay: .milliseconds(10),
                                                    attemptTimeout: .milliseconds(60))
 
+    /// The mouse answers nothing through attempt `k` and everything from attempt `k + 1`: the fake
+    /// is switched by the session's own attempt counter as that attempt begins, so no test depends
+    /// on catching a moment in time.
     private func attemptsUntilApplied(_ h: SessionHarness, silentAttempts k: Int,
                                       start: () -> Void) async throws -> Int {
         h.fake.transport.timing = .never  // every request unanswered, not one write
         let first = h.session.attemptsMade
+        h.session.attemptStarting = { [fake = h.fake] made in
+            if made - first == k + 1 { fake.transport.timing = .nextTurn }
+        }
+        defer { h.session.attemptStarting = nil }
         start()
-        try await eventually(within: .seconds(5)) { h.session.attemptsMade - first == k }  // attempt k has begun
-        h.fake.transport.timing = .nextTurn  // the mouse answers from here on
         try await eventually(within: .seconds(5)) { h.session.status.applied?.state == .applied && !h.session.isConfiguring }
         return h.session.attemptsMade - first
     }
@@ -351,6 +355,44 @@ struct AppliedStateTests {
         defer { h.close() }
         let seen = Transitions(h.session)
         _ = try await attemptsUntilApplied(h, silentAttempts: 1) { h.session.configure() }
+        #expect(seen.states == [.applying, .applied])
+    }
+
+    @Test func aSupersededConfigureTakesItsApplyingWithIt() async throws {
+        let at = Date(timeIntervalSince1970: 1_700_000_321)
+        var environment = Self.scaled
+        environment.date = { at }
+        let h = try await harness(environment: environment)
+        defer { h.close() }
+        h.session.configure()
+        try await eventually { h.session.status.applied?.state == .applied && !h.session.isConfiguring }
+        // A configure that had been answered is showing "applying" when a newer one starts, and the
+        // mouse then goes silent: the newer one must not inherit the transient state.
+        h.session.state.appliedStatus = .init(state: .applying)
+        h.fake.transport.timing = .never
+        let seen = Transitions(h.session)
+        h.session.configure()
+        #expect(h.session.status.applied == .init(state: .applied, at: at))
+        try await eventually(within: .seconds(5)) { !h.session.isConfiguring }
+        #expect(h.session.status.applied == nil && !h.session.status.online)
+        #expect(seen.states == [.applied])  // back to what it was, never applying again
+    }
+
+    @Test func aReplacementSessionStillSeesTheFirstReplyAfterTheOldSessionEnds() async throws {
+        let h = try await harness(environment: Self.scaled)
+        defer { h.close() }
+        h.fake.transport.timing = .never
+        h.session.configure()
+        try await eventually { h.session.attemptsMade >= 1 }
+        // A reload: the replacement takes the same endpoint while the old configure is still running.
+        let next = h.replacement(config: try SessionHarness.config(Self.config), environment: Self.scaled)
+        defer { next.close() }
+        let seen = Transitions(next)
+        next.configure()
+        h.session.close()  // the old configure ends, and its cleanup runs, after the replacement registered
+        try await eventually { !h.session.isConfiguring }
+        h.fake.transport.timing = .nextTurn
+        try await eventually(within: .seconds(5)) { next.status.applied?.state == .applied && !next.isConfiguring }
         #expect(seen.states == [.applying, .applied])
     }
 

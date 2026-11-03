@@ -70,6 +70,9 @@ import Testing
         let rows = try Self.source("DeviceRows.swift")
         #expect(rows.contains("Button(\"Apply Settings Again\") { model.applySettingsAgain() }"))
         #expect(rows.contains("exclamationmark.triangle"))
+        // Two failed mice give two buttons: the visible title is the same, the spoken names are not.
+        #expect(rows.contains(".accessibilityLabel(\"Apply Settings Again to \\(device.name)\")"))
+        #expect(rows.contains(".accessibilityLabel(\"About \\(device.name)\")"))
         #expect(rows.contains("Image(systemName: \"checkmark\")") && rows.contains(".opacity(line.current ? 1 : 0)"))
     }
 
