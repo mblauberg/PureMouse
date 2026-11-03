@@ -75,8 +75,6 @@ struct AppPage: View {
         .safeAreaInset(edge: .top, spacing: 0) {
             AppPageHeader(key: key, identity: identity, segment: segment, select: select, back: back)
         }
-        // At the top, as the Mouse tab's panes are, whatever height the window has.
-        .frame(maxHeight: .infinity, alignment: .top)
         .actionEditorSheet($editor) { action, target in apply(action, to: target) }
         .removeAppAlert(name: identity.name, isPresented: $confirmingRemove, remove: remove)
         // Gesture directions, other controls and more thumb wheel options change the page's height.
