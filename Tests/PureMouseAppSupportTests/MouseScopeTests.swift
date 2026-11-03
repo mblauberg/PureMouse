@@ -420,3 +420,50 @@ private func kitWheel(_ config: ConfigTree, _ key: String) throws -> Config.Thum
     #expect(own.holds(["thumbWheel"], in: scope(m750Key)))
     #expect(ScrollingLayout(config: own, devices: [m750], scope: scope(m750Key)).availability(.thumbWheelAction) == .unsupportedButConfigured)
 }
+
+// MARK: No mouse, and a Bluetooth mouse waiting for Input Monitoring
+
+@MainActor @Test func noMouseAtAllIsOnlyWhenRunningWithNothingKnown() throws {
+    let (empty, _) = try makeModel(devices: [])
+    #expect(empty.hasNoMouse)
+    // A mouse, a mouse waiting for Input Monitoring, or a devices entry (a mouse that is away) each
+    // mean there is one to show.
+    #expect(try !makeModel(devices: [mxMaster]).0.hasNoMouse)
+    let sandbox = try Sandbox()
+    try sandbox.write("{}")
+    try sandbox.writeStatus(daemonStatus(pid: getpid(), inputMonitoring: false,
+                                         waiting: [.init(id: "2", name: "MX Anywhere 3S")]))
+    let waiting = AppModel(locations: sandbox.locations, defaults: UserDefaults(suiteName: "pm-\(UUID().uuidString)")!,
+                           alert: { _, _ in })
+    waiting.reloadStatus()
+    #expect(!waiting.hasNoMouse)
+    #expect(waiting.waitingForInputMonitoring.map(\.name) == ["MX Anywhere 3S"])
+    #expect(waiting.inputMonitoringNeeded)
+    #expect(try !makeModel(config: #"{"devices": {"\#(mx)": {"dpi": 800}}}"#, devices: []).0.hasNoMouse)
+    // Not while PureMouse is paused (it reports no mice then) or off.
+    let paused = try Sandbox()
+    try paused.write("{}")
+    try paused.writeStatus(daemonStatus(pid: getpid(), paused: true))
+    let model = AppModel(locations: paused.locations, defaults: UserDefaults(suiteName: "pm-\(UUID().uuidString)")!,
+                         alert: { _, _ in })
+    model.reloadStatus()
+    #expect(!model.hasNoMouse)
+    let off = try Sandbox()
+    try off.write("{}")
+    let none = AppModel(locations: off.locations, defaults: UserDefaults(suiteName: "pm-\(UUID().uuidString)")!,
+                        alert: { _, _ in })
+    none.reloadStatus()
+    #expect(!none.hasNoMouse)
+}
+
+@MainActor @Test func inputMonitoringIsNeededOnlyForBluetoothMice() throws {
+    // Missing, with a receiver mouse only: not needed (General reads "Not needed").
+    let sandbox = try Sandbox()
+    try sandbox.write("{}")
+    try sandbox.writeStatus(daemonStatus(pid: getpid(), devices: [mxMaster], inputMonitoring: false))
+    let model = AppModel(locations: sandbox.locations, defaults: UserDefaults(suiteName: "pm-\(UUID().uuidString)")!,
+                         alert: { _, _ in })
+    model.reloadStatus()
+    #expect(model.inputMonitoringMissing && !model.inputMonitoringNeeded)
+    #expect(BannerPlan.items(for: BannerPlan.State(model: model, needsAccessibility: true)).isEmpty)
+}

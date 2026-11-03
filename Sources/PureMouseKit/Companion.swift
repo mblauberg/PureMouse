@@ -112,10 +112,18 @@ public struct Status: Codable, Equatable, Sendable {
     /// True while the pointer is on another Mac (Universal Control) and the mice are handed back
     /// to macOS for it.
     public var away: Bool
+    /// Bluetooth mice the daemon has seen but cannot talk to until Input Monitoring is allowed.
+    /// Absent from a daemon older than this field; read it as empty (`waiting`). The schema did not
+    /// change: a reader that does not know the field ignores it.
+    public var waitingForInputMonitoring: [WaitingDevice]?
+
+    /// `waitingForInputMonitoring`, empty when the daemon does not say.
+    public var waiting: [WaitingDevice] { waitingForInputMonitoring ?? [] }
 
     public init(pid: Int32, startedAt: Date, version: String, running: Bool, paused: Bool,
                 permissions: Permissions, logiOptionsRunning: Bool, config: ConfigState,
-                devices: [Device], capture: Capture?, away: Bool = false) {
+                devices: [Device], capture: Capture?, away: Bool = false,
+                waitingForInputMonitoring: [WaitingDevice]? = nil) {
         self.pid = pid
         self.startedAt = startedAt
         self.version = version
@@ -127,6 +135,19 @@ public struct Status: Codable, Equatable, Sendable {
         self.devices = devices
         self.capture = capture
         self.away = away
+        self.waitingForInputMonitoring = waitingForInputMonitoring
+    }
+
+    /// A Bluetooth device whose name macOS shows but whose replies it holds back without Input
+    /// Monitoring, so PureMouse cannot tell what it is or configure it.
+    public struct WaitingDevice: Codable, Equatable, Sendable {
+        /// Stable while the daemon runs: the interface's number.
+        public var id: String
+        public var name: String
+        public init(id: String, name: String) {
+            self.id = id
+            self.name = name
+        }
     }
 
     public struct Permissions: Codable, Equatable, Sendable {

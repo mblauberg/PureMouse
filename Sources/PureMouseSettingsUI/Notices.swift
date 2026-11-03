@@ -8,7 +8,8 @@ extension Notice {
         switch self {
         case .configError: "xmark.octagon.fill"
         case .off, .paused: "pause.circle.fill"
-        case .writeError, .statusTooNew, .logiOptions, .accessibility: "exclamationmark.triangle.fill"
+        case .noMouse: "computermouse"
+        case .writeError, .statusTooNew, .inputMonitoring, .logiOptions, .accessibility: "exclamationmark.triangle.fill"
         }
     }
 
@@ -19,8 +20,10 @@ extension Notice {
         case .statusTooNew: "PureMouse needs an update."
         case .off: "PureMouse is off."
         case .paused: "PureMouse is paused."
+        case .inputMonitoring: "PureMouse needs Input Monitoring."
         case .logiOptions: "Logi Options+ is running."
         case .accessibility: "PureMouse needs Accessibility."
+        case .noMouse: "No mouse found."
         }
     }
 
@@ -33,6 +36,9 @@ extension Notice {
         case .statusTooNew: "The menu bar app is older than the PureMouse running now. Install the latest release."
         case .off: "The mouse works as it does without PureMouse. Changes here apply when it starts."
         case .paused: "The mouse works as it does without PureMouse. Changes here apply when it resumes."
+        case .inputMonitoring:
+            Self.inputMonitoringMessage(waiting: model.waitingForInputMonitoring.map(\.name))
+        case .noMouse: "Turn on your mouse or plug in its receiver. Its settings appear here once it connects."
         case .logiOptions: "Only one app can control the buttons. Quit Logi Options+ or remove it."
         case .accessibility:
             "Allow it in System Settings to use smooth scrolling and button actions. PureMouse restarts itself when you do."
@@ -49,7 +55,9 @@ struct PaneBanners: View {
     var needsAccessibility = false
 
     var body: some View {
+        // A pane that has no mouse to show says so in place (docs/ui-design.md, empty states).
         let notices = BannerPlan.items(for: BannerPlan.State(model: model, needsAccessibility: needsAccessibility))
+            .filter { $0 != .noMouse }
         if let notice = notices.first {
             Section {
                 Banner(title: notice.title, message: notice.message(model), symbol: notice.symbol,
@@ -167,6 +175,11 @@ struct NoticeActions: View {
         case .accessibility:
             Button("Open System Settings") { NSWorkspace.shared.open(PrivacyPane.accessibility.url) }
                 .accessibilityLabel("Allow Accessibility in System Settings")
+        case .inputMonitoring:
+            Button("Open System Settings") { NSWorkspace.shared.open(PrivacyPane.inputMonitoring.url) }
+                .accessibilityLabel("Allow Input Monitoring in System Settings")
+        case .noMouse:
+            EmptyView()
         }
     }
 }

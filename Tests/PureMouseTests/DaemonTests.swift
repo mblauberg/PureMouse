@@ -1,4 +1,6 @@
 import Foundation
+import HIDPP
+import HIDPPTesting
 import PureMouseKit
 import Testing
 @testable import puremouse
@@ -65,6 +67,56 @@ struct DaemonTests {
         #expect(Permissions.needed(postsEvents: false, bluetooth: true, hidOpenFailed: false) == .inputMonitoring)
         #expect(Permissions.needed(postsEvents: false, bluetooth: false, hidOpenFailed: true) == .inputMonitoring)
         #expect(Permissions.needed(postsEvents: true, bluetooth: true, hidOpenFailed: false) == .all)
+    }
+
+    /// A Bluetooth mouse the daemon has seen but cannot ask anything without Input Monitoring is in
+    /// the status as waiting for it, and the daemon says it needs that permission. Once allowed,
+    /// nothing waits.
+    @Test func aBluetoothMouseWithoutInputMonitoringIsListedAsWaitingForIt() throws {
+        let h = try DaemonHarness("{}", permissions: .accessibility)
+        defer { h.close() }
+        #expect(h.daemon.status(running: true).waiting.isEmpty)
+        let mouse = FakeDevice.mxMaster3S
+        _ = h.daemon.listen(mouse.transport, index: mouse.index)
+        let status = h.daemon.status(running: true)
+        #expect(status.waiting.map(\.name) == [mouse.transport.product])
+        #expect(status.permissions.inputMonitoring == false)
+        #expect(h.daemon.missingPermissions == .inputMonitoring)
+        // Not while PureMouse is quitting: the final status lists nothing.
+        #expect(h.daemon.status(running: false).waiting.isEmpty)
+
+        let allowed = try DaemonHarness("{}", permissions: .all)
+        defer { allowed.close() }
+        let other = FakeDevice.mxMaster3S
+        _ = allowed.daemon.listen(other.transport, index: other.index)
+        #expect(allowed.daemon.status(running: true).waiting.isEmpty)
+        #expect(allowed.daemon.missingPermissions.isEmpty)
+    }
+
+    /// A keyboard on Bluetooth is not worth asking Input Monitoring for.
+    @Test func aBluetoothKeyboardNeitherWaitsNorNeedsInputMonitoring() throws {
+        #expect(Daemon.mayBeMouse(product: "MX Master 3S"))
+        #expect(Daemon.mayBeMouse(product: "M750"))
+        #expect(!Daemon.mayBeMouse(product: "MX Keys S"))
+        #expect(!Daemon.mayBeMouse(product: "Logitech Keyboard K380"))
+        let h = try DaemonHarness("{}", permissions: .accessibility)
+        defer { h.close() }
+        let keyboard = FakeTransport(product: "MX Keys")
+        _ = h.daemon.listen(keyboard, index: directDeviceIndex)
+        #expect(h.daemon.status(running: true).waiting.isEmpty)
+        #expect(h.daemon.missingPermissions.isEmpty)
+    }
+
+    /// With a receiver mouse only, the daemon asks for Accessibility and never for Input
+    /// Monitoring, which only Bluetooth needs.
+    @Test func aReceiverMouseAsksForAccessibilityOnly() async throws {
+        let h = try DaemonHarness("{}", permissions: [])
+        defer { h.close() }
+        let m750 = FakeDevice.m750
+        m750.onReceiver(slot: 2)
+        _ = h.daemon.listen(m750.transport, index: m750.index)
+        #expect(h.daemon.missingPermissions == .accessibility)
+        #expect(h.daemon.status(running: true).waiting.isEmpty)
     }
 
     func config(_ json: String) throws -> Config { try SessionHarness.config(json) }

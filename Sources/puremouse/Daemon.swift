@@ -18,7 +18,8 @@ final class Daemon {
     /// they were does not reload.
     private var configBytes: Data?
     private let startedAt = Date.now
-    private let permissions = Permissions.current
+    /// What this process may do; macOS caches it for the life of the process.
+    let permissions: Permissions
     /// Asking a child process for new grants (`pollPermissions`), while it runs.
     private var permissionPoll: Task<Void, Never>?
     /// When the poll stops asking; each re-arm pushes it back (`pollPermissions`).
@@ -112,9 +113,10 @@ final class Daemon {
         }
     }
 
-    init(configURL: URL, environment: SessionEnvironment = .live) {
+    init(configURL: URL, environment: SessionEnvironment = .live, permissions: Permissions = .current) {
         self.configURL = configURL
         self.environment = environment
+        self.permissions = permissions
         config = .defaults
         if !loadConfig() {
             // Stay up with nothing configured rather than crash-loop under launchd; fixing the
@@ -169,6 +171,7 @@ final class Daemon {
         let status = monitor.start()
         if status != kIOReturnSuccess {
             hidOpenFailed = true
+            requestPermissions()
             Log.error("opening HID devices failed: 0x\(String(UInt32(bitPattern: status), radix: 16)) (Input Monitoring permission?)")
         }
         pollPermissions()
@@ -194,7 +197,8 @@ final class Daemon {
             logiOptionsRunning: logiOptionsRunning,
             config: .init(path: configURL.path, error: configError),
             devices: running ? sessions.values.map(\.status).sorted { $0.id < $1.id } : [],
-            capture: capture, away: running && handingOff)
+            capture: capture, away: running && handingOff,
+            waitingForInputMonitoring: running ? waitingForInputMonitoring : [])
     }
 
     private func statusChanged() {
@@ -350,14 +354,41 @@ final class Daemon {
         signalSources.append(source)
     }
 
+    /// Asks for what is needed now and missing, when something may have changed that: at start, when
+    /// a Bluetooth mouse attaches, and when opening HID devices failed.
     private func requestPermissions() {
-        Permissions.requestMissing(permissions)
+        let missing = missingPermissions
+        if !missing.isEmpty { Permissions.request(missing) }
     }
 
     /// The permissions PureMouse needs for its config and mice now but lacks.
-    private var missingPermissions: Permissions {
-        Permissions.needed(postsEvents: Self.postsEvents(config), bluetooth: monitor.interfaces.contains { !$0.isReceiver },
+    var missingPermissions: Permissions {
+        Permissions.needed(postsEvents: Self.postsEvents(config), bluetooth: !bluetoothMice.isEmpty,
                            hidOpenFailed: hidOpenFailed).subtracting(permissions)
+    }
+
+    /// Bluetooth devices that may be mice, adopted or not: the reason Input Monitoring is needed.
+    /// Without that permission a device's replies never arrive, so it cannot be told from a
+    /// keyboard by asking; its name has to do.
+    private var bluetoothMice: [(key: Key, device: HIDPPDevice)] {
+        endpoints.filter { key, device in
+            !device.interface.isReceiver && !ignored.contains(key) && Self.mayBeMouse(product: device.interface.product)
+        }.map { ($0.key, $0.value) }
+    }
+
+    /// The Bluetooth mice seen but not adopted for want of Input Monitoring, for the status.
+    var waitingForInputMonitoring: [Status.WaitingDevice] {
+        guard !permissions.contains(.inputMonitoring) else { return [] }
+        return bluetoothMice.filter { sessions[$0.key] == nil }.map {
+            Status.WaitingDevice(id: deviceID($0.key), name: $0.device.interface.product)
+        }.sorted { $0.id < $1.id }
+    }
+
+    /// Whether a Bluetooth HID++ device might be a mouse by its name: a keyboard is not worth
+    /// asking Input Monitoring for.
+    static func mayBeMouse(product: String) -> Bool {
+        let name = product.lowercased()
+        return !["keyboard", "keys", "keypad"].contains { name.contains($0) }
     }
 
     /// Whether some mouse may need to post events (Accessibility): any scope of the top level or
@@ -426,7 +457,10 @@ final class Daemon {
         } else {
             let device = listen(interface, index: directDeviceIndex)
             Task { await adoptRetrying(device) }
-            pollPermissions()  // a Bluetooth mouse needs Input Monitoring
+            // A Bluetooth mouse needs Input Monitoring: ask now, and let the menu say it is waiting.
+            requestPermissions()
+            pollPermissions()
+            statusChanged()
         }
     }
 

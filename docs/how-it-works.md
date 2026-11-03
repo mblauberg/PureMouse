@@ -206,7 +206,8 @@ touches.
   SIGTERM, before restoring the mouse).
 - Idle cost is zero CPU. The optional daily update check is run by the system's
   background-activity scheduler, not a timer of ours. The display link runs only while a scroll is
-  gliding. The bounded exceptions are the permission poll and the adoption retries below.
+  gliding. The bounded exceptions are the permission poll and the adoption retries below;
+  `IdleCostTests` fails on a new timer or poll in the daemon sources.
 
 ### Sessions
 
@@ -339,6 +340,14 @@ may be taken over; Input Monitoring with a Bluetooth mouse or when opening HID d
 child runs after 2, 4, 8, 16 and 32 s and then once a minute, until `Daemon.permissionPollLength`
 (10 minutes) after the latest start, wake, reload, control change or Bluetooth attach; each of those
 starts or extends it. Without Input Monitoring a Bluetooth mouse is not retried after its first try.
+
+Only needed permissions are asked for: at start, on a Bluetooth attach and after a HID open failure
+the daemon requests `missingPermissions` (the needed ones not yet allowed), never both by reflex,
+so a user with no Bluetooth mouse is not asked for Input Monitoring and Settings shows it as "Not
+needed". A Bluetooth mouse that is seen but cannot be identified without Input Monitoring is listed
+in `Status.waitingForInputMonitoring` (the name heuristic is `Daemon.mayBeMouse`, so a keyboard is
+not listed), and the menu, the Mouse pane and General each offer Allow Input Monitoring for it. This
+adds a status field and no timer or poll (`IdleCostTests`).
 
 ### Battery and DPI
 

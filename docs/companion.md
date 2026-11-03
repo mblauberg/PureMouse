@@ -56,6 +56,7 @@ The daemon rewrites `status.json` when anything in it changes:
 - battery change;
 - DPI or wheel-mode change;
 - permission grant (the restart then writes a fresh one);
+- a Bluetooth mouse seen without Input Monitoring (it joins `waitingForInputMonitoring`);
 - config load or failure;
 - pause or resume;
 - the pointer moving to another Mac or back, when that hands the mice back (`away`);
@@ -137,6 +138,7 @@ All optional; nil members are left out of the JSON.
 | `devices[].capabilities` | object | What the mouse reports. Members: `dpi`, `smartShift`, `smoothScroll`, `thumbWheel`, `haptics` and `battery` (each Bool: true has it, false reported not to; absent unknown, e.g. a lookup that failed transiently). Absent until the mouse's first apply has finished |
 | `devices[].controls[].gestures` | Bool | The control can report raw XY movement. Absent when unknown |
 | `capture.model` | String | The device key (`devices[].model`) of the mouse whose control was pressed |
+| `waitingForInputMonitoring[]` | array | Bluetooth mice the daemon has seen but cannot adopt because Input Monitoring is not allowed, each `{id, name}` (`WaitingDevice`). Absent or empty when none. Added without a `schema` bump: a reader treats absent as empty (`Status.waiting`), and an older menu ignores it |
 
 ### Requests aimed at one mouse (Control)
 

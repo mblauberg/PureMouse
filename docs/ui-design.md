@@ -175,6 +175,11 @@ Each level has one mechanism, and each label says what it reveals.
 - An empty state is a `ContentUnavailableView` with what is missing and one next step, as a
   button where one exists: no mouse found, Bluetooth off, PureMouse paused or off, Logi Options+
   running, permission not allowed, no apps added.
+- **No mouse.** With PureMouse running and not paused, and no mouse known (none adopted, none waiting, none in the config), the Mouse
+  pane is a "No Mouse Found" `ContentUnavailableView` instead of empty tabs. A Bluetooth mouse that
+  is seen but waiting for Input Monitoring is not "no mouse": the pane, General and the menu say
+  so and offer Allow Input Monitoring. General's Input Monitoring row reads "Not needed" when no
+  Bluetooth mouse is in play. A pane's content stays within 600 pt.
 - An error shows next to the control it concerns. Alerts only for an actionable failure or an
   action that cannot be undone (Reset All Settings…, Use Last Working Config…); never at launch,
   never for information.

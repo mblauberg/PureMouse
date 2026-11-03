@@ -130,7 +130,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     private func askAboutUpdatesIfDue() {
         guard iconShown, !questionSettled, updates.questionDue, model.status != nil, model.daemonRunning else { return }
         questionSettled = true
-        let permissionsSetUp = !model.accessibilityMissing && !(model.inputMonitoringMissing && model.hasBluetoothDevice)
+        let permissionsSetUp = !model.accessibilityMissing && !model.inputMonitoringNeeded
         guard permissionsSetUp else { return }
         // Not inside the callback that noticed it: a modal alert there would run the rest of it nested.
         Task { updates.setAutomatic(askAboutUpdates()) }

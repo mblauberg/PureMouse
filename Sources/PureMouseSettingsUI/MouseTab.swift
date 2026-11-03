@@ -201,3 +201,34 @@ struct MousePopUp: View {
         .accessibilityHint("\(Self.followNote) \(Self.appsNote)")
     }
 }
+
+/// A Mouse segment's pane, or the empty state when PureMouse sees no mouse at all
+/// (`AppModel.hasNoMouse`): there is nothing to set yet, and the controls would only be guesses at
+/// a mouse that is not there. Notices still show above it (docs/ui-design.md, empty states).
+struct MouseSegmentPane<Content: View>: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.settings) private var settings
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        Group {
+            if model.hasNoMouse {
+                PaneForm {
+                    PaneBanners()
+                    Section {
+                        ContentUnavailableView {
+                            Label("No Mouse Found", systemImage: "computermouse")
+                        } description: {
+                            Text("Turn on your mouse or plug in its receiver. Its settings appear here once it connects.")
+                        }
+                        // A form row sizes to its content and sits leading; the empty state centres in the row.
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+            } else {
+                content
+            }
+        }
+        .onChange(of: model.hasNoMouse) { settings?.refit() }
+    }
+}

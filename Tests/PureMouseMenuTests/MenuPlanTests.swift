@@ -293,6 +293,29 @@ struct MenuPlanTests {
         #expect(!lines(state).contains("Input Monitoring"))
     }
 
+    /// A Bluetooth mouse the daemon has seen but cannot talk to: the menu names it, says what it
+    /// waits for and offers Allow Input Monitoring, not the advice to check a receiver.
+    @Test func aBluetoothMouseWaitingForInputMonitoringIsNamedAndOffersTheAllow() {
+        var state = Self.running([])
+        state.inputMonitoringMissing = true
+        state.waitingForInputMonitoring = ["MX Anywhere 3S"]
+        let text = lines(state)
+        #expect(text.hasPrefix("header MX Anywhere 3S, Bluetooth · Waiting for Input Monitoring\n"))
+        #expect(text.contains("Allow Input Monitoring [attention, -> openPrivacy(PureMouseAppSupport.PrivacyPane.inputMonitoring)]"))
+        #expect(!text.contains("check the receiver") && !text.contains("No Mouse Connected"))
+        #expect(state.needsAttention)
+        // Without a mouse waiting, nothing asks for it.
+        state.waitingForInputMonitoring = []
+        #expect(!lines(state).contains("Allow Input Monitoring"))
+        #expect(lines(state).contains("No Mouse Connected"))
+    }
+
+    @Test func aReceiverMouseNeverAsksForInputMonitoring() {
+        var state = Self.running()
+        state.inputMonitoringMissing = true
+        #expect(!lines(state).contains("Allow Input Monitoring") && !state.needsAttention)
+    }
+
     @Test func aConfigErrorMakesTheConfigRowsReadOnly() {
         var state = Self.running()
         state.configError = true

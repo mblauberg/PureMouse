@@ -54,7 +54,8 @@ struct GeneralPane: View {
                     NSWorkspace.shared.open(PrivacyPane.accessibility.url)
                 }
                 PermissionRow(title: "Input Monitoring", help: "Needed for Bluetooth mice. USB receivers work without it.",
-                              granted: model.daemonRunning ? model.status?.permissions.inputMonitoring : nil) {
+                              granted: model.daemonRunning ? model.status?.permissions.inputMonitoring : nil,
+                              needed: model.inputMonitoringNeeded) {
                     NSWorkspace.shared.open(PrivacyPane.inputMonitoring.url)
                 }
             } header: {
@@ -241,20 +242,24 @@ private struct PermissionRow: View {
     let help: String
     /// nil while PureMouse is off: only the daemon knows (grants are per process).
     let granted: Bool?
+    /// Whether anything PureMouse does now needs it; a permission that is neither granted nor
+    /// needed (Input Monitoring with no Bluetooth mouse) reads "Not needed" and offers nothing.
+    var needed = true
     let open: () -> Void
 
     var body: some View {
+        let state = PermissionState(granted: granted, needed: needed)
         LabeledContent {
             HStack(spacing: 8) {
-                switch granted {
-                case true?:
-                    Label("Allowed", systemImage: "checkmark.circle.fill")
-                case false?:
-                    Label("Not allowed", systemImage: "exclamationmark.triangle.fill")
+                switch state {
+                case .allowed:
+                    Label(state.word, systemImage: "checkmark.circle.fill")
+                case .notAllowed:
+                    Label(state.word, systemImage: "exclamationmark.triangle.fill")
                     Button("Open System Settings", action: open)
                         .accessibilityLabel("Allow \(title) in System Settings")
-                case nil:
-                    Text("Unavailable while PureMouse is off")
+                case .notNeeded, .unavailable:
+                    Text(state.word)
                 }
             }
             .symbolRenderingMode(.multicolor)

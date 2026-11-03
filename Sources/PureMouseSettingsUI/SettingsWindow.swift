@@ -80,9 +80,9 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
                 return header
             } make: { segment in
                 switch segment {
-                case .buttons: host(ButtonsPane())
-                case .scrolling: host(ScrollingPane())
-                case .pointer: host(PointerPane())
+                case .buttons: host(MouseSegmentPane { ButtonsPane() })
+                case .scrolling: host(MouseSegmentPane { ScrollingPane() })
+                case .pointer: host(MouseSegmentPane { PointerPane() })
                 }
             }
             mouse.didSelect = { [weak tabs] in

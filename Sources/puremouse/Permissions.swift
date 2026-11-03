@@ -28,15 +28,16 @@ struct Permissions: OptionSet {
         return needed
     }
 
-    /// Shows the system prompt for each missing permission. Each prompt appears once; later
-    /// requests are no-ops until the user acts in System Settings.
-    static func requestMissing(_ granted: Permissions) {
-        if !granted.contains(.inputMonitoring) {
-            Log.error("Input Monitoring not granted; requesting")
+    /// Shows the system prompt for each permission in `missing`, which is what is needed now and
+    /// not granted (`Daemon.missingPermissions`): a receiver mouse never asks for Input Monitoring.
+    /// Each prompt appears once; later requests are no-ops until the user acts in System Settings.
+    static func request(_ missing: Permissions) {
+        if missing.contains(.inputMonitoring) {
+            Log.error("Input Monitoring needed but not granted; requesting")
             IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
         }
-        if !granted.contains(.accessibility) {
-            Log.error("Accessibility (post events) not granted; requesting")
+        if missing.contains(.accessibility) {
+            Log.error("Accessibility (post events) needed but not granted; requesting")
             CGRequestPostEventAccess()
         }
     }

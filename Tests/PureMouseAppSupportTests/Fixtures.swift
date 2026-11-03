@@ -63,11 +63,12 @@ final class ManualClock {
 }
 
 func daemonStatus(pid: Int32 = 4242, running: Bool = true, paused: Bool = false, schema: Int = Status.currentSchema,
-                  devices: [Status.Device] = [], capture: Status.Capture? = nil, configError: String? = nil) -> Status {
+                  devices: [Status.Device] = [], capture: Status.Capture? = nil, configError: String? = nil,
+                  inputMonitoring: Bool = true, waiting: [Status.WaitingDevice]? = nil) -> Status {
     var status = Status(pid: pid, startedAt: Date(timeIntervalSince1970: 0), version: "0.3.0", running: running,
-                        paused: paused, permissions: .init(accessibility: true, inputMonitoring: true),
+                        paused: paused, permissions: .init(accessibility: true, inputMonitoring: inputMonitoring),
                         logiOptionsRunning: false, config: .init(path: "/tmp/config.json", error: configError),
-                        devices: devices, capture: capture)
+                        devices: devices, capture: capture, waitingForInputMonitoring: waiting)
     status.schema = schema
     return status
 }

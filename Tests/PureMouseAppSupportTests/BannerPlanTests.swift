@@ -10,9 +10,12 @@ import Testing
     @Test func everyNoticeAtOnceKeepsTheOrder() {
         let state = BannerPlan.State(configError: true, writeError: true, statusTooNew: true, daemonRunning: false,
                                      paused: true, logiOptionsRunning: true, accessibilityMissing: true,
-                                     needsAccessibility: true)
+                                     needsAccessibility: true, inputMonitoringNeeded: true, noMouse: true)
         #expect(BannerPlan.items(for: state)
-            == [.configError, .writeError, .statusTooNew, .off, .paused, .logiOptions, .accessibility])
+            == [.configError, .writeError, .statusTooNew, .off, .paused, .inputMonitoring, .logiOptions,
+                .accessibility, .noMouse])
+        // The plan's order is the notices' own order, so a new notice cannot slip out of place.
+        #expect(BannerPlan.items(for: state) == Notice.allCases)
         #expect(BannerPlan.items(for: BannerPlan.State()).isEmpty)
     }
 
@@ -23,6 +26,31 @@ import Testing
         needing.needsAccessibility = true
         #expect(BannerPlan.items(for: needing) == [.accessibility])
         #expect(BannerPlan.items(for: BannerPlan.State(needsAccessibility: true)).isEmpty)
+    }
+
+    @Test func inputMonitoringAndNoMouseHaveTheirOwnNotices() {
+        #expect(BannerPlan.items(for: BannerPlan.State(inputMonitoringNeeded: true)) == [.inputMonitoring])
+        #expect(BannerPlan.items(for: BannerPlan.State(noMouse: true)) == [.noMouse])
+        // A Bluetooth mouse waiting outranks Logi Options+ and Accessibility; no mouse comes last.
+        let state = BannerPlan.State(logiOptionsRunning: true, accessibilityMissing: true, needsAccessibility: true,
+                                     inputMonitoringNeeded: true, noMouse: true)
+        #expect(BannerPlan.items(for: state).first == .inputMonitoring)
+        #expect(BannerPlan.items(for: state).last == .noMouse)
+    }
+
+    /// General's Input Monitoring row says "Not needed" with no Bluetooth mouse, and offers the
+    /// allow only when one needs it.
+    @Test func aPermissionNobodyNeedsReadsNotNeeded() {
+        #expect(PermissionState(granted: false, needed: false) == .notNeeded)
+        #expect(PermissionState(granted: false, needed: false).word == "Not needed")
+        #expect(PermissionState(granted: false, needed: true) == .notAllowed)
+        #expect(PermissionState(granted: true, needed: false) == .allowed)
+        #expect(PermissionState(granted: nil, needed: true) == .unavailable)
+    }
+
+    @Test func theInputMonitoringMessageNamesTheMiceOrBluetoothMice() {
+        #expect(Notice.inputMonitoringMessage(waiting: ["MX Anywhere 3S"]).contains("MX Anywhere 3S"))
+        #expect(Notice.inputMonitoringMessage(waiting: []).contains("your Bluetooth mouse"))
     }
 
     @Test func aBannerCountsTheNoticesBehindIt() {

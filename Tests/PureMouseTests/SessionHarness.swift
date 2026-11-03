@@ -139,12 +139,13 @@ final class DaemonHarness {
     let daemon: Daemon
     private var endpoints: [HIDPPDevice] = []
 
-    init(_ json: String, adoptionSleep: ((Duration) async throws -> Void)? = nil) throws {
+    init(_ json: String, permissions: Permissions = .all,
+         adoptionSleep: ((Duration) async throws -> Void)? = nil) throws {
         url = FileManager.default.temporaryDirectory.appending(path: "puremouse-\(UUID().uuidString).json")
         try Data(json.utf8).write(to: url)
         var environment = SessionEnvironment(canPostEvents: true, configureRetryDelay: .milliseconds(1))
         if let adoptionSleep { environment.adoptionSleep = adoptionSleep }
-        daemon = Daemon(configURL: url, environment: environment)
+        daemon = Daemon(configURL: url, environment: environment, permissions: permissions)
     }
 
     /// Adopts `fake` and waits for its first configure to end.

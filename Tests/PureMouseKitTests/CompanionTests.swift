@@ -43,7 +43,8 @@ private func fullStatus() -> Status {
                   dpiSteps: [], wheelMode: nil, controls: [],
                   model: "pb02c", kind: "mouse"),
         ],
-        capture: .init(token: 4, state: .pressed, cid: 0xFD, deviceID: "2-1", model: "pb02c"), away: false)
+        capture: .init(token: 4, state: .pressed, cid: 0xFD, deviceID: "2-1", model: "pb02c"), away: false,
+        waitingForInputMonitoring: [.init(id: "3", name: "MX Anywhere 3S")])
 }
 
 @Suite struct CompanionContractTests {
@@ -54,6 +55,17 @@ private func fullStatus() -> Status {
         #expect(back.devices[0].model == "m4082b0230000" && back.devices[0].unit == "0a1b2c3d")
         #expect(back.devices[0].capabilities?.smoothScroll == false && back.devices[0].controls[1].gestures == false)
         #expect(back.capture?.model == "pb02c")
+    }
+
+    /// A status from a daemon older than the waiting field still reads, with nobody waiting.
+    @Test func aStatusWithoutTheWaitingFieldReadsAsNobodyWaiting() throws {
+        var status = fullStatus()
+        #expect(status.waiting.map(\.name) == ["MX Anywhere 3S"])
+        status.waitingForInputMonitoring = nil
+        let data = try Companion.encoder.encode(status)
+        #expect(!String(decoding: data, as: UTF8.self).contains("waitingForInputMonitoring"))
+        let back = try Companion.decoder.decode(Status.self, from: data)
+        #expect(back.waitingForInputMonitoring == nil && back.waiting.isEmpty)
     }
 
     @Test func requestsAimedAtOneMouseRoundTrip() throws {
