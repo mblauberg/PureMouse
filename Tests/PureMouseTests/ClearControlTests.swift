@@ -14,6 +14,8 @@ private final class Errors: @unchecked Sendable {
 
 @MainActor @Suite struct ClearControlTests {
     nonisolated private static let bound: DispatchTimeInterval = .seconds(10)
+    // The workers run on their own threads, not a global queue: with the whole suite running in
+    // parallel, a global-queue block could wait longer than `bound` to start (#170).
 
     private func makeControl() throws -> (URL, URL) {
         let directory = FileManager.default.temporaryDirectory.appending(path: "ClearControlTests-\(UUID())")
@@ -36,7 +38,7 @@ private final class Errors: @unchecked Sendable {
         let cleared = DispatchSemaphore(value: 0)
         let finished = DispatchSemaphore(value: 0)
         let clearedWhileHeld = Box()
-        DispatchQueue.global().async {
+        Thread.detachNewThread {
             do {
                 try FileLock.withLock(FileLock.url(for: control)) {
                     locked.signal()
@@ -48,7 +50,7 @@ private final class Errors: @unchecked Sendable {
         }
         #expect(locked.wait(timeout: .now() + Self.bound) == .success)
         let clearer = DispatchSemaphore(value: 0)
-        DispatchQueue.global().async {
+        Thread.detachNewThread {
             StatusChannel.clearControl(control, timeout: 10)
             cleared.signal()
             clearer.signal()
@@ -68,7 +70,7 @@ private final class Errors: @unchecked Sendable {
         let locked = DispatchSemaphore(value: 0)
         let release = DispatchSemaphore(value: 0)
         let finished = DispatchSemaphore(value: 0)
-        DispatchQueue.global().async {
+        Thread.detachNewThread {
             do {
                 try FileLock.withLock(FileLock.url(for: control)) {
                     locked.signal()
