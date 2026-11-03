@@ -151,7 +151,8 @@ struct ButtonsPane: View {
 
     /// The mouse the device card draws: the chosen one, else the only one known.
     private var cardMouse: KnownMouse? {
-        DeviceCardPlan.mouse(selected: model.selectedMouse, known: model.knownMice)
+        DeviceCardPlan.mouse(selected: model.selectedMouse, known: model.knownMice,
+                             unidentified: model.hasUnidentifiedMouse)
     }
 
     /// The card's parts, from what the mouse has and what Scrolling shows for it; nil for a mouse
