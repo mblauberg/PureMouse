@@ -14,14 +14,14 @@ public enum ThumbWheelAdvancedRow: Hashable, CaseIterable, Sendable {
 
     /// The rows that apply. `scrolls`: the wheel scrolls at this path. `someAppScrolls`: it
     /// scrolls in some app, where `inverted` still matters. `inApp`: the rows are an app's, which
-    /// has no `inverted` or speed of its own. `inherits`: the app leaves the action to the global
-    /// one, so the step is the global one's too.
-    public static func rows(scrolls: Bool, someAppScrolls: Bool, inApp: Bool, inherits: Bool) -> [ThumbWheelAdvancedRow] {
+    /// has no `inverted` or speed of its own. A scope that leaves the action to a wider one has the
+    /// rows of the action in effect, each of which it may set itself.
+    public static func rows(scrolls: Bool, someAppScrolls: Bool, inApp: Bool) -> [ThumbWheelAdvancedRow] {
         allCases.filter {
             switch $0 {
             case .reverseScrolling: !inApp && (scrolls || someAppScrolls)
             case .swapDirections: !scrolls
-            case .turnDistance: !scrolls && !inherits
+            case .turnDistance: !scrolls
             case .speed: !inApp && scrolls
             }
         }
@@ -90,12 +90,11 @@ public struct ScrollingLayout {
     /// SmartShift is on unless its threshold is 255 (or more).
     public var smartShiftOn: Bool { config.resolvedInt(["scrollWheel", "smartShiftThreshold"], in: scope).map { $0 < 255 } ?? true }
 
-    /// The thumb wheel rows the settings in `scope` make apply. A mouse that leaves the action to
-    /// All Mice has the step of that action too.
+    /// The thumb wheel rows the settings in `scope` make apply: those of the action in effect, which
+    /// a mouse may leave to All Mice.
     var thumbWheelRows: [ThumbWheelAdvancedRow] {
-        let inherits = scope.deviceKey != nil && config.thumbWheelChoice(at: config.prefix(of: scope) + ["thumbWheel"]) == .inherit
-        return ThumbWheelAdvancedRow.rows(scrolls: config.thumbWheel(in: scope).scrolls,
-                                          someAppScrolls: config.someAppScrollsThumbWheel, inApp: false, inherits: inherits)
+        ThumbWheelAdvancedRow.rows(scrolls: config.thumbWheel(in: scope).scrolls,
+                                   someAppScrolls: config.someAppScrollsThumbWheel, inApp: false)
     }
 
     /// The pane's groups: Smooth scrolling, Main Wheel and Thumb Wheel, each with the rows it

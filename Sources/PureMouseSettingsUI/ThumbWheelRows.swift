@@ -1,6 +1,52 @@
 import PureMouseAppSupport
 import SwiftUI
 
+/// What the thumb wheel's rows show at `path`, worked out from the state in effect and from which
+/// keys the scope holds, so a row reads as it does in the wider scope until it sets its own value
+/// (`InheritedValue`). Separate from the view so the rules can be tested.
+struct ThumbWheelPresentation {
+    let config: ConfigTree
+    let path: [String]
+    /// The state `path`'s keys apply on top of (`ThumbWheelRows.base`).
+    let base: ThumbWheelState
+    /// The wider scope's choice, for a mouse or an app; nil at the top level.
+    let inherited: ThumbWheelChoice?
+    let source: String
+    let scope: ConfigScope
+
+    /// The state in effect.
+    var state: ThumbWheelState { config.thumbWheel(at: path, base: base) }
+    /// The scope's own choice, `.inherit` while it sets none of the action's keys.
+    var choice: ThumbWheelChoice { config.thumbWheelChoice(at: path) }
+    /// What the wheel does in effect: the own choice, else the wider scope's.
+    var effective: ThumbWheelChoice { choice == .inherit ? (inherited ?? .scroll) : choice }
+    /// The Action row's value; nil at the top level, which has nothing wider.
+    var action: InheritedValue<ThumbWheelChoice>? {
+        inherited.map { InheritedValue(own: choice == .inherit ? nil : choice, inherited: $0, source: source) }
+    }
+
+    /// The scope holds `key` itself.
+    func owns(_ key: String) -> Bool {
+        scope.deviceKey != nil ? config.isOverridden(["thumbWheel", key], in: scope) : config.contains(path + [key])
+    }
+
+    /// Turn left and right rows exist while the action in effect is Custom, whoever set it.
+    var showsDirections: Bool { effective == .custom && state.pair != nil }
+
+    /// How a row for the config key `key` ("left", "right", "step", "reversed", "inverted") stands.
+    func standing(of key: String, reset: @escaping () -> Void = {}) -> RowStanding {
+        RowStanding(source: inherited == nil ? nil : source, isOwn: owns(key), reset: reset)
+    }
+
+    /// The Custom row for the way the key `key` turns: the scope's own action, else what the wider
+    /// scope does for that key.
+    func direction(_ key: String) -> InheritedValue<String> {
+        let wider = base.pair.map { key == "left" ? $0.left : $0.right } ?? .named("none")
+        let current = state.pair.map { key == "left" ? $0.left : $0.right } ?? .named("none")
+        return InheritedValue(own: owns(key) ? current.label : nil, inherited: wider.label, source: source)
+    }
+}
+
 /// The thumb wheel's rows, shared by the Scrolling pane (`["thumbWheel"]`, or a mouse's own, which
 /// says "Set for this mouse." where it has its own value) and an app in the Apps pane (`["apps",
 /// key, "thumbWheel"]`, "Set for this app."; `InheritedValue`). `.standard`: the Action
@@ -41,6 +87,10 @@ struct ThumbWheelRows: View {
     @State private var showMore = false
 
     private var isMouse: Bool { scope.deviceKey != nil }
+
+    private var presentation: ThumbWheelPresentation {
+        ThumbWheelPresentation(config: model.config, path: path, base: base, inherited: inherited, source: source, scope: scope)
+    }
 
     /// An edit in the scope the rows are for: a mouse's entry gets its name and loses it with its
     /// last value.
@@ -95,13 +145,14 @@ struct ThumbWheelRows: View {
                 .accessibilityValue(choice.label)
             }
         } label: {
-            RowLabel("Action", help: caption, availability: availability, note: note)
+            RowLabel("Action", help: caption, availability: availability, note: note,
+                     spokenTitle: "Thumb wheel action\(spokenSuffix)")
         }
         .overridable(note, help: caption)
         // Custom adds rows.
         .onChange(of: choice) { settings?.refit() }
         .actionEditorSheet($sheet) { action, target in apply(action, to: target) }
-        if choice == .custom, let pair = state.pair {
+        if presentation.showsDirections, let pair = state.pair {
             // Rows name the way the wheel turns; reversed, each shows the other key's action.
             direction("left", state.reversed ? pair.right : pair.left, reversed: state.reversed)
             direction("right", state.reversed ? pair.left : pair.right, reversed: state.reversed)
@@ -118,8 +169,7 @@ struct ThumbWheelRows: View {
     static func advancedRows(_ config: ConfigTree, path: [String], base: ThumbWheelState) -> [ThumbWheelAdvancedRow] {
         let inApp = path.first == "apps"
         return ThumbWheelAdvancedRow.rows(scrolls: config.thumbWheel(at: path, base: base).scrolls,
-                                          someAppScrolls: config.someAppScrollsThumbWheel, inApp: inApp,
-                                          inherits: config.thumbWheelChoice(at: path) == .inherit)
+                                          someAppScrolls: config.someAppScrollsThumbWheel, inApp: inApp)
     }
 
     @ViewBuilder private var advancedRows: some View {
@@ -135,7 +185,7 @@ struct ThumbWheelRows: View {
                             value: model.number(["smoothScroll", "horizontalSpeed"], default: 1, step: 0.05, in: model.scopeTarget),
                             range: 0.25...3, low: "Slow", high: "Fast", format: Format.multiplier,
                             availability: advancedAvailability,
-                            note: model.inheritance(of: [["smoothScroll", "horizontalSpeed"]], in: model.scopeTarget))
+                            standing: model.standing(of: [["smoothScroll", "horizontalSpeed"]], in: model.scopeTarget))
                     // A scrolling speed: it applies while smooth scrolling is on.
                     .disabled(!config.smoothScrollEnabled(in: scope))
             }
@@ -146,19 +196,24 @@ struct ThumbWheelRows: View {
     @ViewBuilder private func reverseScrolling(scrollsHere: Bool) -> some View {
         let inverted = model.config.bool(path + ["inverted"])
         let help = scrollsHere ? "Reverses this wheel." : "Reverses this wheel in apps where it scrolls."
-        let value = InheritedValue(own: inverted, inherited: model.config.bool(["thumbWheel", "inverted"]) ?? false,
-                                   source: source)
-        let note = inherited == nil ? nil : value.note { edit { $0.setThumbWheelKey(nil, "inverted", at: path) } }
-        Toggle(isOn: Binding(get: { value.effective }, set: { on in edit { $0.setThumbWheelKey(on, "inverted", at: path) } })) {
+        let effective = inverted ?? model.config.bool(["thumbWheel", "inverted"]) ?? false
+        let standing = presentation.standing(of: "inverted") { edit { $0.setThumbWheelKey(nil, "inverted", at: path) } }
+        let note = standing.note
+        Toggle(isOn: Binding(get: { effective }, set: { on in edit { $0.setThumbWheelKey(on, "inverted", at: path) } })) {
             RowLabel("Reverse direction", help: help, mouseDefault: inherited == nil && inverted == nil,
-                     availability: advancedAvailability, note: note)
+                     availability: advancedAvailability, note: note, spokenTitle: "Reverse thumb wheel direction")
         }
         .overridable(note, help: help)
         .accessibilityLabel("Reverse thumb wheel direction")
+        .accessibilityValue(standing.spoken(effective ? "On" : "Off"))
     }
 
+    /// The turn distance: the wheel's own `step`, or the one the action in effect brings.
     private func turnDistance(_ state: ThumbWheelState) -> some View {
-        LabeledContent {
+        let standing = presentation.standing(of: "step") { edit { $0.setThumbWheelKey(nil, "step", at: path) } }
+        let note = standing.note
+        let help = "How far to turn before the action repeats."
+        return LabeledContent {
             HStack(spacing: 8) {
                 Text("\(state.step)")
                     .monospacedDigit()
@@ -169,25 +224,29 @@ struct ThumbWheelRows: View {
                                        set: { new in edit(debounce: true) { $0.setThumbWheelKey(new, "step", at: path) } }),
                         in: 1...36)
                     .labelsHidden()
-                    .accessibilityValue("\(state.step)")
+                    .accessibilityValue(standing.spoken("\(state.step)"))
             }
         } label: {
-            RowLabel("Turn distance", help: "How far to turn before the action repeats.", availability: advancedAvailability)
+            RowLabel("Turn distance", help: help, availability: advancedAvailability, note: note,
+                     spokenTitle: "Turn distance\(spokenSuffix)")
         }
+        .overridable(note, help: help)
     }
 
     /// Swap directions: a switch, whose row says so when a mouse or an app sets it itself.
     @ViewBuilder private func swapDirections(_ state: ThumbWheelState) -> some View {
         let path = path
         let help = "Swaps what turning left and right does."
-        let value = InheritedValue(own: model.config.thumbWheelReversed(at: path), inherited: base.reversed, source: source)
-        let note = inherited == nil ? nil : value.note { edit { $0.setThumbWheelReversed(nil, at: path) } }
+        let standing = presentation.standing(of: "reversed") { edit { $0.setThumbWheelReversed(nil, at: path) } }
+        let note = standing.note
         Toggle(isOn: Binding(get: { state.reversed },
                              set: { on in edit { $0.setThumbWheelReversed(on, at: path) } })) {
-            RowLabel("Swap directions", help: help, availability: advancedAvailability, note: note)
+            RowLabel("Swap directions", help: help, availability: advancedAvailability, note: note,
+                     spokenTitle: "Swap thumb wheel directions\(spokenSuffix)")
         }
         .overridable(note, help: help)
         .accessibilityLabel("Swap thumb wheel directions\(spokenSuffix)")
+        .accessibilityValue(standing.spoken(state.reversed ? "On" : "Off"))
     }
 
     private func help(_ choice: ThumbWheelChoice, reversed: Bool) -> String {
@@ -206,19 +265,29 @@ struct ThumbWheelRows: View {
     }
 
     /// The row for turning the wheel one way (`direction`), which sets the key that way's
-    /// action is in: the other one while reversed.
+    /// action is in: the other one while reversed. On a mouse or in an app it reads as the wider
+    /// scope's action until set, and then says so.
     private func direction(_ direction: String, _ action: ButtonAction, reversed: Bool) -> some View {
         let title = direction == "left" ? "Turn left" : "Turn right"
         let key = ConfigTree.thumbWheelKey(turning: direction, reversed: reversed)
         let target = BindingTarget(button: "thumbWheel", direction: key, app: path.first == "apps" && path.count > 1 ? path[1] : nil,
                                    label: "turning the thumb wheel \(direction)", appName: appName)
-        return LabeledContent(title) {
-            ActionButton(action: action == .standard ? .named("none") : action,
+        let spokenName = "Thumb wheel, \(title.lowercased())\(spokenSuffix)"
+        let inherits = inherited != nil
+        let value = presentation.direction(key)
+        let note = inherits ? value.note { apply(.standard, to: target) } : nil
+        return LabeledContent {
+            ActionButton(action: inherits && value.isInherited ? .standard : action,
                          allowsDefault: false, allowsGesture: false,
                          isPresented: Binding(get: { presented == direction }, set: { presented = $0 ? direction : nil }),
                          choose: { entry in choose(entry, for: target, current: action) },
-                         accessibilityName: "Thumb wheel, \(title.lowercased())\(spokenSuffix)")
+                         accessibilityName: spokenName,
+                         sameAsEverywhere: inherits ? value.inherited : nil,
+                         source: source)
+        } label: {
+            RowLabel(title, note: note, spokenTitle: spokenName)
         }
+        .overridable(note, help: nil)
         .disclosedRow()
         .actionEditorPopover($sheet, for: target) { action, target in apply(action, to: target) }
     }
@@ -238,6 +307,7 @@ struct ThumbWheelRows: View {
 
     private func apply(_ action: ButtonAction, to target: BindingTarget) {
         guard let direction = target.direction else { return }
-        edit { $0.setThumbWheel(direction, to: action, at: path) }
+        // "Same as …" gives the key back; anything else sets it.
+        edit { $0.setThumbWheel(direction, to: action == .standard ? nil : action, at: path) }
     }
 }

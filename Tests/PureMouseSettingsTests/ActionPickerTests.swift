@@ -85,7 +85,8 @@ private func entry(_ id: String, _ entries: [PickerEntry]) -> PickerEntry? { ent
         .appending(path: "Sources/PureMouseSettingsUI")
     for file in ["ButtonsPane.swift", "AppSheet.swift"] {
         let text = try String(contentsOf: ui.appending(path: file), encoding: .utf8)
-        #expect(text.contains("allowsDefault: !isDirection,"), "\(file)")
+        // The button rows ask the one rule (`PickerEntry.offersMouseDefault`, tested by control in OverrideRowTests).
+        #expect(text.contains("allowsDefault: !isDirection && PickerEntry.offersMouseDefault("), "\(file)")
         #expect(!text.contains("allowsDefault: false"), "\(file)")
     }
 }

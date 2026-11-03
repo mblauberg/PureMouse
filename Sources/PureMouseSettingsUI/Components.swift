@@ -15,9 +15,18 @@ struct RowLabel: View {
     /// The scope has its own value: "Set for this mouse." and its button take the help's place, on
     /// the same line (`View.overridable(_:help:)` makes the help the row's tooltip).
     var note: InheritedOverride?
+    /// What VoiceOver calls the row in the note's button, where the title alone is ambiguous
+    /// (the same direction under two buttons).
+    var spokenTitle: String?
+    /// The help stays under the title beside a note: it says something the control can't (Feel's
+    /// "Custom. Adjust in Advanced." when no preset is selected).
+    var keepsHelp = false
 
     init(_ title: String, help: String? = nil, mouseDefault: Bool = false,
-         availability: ControlAvailability = .available, note: InheritedOverride? = nil) {
+         availability: ControlAvailability = .available, note: InheritedOverride? = nil, spokenTitle: String? = nil,
+         keepsHelp: Bool = false) {
+        self.keepsHelp = keepsHelp
+        self.spokenTitle = spokenTitle
         self.title = title
         self.help = help
         self.mouseDefault = mouseDefault
@@ -37,15 +46,15 @@ struct RowLabel: View {
         return parts.map { part in part.last.map { ends.contains($0) } == true ? part : part + "." }.joined(separator: " ")
     }
 
-    /// The caption under the title. A changed row's help is its tooltip, so it is not here.
+    /// The caption under the title. A changed row's help is its tooltip, so it is not here (unless `keepsHelp`).
     var captionText: String? {
-        Self.caption([note == nil ? help : nil, mouseDefault ? Self.mouseDefaultCaption : nil, availability.caption])
+        Self.caption([note == nil || keepsHelp ? help : nil, mouseDefault ? Self.mouseDefaultCaption : nil, availability.caption])
     }
 
     var body: some View {
         Text(title)
         if let captionText { Text(captionText) }
-        if let note { OverrideLine(note: note) }
+        if let note { OverrideLine(note: note, subject: spokenTitle ?? title) }
     }
 }
 
@@ -57,8 +66,10 @@ struct PopUpLabel: View {
 
     var body: some View {
         HStack(spacing: 4) {
+            // Primary, as the form's own pop-ups draw the value (a `LabeledContent` makes it secondary).
             Text(text)
                 .lineLimit(1)
+                .foregroundStyle(.primary)
             Image(systemName: "chevron.up.chevron.down")
                 .imageScale(.small)
                 .foregroundStyle(.secondary)
@@ -108,14 +119,15 @@ struct ValueSlider: View {
     var availability = ControlAvailability.available
     /// The key is absent and the mouse keeps its own setting (`RowLabel.mouseDefault`).
     var mouseDefault = false
-    /// On a mouse: set when the value is its own rather than All Mice's (`InheritedValue.note`).
-    var note: InheritedOverride?
+    /// On a mouse or in an app: whether the value is its own rather than the wider scope's.
+    var standing = RowStanding.none
+    private var note: InheritedOverride? { standing.note }
 
     var body: some View {
         LabeledContent {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 EndLabeledSlider(title: spokenTitle ?? title, value: $value, range: range, low: low, high: high)
-                    .accessibilityValue(format(value))
+                    .accessibilityValue(standing.spoken(format(value)))
                     .frame(width: 200)
                 // The readout takes the room of the widest value it can show, hidden, so the
                 // slider does not shift as the digits change, and at least one shared width, so
@@ -131,7 +143,8 @@ struct ValueSlider: View {
                 .accessibilityHidden(true)
             }
         } label: {
-            RowLabel(title, help: help, mouseDefault: mouseDefault, availability: availability, note: note)
+            RowLabel(title, help: help, mouseDefault: mouseDefault, availability: availability, note: note,
+                     spokenTitle: spokenTitle)
         }
         .overridable(note, help: help)
     }
@@ -180,14 +193,12 @@ extension AppModel {
         }
     }
 
-    /// What a row for `paths` shows on a mouse that has its own value for any of them: the caption
-    /// and the action that gives them back. nil while it follows All Mice, and for All Mice, which
-    /// has no wider scope.
-    func inheritance(of paths: [[String]], in target: ScopeTarget) -> InheritedOverride? {
-        guard target.scope.deviceKey != nil else { return nil }
-        let own = paths.contains { config.isOverridden($0, in: target.scope) }
-        return InheritedValue<Bool>(own: own ? true : nil, inherited: false, source: InheritedScope.allMice)
-            .note { [self] in update(in: target) { $0.removeOverrides(paths, in: target.scope) } }
+    /// Where a row for `paths` stands in `target`'s scope: on a mouse, own while it holds any of them
+    /// (`reset` gives them back to All Mice); nothing wider for All Mice.
+    func standing(of paths: [[String]], in target: ScopeTarget) -> RowStanding {
+        RowStanding.of(paths, in: config, scope: target.scope) { [self] in
+            update(in: target) { $0.removeOverrides(paths, in: target.scope) }
+        }
     }
 
     /// A binding to a numeric config key, showing `fallback` when absent. Writes are debounced.
@@ -328,7 +339,7 @@ struct DisclosureLabel: View {
             .buttonStyle(.plain)
             .accessibilityLabel(spokenTitle ?? title)
             .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
-            if let note { OverrideLine(note: note).disclosedRow() }
+            if let note { OverrideLine(note: note, subject: spokenTitle ?? title).disclosedRow() }
         }
     }
 }

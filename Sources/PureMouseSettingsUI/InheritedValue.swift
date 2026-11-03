@@ -90,17 +90,66 @@ struct InheritedOverride {
     }
 }
 
+/// Where a row stands against the wider scope: nothing wider (All Mice, Everywhere), left to it, or
+/// the scope's own value. One answer for every control of a row: its caption and "Use … Setting"
+/// link while own (`note`), and its spoken value while left to the wider scope (`spoken`), which
+/// a native switch, segmented control or slider has no other way to say.
+struct RowStanding {
+    /// The wider scope the setting may be left to; nil when there is none.
+    var source: String?
+    /// The scope has its own value.
+    var isOwn = false
+    /// Removes the own value.
+    var reset: () -> Void = {}
+
+    /// All Mice and Everywhere: nothing to inherit.
+    static var none: RowStanding { RowStanding(source: nil) }
+
+    /// A mouse's row for the config `paths`: own while the mouse holds any of them. Any other scope
+    /// has no wider one here.
+    static func of(_ paths: [[String]], in config: ConfigTree, scope: ConfigScope, reset: @escaping () -> Void = {}) -> RowStanding {
+        guard scope.deviceKey != nil else { return .none }
+        return RowStanding(source: InheritedScope.allMice, isOwn: paths.contains { config.isOverridden($0, in: scope) }, reset: reset)
+    }
+
+    var isInherited: Bool { source != nil && !isOwn }
+
+    /// What a row shows and offers while the scope has its own value.
+    var note: InheritedOverride? {
+        guard let source, isOwn else { return nil }
+        return InheritedOverride(source: source, reset: reset)
+    }
+
+    /// `value` as VoiceOver reads a control left to the wider scope: "On, same as All Mice".
+    func spoken(_ value: String) -> String {
+        guard isInherited, let source else { return value }
+        return "\(value), same as \(source)"
+    }
+}
+
 /// The caption line of a changed row: "Set for this mouse." and, on the same line, the button that
-/// gives the setting back.
+/// gives the setting back. The button reads as a link, and VoiceOver says which row it is for
+/// ("Use All Mice Setting for Speed"), since several rows of a pane may be changed at once.
 struct OverrideLine: View {
     let note: InheritedOverride
+    /// What VoiceOver calls the row the line belongs to.
+    let subject: String
+
+    /// What VoiceOver calls the button.
+    static func spokenReset(_ note: InheritedOverride, subject: String) -> String { "\(note.resetTitle) for \(subject)" }
 
     var body: some View {
         HStack(spacing: 4) {
             Text(note.caption)
                 .foregroundStyle(.secondary)
-            Button(note.resetTitle) { note.reset() }
-                .buttonStyle(.link)
+            // A line of caption text is under 20 pt tall; the padding takes the hit target to the
+            // minimum (docs/ui-design.md), and the plain style keeps the label's own frame.
+            Button { note.reset() } label: { Text(note.resetTitle).padding(.vertical, 3).contentShape(Rectangle()) }
+                .buttonStyle(.plain)
+                .foregroundStyle(.tint)
+                .accessibilityLabel(Self.spokenReset(note, subject: subject))
+                .accessibilityAddTraits(.isLink)
+                .modifier(LinkPointer())
         }
         .font(.subheadline)
     }

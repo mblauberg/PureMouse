@@ -156,13 +156,6 @@ import Testing
 
 // MARK: A mouse's inherited values (#54)
 
-private func overrideKeys(_ text: String) -> [String] {
-    // A label that takes a row's note (`note: note`, or the Presets row's) is paired with an `.overridable(`
-    // on its row; a slider's `model.inheritance(` note is applied by ValueSlider itself.
-    let note = try! Regex(#"\bnote: (note|presetsRow)\b"#)
-    return text.matches(of: note).map { String($0.output[0].substring ?? "") }
-}
-
 @MainActor @Test func aMouseAndAnAppShowAnInheritedValueThroughTheSameType() {
     // One type, one rule: an inherited value has no caption and no mark; an own one says "Set for <owner>."
     let app = InheritedValue<String>(own: nil, inherited: "Mute", source: InheritedScope.everywhere)
@@ -240,14 +233,11 @@ private func overrideKeys(_ text: String) -> [String] {
     }
 
     @Test func theChangeButtonIsALinkAndEveryChangedRowOffersItAsAMenuAndAnAction() throws {
+        // The line's words and the row's extras are one place's; which rows use them is tested by row,
+        // in "A mouse's rows" below.
         let words = try Self.source("InheritedValue.swift")
-        #expect(words.contains(".buttonStyle(.link)"))
+        #expect(words.contains(".accessibilityAddTraits(.isLink)"))
         #expect(words.contains(".contextMenu") && words.contains(".accessibilityActions"))
-        // Every row that takes a note applies `overridable`, in the same file.
-        for file in ["PointerPane", "ScrollingPane", "ButtonsPane", "ThumbWheelRows", "AppSheet"] {
-            let text = try Self.source(file + ".swift")
-            #expect(overrideKeys(text).count == text.components(separatedBy: ".overridable(").count - 1, "\(file)")
-        }
         // ValueSlider applies it itself.
         #expect(try Self.source("Components.swift").contains(".overridable(note, help: help)"))
     }

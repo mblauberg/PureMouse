@@ -198,8 +198,9 @@ private func tree(_ json: String) throws -> ConfigTree { try ConfigTree(data: Da
 }
 
 @Test func anAppsThumbWheelRowsLeaveOutGlobalOnlyKeys() {
-    #expect(ThumbWheelAdvancedRow.rows(scrolls: false, someAppScrolls: true, inApp: true, inherits: false)
+    #expect(ThumbWheelAdvancedRow.rows(scrolls: false, someAppScrolls: true, inApp: true)
         == [.swapDirections, .turnDistance])
-    #expect(ThumbWheelAdvancedRow.rows(scrolls: false, someAppScrolls: false, inApp: true, inherits: true) == [.swapDirections])
-    #expect(ThumbWheelAdvancedRow.rows(scrolls: true, someAppScrolls: false, inApp: true, inherits: false).isEmpty)
+    // An app that leaves the action to the global one still has the turn distance of that action.
+    #expect(ThumbWheelAdvancedRow.rows(scrolls: false, someAppScrolls: false, inApp: true) == [.swapDirections, .turnDistance])
+    #expect(ThumbWheelAdvancedRow.rows(scrolls: true, someAppScrolls: false, inApp: true).isEmpty)
 }

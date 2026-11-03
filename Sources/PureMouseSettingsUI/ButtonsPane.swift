@@ -164,18 +164,15 @@ struct ButtonsPane: View {
                     .foregroundStyle(.secondary)
                     .padding(.leading, indented ? 38 : 22)
                 ForEach(state.directions, id: \.name) { direction in
-                    // A direction the mouse leaves out follows the All Mice gesture, if there is one;
-                    // else it does nothing.
-                    let inherited = direction.everywhere.map { ($0 == .standard ? ButtonAction.named("none") : $0) }
-                    let own = direction.own == .standard && inherited == nil ? .named("none") : direction.own
+                    // A direction the mouse leaves out follows the All Mice gesture's, if it has one,
+                    // else does nothing; one it sets itself is marked either way.
                     let target = BindingTarget(button: key, direction: direction.name)
-                    let note = inherited.flatMap {
-                        ActionButton.inherited(own, everywhere: $0.label, source: InheritedScope.allMice).note { apply(.standard, to: target) }
-                    }
+                    let note = ActionButton.inherited(direction, source: InheritedScope.allMice).note { apply(.standard, to: target) }
                     LabeledContent {
-                        actionButton(own, target: target, sameAsEverywhere: inherited?.label, spokenEverywhere: inherited?.spokenLabel)
+                        actionButton(direction.own, target: target, sameAsEverywhere: direction.inherited.label,
+                                     spokenEverywhere: direction.inherited.spokenLabel)
                     } label: {
-                        RowLabel(Gesture.label(direction.name), note: note)
+                        RowLabel(Gesture.label(direction.name), note: note, spokenTitle: target.title)
                     }
                     .overridable(note, help: nil)
                     .padding(.leading, indented ? 38 : 22)
@@ -232,9 +229,9 @@ struct ButtonsPane: View {
         let isDirection = target.direction != nil
         let inherits = sameAsEverywhere != nil
         return ActionButton(
-            action: isDirection && action == .standard ? .named("none") : action,
+            action: isDirection && action == .standard && !inherits ? .named("none") : action,
             // On a mouse, Mouse Default is its own value ("default") beside "Same as All Mice".
-            allowsDefault: !isDirection,
+            allowsDefault: !isDirection && PickerEntry.offersMouseDefault(for: target.button, inMouseOrApp: isMouse, current: action),
             allowsGesture: !isDirection,
             isPresented: Binding(get: { presented == id }, set: { presented = $0 ? id : nil }),
             choose: { entry in choose(entry, for: target, current: action) },
@@ -285,11 +282,11 @@ private struct ButtonsAdvancedSheet: View {
                 ValueSlider(title: "Distance", help: "How far to move while holding before a direction fires.",
                             value: model.number(["gesture", "distanceMm"], default: 4, step: 0.5, in: target),
                             range: 2...12, low: "Short", high: "Long", format: Format.millimetres,
-                            note: model.inheritance(of: [["gesture", "distanceMm"]], in: target))
+                            standing: model.standing(of: [["gesture", "distanceMm"]], in: target))
                 ValueSlider(title: "Repeat", help: "Keep moving to repeat, such as across several Spaces.",
                             value: model.number(["gesture", "repeatIntervalMs"], default: 400, step: 50, in: target),
                             range: 150...1000, low: "Fast", high: "Slow", format: Format.milliseconds,
-                            note: model.inheritance(of: [["gesture", "repeatIntervalMs"]], in: target))
+                            standing: model.standing(of: [["gesture", "repeatIntervalMs"]], in: target))
             }
             .disabled(model.readOnly)
         }

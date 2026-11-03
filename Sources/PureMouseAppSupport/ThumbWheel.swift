@@ -213,8 +213,8 @@ extension ConfigTree {
         reversed ? (direction == "left" ? "right" : "left") : direction
     }
 
-    /// Sets what turning one way does ("left" or "right").
-    public mutating func setThumbWheel(_ direction: String, to action: ButtonAction, at path: [String]) {
-        put(action.json, at: path + [direction])
+    /// Sets what turning one way does ("left" or "right"); nil gives the key back to the wider scope.
+    public mutating func setThumbWheel(_ direction: String, to action: ButtonAction?, at path: [String]) {
+        put(action?.json, at: path + [direction])
     }
 }

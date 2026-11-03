@@ -38,7 +38,7 @@ struct ScrollingPane: View {
                                         value: model.number(["smoothScroll", "speed"], default: 1, step: 0.05, in: target),
                                         range: 0.25...3, low: "Slow", high: "Fast", format: Format.multiplier,
                                         availability: layout.availability(.speed),
-                                        note: model.inheritance(of: [["smoothScroll", "speed"]], in: target))
+                                        standing: model.standing(of: [["smoothScroll", "speed"]], in: target))
                         }
                     }
                     // Dimmed, not hidden: the switch above brings them back.
@@ -92,13 +92,19 @@ struct ScrollingPane: View {
         let value = InheritedValue(own: isMouse ? model.config.smoothScrollOwn(in: scope) : nil,
                                    inherited: model.config.smoothScrollEnabled, source: InheritedScope.allMice)
         let note = value.note { model.update(in: target) { $0.setSmoothScroll(nil, in: scope) } }
+        let on = model.config.smoothScrollEnabled(in: scope)
+        let standing = RowStanding(source: isMouse ? InheritedScope.allMice : nil, isOwn: !value.isInherited)
         return Toggle(isOn: Binding(get: { model.config.smoothScrollEnabled(in: scope) },
                                     set: { on in model.update(in: target) { $0.setSmoothScroll(on, in: scope) } })) {
             RowLabel("Smooth scrolling", help: help, availability: availability, note: note)
         }
         .overridable(note, help: help)
         .accessibilityLabel("Smooth scrolling")
+        .accessibilityValue(standing.spoken(Self.spoken(on)))
     }
+
+    /// What VoiceOver reads for a switch: the state, which an inheriting row follows with its source.
+    static func spoken(_ on: Bool) -> String { on ? "On" : "Off" }
 
     /// Three presets; values no preset matches select none, and the caption says where they are.
     private func feel(_ availability: ControlAvailability) -> some View {
@@ -112,6 +118,7 @@ struct ScrollingPane: View {
                 $0.removeOverrides([["smoothScroll", "acceleration"], ["smoothScroll", "smoothingMs"]], in: scope)
             }
         }
+        let standing = RowStanding(source: isMouse ? InheritedScope.allMice : nil, isOwn: !value.isInherited)
         return LabeledContent {
             Picker("Feel", selection: Binding(get: { selection }, set: { feel in
                 if let feel { model.update(in: target) { $0.apply(feel, in: scope) } }
@@ -121,17 +128,19 @@ struct ScrollingPane: View {
             .pickerStyle(.segmented)
             .labelsHidden()
             .fixedSize()
+            .accessibilityValue(standing.spoken(selection?.label ?? "No preset"))
         } label: {
-            RowLabel("Feel", help: help, availability: availability, note: note)
+            RowLabel("Feel", help: help, availability: availability, note: note, keepsHelp: selection == nil)
         }
-        .overridable(note, help: help)
+        .overridable(note, help: selection == nil ? nil : help)
     }
 
     private func reverseDirection(_ availability: ControlAvailability) -> some View {
         let path = ["scrollWheel", "inverted"]
         let scope = model.scope, target = model.scopeTarget
         let help = "Reverses this wheel."
-        let note = model.inheritance(of: [path], in: target)
+        let standing = model.standing(of: [path], in: target)
+        let note = standing.note
         return Toggle(isOn: Binding(get: { model.config.resolvedBool(path, in: scope) ?? false },
                                     set: { on in model.update(in: target) { $0.set(on, at: path, in: scope) } })) {
             RowLabel("Reverse direction", help: help, mouseDefault: model.config.resolved(path, in: scope) == nil,
@@ -139,6 +148,7 @@ struct ScrollingPane: View {
         }
         .overridable(note, help: help)
         .accessibilityLabel("Reverse main wheel direction")
+        .accessibilityValue(standing.spoken(Self.spoken(model.config.resolvedBool(path, in: scope) ?? false)))
     }
 
     private func wheelMode(_ availability: ControlAvailability) -> some View {
@@ -146,7 +156,8 @@ struct ScrollingPane: View {
         let scope = model.scope, target = model.scopeTarget
         let mode = model.config.resolved(path, in: scope) as? String
         let help = "Mode when the mouse connects."
-        let note = model.inheritance(of: [path], in: target)
+        let standing = model.standing(of: [path], in: target)
+        let note = standing.note
         return LabeledContent {
             Picker("Wheel mode", selection: Binding<String?>(get: { mode },
                                                               set: { new in model.update(in: target) { $0.set(new, at: path, in: scope) } })) {
@@ -156,6 +167,7 @@ struct ScrollingPane: View {
             .pickerStyle(.segmented)
             .labelsHidden()
             .fixedSize()
+            .accessibilityValue(standing.spoken(mode == "freespin" ? "Free Spin" : mode == "ratchet" ? "Ratchet" : "Not set"))
         } label: {
             RowLabel("Wheel mode", help: help, mouseDefault: mode == nil, availability: availability, note: note)
         }
@@ -168,13 +180,15 @@ struct ScrollingPane: View {
         let scope = model.scope, target = model.scopeTarget
         let threshold = model.config.resolvedInt(path, in: scope)
         let help = "Frees the wheel when you scroll fast."
-        let note = model.inheritance(of: [path], in: target)
+        let standing = model.standing(of: [path], in: target)
+        let note = standing.note
         return Toggle(isOn: Binding(get: { threshold.map { $0 < 255 } ?? true },
                                     set: { on in model.update(in: target) { $0.set(on ? 12 : 255, at: path, in: scope) } })) {
             RowLabel("SmartShift", help: help, mouseDefault: threshold == nil, availability: availability, note: note)
         }
         .overridable(note, help: help)
         .accessibilityLabel("SmartShift")
+        .accessibilityValue(standing.spoken(Self.spoken(threshold.map { $0 < 255 } ?? true)))
     }
 }
 
@@ -197,14 +211,14 @@ private struct ScrollingAdvancedSheet: View {
                                         value: model.number(["smoothScroll", "acceleration"], default: 1, step: 0.1, in: target),
                                         range: 0...3, low: "Off", high: "Strong", format: Format.strength,
                                         availability: layout.availability(.acceleration),
-                                        note: model.inheritance(of: [["smoothScroll", "acceleration"]], in: target))
+                                        standing: model.standing(of: [["smoothScroll", "acceleration"]], in: target))
                         }
                         if layout.shows(.glide) {
                             ValueSlider(title: "Glide", help: "0 scrolls instantly.",
                                         value: model.number(["smoothScroll", "smoothingMs"], default: 125, step: 25, in: target),
                                         range: 0...500, low: "Short", high: "Long", format: Format.milliseconds,
                                         availability: layout.availability(.glide),
-                                        note: model.inheritance(of: [["smoothScroll", "smoothingMs"]], in: target))
+                                        standing: model.standing(of: [["smoothScroll", "smoothingMs"]], in: target))
                         }
                         if layout.shows(.shiftScrollsSideways) {
                             shiftSideways(layout.availability(.shiftScrollsSideways))
@@ -232,13 +246,15 @@ private struct ScrollingAdvancedSheet: View {
     private func shiftSideways(_ availability: ControlAvailability) -> some View {
         let path = ["smoothScroll", "shiftScrollsHorizontally"]
         let scope = model.scope, target = model.scopeTarget
-        let note = model.inheritance(of: [path], in: target)
+        let standing = model.standing(of: [path], in: target)
+        let note = standing.note
         return Toggle(isOn: Binding(get: { model.config.resolvedBool(path, in: scope) ?? true },
                                     set: { on in model.update(in: target) { $0.set(on, at: path, in: scope) } })) {
             RowLabel("Hold Shift to scroll sideways", availability: availability, note: note)
         }
         .overridable(note, help: nil)
         .accessibilityLabel("Hold Shift to scroll sideways")
+        .accessibilityValue(standing.spoken(ScrollingPane.spoken(model.config.resolvedBool(path, in: scope) ?? true)))
     }
 
     /// The SmartShift threshold: how fast a scroll frees the wheel.
@@ -252,6 +268,6 @@ private struct ScrollingAdvancedSheet: View {
                            range: 1...50, low: "Slower", high: "Faster",
                            format: { String(Int($0.rounded())) },
                            availability: availability, mouseDefault: threshold == nil,
-                           note: model.inheritance(of: [path], in: target))
+                           standing: model.standing(of: [path], in: target))
     }
 }

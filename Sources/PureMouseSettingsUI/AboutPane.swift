@@ -133,7 +133,7 @@ private struct UpdateRow: View {
 }
 
 /// The pointing hand over a link (macOS 15 and later; macOS 14 shows the arrow).
-private struct LinkPointer: ViewModifier {
+struct LinkPointer: ViewModifier {
     func body(content: Content) -> some View {
         if #available(macOS 15, *) {
             content.pointerStyle(.link)

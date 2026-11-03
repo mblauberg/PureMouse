@@ -194,6 +194,15 @@ public struct AppButton: Equatable, Sendable {
         public let name: String
         public let own: ButtonAction
         public let everywhere: ButtonAction?
+
+        /// The scope sets this direction itself, whether or not a wider gesture has one.
+        public var isOwn: Bool { own != .standard }
+
+        /// What applies while the scope leaves the direction out: the wider gesture's, else nothing.
+        public var inherited: ButtonAction {
+            guard let everywhere, everywhere != .standard else { return .named("none") }
+            return everywhere
+        }
     }
 
     public let own: ButtonAction

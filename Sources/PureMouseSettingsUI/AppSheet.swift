@@ -181,16 +181,14 @@ struct AppSheet: View {
             if isExpanded.wrappedValue {
                 ForEach(state.directions, id: \.name) { direction in
                     let target = bindingTarget(button, direction: direction.name)
-                    // A direction the app leaves out follows the global gesture, if there is one;
-                    // else it does nothing.
-                    let inherited = direction.everywhere.map { everywhereLabel($0, direction: true) }
-                    let spokenInherited = direction.everywhere.map { everywhereLabel($0, direction: true, spoken: true) }
-                    let own = direction.own == .standard && inherited == nil ? .named("none") : direction.own
-                    let note = inherited.flatMap { ActionButton.inherited(own, everywhere: $0).note { apply(.standard, to: target) } }
+                    // A direction the app leaves out follows the global gesture's, if it has one, else
+                    // does nothing; one it sets itself is marked either way.
+                    let note = ActionButton.inherited(direction, source: InheritedScope.everywhere).note { apply(.standard, to: target) }
                     LabeledContent {
-                        actionButton(own, target: target, sameAsEverywhere: inherited, spokenEverywhere: spokenInherited)
+                        actionButton(direction.own, target: target, sameAsEverywhere: direction.inherited.label,
+                                     spokenEverywhere: direction.inherited.spokenLabel)
                     } label: {
-                        RowLabel(Gesture.label(direction.name), note: note)
+                        RowLabel(Gesture.label(direction.name), note: note, spokenTitle: target.title + spoken)
                     }
                     .overridable(note, help: nil)
                     .padding(.leading, indented ? 38 : 22)
@@ -206,7 +204,7 @@ struct AppSheet: View {
         let isDirection = target.direction != nil
         return ActionButton(
             action: action,
-            allowsDefault: !isDirection,
+            allowsDefault: !isDirection && PickerEntry.offersMouseDefault(for: target.button, inMouseOrApp: true, current: action),
             allowsGesture: !isDirection,
             isPresented: Binding(get: { presented == id }, set: { presented = $0 ? id : nil }),
             choose: { entry in choose(entry, for: target, current: action) },
@@ -243,6 +241,14 @@ struct AppSheet: View {
 
     // MARK: Scrolling
 
+    /// A value the app sets under `apps.<key>` stands against Everywhere's: marked while the app holds
+    /// it, and given back by removing the key (the last one turns Custom scrolling off).
+    private func appStanding(_ path: [String], _ config: ConfigTree) -> RowStanding {
+        RowStanding(source: InheritedScope.everywhere, isOwn: config.contains(path)) {
+            model.update { $0.set(nil, at: path) }
+        }
+    }
+
     private func scrolling(_ config: ConfigTree) -> some View {
         let custom = config.overridesScrolling(key)
         let speedPath = scope + ["smoothScroll", "speed"]
@@ -258,11 +264,13 @@ struct AppSheet: View {
             if custom {
                 ValueSlider(title: "Speed", spokenTitle: "Scrolling speed\(spoken)",
                             value: model.number(speedPath, default: globalSpeed, step: 0.05),
-                            range: 0.25...3, low: "Slow", high: "Fast", format: Format.multiplier)
+                            range: 0.25...3, low: "Slow", high: "Fast", format: Format.multiplier,
+                            standing: appStanding(speedPath, config))
                     .disclosedRow()
                 ValueSlider(title: "Glide", spokenTitle: "Glide\(spoken)", help: "0 scrolls instantly.",
                             value: model.number(glidePath, default: globalGlide, step: 25),
-                            range: 0...500, low: "Short", high: "Long", format: Format.milliseconds)
+                            range: 0...500, low: "Short", high: "Long", format: Format.milliseconds,
+                            standing: appStanding(glidePath, config))
                     .disabled(!config.scrollsSmoothly(key))
                     .disclosedRow()
             }

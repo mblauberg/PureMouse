@@ -34,8 +34,8 @@ struct PointerPane: View {
         let scope = model.scope, target = model.scopeTarget
         let presets = model.config.dpiPresets(in: scope)
         let layout = PointerLayout(config: model.config, devices: model.capabilityDevices(in: scope), scope: scope)
-        let speed = model.inheritance(of: [["dpi"]], in: target)
-        let presetsRow = model.inheritance(of: [["dpiPresets"]], in: target)
+        let speed = model.standing(of: [["dpi"]], in: target)
+        let presetsRow = model.standing(of: [["dpiPresets"]], in: target).note
         PaneForm {
             PaneBanners()
             Section {
@@ -48,7 +48,7 @@ struct PointerPane: View {
                                 low: reported ? Format.number(steps.first ?? 0) : "",
                                 high: reported ? Format.number(steps.last ?? 0) : "",
                                 format: { _ in reading.readout(live: live, configured: configured) },
-                                availability: layout.availability, mouseDefault: estimate, note: speed)
+                                availability: layout.availability, mouseDefault: estimate, standing: speed)
                         // A sensor with a single setting has nothing to slide between.
                         .disabled(steps.count < 2)
                     LabeledContent {} label: {

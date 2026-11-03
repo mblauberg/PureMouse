@@ -18,15 +18,18 @@ struct PickerEntry: Identifiable, Equatable {
     /// The picker's entries, in order. Gesture directions get neither Mouse Default nor Hold and
     /// Move. On a mouse or in an app, `inherited` (what applies elsewhere, and where from) adds the
     /// entry that removes the own binding, worded by its source, and Mouse Default then writes
-    /// `"default"` as the scope's own value. `haptics`: whether to list the haptic waveforms (`ControlAvailability`).
+    /// `"default"` as the scope's own value; but not while the wider scope already is Mouse Default
+    /// (that is "Same as …" then), unless it is `current`. `haptics`: whether to list the haptic
+    /// waveforms (`ControlAvailability`).
     static func all(allowsDefault: Bool, allowsGesture: Bool, inherited: InheritedValue<String>? = nil,
-                    haptics: Bool = true) -> [PickerEntry] {
+                    haptics: Bool = true, current: ButtonAction = .standard) -> [PickerEntry] {
         var entries: [PickerEntry] = []
         if let inherited {
             entries.append(PickerEntry(id: "inherit", label: inherited.entry, detail: "(\(inherited.inherited))", group: nil,
                                        kind: .set(.standard), symbol: "globe"))
         }
-        if allowsDefault {
+        let widerIsDefault = inherited?.inherited == ButtonAction.standard.label
+        if allowsDefault, !widerIsDefault || current == .mouseDefault {
             // Where something wider applies, Mouse Default is a value of its own ("default") and
             // "Same as …" above is the entry that removes the key; at the top level they are one.
             entries.append(PickerEntry(id: "default", label: ButtonAction.standard.label, group: nil,
@@ -58,6 +61,16 @@ struct PickerEntry: Identifiable, Equatable {
     }
 
     var isHaptic: Bool { group == ActionCatalog.hapticGroup }
+
+    /// Whether a mouse or an app may choose Mouse Default for the button `key`: only where the mouse
+    /// has a behaviour of its own to hand back (`Config.nativeBehaviour(of:)`). Under All Mice the
+    /// choice is just an unbound button, so it is always there; `current` keeps a hand-edited
+    /// "default" on another control in view.
+    static func offersMouseDefault(for key: String, inMouseOrApp: Bool, current: ButtonAction = .standard) -> Bool {
+        guard inMouseOrApp else { return true }
+        if current == .mouseDefault { return true }
+        return NamedButton.cid(forKey: key).flatMap(Config.nativeBehaviour(of:)) != nil
+    }
 
     func matches(_ action: ButtonAction) -> Bool {
         switch (kind, action) {
@@ -393,6 +406,11 @@ struct ActionButton: View {
         InheritedValue(own: action == .standard ? nil : action.label, inherited: everywhere, source: source)
     }
 
+    /// A gesture direction as its row shows it: the scope's own, else the wider gesture's (or nothing).
+    static func inherited(_ direction: AppButton.Direction, source: String) -> InheritedValue<String> {
+        inherited(direction.own, everywhere: direction.inherited.label, source: source)
+    }
+
     private var inherited: InheritedValue<String>? { sameAsEverywhere.map { Self.inherited(action, everywhere: $0, source: source) } }
 
     /// Longer labels (a command) are shortened in the middle to this many characters.
@@ -434,7 +452,7 @@ struct ActionButton: View {
         .popover(isPresented: $isPresented, arrowEdge: .bottom) {
             ActionPicker(current: action,
                          entries: PickerEntry.all(allowsDefault: allowsDefault, allowsGesture: allowsGesture,
-                                                  inherited: inherited, haptics: offersHaptics),
+                                                  inherited: inherited, haptics: offersHaptics, current: action),
                          focusSearch: openedFromKeyboard) { entry in
                 isPresented = false
                 choose(entry)
