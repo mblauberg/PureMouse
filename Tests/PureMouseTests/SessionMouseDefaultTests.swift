@@ -135,9 +135,10 @@ import Testing
         await press(h, cid)
         #expect(h.session.pointerFree == [cid])
         #expect(h.fake.control(cid)?.rawXY == false)
-        try await Task.sleep(for: .milliseconds(400))
+        // Wait for the apply itself, not a guess at how long it takes: CI runners are slow.
+        try await Task.sleep(for: .milliseconds(150))
+        try await eventually(within: .seconds(10)) { !h.session.isConfiguring }
         await h.session.diversion.drain()
-        #expect(!h.session.isConfiguring)
         return h
     }
 
