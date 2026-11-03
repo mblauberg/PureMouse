@@ -162,6 +162,36 @@ Settings. For the menu, `PUREMOUSE_DEV_MENU=1` opens it; a window capture (`scre
 leaves out the menu's blur, so the README's menu shots take the shape and shadow from a window
 capture and the body from a screen capture of the same rect.
 
+### UI matrix
+
+`scripts/ui-matrix.sh` is the repeatable run of the accessibility dump and the captures. It runs
+`PUREMOUSE_DEV_AX_DUMP=1`, and the light and dark `PUREMOUSE_DEV_CAPTURE`, over every pane, sheet and
+dev hook in its matrix table (one row each, at the top of the script), against five fixtures: one
+mouse, two mice, no mouse, paused and off. It needs a debug build of the helper (`swift build`, then
+`.build/debug/PureMouseSettings` or `--binary`) and builds nothing itself.
+
+```sh
+scripts/ui-matrix.sh [--out DIR] [--only NAME] [--binary PATH] [--timeout SECONDS]
+```
+
+- It writes `summary.txt` into `--out` (a new or empty folder; by default a timed folder under
+  `$TMPDIR`), one line per run with its result. The dumps, captures and logs sit beside it.
+- `--only` takes a row or a fixture by name. `--timeout` (default 120) kills a run that hangs and
+  reports it.
+- Exit 1 if a dump reports a finding, a run hangs or fails, or a capture (or a sheet's `-sheet.png`)
+  is missing. Exit 2 for a usage error or the config guard.
+- Every run is sandboxed. Before anything runs, `HOME`, `CFFIXED_USER_HOME`, `PUREMOUSE_CONFIG`,
+  `PUREMOUSE_DAEMON` and `PUREMOUSE_COMPANION_DIR` point into a temporary folder, with a stub daemon
+  and the fixture's `status.json`. It refuses if an inherited `PUREMOUSE_CONFIG` or `--out` would
+  resolve under `~/.config/puremouse`.
+- The full matrix is 293 runs. Expect roughly half an hour on the spare Mac (an estimate, not yet
+  timed). Run it there only, never on the Mac whose PureMouse you use (AGENTS.md): its windows open
+  on screen.
+- `scripts/tests/run.sh ui_matrix` tests the script with a fake helper, so it runs anywhere.
+- Not in the matrix: the menu app's hooks (`PureMouseMenu`), the keyboard hooks
+  (`PUREMOUSE_DEV_KEY`), and the hooks that pick one of a device's controls or arrivals (`FOUND`,
+  `BUTTON`, `ARRIVAL`, `MORE`).
+
 ## Other Macs
 
 `scripts/release.sh --dry-run --version 0.0.0-ci.local` builds the universal dmg; for a test Mac,
