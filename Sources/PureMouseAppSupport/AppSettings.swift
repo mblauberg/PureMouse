@@ -68,6 +68,11 @@ extension ConfigTree {
             return
         }
         if case .gesture = self.binding(button, in: scope) { return }
+        // Mouse Default hides the global gesture; choosing Hold and Move gives it back whole.
+        if self.binding(button, in: scope) == .mouseDefault, self.binding(button) == .gesture {
+            bind(button, to: .standard, in: scope)
+            return
+        }
         let path = scope.prefix + ["buttons", buttonKey(button, in: scope)]
         let click: Any
         if self.binding(button, in: scope) == .mouseDefault {
@@ -89,18 +94,9 @@ extension ConfigTree {
     /// gesture's direction applies; the last one removes the app's binding (an empty gesture is
     /// not one). Anything else, "Do Nothing" included, is written as given.
     public mutating func bindInApp(_ app: String, button: String, direction: String, to binding: ButtonAction) {
-        let scope = Self.appScope(app)
-        let key = buttonKey(button, in: scope)
-        let path = scope.prefix + ["buttons", key]
-        switch binding {
-        case .standard:
-            let others = (self[path] as? [String: Any])?.keys.filter { $0 != direction } ?? []
-            set(nil, at: others.isEmpty ? path : path + [direction])
-        case .gesture, .mouseDefault:
-            break
-        default:
-            set(binding.json, at: path + [direction])
-        }
+        // The same rules as a mouse's: only `.standard` removes the key, and the last direction takes
+        // the whole binding with it.
+        bind(button, direction: direction, to: binding, in: Self.appScope(app))
     }
 
     // MARK: Scrolling

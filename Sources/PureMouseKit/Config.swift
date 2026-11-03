@@ -113,8 +113,9 @@ public struct Config: Decodable, Sendable {
     /// every name `buttons` held for that control, which is how a device entry leaves a button
     /// the top level binds to the mouse's own behaviour; at the top level there is nothing to
     /// remove, so it is the same as leaving the name out. Names within `c` do not layer on each
-    /// other; if two name one control, the last in sorted order decides it (a binding, or
-    /// `"default"`) and every binding's name stays in `buttons`.
+    /// other; if two name one control, the last in sorted order decides it. When that is a binding,
+    /// the names of the bindings before it stay in `buttons` too; when it is `"default"`, none of
+    /// them does, and the control has no binding.
     private mutating func decodeButtons(_ c: KeyedDecodingContainer<AnyKey>) throws {
         let before = bindings
         let earlier = Set(buttons.keys)
