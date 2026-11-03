@@ -1,0 +1,925 @@
+{
+  "packs": [
+    {
+      "id": "zoom",
+      "name": "Zoom",
+      "bundleIDs": ["us.zoom.xos"],
+      "actions": [
+        {
+          "id": "zoom.muteAudio",
+          "bundleIDs": ["us.zoom.xos"],
+          "label": "Mute or Unmute Microphone",
+          "category": "Meeting",
+          "payload": "cmd+shift+a",
+          "sourceURL": "https://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0067050",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["mute", "unmute", "mic", "microphone", "audio", "talk"]
+        },
+        {
+          "id": "zoom.video",
+          "bundleIDs": ["us.zoom.xos"],
+          "label": "Start or Stop Video",
+          "category": "Meeting",
+          "payload": "cmd+shift+v",
+          "sourceURL": "https://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0067050",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["video", "camera", "webcam"]
+        },
+        {
+          "id": "zoom.screenShare",
+          "bundleIDs": ["us.zoom.xos"],
+          "label": "Start or Stop Screen Share",
+          "category": "Meeting",
+          "payload": "cmd+shift+s",
+          "sourceURL": "https://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0067050",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["screen", "share", "presentation"]
+        },
+        {
+          "id": "zoom.pauseShare",
+          "bundleIDs": ["us.zoom.xos"],
+          "label": "Pause or Resume Screen Share",
+          "category": "Meeting",
+          "payload": "cmd+shift+t",
+          "sourceURL": "https://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0067050",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["screen", "pause", "resume"]
+        },
+        {
+          "id": "zoom.inMeetingChat",
+          "bundleIDs": ["us.zoom.xos"],
+          "label": "Show or Hide In-Meeting Chat",
+          "category": "Meeting",
+          "payload": "cmd+shift+h",
+          "sourceURL": "https://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0067050",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["chat", "messages"]
+        },
+        {
+          "id": "zoom.participants",
+          "bundleIDs": ["us.zoom.xos"],
+          "label": "Show or Hide Participants",
+          "category": "Meeting",
+          "payload": "cmd+u",
+          "sourceURL": "https://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0067050",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["participants", "attendees", "people"]
+        },
+        {
+          "id": "zoom.raiseHand",
+          "bundleIDs": ["us.zoom.xos"],
+          "label": "Raise or Lower Hand",
+          "category": "Meeting",
+          "payload": "opt+y",
+          "sourceURL": "https://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0067050",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["hand", "raise"]
+        },
+        {
+          "id": "zoom.fullScreen",
+          "bundleIDs": ["us.zoom.xos"],
+          "label": "Enter or Exit Full Screen",
+          "category": "View",
+          "payload": "cmd+shift+f",
+          "sourceURL": "https://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0067050",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["fullscreen", "window"]
+        }
+      ]
+    },
+    {
+      "id": "teams",
+      "name": "Microsoft Teams",
+      "bundleIDs": ["com.microsoft.teams2", "com.microsoft.teams"],
+      "actions": [
+        {
+          "id": "teams.muteAudio",
+          "bundleIDs": ["com.microsoft.teams2", "com.microsoft.teams"],
+          "label": "Mute or Unmute Microphone",
+          "category": "Meeting",
+          "payload": "cmd+shift+m",
+          "sourceURL": "https://support.microsoft.com/en-us/office/keyboard-shortcuts-for-microsoft-teams-2e8e2a70-e8d8-4a19-949b-4c36dd5292d2",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["mute", "unmute", "mic", "microphone", "audio"]
+        },
+        {
+          "id": "teams.video",
+          "bundleIDs": ["com.microsoft.teams2", "com.microsoft.teams"],
+          "label": "Turn Camera On or Off",
+          "category": "Meeting",
+          "payload": "cmd+shift+o",
+          "sourceURL": "https://support.microsoft.com/en-us/office/keyboard-shortcuts-for-microsoft-teams-2e8e2a70-e8d8-4a19-949b-4c36dd5292d2",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["video", "camera", "webcam"]
+        },
+        {
+          "id": "teams.raiseHand",
+          "bundleIDs": ["com.microsoft.teams2", "com.microsoft.teams"],
+          "label": "Raise or Lower Hand",
+          "category": "Meeting",
+          "payload": "cmd+shift+k",
+          "sourceURL": "https://support.microsoft.com/en-us/office/keyboard-shortcuts-for-microsoft-teams-2e8e2a70-e8d8-4a19-949b-4c36dd5292d2",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["hand", "raise"]
+        },
+        {
+          "id": "teams.search",
+          "bundleIDs": ["com.microsoft.teams2", "com.microsoft.teams"],
+          "label": "Search",
+          "category": "Navigation",
+          "payload": "cmd+e",
+          "sourceURL": "https://support.microsoft.com/en-us/office/keyboard-shortcuts-for-microsoft-teams-2e8e2a70-e8d8-4a19-949b-4c36dd5292d2",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["find", "search", "lookup"]
+        },
+        {
+          "id": "teams.newChat",
+          "bundleIDs": ["com.microsoft.teams2", "com.microsoft.teams"],
+          "label": "New Chat",
+          "category": "Navigation",
+          "payload": "cmd+n",
+          "sourceURL": "https://support.microsoft.com/en-us/office/keyboard-shortcuts-for-microsoft-teams-2e8e2a70-e8d8-4a19-949b-4c36dd5292d2",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["message", "compose", "start"]
+        },
+        {
+          "id": "teams.filter",
+          "bundleIDs": ["com.microsoft.teams2", "com.microsoft.teams"],
+          "label": "Filter",
+          "category": "Navigation",
+          "payload": "cmd+shift+f",
+          "sourceURL": "https://support.microsoft.com/en-us/office/keyboard-shortcuts-for-microsoft-teams-2e8e2a70-e8d8-4a19-949b-4c36dd5292d2",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["filter"]
+        }
+      ]
+    },
+    {
+      "id": "photoshop",
+      "name": "Adobe Photoshop",
+      "bundleIDs": ["com.adobe.Photoshop"],
+      "actions": [
+        {
+          "id": "photoshop.decreaseBrushSize",
+          "bundleIDs": ["com.adobe.Photoshop"],
+          "label": "Decrease Brush Size",
+          "category": "Tools",
+          "payload": "[",
+          "sourceURL": "https://helpx.adobe.com/photoshop/using/default-keyboard-shortcuts.html",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["brush", "smaller", "decrease", "size"],
+          "pairedOpposite": "photoshop.increaseBrushSize",
+          "pairLabel": "Brush Size"
+        },
+        {
+          "id": "photoshop.increaseBrushSize",
+          "bundleIDs": ["com.adobe.Photoshop"],
+          "label": "Increase Brush Size",
+          "category": "Tools",
+          "payload": "]",
+          "sourceURL": "https://helpx.adobe.com/photoshop/using/default-keyboard-shortcuts.html",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["brush", "larger", "increase", "size"],
+          "pairedOpposite": "photoshop.decreaseBrushSize",
+          "pairLabel": "Brush Size"
+        },
+        {
+          "id": "photoshop.deselect",
+          "bundleIDs": ["com.adobe.Photoshop"],
+          "label": "Deselect",
+          "category": "Select",
+          "payload": "cmd+d",
+          "sourceURL": "https://helpx.adobe.com/photoshop/using/default-keyboard-shortcuts.html",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["select", "none", "clear"]
+        },
+        {
+          "id": "photoshop.freeTransform",
+          "bundleIDs": ["com.adobe.Photoshop"],
+          "label": "Free Transform",
+          "category": "Edit",
+          "payload": "cmd+t",
+          "sourceURL": "https://helpx.adobe.com/photoshop/using/default-keyboard-shortcuts.html",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["transform", "scale", "rotate"]
+        },
+        {
+          "id": "photoshop.fitOnScreen",
+          "bundleIDs": ["com.adobe.Photoshop"],
+          "label": "Fit on Screen",
+          "category": "View",
+          "payload": "cmd+0",
+          "sourceURL": "https://helpx.adobe.com/photoshop/using/default-keyboard-shortcuts.html",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["fit", "zoom", "screen"]
+        },
+        {
+          "id": "photoshop.newLayer",
+          "bundleIDs": ["com.adobe.Photoshop"],
+          "label": "New Layer",
+          "category": "Layer",
+          "payload": "cmd+shift+n",
+          "sourceURL": "https://helpx.adobe.com/photoshop/using/default-keyboard-shortcuts.html",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["layer", "create", "add"]
+        },
+        {
+          "id": "photoshop.switchColors",
+          "bundleIDs": ["com.adobe.Photoshop"],
+          "label": "Switch Foreground and Background Colors",
+          "category": "Tools",
+          "payload": "x",
+          "sourceURL": "https://helpx.adobe.com/photoshop/using/default-keyboard-shortcuts.html",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["color", "swap", "palette"]
+        }
+      ]
+    },
+    {
+      "id": "figma",
+      "name": "Figma",
+      "bundleIDs": ["com.figma.Desktop"],
+      "actions": [
+        {
+          "id": "figma.showHideUI",
+          "bundleIDs": ["com.figma.Desktop"],
+          "label": "Show or Hide UI",
+          "category": "View",
+          "payload": "cmd+\\",
+          "sourceURL": "https://help.figma.com/hc/en-us/articles/360039958033-Keyboard-shortcuts",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["canvas", "interface", "panels", "clean"]
+        },
+        {
+          "id": "figma.quickActions",
+          "bundleIDs": ["com.figma.Desktop"],
+          "label": "Show Quick Actions",
+          "category": "Essentials",
+          "payload": "cmd+/",
+          "sourceURL": "https://help.figma.com/hc/en-us/articles/360039958033-Keyboard-shortcuts",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["search", "command", "palette", "actions"]
+        },
+        {
+          "id": "figma.zoomToFit",
+          "bundleIDs": ["com.figma.Desktop"],
+          "label": "Zoom to Fit",
+          "category": "View",
+          "payload": "shift+1",
+          "sourceURL": "https://help.figma.com/hc/en-us/articles/360039958033-Keyboard-shortcuts",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["zoom", "fit", "screen", "canvas"]
+        },
+        {
+          "id": "figma.zoomToSelection",
+          "bundleIDs": ["com.figma.Desktop"],
+          "label": "Zoom to Selection",
+          "category": "View",
+          "payload": "shift+2",
+          "sourceURL": "https://help.figma.com/hc/en-us/articles/360039958033-Keyboard-shortcuts",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["zoom", "selection", "focus"]
+        },
+        {
+          "id": "figma.addAutoLayout",
+          "bundleIDs": ["com.figma.Desktop"],
+          "label": "Add Auto Layout",
+          "category": "Layout",
+          "payload": "shift+a",
+          "sourceURL": "https://help.figma.com/hc/en-us/articles/360039958033-Keyboard-shortcuts",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["layout", "flex", "auto"]
+        },
+        {
+          "id": "figma.group",
+          "bundleIDs": ["com.figma.Desktop"],
+          "label": "Group Selection",
+          "category": "Arrange",
+          "payload": "cmd+g",
+          "sourceURL": "https://help.figma.com/hc/en-us/articles/360039958033-Keyboard-shortcuts",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["group", "organize"]
+        },
+        {
+          "id": "figma.frameSelection",
+          "bundleIDs": ["com.figma.Desktop"],
+          "label": "Frame Selection",
+          "category": "Arrange",
+          "payload": "cmd+opt+g",
+          "sourceURL": "https://help.figma.com/hc/en-us/articles/360039958033-Keyboard-shortcuts",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["frame", "container"]
+        }
+      ]
+    },
+    {
+      "id": "finalcut",
+      "name": "Final Cut Pro",
+      "bundleIDs": ["com.apple.FinalCut"],
+      "actions": [
+        {
+          "id": "finalcut.blade",
+          "bundleIDs": ["com.apple.FinalCut"],
+          "label": "Blade",
+          "category": "Editing",
+          "payload": "cmd+b",
+          "sourceURL": "https://support.apple.com/guide/final-cut-pro/keyboard-shortcuts-verbd39b1ab2/mac",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["cut", "split", "razor", "slice"],
+          "keymapNote": "Depends on your keymap."
+        },
+        {
+          "id": "finalcut.bladeAll",
+          "bundleIDs": ["com.apple.FinalCut"],
+          "label": "Blade All",
+          "category": "Editing",
+          "payload": "cmd+shift+b",
+          "sourceURL": "https://support.apple.com/guide/final-cut-pro/keyboard-shortcuts-verbd39b1ab2/mac",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["cut", "all", "split"],
+          "keymapNote": "Depends on your keymap."
+        },
+        {
+          "id": "finalcut.zoomToFit",
+          "bundleIDs": ["com.apple.FinalCut"],
+          "label": "Zoom to Fit",
+          "category": "View",
+          "payload": "shift+z",
+          "sourceURL": "https://support.apple.com/guide/final-cut-pro/keyboard-shortcuts-verbd39b1ab2/mac",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["zoom", "timeline", "fit"],
+          "keymapNote": "Depends on your keymap."
+        },
+        {
+          "id": "finalcut.zoomIn",
+          "bundleIDs": ["com.apple.FinalCut"],
+          "label": "Zoom In Timeline",
+          "category": "View",
+          "payload": "cmd+=",
+          "sourceURL": "https://support.apple.com/guide/final-cut-pro/keyboard-shortcuts-verbd39b1ab2/mac",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["zoom", "timeline", "in"],
+          "pairedOpposite": "finalcut.zoomOut",
+          "pairLabel": "Zoom Timeline",
+          "keymapNote": "Depends on your keymap."
+        },
+        {
+          "id": "finalcut.zoomOut",
+          "bundleIDs": ["com.apple.FinalCut"],
+          "label": "Zoom Out Timeline",
+          "category": "View",
+          "payload": "cmd+-",
+          "sourceURL": "https://support.apple.com/guide/final-cut-pro/keyboard-shortcuts-verbd39b1ab2/mac",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["zoom", "timeline", "out"],
+          "pairedOpposite": "finalcut.zoomIn",
+          "pairLabel": "Zoom Timeline",
+          "keymapNote": "Depends on your keymap."
+        },
+        {
+          "id": "finalcut.selectTool",
+          "bundleIDs": ["com.apple.FinalCut"],
+          "label": "Select Tool",
+          "category": "Tools",
+          "payload": "a",
+          "sourceURL": "https://support.apple.com/guide/final-cut-pro/keyboard-shortcuts-verbd39b1ab2/mac",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["arrow", "pointer", "tool"],
+          "keymapNote": "Depends on your keymap."
+        },
+        {
+          "id": "finalcut.bladeTool",
+          "bundleIDs": ["com.apple.FinalCut"],
+          "label": "Blade Tool",
+          "category": "Tools",
+          "payload": "b",
+          "sourceURL": "https://support.apple.com/guide/final-cut-pro/keyboard-shortcuts-verbd39b1ab2/mac",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["blade", "razor", "tool"],
+          "keymapNote": "Depends on your keymap."
+        }
+      ]
+    },
+    {
+      "id": "excel",
+      "name": "Microsoft Excel",
+      "bundleIDs": ["com.microsoft.Excel"],
+      "actions": [
+        {
+          "id": "excel.previousSheet",
+          "bundleIDs": ["com.microsoft.Excel"],
+          "label": "Previous Sheet",
+          "category": "Navigation",
+          "payload": "ctrl+pageup",
+          "sourceURL": "https://support.microsoft.com/en-us/office/keyboard-shortcuts-in-excel-1798d9d5-842a-42b8-9c99-9b7213f0040f",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["sheet", "tab", "previous", "worksheet"],
+          "pairedOpposite": "excel.nextSheet",
+          "pairLabel": "Switch Sheets"
+        },
+        {
+          "id": "excel.nextSheet",
+          "bundleIDs": ["com.microsoft.Excel"],
+          "label": "Next Sheet",
+          "category": "Navigation",
+          "payload": "ctrl+pagedown",
+          "sourceURL": "https://support.microsoft.com/en-us/office/keyboard-shortcuts-in-excel-1798d9d5-842a-42b8-9c99-9b7213f0040f",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["sheet", "tab", "next", "worksheet"],
+          "pairedOpposite": "excel.previousSheet",
+          "pairLabel": "Switch Sheets"
+        },
+        {
+          "id": "excel.formatCells",
+          "bundleIDs": ["com.microsoft.Excel"],
+          "label": "Format Cells",
+          "category": "Formatting",
+          "payload": "cmd+1",
+          "sourceURL": "https://support.microsoft.com/en-us/office/keyboard-shortcuts-in-excel-1798d9d5-842a-42b8-9c99-9b7213f0040f",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["format", "cells", "style", "number"]
+        },
+        {
+          "id": "excel.editCell",
+          "bundleIDs": ["com.microsoft.Excel"],
+          "label": "Edit Active Cell",
+          "category": "Editing",
+          "payload": "ctrl+u",
+          "sourceURL": "https://support.microsoft.com/en-us/office/keyboard-shortcuts-in-excel-1798d9d5-842a-42b8-9c99-9b7213f0040f",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["edit", "cell", "formula"]
+        },
+        {
+          "id": "excel.insertHyperlink",
+          "bundleIDs": ["com.microsoft.Excel"],
+          "label": "Insert Link",
+          "category": "Insert",
+          "payload": "cmd+k",
+          "sourceURL": "https://support.microsoft.com/en-us/office/keyboard-shortcuts-in-excel-1798d9d5-842a-42b8-9c99-9b7213f0040f",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["link", "url", "hyperlink"]
+        },
+        {
+          "id": "excel.openFilter",
+          "bundleIDs": ["com.microsoft.Excel"],
+          "label": "Filter",
+          "category": "Data",
+          "payload": "cmd+shift+f",
+          "sourceURL": "https://support.microsoft.com/en-us/office/keyboard-shortcuts-in-excel-1798d9d5-842a-42b8-9c99-9b7213f0040f",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["filter", "sort", "data"]
+        }
+      ]
+    },
+    {
+      "id": "powerpoint",
+      "name": "Microsoft PowerPoint",
+      "bundleIDs": ["com.microsoft.Powerpoint"],
+      "actions": [
+        {
+          "id": "powerpoint.startSlideShow",
+          "bundleIDs": ["com.microsoft.Powerpoint"],
+          "label": "Start Slide Show",
+          "category": "Slide Show",
+          "payload": "cmd+shift+return",
+          "sourceURL": "https://support.microsoft.com/en-us/office/use-keyboard-shortcuts-to-create-powerpoint-presentations-ec62c20e-d764-4122-8349-8d7d8e874836",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["play", "present", "presentation"]
+        },
+        {
+          "id": "powerpoint.newSlide",
+          "bundleIDs": ["com.microsoft.Powerpoint"],
+          "label": "New Slide",
+          "category": "Slides",
+          "payload": "cmd+shift+n",
+          "sourceURL": "https://support.microsoft.com/en-us/office/use-keyboard-shortcuts-to-create-powerpoint-presentations-ec62c20e-d764-4122-8349-8d7d8e874836",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["slide", "add", "create"]
+        },
+        {
+          "id": "powerpoint.duplicate",
+          "bundleIDs": ["com.microsoft.Powerpoint"],
+          "label": "Duplicate",
+          "category": "Edit",
+          "payload": "cmd+d",
+          "sourceURL": "https://support.microsoft.com/en-us/office/use-keyboard-shortcuts-to-create-powerpoint-presentations-ec62c20e-d764-4122-8349-8d7d8e874836",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["duplicate", "copy", "slide", "shape"]
+        },
+        {
+          "id": "powerpoint.group",
+          "bundleIDs": ["com.microsoft.Powerpoint"],
+          "label": "Group Objects",
+          "category": "Arrange",
+          "payload": "cmd+opt+g",
+          "sourceURL": "https://support.microsoft.com/en-us/office/use-keyboard-shortcuts-to-create-powerpoint-presentations-ec62c20e-d764-4122-8349-8d7d8e874836",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["group", "shapes", "objects"]
+        },
+        {
+          "id": "powerpoint.ungroup",
+          "bundleIDs": ["com.microsoft.Powerpoint"],
+          "label": "Ungroup Objects",
+          "category": "Arrange",
+          "payload": "cmd+opt+shift+g",
+          "sourceURL": "https://support.microsoft.com/en-us/office/use-keyboard-shortcuts-to-create-powerpoint-presentations-ec62c20e-d764-4122-8349-8d7d8e874836",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["ungroup", "separate"]
+        },
+        {
+          "id": "powerpoint.insertHyperlink",
+          "bundleIDs": ["com.microsoft.Powerpoint"],
+          "label": "Insert Link",
+          "category": "Insert",
+          "payload": "cmd+k",
+          "sourceURL": "https://support.microsoft.com/en-us/office/use-keyboard-shortcuts-to-create-powerpoint-presentations-ec62c20e-d764-4122-8349-8d7d8e874836",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["link", "hyperlink"]
+        }
+      ]
+    },
+    {
+      "id": "word",
+      "name": "Microsoft Word",
+      "bundleIDs": ["com.microsoft.Word"],
+      "actions": [
+        {
+          "id": "word.centerText",
+          "bundleIDs": ["com.microsoft.Word"],
+          "label": "Center Text",
+          "category": "Alignment",
+          "payload": "cmd+e",
+          "sourceURL": "https://support.microsoft.com/en-us/office/keyboard-shortcuts-in-word-95ef89dd-7142-4b5c-afb2-f762f663ceb2",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["center", "align", "paragraph"]
+        },
+        {
+          "id": "word.leftAlignText",
+          "bundleIDs": ["com.microsoft.Word"],
+          "label": "Left Align Text",
+          "category": "Alignment",
+          "payload": "cmd+l",
+          "sourceURL": "https://support.microsoft.com/en-us/office/keyboard-shortcuts-in-word-95ef89dd-7142-4b5c-afb2-f762f663ceb2",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["left", "align", "paragraph"]
+        },
+        {
+          "id": "word.rightAlignText",
+          "bundleIDs": ["com.microsoft.Word"],
+          "label": "Right Align Text",
+          "category": "Alignment",
+          "payload": "cmd+r",
+          "sourceURL": "https://support.microsoft.com/en-us/office/keyboard-shortcuts-in-word-95ef89dd-7142-4b5c-afb2-f762f663ceb2",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["right", "align", "paragraph"]
+        },
+        {
+          "id": "word.justifyText",
+          "bundleIDs": ["com.microsoft.Word"],
+          "label": "Justify Text",
+          "category": "Alignment",
+          "payload": "cmd+j",
+          "sourceURL": "https://support.microsoft.com/en-us/office/keyboard-shortcuts-in-word-95ef89dd-7142-4b5c-afb2-f762f663ceb2",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["justify", "align", "paragraph"]
+        },
+        {
+          "id": "word.insertPageBreak",
+          "bundleIDs": ["com.microsoft.Word"],
+          "label": "Insert Page Break",
+          "category": "Insert",
+          "payload": "cmd+return",
+          "sourceURL": "https://support.microsoft.com/en-us/office/keyboard-shortcuts-in-word-95ef89dd-7142-4b5c-afb2-f762f663ceb2",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["page", "break", "section"]
+        },
+        {
+          "id": "word.insertHyperlink",
+          "bundleIDs": ["com.microsoft.Word"],
+          "label": "Insert Link",
+          "category": "Insert",
+          "payload": "cmd+k",
+          "sourceURL": "https://support.microsoft.com/en-us/office/keyboard-shortcuts-in-word-95ef89dd-7142-4b5c-afb2-f762f663ceb2",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["link", "hyperlink", "url"]
+        }
+      ]
+    },
+    {
+      "id": "vscode",
+      "name": "Visual Studio Code",
+      "bundleIDs": ["com.microsoft.VSCode"],
+      "actions": [
+        {
+          "id": "vscode.commandPalette",
+          "bundleIDs": ["com.microsoft.VSCode"],
+          "label": "Show Command Palette",
+          "category": "Navigation",
+          "payload": "cmd+shift+p",
+          "sourceURL": "https://code.visualstudio.com/docs/getstarted/keybindings",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["command", "palette", "actions"],
+          "keymapNote": "Depends on your keymap."
+        },
+        {
+          "id": "vscode.quickOpen",
+          "bundleIDs": ["com.microsoft.VSCode"],
+          "label": "Quick Open File",
+          "category": "Navigation",
+          "payload": "cmd+p",
+          "sourceURL": "https://code.visualstudio.com/docs/getstarted/keybindings",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["file", "open", "find"],
+          "keymapNote": "Depends on your keymap."
+        },
+        {
+          "id": "vscode.toggleTerminal",
+          "bundleIDs": ["com.microsoft.VSCode"],
+          "label": "Show or Hide Terminal",
+          "category": "View",
+          "payload": "ctrl+`",
+          "sourceURL": "https://code.visualstudio.com/docs/getstarted/keybindings",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["terminal", "shell", "console"],
+          "keymapNote": "Depends on your keymap."
+        },
+        {
+          "id": "vscode.toggleSidebar",
+          "bundleIDs": ["com.microsoft.VSCode"],
+          "label": "Show or Hide Primary Side Bar",
+          "category": "View",
+          "payload": "cmd+b",
+          "sourceURL": "https://code.visualstudio.com/docs/getstarted/keybindings",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["sidebar", "explorer"],
+          "keymapNote": "Depends on your keymap."
+        },
+        {
+          "id": "vscode.previousEditor",
+          "bundleIDs": ["com.microsoft.VSCode"],
+          "label": "Previous Editor",
+          "category": "Navigation",
+          "payload": "cmd+opt+left",
+          "sourceURL": "https://code.visualstudio.com/docs/getstarted/keybindings",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["tab", "editor", "previous"],
+          "pairedOpposite": "vscode.nextEditor",
+          "pairLabel": "Switch Editors",
+          "keymapNote": "Depends on your keymap."
+        },
+        {
+          "id": "vscode.nextEditor",
+          "bundleIDs": ["com.microsoft.VSCode"],
+          "label": "Next Editor",
+          "category": "Navigation",
+          "payload": "cmd+opt+right",
+          "sourceURL": "https://code.visualstudio.com/docs/getstarted/keybindings",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["tab", "editor", "next"],
+          "pairedOpposite": "vscode.previousEditor",
+          "pairLabel": "Switch Editors",
+          "keymapNote": "Depends on your keymap."
+        },
+        {
+          "id": "vscode.fold",
+          "bundleIDs": ["com.microsoft.VSCode"],
+          "label": "Fold Code",
+          "category": "Folding",
+          "payload": "cmd+opt+[",
+          "sourceURL": "https://code.visualstudio.com/docs/getstarted/keybindings",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["fold", "collapse"],
+          "pairedOpposite": "vscode.unfold",
+          "pairLabel": "Fold Code",
+          "keymapNote": "Depends on your keymap."
+        },
+        {
+          "id": "vscode.unfold",
+          "bundleIDs": ["com.microsoft.VSCode"],
+          "label": "Unfold Code",
+          "category": "Folding",
+          "payload": "cmd+opt+]",
+          "sourceURL": "https://code.visualstudio.com/docs/getstarted/keybindings",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["unfold", "expand"],
+          "pairedOpposite": "vscode.fold",
+          "pairLabel": "Fold Code",
+          "keymapNote": "Depends on your keymap."
+        }
+      ]
+    },
+    {
+      "id": "safari",
+      "name": "Safari",
+      "bundleIDs": ["com.apple.Safari"],
+      "actions": [
+        {
+          "id": "safari.previousTab",
+          "bundleIDs": ["com.apple.Safari"],
+          "label": "Previous Tab",
+          "category": "Tabs",
+          "payload": "ctrl+shift+tab",
+          "sourceURL": "https://support.apple.com/guide/safari/keyboard-shortcuts-and-gestures-ibrw1065/mac",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["tab", "back"],
+          "pairedOpposite": "safari.nextTab",
+          "pairLabel": "Switch Tabs"
+        },
+        {
+          "id": "safari.nextTab",
+          "bundleIDs": ["com.apple.Safari"],
+          "label": "Next Tab",
+          "category": "Tabs",
+          "payload": "ctrl+tab",
+          "sourceURL": "https://support.apple.com/guide/safari/keyboard-shortcuts-and-gestures-ibrw1065/mac",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["tab", "forward"],
+          "pairedOpposite": "safari.previousTab",
+          "pairLabel": "Switch Tabs"
+        },
+        {
+          "id": "safari.reopenClosedTab",
+          "bundleIDs": ["com.apple.Safari"],
+          "label": "Reopen Last Closed Tab",
+          "category": "Tabs",
+          "payload": "cmd+shift+t",
+          "sourceURL": "https://support.apple.com/guide/safari/keyboard-shortcuts-and-gestures-ibrw1065/mac",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["restore", "reopen", "undo"]
+        },
+        {
+          "id": "safari.tabOverview",
+          "bundleIDs": ["com.apple.Safari"],
+          "label": "Show All Tabs",
+          "category": "Tabs",
+          "payload": "cmd+shift+\\",
+          "sourceURL": "https://support.apple.com/guide/safari/keyboard-shortcuts-and-gestures-ibrw1065/mac",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["overview", "grid"]
+        },
+        {
+          "id": "safari.showSidebar",
+          "bundleIDs": ["com.apple.Safari"],
+          "label": "Show or Hide Sidebar",
+          "category": "View",
+          "payload": "ctrl+cmd+s",
+          "sourceURL": "https://support.apple.com/guide/safari/keyboard-shortcuts-and-gestures-ibrw1065/mac",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["sidebar", "bookmarks", "reading list"]
+        },
+        {
+          "id": "safari.reloadPage",
+          "bundleIDs": ["com.apple.Safari"],
+          "label": "Reload Page",
+          "category": "Navigation",
+          "payload": "cmd+r",
+          "sourceURL": "https://support.apple.com/guide/safari/keyboard-shortcuts-and-gestures-ibrw1065/mac",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["refresh", "reload"]
+        }
+      ]
+    },
+    {
+      "id": "chrome",
+      "name": "Google Chrome",
+      "bundleIDs": ["com.google.Chrome"],
+      "actions": [
+        {
+          "id": "chrome.previousTab",
+          "bundleIDs": ["com.google.Chrome"],
+          "label": "Previous Tab",
+          "category": "Tabs",
+          "payload": "cmd+opt+left",
+          "sourceURL": "https://support.google.com/chrome/answer/157179",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["tab", "back"],
+          "pairedOpposite": "chrome.nextTab",
+          "pairLabel": "Switch Tabs"
+        },
+        {
+          "id": "chrome.nextTab",
+          "bundleIDs": ["com.google.Chrome"],
+          "label": "Next Tab",
+          "category": "Tabs",
+          "payload": "cmd+opt+right",
+          "sourceURL": "https://support.google.com/chrome/answer/157179",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["tab", "forward"],
+          "pairedOpposite": "chrome.previousTab",
+          "pairLabel": "Switch Tabs"
+        },
+        {
+          "id": "chrome.reopenClosedTab",
+          "bundleIDs": ["com.google.Chrome"],
+          "label": "Reopen Closed Tab",
+          "category": "Tabs",
+          "payload": "cmd+shift+t",
+          "sourceURL": "https://support.google.com/chrome/answer/157179",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["restore", "reopen", "undo"]
+        },
+        {
+          "id": "chrome.newIncognitoWindow",
+          "bundleIDs": ["com.google.Chrome"],
+          "label": "New Incognito Window",
+          "category": "Window",
+          "payload": "cmd+shift+n",
+          "sourceURL": "https://support.google.com/chrome/answer/157179",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["private", "incognito"]
+        },
+        {
+          "id": "chrome.bookmarkManager",
+          "bundleIDs": ["com.google.Chrome"],
+          "label": "Open Bookmark Manager",
+          "category": "Bookmarks",
+          "payload": "cmd+opt+b",
+          "sourceURL": "https://support.google.com/chrome/answer/157179",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["bookmarks", "manager", "favorites"]
+        },
+        {
+          "id": "chrome.history",
+          "bundleIDs": ["com.google.Chrome"],
+          "label": "Open History",
+          "category": "History",
+          "payload": "cmd+y",
+          "sourceURL": "https://support.google.com/chrome/answer/157179",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["history", "visited"]
+        }
+      ]
+    },
+    {
+      "id": "edge",
+      "name": "Microsoft Edge",
+      "bundleIDs": ["com.microsoft.edgemac"],
+      "actions": [
+        {
+          "id": "edge.previousTab",
+          "bundleIDs": ["com.microsoft.edgemac"],
+          "label": "Previous Tab",
+          "category": "Tabs",
+          "payload": "cmd+opt+left",
+          "sourceURL": "https://support.microsoft.com/en-us/microsoft-edge/keyboard-shortcuts-in-microsoft-edge-50d3edab-30d9-c7e4-21ce-37fe2713cfad",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["tab", "back"],
+          "pairedOpposite": "edge.nextTab",
+          "pairLabel": "Switch Tabs"
+        },
+        {
+          "id": "edge.nextTab",
+          "bundleIDs": ["com.microsoft.edgemac"],
+          "label": "Next Tab",
+          "category": "Tabs",
+          "payload": "cmd+opt+right",
+          "sourceURL": "https://support.microsoft.com/en-us/microsoft-edge/keyboard-shortcuts-in-microsoft-edge-50d3edab-30d9-c7e4-21ce-37fe2713cfad",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["tab", "forward"],
+          "pairedOpposite": "edge.previousTab",
+          "pairLabel": "Switch Tabs"
+        },
+        {
+          "id": "edge.reopenClosedTab",
+          "bundleIDs": ["com.microsoft.edgemac"],
+          "label": "Reopen Closed Tab",
+          "category": "Tabs",
+          "payload": "cmd+shift+t",
+          "sourceURL": "https://support.microsoft.com/en-us/microsoft-edge/keyboard-shortcuts-in-microsoft-edge-50d3edab-30d9-c7e4-21ce-37fe2713cfad",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["restore", "reopen", "undo"]
+        },
+        {
+          "id": "edge.newInPrivateWindow",
+          "bundleIDs": ["com.microsoft.edgemac"],
+          "label": "New InPrivate Window",
+          "category": "Window",
+          "payload": "cmd+shift+n",
+          "sourceURL": "https://support.microsoft.com/en-us/microsoft-edge/keyboard-shortcuts-in-microsoft-edge-50d3edab-30d9-c7e4-21ce-37fe2713cfad",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["private", "inprivate"]
+        },
+        {
+          "id": "edge.downloads",
+          "bundleIDs": ["com.microsoft.edgemac"],
+          "label": "Open Downloads",
+          "category": "Downloads",
+          "payload": "cmd+j",
+          "sourceURL": "https://support.microsoft.com/en-us/microsoft-edge/keyboard-shortcuts-in-microsoft-edge-50d3edab-30d9-c7e4-21ce-37fe2713cfad",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["downloads", "files"]
+        },
+        {
+          "id": "edge.history",
+          "bundleIDs": ["com.microsoft.edgemac"],
+          "label": "Open History",
+          "category": "History",
+          "payload": "cmd+y",
+          "sourceURL": "https://support.microsoft.com/en-us/microsoft-edge/keyboard-shortcuts-in-microsoft-edge-50d3edab-30d9-c7e4-21ce-37fe2713cfad",
+          "verifiedDate": "2026-11-04",
+          "keywords": ["history", "visited"]
+        }
+      ]
+    }
+  ]
+}

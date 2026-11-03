@@ -27,6 +27,7 @@ let package = Package(
         .target(
             name: "PureMouseSettingsUI",
             dependencies: ["PureMouseKit", "PureMouseAppSupport"],
+            resources: [.process("Resources")],
             swiftSettings: [.unsafeFlags(["-Osize"], .when(configuration: .release))]
         ),
         // The menu bar app: status item and menu; opens the Settings helper. Edits the config; never
