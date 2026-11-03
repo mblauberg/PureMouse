@@ -143,7 +143,7 @@ the full list. The ones used most:
 | `PUREMOUSE_DEV_SHORTCUT=<button>` | A button's shortcut sheet on Mouse › Buttons; with `PUREMOUSE_DEV_APP`, that button's shortcut editor popover on the app sheet (`AppSheet.body`) |
 | `PUREMOUSE_DEV_MOUSE=<device key>\|all` | Chooses that mouse on Mouse, or All Mice; `PUREMOUSE_DEV_OTHERS=1` opens Buttons' Other controls |
 | `PUREMOUSE_DEV_APP=<bundle id>` | Opens Apps on that app's sheet, adding it without writing |
-| `PUREMOUSE_DEV_SHEET=<name>` | A sheet: `presets` on Mouse › Pointer, or `advanced` on the pane shown (`DevSheet`) |
+| `PUREMOUSE_DEV_SHEET=<name>` | A sheet: `presets` on Mouse › Pointer, `advanced` on the pane shown, or `aboutMouse` on General (`DevSheet`) |
 | `PUREMOUSE_DEV_CAPTURE=<file.png>` | Saves the helper's own windows to that file and quits (`DevCapture`). Needs no Screen Recording permission, so it works over SSH |
 | `PUREMOUSE_DEV_AX_DUMP=1` | Prints each control's accessibility role, label and size for every tab and Mouse segment (with `PUREMOUSE_DEV_PANE`, for what the sheet, picker and shortcut hooks open), and exits 1 on an unlabelled or duplicate control or one under 20 × 20 pt (`DevAXDump`). Run it on the spare Mac, not the one in use |
 
