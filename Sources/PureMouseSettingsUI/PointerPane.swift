@@ -3,6 +3,7 @@ import SwiftUI
 
 struct PointerPane: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openURL) private var openURL
     @Environment(\.settings) private var settings
     @State private var typed: Int?
     @State private var exactValue = false
@@ -30,7 +31,6 @@ struct PointerPane: View {
 
     var body: some View {
         let steps = steps
-        let reported = !reportedSteps.isEmpty
         let scope = model.scope, target = model.scopeTarget
         let presets = model.config.dpiPresets(in: scope)
         let layout = PointerLayout(config: model.config, devices: model.capabilityDevices(in: scope), scope: scope)
@@ -40,18 +40,22 @@ struct PointerPane: View {
             PaneBanners()
             Section {
                 if layout.showsRows {
-                    ValueSlider(title: "Pointer Speed", spokenTitle: "Pointer speed",
-                                help: "Higher moves the pointer further for the same hand movement. Available speeds depend on your mouse.",
+                    ValueSlider(title: PointerWords.title, spokenTitle: PointerWords.title,
+                                help: PointerWords.help,
                                 value: Binding(get: { Double(DPIReading.index(of: current, in: steps)) },
                                                set: { DPIReading.step(at: $0, in: steps).map { setDPI($0, debounce: true) } }),
                                 range: 0...Double(max(steps.count - 1, 1)),
-                                low: reported ? Format.number(steps.first ?? 0) : "",
-                                high: reported ? Format.number(steps.last ?? 0) : "",
+                                low: PointerWords.slow, high: PointerWords.fast,
                                 format: { _ in reading.readout(live: live, configured: configured) },
-                                availability: layout.availability, mouseDefault: estimate, standing: speed)
+                                showsReadout: false, availability: layout.availability, mouseDefault: estimate, standing: speed)
                         // A sensor with a single setting has nothing to slide between.
                         .disabled(steps.count < 2)
-                    LabeledContent {} label: {
+                    LabeledContent {
+                        if !exactValue {
+                            Text(reading.readout(live: live, configured: configured))
+                                .monospacedDigit().foregroundStyle(.secondary)
+                        }
+                    } label: {
                         DisclosureLabel(title: "Exact value", isExpanded: $exactValue)
                     }
                     if exactValue {
@@ -63,7 +67,7 @@ struct PointerPane: View {
                                     .multilineTextAlignment(.trailing)
                                     .labelsHidden()
                                     .onSubmit { commitTyped(steps) }
-                                    .accessibilityLabel("Pointer speed")
+                                    .accessibilityLabel(PointerWords.exactLabel)
                                 Text("DPI").foregroundStyle(.secondary).accessibilityHidden(true)
                             }
                         } label: {
@@ -81,14 +85,18 @@ struct PointerPane: View {
                 } else {
                     // Nothing else on the pane applies, so say why it is bare.
                     LabeledContent {} label: {
-                        RowLabel("Pointer Speed", help: ControlAvailability.unsupportedCaption)
+                        RowLabel("Pointer speed", help: ControlAvailability.unsupportedCaption)
                     }
                 }
             } footer: {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(scope.deviceKey == nil && model.devices.count > 1
-                         ? "The Tracking speed setting in System Settings applies on top. Applies to every connected mouse."
-                         : "The Tracking speed setting in System Settings applies on top.")
+                    Text(PointerWords.footer)
+                    Button {
+                        openURL(URL(string: PointerWords.mouseSettingsURL)!)
+                    } label: {
+                        Text(PointerWords.openMouseSettings).padding(.vertical, 2).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.link)
                     PaneFooter(restoreDefaults: {
                         typed = nil
                         reading.clear()
@@ -102,7 +110,7 @@ struct PointerPane: View {
         .onChange(of: model.writeError) { if model.writeError != nil { reading.clear() } }
         .onChange(of: exactValue) { settings?.refit() }
         .sheet(isPresented: Binding(get: { settings?.sheet == .presets }, set: { if !$0 { settings?.sheet = nil } })) {
-            PresetsSheet(current: current, steps: steps) { setDPI($0) }
+            PresetsSheet(current: current, steps: reportedSteps) { setDPI($0) }
         }
     }
 

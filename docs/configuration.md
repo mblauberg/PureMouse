@@ -78,6 +78,13 @@ saves the file as `config.json.bak`).
 | `devices` | Settings for one model of mouse, over the ones above ([below](#per-device-settings)) |
 | `universalControl.handOff` | While the pointer is on another Mac (Universal Control), hand the wheels and buttons back to macOS so they scroll and click there natively; take them again when the pointer returns. Default true; false keeps PureMouse's behaviour, which does nothing on the other Mac |
 
+Settings › Mouse › Pointer › Edit Presets… edits the list in the selected mouse scope. Return or
+leaving a field snaps it to a supported sensor step within 50–25600 (to a multiple of 50 when the
+mouse reports no steps), merges duplicate speeds and sorts the list. The plus button adds the
+current speed, or the next unsaved step above it (below it, from the top step), up to eight
+entries, then focuses the new field. The minus button removes the focused row, otherwise the row
+last edited, otherwise the checked speed. The checkmark button uses a saved speed.
+
 A number outside its range is an error: the config is not loaded (on reload, the previous one stays
 in effect) and the log names the field.
 
