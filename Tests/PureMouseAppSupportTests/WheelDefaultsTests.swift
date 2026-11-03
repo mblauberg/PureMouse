@@ -39,11 +39,14 @@ private func tree(_ json: String) throws -> ConfigTree { try ConfigTree(data: Da
 
 // MARK: What a choice writes
 
-@Test func aChoiceEqualToTheDefaultWritesNothingAndOneThatDiffersWritesIt() {
+@Test func theTopLevelAlwaysWritesTheChosenValueEvenWhenItIsTheDefault() {
+    // The daemon leaves the mouse as it last set it, so removing a key would not undo it: Reverse off
+    // with smooth scrolling off keeps the hardware's direction, SmartShift on is applied only when set.
     var config = ConfigTree()
     WheelDefaults.chooseReversed(false, in: &config, scope: .global)
     WheelDefaults.chooseSmartShift(true, in: &config, scope: .global)
-    #expect(config[["scrollWheel"]] == nil)
+    #expect(config.bool(["scrollWheel", "inverted"]) == false)
+    #expect(config.int(["scrollWheel", "smartShiftThreshold"]) == 12)
 
     WheelDefaults.chooseReversed(true, in: &config, scope: .global)
     WheelDefaults.chooseSmartShift(false, in: &config, scope: .global)
@@ -52,11 +55,11 @@ private func tree(_ json: String) throws -> ConfigTree { try ConfigTree(data: Da
     #expect(config.int(["scrollWheel", "smartShiftThreshold"]) == 255)
     #expect(config.string(["scrollWheel", "mode"]) == "ratchet")
 
-    // Back to the default: the keys go.
+    // Turning them back writes again: off for Reverse, 12 for SmartShift.
     WheelDefaults.chooseReversed(false, in: &config, scope: .global)
     WheelDefaults.chooseSmartShift(true, in: &config, scope: .global)
-    #expect(config.bool(["scrollWheel", "inverted"]) == nil)
-    #expect(config.int(["scrollWheel", "smartShiftThreshold"]) == nil)
+    #expect(config.bool(["scrollWheel", "inverted"]) == false)
+    #expect(config.int(["scrollWheel", "smartShiftThreshold"]) == 12)
 }
 
 @Test func theTopLevelAlwaysWritesTheChosenModeWhateverTheMouseReports() throws {
@@ -80,14 +83,14 @@ private func tree(_ json: String) throws -> ConfigTree { try ConfigTree(data: Da
     #expect(other.string(other.prefix(of: mouse) + ["scrollWheel", "mode"]) == "ratchet")
 }
 
-@Test func aMouseWritesOnlyWhatDiffersFromWhatItInherits() throws {
+@Test func aMouseDropsItsKeyOnlyForAnExplicitAllMiceValueItEquals() throws {
     var config = try tree(#"{"scrollWheel": {"inverted": true, "mode": "freespin", "smartShiftThreshold": 255}}"#)
     // Equal to All Mice's value: no key under the mouse.
     WheelDefaults.chooseReversed(true, in: &config, scope: mouse)
     WheelDefaults.chooseMode(.freespin, in: &config, scope: mouse)
     WheelDefaults.chooseSmartShift(false, in: &config, scope: mouse)
     #expect(config[["devices"]] == nil)
-    // Different: written under the mouse, and All Mice's is untouched.
+    // Different from All Mice's: written under the mouse, and All Mice's is untouched.
     WheelDefaults.chooseReversed(false, in: &config, scope: mouse)
     WheelDefaults.chooseMode(.ratchet, in: &config, scope: mouse)
     WheelDefaults.chooseSmartShift(true, in: &config, scope: mouse)
@@ -105,13 +108,15 @@ private func tree(_ json: String) throws -> ConfigTree { try ConfigTree(data: Da
     #expect(config[["devices"]] == nil)
 }
 
-@Test func aMouseUnderAnUnsetAllMiceFollowsTheMouseDefault() throws {
+@Test func aMouseUnderAnUnsetAllMiceWritesItsChoiceToo() throws {
     var config = ConfigTree()
     WheelDefaults.chooseSmartShift(true, in: &config, scope: mouse)
     WheelDefaults.chooseReversed(false, in: &config, scope: mouse)
-    #expect(config[["devices"]] == nil)
+    let path = config.prefix(of: mouse) + ["scrollWheel"]
+    #expect(config.int(path + ["smartShiftThreshold"]) == 12)
+    #expect(config.bool(path + ["inverted"]) == false)
     WheelDefaults.chooseSmartShift(false, in: &config, scope: mouse)
-    #expect(config.int(config.prefix(of: mouse) + ["scrollWheel", "smartShiftThreshold"]) == 255)
+    #expect(config.int(path + ["smartShiftThreshold"]) == 255)
 }
 
 @MainActor @Test func theRowsWriteThroughTheModelsScopeTarget() throws {

@@ -105,6 +105,8 @@ struct ScrollingPane: View {
             ScrollingAdvancedSheet().environment(model)
         }
         .onChange(of: layout.hasAdvanced) { _, has in if !has { showingAdvanced = false } }
+        // Try it adds or removes the sample's rows: the window refits (as Pointer's exact value does).
+        .onChange(of: showingTryIt) { settings?.refit() }
         #if DEBUG
         .onAppear {
             if ProcessInfo.processInfo.environment["PUREMOUSE_DEV_TRY_IT"] != nil { showingTryIt = true }

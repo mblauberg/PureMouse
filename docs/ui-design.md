@@ -138,11 +138,10 @@ answering a question people have, and a good default means most people never tou
 The main wheel's rows always show a concrete value (`WheelDefaults`): while nothing is set,
 Reverse direction is off, Wheel mode is the mode the mouse reports (Ratchet if it reports none)
 and SmartShift is on, with no "Using the mouse's own setting." caption (Switches at, in Advanced…,
-keeps it). A key is written only when the choice differs from what the scope would have without
-it: the value an explicit All Mice setting gives a mouse, else that default. A choice equal to it
-removes the key; SmartShift on over an inherited off writes 12. Wheel mode is the exception: it is
-always written, because the daemon does not restore the mouse's own mode when the key goes, and
-only a mouse's choice equal to an explicit All Mice mode removes it.
+keeps it). A choice is always written (Reverse off as `false`, SmartShift on as 12), because the
+daemon leaves the mouse as it last set it: a removed key would not undo anything, and Settings
+would show a value the mouse does not have. Only a mouse's choice equal to an explicit All Mice
+value removes its key, since the daemon applies that value to it anyway.
 
 ## Disclosure
 

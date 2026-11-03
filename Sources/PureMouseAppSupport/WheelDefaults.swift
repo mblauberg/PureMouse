@@ -3,10 +3,14 @@ import PureMouseKit
 
 /// What the main wheel's three rows show and write in a scope (#146). A row always shows a
 /// concrete value: a key that is not set reads as the mouse's default (not reversed, the wheel
-/// mode the mouse reports, SmartShift on). A key is written only when the choice differs from
-/// what the scope would have without it, which is the value an explicit wider scope sets, else
-/// that default; otherwise the key is removed, so the mouse keeps following. Wheel mode is the
-/// exception: it is written unless a mouse's choice equals an explicit All Mice value (`chooseMode`).
+/// mode the mouse reports, SmartShift on).
+///
+/// A choice is always written, with one exception: a mouse's scope removes its key when the choice
+/// equals an explicit All Mice value, which the daemon applies to it anyway. The top level never
+/// removes a key, and a mouse under an unset All Mice writes too. Removing a key would not undo
+/// it: the daemon leaves the mouse as it last set it (wheel mode and SmartShift are written only
+/// when set; with smooth scrolling off the wheel keeps the hardware's current direction), so Settings
+/// would show a value the mouse does not have.
 public enum WheelDefaults {
     public static let reversedPath = ["scrollWheel", "inverted"]
     public static let modePath = ["scrollWheel", "mode"]
@@ -42,23 +46,20 @@ public enum WheelDefaults {
     /// The user chose `reversed`. Written through `model.update(in: model.scopeTarget)`.
     public static func chooseReversed(_ reversed: Bool, in config: inout ConfigTree, scope: ConfigScope) {
         let inherited = parent(config, scope) { $0.resolvedBool(reversedPath, in: .global) }
-        write(reversed, default: false, inherited: inherited, at: reversedPath, stored: reversed, in: &config, scope: scope)
+        write(reversed == inherited ? nil : reversed, at: reversedPath, in: &config, scope: scope)
     }
 
-    /// The user chose `mode`. Unlike the other two rows, the mode is always written: the daemon
-    /// does not restore the mouse's own wheel mode when the key goes, so removing it would leave the
-    /// mouse in the old mode while Settings shows the new one. Only a mouse's scope drops its key,
-    /// and only when the choice equals an explicit All Mice value, which the daemon applies anyway.
+    /// The user chose `mode`.
     public static func chooseMode(_ mode: Mode, in config: inout ConfigTree, scope: ConfigScope) {
         let inherited = parent(config, scope) { ($0.resolved(modePath, in: .global) as? String).flatMap(Mode.init(rawValue:)) }
-        config.set(mode == inherited ? nil : mode.rawValue, at: modePath, in: scope)
+        write(mode == inherited ? nil : mode.rawValue, at: modePath, in: &config, scope: scope)
     }
 
-    /// The user chose SmartShift `on`: on writes 12 over an inherited off, off writes 255.
+    /// The user chose SmartShift `on`: on writes 12 (also over an inherited off), off writes 255.
     public static func chooseSmartShift(_ on: Bool, in config: inout ConfigTree, scope: ConfigScope) {
         let inherited = parent(config, scope) { $0.resolvedInt(smartShiftPath, in: .global).map { isOn($0) } }
-        write(on, default: true, inherited: inherited, at: smartShiftPath,
-              stored: on ? smartShiftOnThreshold : smartShiftOffThreshold, in: &config, scope: scope)
+        write(on == inherited ? nil : (on ? smartShiftOnThreshold : smartShiftOffThreshold), at: smartShiftPath,
+              in: &config, scope: scope)
     }
 
     /// What a mouse's scope inherits from an explicit All Mice value; nil for any other scope, and
@@ -67,9 +68,8 @@ public enum WheelDefaults {
         scope.deviceKey == nil ? nil : read(config)
     }
 
-    private static func write<V: Equatable>(_ choice: V, default fallback: V, inherited: V?, at path: [String],
-                                            stored: Any, in config: inout ConfigTree, scope: ConfigScope) {
-        let follows = choice == (inherited ?? fallback)
-        config.set(follows ? nil : stored, at: path, in: scope)
+    /// Writes `value`, or removes the key for nil.
+    private static func write(_ value: Any?, at path: [String], in config: inout ConfigTree, scope: ConfigScope) {
+        config.set(value, at: path, in: scope)
     }
 }

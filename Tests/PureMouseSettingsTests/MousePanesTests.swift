@@ -162,6 +162,8 @@ import Testing
         // A ScrollView has no intrinsic height: the frame is a named constant, and it shows only when expanded.
         #expect(scrolling.contains(".frame(height: Self.sampleHeight)"))
         #expect(scrolling.contains("if showingTryIt {"))
+        // Expanding it refits the window, as Pointer's exact value does.
+        #expect(scrolling.contains(".onChange(of: showingTryIt) { settings?.refit() }"))
         #expect(scrolling.contains(#"@State private var showingTryIt = false"#))
         #expect(scrolling.contains("PUREMOUSE_DEV_TRY_IT"))
     }
