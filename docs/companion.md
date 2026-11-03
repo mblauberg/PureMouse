@@ -91,8 +91,9 @@ missing or stale file means "PureMouse Is Off".
   `dpi` alone keeps the cycled one. Every control write repeats the last token, so a later pause
   or capture cannot erase it unread; the daemon acts once per token.
 - `reapply: token`, when new, is Apply Settings Again: it starts a fresh `Session.configure()` on
-  every mouse whose settings are not applied, or on the one named by `device`, past the 30 s
-  offline guard (`Session.reapply()`). It does nothing for a mouse that is applied or applying.
+  every mouse whose settings are not applied, past the 30 s offline guard (`Session.reapply()`).
+  It is independent of `device`, which aims `useConfiguredDPI` only, so neither request narrows
+  or widens the other when both are pending. It does nothing for a mouse that is applied or applying.
   The menu sends it from the attention row that shows while a mouse is not applied, and repeats
   the last token on every control write, as for `useConfiguredDPI`, so the daemon acts once per
   token.
@@ -153,7 +154,7 @@ All optional; nil members are left out of the JSON.
 | `devices[].kind` | String | A word such as `mouse`, `trackball` or `keyboard`. |
 | `devices[].capabilities` | object | What the mouse reports. Members: `dpi`, `smartShift`, `smoothScroll`, `thumbWheel`, `haptics` and `battery` (each Bool: true has it, false reported not to; absent unknown, e.g. a lookup that failed transiently). Absent until the mouse's first apply has finished |
 | `devices[].controls[].gestures` | Bool | The control can report raw XY movement. Absent when unknown |
-| `devices[].applied` | object | Whether the mouse's settings are on it: `{state, at}`. `state` is `applying` (a configure has started), `applied` (`Session.apply()` ran to its end for the current config; `at` is the wall-clock time, ISO 8601) or `notApplied` (the configure's three attempts failed). Absent before the first configure. Written on those transitions only |
+| `devices[].applied` | object | Whether the mouse's settings are on it: `{state, at}`. `state` is `applying` (a configure has started), `applied` (`Session.apply()` ran to its end for the current config; `at` is the wall-clock time, ISO 8601) or `notApplied` (the mouse answered but the configure's three attempts failed; a mouse that answered nothing, or whose link is down, is offline and the field is absent). Absent before the first configure, and for a mouse that is asleep or away. Written on those transitions only |
 | `devices[].firmware` | String | The main firmware as the mouse names it, such as `RBM 22.01 B0015` (name, major.minor, build). Read once per mouse after its first successful configure, with 0x0003 function 1. Absent when the mouse does not report it |
 | `devices[].hosts` | object | The Easy-Switch hosts the mouse reports (HID++ 0x1814, with names from 0x1815): `{current, slots[]}`, `current` the zero-based index of this Mac's host, each slot `{name, paired}` with `name` the computer's name where the mouse gives one. Re-read after each successful configure. Absent for a mouse with one host or without the feature. Read only: PureMouse never sends the change-host command |
 | `capture.model` | String | The device key (`devices[].model`) of the mouse whose control was pressed |
@@ -165,7 +166,7 @@ All optional; nil members are left out of the JSON.
 |---|---|---|
 | `capture.device` | String | Listen on the mouse with this device key (`devices[].model`) only. Absent means every mouse |
 | `device` | String | Qualifies `useConfiguredDPI`: set only the mouse with this device key to the config's `dpi`. Absent means every mouse |
-| `reapply` | Int | A token: a new value is Apply Settings Again for every mouse that is not applied |
+| `reapply` | Int | A token: a new value is Apply Settings Again for every mouse that is not applied; `device` does not aim it |
 
 Settings sets `capture.device` and `device` to the mouse chosen on Mouse (none for All Mice). The
 status menu sets neither and writes the top-level `dpi`. A press reports the mouse's key in

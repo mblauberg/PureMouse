@@ -188,8 +188,9 @@ Each level has one mechanism, and each label says what it reveals.
   occasional task. With two or more mice it stays one submenu, with a section header per mouse.
 - **Quiet when applied.** The menu reports a problem, not that all is well. The header's second
   line reads "Applying settings…" or "Settings not applied" only while that is true (before
-  "Asleep": a mouse that did not take its settings is not simply asleep), with an Apply Settings
-  Again attention row only while not applied. The time of the last apply ("Settings applied at
+  "Asleep": a mouse that answered and did not take its settings is not simply asleep; a mouse that
+  answered nothing, or whose link is down, is asleep or away and reads "Asleep", never "not
+  applied"), with an Apply Settings Again attention row only while not applied. The time of the last apply ("Settings applied at
   09:14") is on the ⌥ detail line. Nothing in the menu expires a state on a timer: each one comes
   from a status change.
 - Unavailable **commands** are disabled, not hidden; **status** rows that do not apply are hidden.

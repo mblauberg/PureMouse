@@ -213,11 +213,18 @@ touches.
   background-activity scheduler, not a timer of ours. The display link runs only while a scroll is
   gliding. The bounded exceptions are the permission poll, the adoption retries and the reapply
   retries below; `IdleCostTests` fails on a new timer or poll in the daemon sources.
-- The reapply retries are one `Session.configure`: 3 attempts, each request waiting at most 600 ms
-  (`SessionEnvironment.reapplyAttemptTimeout`), 200 ms apart (`reapplyRetryDelay`). It starts on
-  an event (wake, reconnect, link up, reload, adoption, Apply Settings Again) and ends after the
-  third attempt at about 2 s, so a mouse that never answers costs nothing more until its next
-  event. There is no heartbeat, and nothing re-checks a mouse that is applied.
+- The reapply retries are one `Session.configure`: 3 attempts, 200 ms apart
+  (`SessionEnvironment.reapplyRetryDelay`), each request of an attempt waiting at most 600 ms
+  (`reapplyAttemptTimeout`; per request, not per attempt). It starts on an event (wake,
+  reconnect, link up, reload, adoption, Apply Settings Again) and ends after the third attempt, so
+  a mouse that never answers costs nothing more until its next event. An attempt stops at a
+  request the mouse needs to answer, but some lookups it can do without (battery source, event
+  features) do not stop it, so one attempt against a mouse that answers nothing can wait on
+  several requests: measured, a fully silent mouse is given up on after about 10 s with its
+  feature indices known and about 15 s without them, not in two. That is only how long
+  "Applying settings…" shows for a sleeping mouse; a mouse that starts answering at any moment
+  is applied within about a second of it (below). There is no heartbeat, and nothing re-checks a
+  mouse that is applied.
 
 ### Sessions
 
@@ -227,21 +234,31 @@ touches.
   (`Session.reconfigureIfOffline`) defer to a running one, and start one at most once per 30 s.
 - **Applied state.** A session is `applying` from the start of `configure()`, `applied` (with the
   time, `Environment.date`) once `apply()` has run to its end for the current config, and
-  `notApplied` after the third attempt fails. It is published on those transitions only, so an idle
-  mouse writes nothing. A mouse that never answers is then also offline (`online` false). A
-  `notApplied` mouse shows "Settings not applied" in the menu and General even where it would
-  otherwise read "Asleep"; the menu's Apply Settings Again (`Control.reapply`, one token per
-  request) calls `Session.reapply()`, which starts a fresh configure at once, past the 30 s guard,
-  and does nothing for a session that is not `notApplied`.
-- **Bound.** Each attempt is short (above), so a request lost while the mouse was still waking
-  fails in time for the next, and a mouse answering at any point in the window has its settings
-  back within about a second of that moment. Wake (`Session.configureAfterWake`) starts every
+  `notApplied` after the third attempt fails **for a mouse that answered**: at least one reply
+  (`HIDPPDevice.repliesReceived`) arrived during the configure and `apply()` still did not finish.
+  A mouse that answered nothing at all, or whose receiver link is down, is asleep or away, not
+  failed: its configure ends with `applied` nil and the mouse offline (`online` false), which the
+  menu and General read as "Asleep", and its next link-up or event from the device (the
+  `reconfigureIfOffline` guard, at most once per 30 s) starts a configure. A link-down report ends
+  a configure under way and clears the state (`Session.linkWentDown`), so a late exhaustion cannot
+  turn it into a failure. The state is published on those transitions only, so an idle mouse
+  writes nothing. A `notApplied` mouse shows "Settings not applied" in the menu and General
+  before "Asleep"; the menu's Apply Settings Again (`Control.reapply`, one token per request,
+  aimed at every mouse, whatever `device` says) calls `Session.reapply()`, which starts a fresh
+  configure at once, past the 30 s guard, and does nothing for a session that is not `notApplied`.
+- **Request timeouts are leased.** The 600 ms (and `restore`'s 400 ms) is lent to the endpoint
+  with `HIDPPDevice.lendTimeout` and ended by the lease's own number (`returnTimeout`): a retired
+  configure, or one `restore` cancelled, returns its lease when it ends and so cannot reset the
+  timeout its replacement or the restore is using.
+- **Bound.** Requests are short (above), so one lost while the mouse was still waking fails in
+  time for the next, and a mouse answering at any point in the window has its settings back
+  within about a second of that moment: the request in flight (at most 600 ms), then either the
+  rest of the apply or, if a request it needs was lost, 200 ms and another attempt. Wake (`Session.configureAfterWake`) starts every
   session's configure at once; the daemon's other wake work (notifications, permissions, Logi
   Options+, stragglers) follows 2 s later. A session whose receiver slot is known to be down
-  (`linkDown`: the mouse is on another computer or switched off) is left alone by a wake, so the
-  mouse is not reported as not applied for being away. A mouse that is asleep when the Mac wakes,
-  and does not answer within the window, is reported as not applied until its own reconnect
-  starts another configure; that is a known false alarm, and a bounded one.
+  (`linkDown`: the mouse is on another computer or switched off) is left alone by a wake. A mouse
+  that is asleep when the Mac wakes and answers nothing in the window is offline with the
+  applied state left out, as above, until its own reconnect or first event starts a configure.
 - **Facts for About This Mouse.** After a successful configure the session reads the mouse's
   Easy-Switch hosts (HID++ 0x1814 `GetHostsInfo`, with names from 0x1815 where it reports them) and,
   once per mouse, its firmware (0x0003 function 1, per entity). They are reads only: the change-host

@@ -267,10 +267,12 @@ or a host switch-back, and fails above 2 seconds (the bound in
 - **Fake leg** (automated, any Mac). Runs `ReconnectRigTests` (`PUREMOUSE_RIG_CYCLES=N swift test
   --filter ReconnectRigTests`; off without the variable) against a `FakeDevice` on the daemon's
   live retry schedule: N cycles each of a wake (`configureAfterWake`), a reconnect (a 0x1D4B
-  announcement) and a host switch-back (link down, then up). The fake stays silent for 0 to 1.3 s
+  announcement) and a host switch-back (link down, then up). The fake answers no request at all for 0 to 1.3 s
   after the trigger, so the cycles land on the first, second and third attempt, then starts
   answering; the time is from that moment to the session's applied state. It prints a table of
-  the median and worst per kind. `PUREMOUSE_RIG_TSV=FILE` also saves the raw lines.
+  the median and worst per kind. `PUREMOUSE_RIG_TSV=FILE` also saves the raw lines. These are the
+  only wall-clock assertions: the ordinary run (`AppliedStateTests`) counts attempts against a
+  scaled schedule instead, so a busy runner cannot fail it, and needs no isolated machine.
 - **Hardware leg** (owner assisted). A spare Mac with no mouse can only run the fake leg. With the
   daemon running, the script reads the installed daemon's `status.json` (`PUREMOUSE_COMPANION_DIR`
   picks another) and, for each cycle, waits for you to wake the Mac, switch the mouse off and on, or

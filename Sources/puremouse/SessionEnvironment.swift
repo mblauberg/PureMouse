@@ -17,15 +17,18 @@ struct SessionEnvironment {
     var naturalScrolling: () -> Bool = { SystemScrollSettings.naturalScrolling }
     /// How long each request of a configure attempt waits for its reply; nil leaves the device's
     /// own timeout. Short, so a request lost while the mouse was still waking fails in time for the
-    /// next attempt (`reapplyWindow`).
+    /// next attempt.
     var attemptTimeout: Duration?
     /// The wall clock, for the time settings were applied.
     var date: () -> Date = { Date() }
 
-    /// Three attempts of at most `attemptTimeout` each, `retryDelay` apart: a mouse answering from
-    /// any moment in the window has its settings back within one timeout, one delay and one apply
-    /// (about a second) of that moment, and a mouse that never answers is given up on at about
-    /// two seconds. A mouse that returns later announces itself and starts a new configure.
+    /// Three attempts, `retryDelay` apart, each request of which waits at most `attemptTimeout`
+    /// (per request, not per attempt). A mouse answering from any moment in the window has its
+    /// settings back within about a second of that moment: the request in flight, then the rest of
+    /// the apply or one delay and another attempt. A mouse that answers nothing is given up on only
+    /// after its attempts have waited on every request they make, about 10 to 15 s (several
+    /// lookups an attempt can do without each wait out their timeout), and is then offline, not
+    /// failed. A mouse that returns later announces itself and starts a new configure.
     static let reapplyAttemptTimeout: Duration = .milliseconds(600)
     static let reapplyRetryDelay: Duration = .milliseconds(200)
 
