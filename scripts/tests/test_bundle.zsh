@@ -133,13 +133,16 @@ test_settings_plist_is_a_regular_app_with_its_own_identifier() {
     local menu="$(menu_of $app)/Contents/Info.plist" settings="$(settings_of $app)/Contents/Info.plist"
     plutil -lint -s "$settings"
     local differing=$(diff "$menu" "$settings" | sed -n 's/^[<>] *<key>\([^<]*\)<.*/\1/p' | sort -u)
-    local expected=$'CFBundleDisplayName\nCFBundleExecutable\nCFBundleIdentifier\nLSUIElement'
+    # Both show as PureMouse now, so the display name no longer differs (ADR 0009, amendment).
+    local expected=$'CFBundleExecutable\nCFBundleIdentifier\nLSUIElement'
     [[ $differing == $expected ]] || { print -u2 -- "differing keys: ${(f)differing}"; return 1; }
     # Its own allocator setting, for the opens that do not pass on the menu app's environment.
     [[ $(/usr/libexec/PlistBuddy -c "Print :LSEnvironment:MallocSpaceEfficient" "$settings") == 1 ]] || return 1
     [[ $(plist_value "$settings" CFBundleIdentifier) == io.github.mblauberg.puremouse.settings ]]
     [[ $(plist_value "$settings" LSUIElement) == false ]]
-    [[ $(plist_value "$settings" CFBundleDisplayName) == "PureMouse Settings" ]]
+    # One name: the helper shows as PureMouse; its folder and identifier stay as they are (ADR 0009).
+    [[ $(plist_value "$settings" CFBundleDisplayName) == "PureMouse" ]]
+    [[ $(plist_value "$settings" CFBundleName) == "PureMouse" ]]
     [[ $(settings_of $app) == "$app/Contents/Helpers/PureMouse Settings.app" ]]
     [[ -x "$(settings_of $app)/Contents/MacOS/$(plist_value "$settings" CFBundleExecutable)" ]]
     # The Dock draws its icon from Assets.car in every icon style, as it does PureMouse.app's.

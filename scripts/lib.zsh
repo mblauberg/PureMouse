@@ -160,7 +160,7 @@ write_info_plist() {
             display=$'\n  <key>CFBundleDisplayName</key><string>PureMouse</string>'
             environment=$allocator ;;
         settings)
-            display=$'\n  <key>CFBundleDisplayName</key><string>PureMouse Settings</string>'
+            display=$'\n  <key>CFBundleDisplayName</key><string>PureMouse</string>'
             environment=$allocator
             element='<false/>' ;;
         *) die "write_info_plist: role must be daemon, menu or settings, not '$role'" ;;

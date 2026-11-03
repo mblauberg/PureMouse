@@ -26,7 +26,7 @@ import Testing
 
     @Test(arguments: [
         (LoginAction.openAtLogin(true), "login on"), (.openAtLogin(false), "login off"),
-        (.running(true), "start"), (.running(false), "stop"),
+        (.start, "start"),
     ])
     func eachControlReachesTheCLIAsItsOwnCommand(action: LoginAction, expected: String) async throws {
         let daemon = try echoingDaemon()
@@ -34,6 +34,15 @@ import Testing
             Lifecycle.run(action.command, daemon: daemon) { continuation.resume(returning: (try? $0.get()) ?? "failed") }
         }
         #expect(output == expected)
+    }
+
+    /// Stop is Quit PureMouse's (the menu bar app); Settings offers no control for it.
+    @Test func stopReachesTheCLIAsStop() async throws {
+        let daemon = try echoingDaemon()
+        let output = await withCheckedContinuation { continuation in
+            Lifecycle.run(.stop, daemon: daemon) { continuation.resume(returning: (try? $0.get()) ?? "failed") }
+        }
+        #expect(output == "stop")
     }
 
     /// The alert body says what to do; the command's raw output stays out of it.

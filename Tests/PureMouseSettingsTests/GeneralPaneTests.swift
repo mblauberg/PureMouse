@@ -19,9 +19,44 @@ import Testing
         for file in Self.files {
             let text = try Self.source(file)
             for retired in ["Open Settings…", "PureMouse isn't running", "Not Allowed", "Open Login Items…", "Open Config\"",
-                            "Restore Last Working", "Unknown While Off", "Needs the menu bar icon"] {
+                            "Restore Last Working", "Unknown While Off", "Needs the menu bar icon",
+                            "Stopping returns", "Turning it off doesn't stop", "PureMouse Settings"] {
                 #expect(!text.contains(retired), "\(file) says \(retired)")
             }
+        }
+    }
+
+    /// General's PureMouse row is the pause switch (`AppModel.setPaused`, through `RunState`'s
+    /// mapping, tested in BannerPlanTests), with Start only while off, and Open at login has no
+    /// caption (#146). The row is read up to the low battery row, which follows it.
+    @Test func thePureMouseRowPausesAndStartsAndOpenAtLoginHasNoCaption() throws {
+        let general = try Self.source("GeneralPane.swift")
+        let row = try #require(general.range(of: "private var runningRow").map { general[$0.lowerBound...] })
+        let body = try #require(row.range(of: "/// The menu bar app posts the notifications").map { String(row[..<$0.lowerBound]) })
+        #expect(body.contains("state.toggled(on)"))
+        #expect(body.contains("model.setPaused("))
+        // A value would turn the switch into a plain toggle (the AX dump's "not the form's switch").
+        #expect(!body.contains(".accessibilityValue("))
+        // The form's own toggle row, so it keeps the switch role.
+        #expect(body.contains("Toggle(isOn: Binding(get: { state.isOn }"))
+        #expect(!body.contains(".toggleStyle(.switch)"))
+        #expect(body.contains(#"Button("Start")"#))
+        #expect(!body.contains("Stop"))
+        #expect(general.contains(#"RowLabel("Open at login")"#))
+        #expect(!general.contains(#"RowLabel("Open at login", help"#))
+    }
+
+    /// The notices below the PureMouse row leave out off and paused, which that row already shows.
+    @Test func generalListsNoticesThroughThePlanThatLeavesOutTheRowsOwn() throws {
+        #expect(try Self.source("GeneralPane.swift").contains("BannerPlan.generalItems(for:"))
+    }
+
+    /// No Stop button anywhere in Settings: no string literal in its sources starts "Stop".
+    @Test func noStopButtonAnywhereInSettings() throws {
+        let enumerator = FileManager.default.enumerator(at: Self.ui, includingPropertiesForKeys: nil)
+        for file in (enumerator?.allObjects as? [URL] ?? []) where file.pathExtension == "swift" {
+            let text = try String(contentsOf: file, encoding: .utf8)
+            #expect(!text.contains("\"Stop"), "\(file.lastPathComponent) has a Stop label")
         }
     }
 
