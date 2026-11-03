@@ -1,0 +1,110 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-26
+    environment: release
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify tag and main ancestry
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]] || { echo 'Invalid release tag' >&2; exit 1; }
+          git merge-base --is-ancestor HEAD origin/main || { echo 'Tag is outside main' >&2; exit 1; }
+      - name: Sign and build release
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+          SIGNING_CERT_P12_BASE64: ${{ secrets.SIGNING_CERT_P12_BASE64 }}
+          SIGNING_CERT_PASSWORD: ${{ secrets.SIGNING_CERT_PASSWORD }}
+          SIGNING_IDENTITY_NAME: ${{ vars.SIGNING_IDENTITY_NAME }}
+          NOTARY_API_KEY_P8_BASE64: ${{ secrets.NOTARY_API_KEY_P8_BASE64 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          # Credentials live in a private folder; the build keeps the default umask so the shipped
+          # bundle stays readable by every account.
+          work="$RUNNER_TEMP/puremouse-release"
+          mkdir -m 700 "$work"
+          cleanup() {
+            security delete-keychain "$work/signing.keychain-db" >/dev/null 2>&1 || true
+            rm -rf "$work" .build/notary
+          }
+          trap cleanup EXIT
+          trap 'exit 130' INT TERM HUP
+          if [[ -n "$SIGNING_CERT_P12_BASE64" && -n "$SIGNING_CERT_PASSWORD" && -n "$SIGNING_IDENTITY_NAME" ]]; then
+            keychain_password=$(openssl rand -hex 32)
+            echo "::add-mask::$keychain_password"
+            printf '%s' "$SIGNING_CERT_P12_BASE64" | base64 --decode > "$work/signing.p12"
+            security create-keychain -p "$keychain_password" "$work/signing.keychain-db" >/dev/null 2>&1
+            security set-keychain-settings -lut 21600 "$work/signing.keychain-db"
+            security unlock-keychain -p "$keychain_password" "$work/signing.keychain-db" >/dev/null 2>&1
+            security import "$work/signing.p12" -k "$work/signing.keychain-db" -P "$SIGNING_CERT_PASSWORD" -T /usr/bin/codesign >/dev/null 2>&1
+            security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$work/signing.keychain-db" >/dev/null 2>&1
+            security list-keychains -d user -s "$work/signing.keychain-db"
+            export PUREMOUSE_SIGN_IDENTITY="$SIGNING_IDENTITY_NAME"
+          elif [[ -z "$SIGNING_CERT_P12_BASE64" && -z "$SIGNING_CERT_PASSWORD" && "$TAG" == *-rc.* ]]; then
+            export PUREMOUSE_SIGN_IDENTITY=-
+            echo 'Unsigned release candidate: explicitly using ad hoc signing.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Signing credentials and identity must all be configured (stable releases require them).' >&2
+            exit 1
+          fi
+          if [[ -n "$NOTARY_API_KEY_P8_BASE64" || -n "$NOTARY_KEY_ID" || -n "$NOTARY_ISSUER_ID" ]]; then
+            [[ -n "$NOTARY_API_KEY_P8_BASE64" && -n "$NOTARY_KEY_ID" && -n "$NOTARY_ISSUER_ID" ]] || { echo 'Incomplete notary credentials' >&2; exit 1; }
+            export NOTARY_KEY_PATH="$work/AuthKey.p8"
+            printf '%s' "$NOTARY_API_KEY_P8_BASE64" | base64 --decode > "$NOTARY_KEY_PATH"
+          fi
+          # release.sh never prints a credential (notarytool's log describes the submitted files),
+          # and Actions masks every secret, so its output stays in the log for diagnosing failures.
+          scripts/release.sh
+      - name: Attest disk image
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: .build/dist/*.dmg
+      - name: Retain release files
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: PureMouse-${{ github.ref_name }}
+          path: |
+            .build/dist/*.dmg
+            .build/dist/SHA256SUMS
+          retention-days: 7
+          if-no-files-found: error
+      - name: Create draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          args=(--draft --verify-tag --generate-notes)
+          [[ "$TAG" != *-rc.* ]] || args+=(--prerelease)
+          gh release create "$TAG" ".build/dist/PureMouse-${TAG#v}.dmg" .build/dist/SHA256SUMS "${args[@]}"
+      - name: Remove temporary signing files
+        if: always()
+        shell: bash
+        run: |
+          security delete-keychain "$RUNNER_TEMP/puremouse-release/signing.keychain-db" >/dev/null 2>&1 || true
+          rm -rf "$RUNNER_TEMP/puremouse-release" .build/notary
