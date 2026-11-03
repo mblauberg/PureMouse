@@ -1762,6 +1762,60 @@ config: Config
   apps: [0]
   warnings: [0]
 
+### ok-buttons-media-and-middle-click
+config: Config
+  dpi: nil
+  dpiPresets: [0]
+  scrollWheel: nil
+  thumbWheel: nil
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [5]
+    back: action
+      action: playPause
+    forward: action
+      action: nextTrack
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    middle: action
+      action: middleClick
+    top: action
+      action: previousTrack
+  gesture: GestureSettings
+    distanceMm: 4.0
+    repeatIntervalMs: 400
+  universalControl: UniversalControl
+    handOff: true
+  bindings: [5]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    196: action
+      action: previousTrack
+    82: action
+      action: middleClick
+    83: action
+      action: playPause
+    86: action
+      action: nextTrack
+  unknownButtons: [0]
+  apps: [0]
+  warnings: [0]
+
 ### ok-buttons-named
 config: Config
   dpi: nil

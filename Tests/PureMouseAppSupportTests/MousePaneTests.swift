@@ -25,9 +25,46 @@ private func tree(_ json: String) throws -> ConfigTree { try ConfigTree(data: Da
     #expect(GestureSummary.text(click: .standard, directionsSet: 1) == "Click: Do Nothing, 1 direction set.")
     var config = ConfigTree()
     config.bind("gesture", to: .gesture)
-    #expect(config.gestureSummary("gesture") == "Click: Do Nothing, no directions set.")
+    #expect(config.gestureSummary("gesture") == "Click: Do Nothing, 4 directions set.")
     let set = try tree(#"{"buttons": {"gesture": {"click": "missionControl", "up": "spaceLeft", "down": "none", "left": {"keys": "cmd+w"}}}}"#)
     #expect(set.gestureSummary("gesture") == "Click: Mission Control, 2 directions set.")
+}
+
+@Test func choosingHoldAndMoveSeedsOnlyMissingDirections() throws {
+    var fresh = ConfigTree()
+    fresh.bind("gesture", to: .gesture)
+    #expect(fresh.string(["buttons", "gesture", "up"]) == "missionControl")
+    #expect(fresh.string(["buttons", "gesture", "down"]) == "appExpose")
+    #expect(fresh.string(["buttons", "gesture", "left"]) == "spaceLeft")
+    #expect(fresh.string(["buttons", "gesture", "right"]) == "spaceRight")
+
+    var partial = try tree(#"{"buttons": {"gesture": {"up": "launchpad", "left": "none"}}}"#)
+    partial.bind("gesture", to: .gesture)
+    #expect(partial.string(["buttons", "gesture", "up"]) == "launchpad")
+    #expect(partial.string(["buttons", "gesture", "left"]) == "none")
+    #expect(partial.string(["buttons", "gesture", "down"]) == nil)
+    #expect(partial.string(["buttons", "gesture", "right"]) == nil)
+
+    // A wider gesture with an Up direction: a seeded direction in a narrower scope would win over it
+    // (Kit merges the scope's gesture over the global one).
+    let mouse = ConfigScope.device("m0123456789ab")!
+    let safari = ConfigScope.app("com.apple.Safari")
+    var config = try tree(#"{"buttons": {"back": {"up": "launchpad"}}}"#)
+
+    var inMouse = config
+    inMouse.bind("back", to: .gesture, in: mouse)
+    #expect(inMouse[["devices", "m0123456789ab", "buttons", "back"]] == nil)
+    #expect(inMouse.resolved(["buttons", "back", "up"], in: mouse) as? String == "launchpad")
+    #expect(inMouse.resolved(["buttons", "back", "down"], in: mouse) == nil)
+    #expect(inMouse.resolved(["buttons", "back", "left"], in: mouse) == nil)
+    #expect(inMouse.resolved(["buttons", "back", "right"], in: mouse) == nil)
+
+    config.bind("back", to: .gesture, in: safari)
+    #expect(config.gestureBinding("back", "up", in: safari) == .standard)
+    #expect(config.gestureBinding("back", "down", in: safari) == .standard)
+    #expect(config.gestureBinding("back", "left", in: safari) == .standard)
+    #expect(config.gestureBinding("back", "right", in: safari) == .standard)
+    #expect(config.gestureBinding("back", "up") == .named("launchpad"))
 }
 
 @Test func advancedOnButtonsNeedsSomeHoldAndMoveButton() throws {

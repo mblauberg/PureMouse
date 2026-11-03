@@ -322,12 +322,15 @@ app's action picker (**Mouse Default**), beside **Same as All Mice** / **Same as
 removes the key instead. Where the wider scope already is Mouse Default, the picker lists only
 **Same as …**, since the two would be the same. Choosing **Hold and Move** on a mouse or in an app that
 has Mouse Default, when the wider binding is a gesture, removes the key, so the mouse takes that
-gesture whole (its click and directions), as **Same as …** does.
+gesture whole (its click and directions), as **Same as …** does. Choosing **Hold and Move** when
+no direction is set in the target scope seeds Mission Control up, App Exposé down and Spaces left
+and right. Existing directions are kept.
 
 **Actions:** `missionControl`, `appExpose`, `showDesktop`, `launchpad`, `spaceLeft`, `spaceRight`,
-`navigateBack`, `navigateForward`, `toggleScrollMode`, `cycleDPI`, `volumeUp`, `volumeDown`, `mute`,
-`brightnessUp`, `brightnessDown`, `nextTab`, `previousTab`, `zoomIn`, `zoomOut`, `none`,
-`{"keys": "cmd+shift+4"}`, `{"run": "open -a Safari"}`, `{"haptic": "sharpStateChange"}`.
+`navigateBack`, `navigateForward`, `toggleScrollMode`, `cycleDPI`, `playPause`, `nextTrack`,
+`previousTrack`, `volumeUp`, `volumeDown`, `mute`, `middleClick`, `brightnessUp`, `brightnessDown`,
+`nextTab`, `previousTab`, `zoomIn`, `zoomOut`, `none`, `{"keys": "cmd+shift+4"}`,
+`{"run": "open -a Safari"}`, `{"haptic": "sharpStateChange"}`.
 
 `run` starts the command with `/bin/sh -c`, as you, and does not wait for it. Its output is
 discarded; a command that exits non-zero is logged once with its first 80 characters and its exit
@@ -338,6 +341,9 @@ status. To see what a command prints, redirect it to a file:
 Settings › Keyboard › Keyboard Shortcuts › Mission Control, or Ctrl+Left/Right if those are off.
 `nextTab`/`previousTab` send Ctrl+Tab and Ctrl+Shift+Tab, and `zoomIn`/`zoomOut` Cmd+= and Cmd+-,
 which most apps share; use `{"keys": ...}` for an app that differs.
+
+`middleClick` holds the middle button down while its control is held, so a press can drag
+(middle-drag, autoscroll). As a gesture's click or direction, it is one full click.
 
 `cycleDPI` switches to the next of `dpiPresets` above the current resolution, wrapping to the
 lowest. The choice survives reconnects until a config change alters `dpi` or `dpiPresets`.

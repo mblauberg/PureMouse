@@ -20,6 +20,10 @@ public enum Action: Equatable, Decodable, Sendable {
     case volumeUp
     case volumeDown
     case mute
+    case playPause
+    case nextTrack
+    case previousTrack
+    case middleClick
     case brightnessUp
     case brightnessDown
     /// Ctrl+Tab and Ctrl+Shift+Tab, which most tabbed apps take as next and previous tab.
@@ -40,6 +44,8 @@ public enum Action: Equatable, Decodable, Sendable {
         "spaceRight": .spaceRight, "navigateBack": .navigateBack, "navigateForward": .navigateForward,
         "toggleScrollMode": .toggleScrollMode, "cycleDPI": .cycleDPI,
         "volumeUp": .volumeUp, "volumeDown": .volumeDown, "mute": .mute,
+        "playPause": .playPause, "nextTrack": .nextTrack, "previousTrack": .previousTrack,
+        "middleClick": .middleClick,
         "brightnessUp": .brightnessUp, "brightnessDown": .brightnessDown,
         "nextTab": .nextTab, "previousTab": .previousTab, "zoomIn": .zoomIn, "zoomOut": .zoomOut,
     ]

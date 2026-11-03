@@ -133,6 +133,7 @@ One term per concept. "Retire" lists words that must not appear in UI text for t
 | Support | Support PureMouse (About link); GitHub Sponsors (the destination) | Donate, Buy Me a Coffee, Pro, Free version |
 | Facts a mouse reports | About This Mouse (the sheet, opened by the (i) on the mouse's row in General › Status; titled with the mouse's name); rows Battery, Connection, Easy-Switch, Firmware, Model ID (the key the config uses, lowercase); Copy Details (plain text, no serial or unit number); a row the mouse does not report is hidden | Diagnostics, Device info, Properties |
 | Easy-Switch status | Easy-Switch; "Computer 1 · This Mac" (checkmark), "Computer 2 · MacBook Air", "Computer 3 · Not paired"; "Computer 1" on the mouse's row in General | host, channel, slot |
+| Media and click actions | Play/Pause, Next Track, Previous Track, Volume Up, Volume Down, Mute (picker › Media); Middle Click (picker › Mouse: the action; "Wheel click" is the button's row) | Play-Pause, Skip, Mouse 3, Button 3 |
 | Whether settings are on the mouse | Applying settings… and Settings not applied (the device line in the menu and General, only while true); Apply Settings Again (the menu's attention row); "Settings applied at 09:14" (the ⌥ line only). Never "Settings applied" on the menu header | synced, reapply, restore, Applied (as a status line) |
 
 ## Planned (#155)
