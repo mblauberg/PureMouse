@@ -76,6 +76,8 @@ final class InstallSpy {
     var cleanup: Suspended?
     /// Runs while the confirmation is up, as another request arriving during the modal alert does.
     var duringConfirm: (@MainActor () -> Void)?
+    /// Stands in for the whole relaunch, to run the real `relaunchLive` over a fake Settings helper.
+    var relaunchOverride: (@MainActor (URL, InstallSource) async -> Relaunch)?
 }
 
 /// The question about automatic checks, asked of the person once.
@@ -274,7 +276,11 @@ struct AppControllerUpdateTests {
             }
             return await spy.outcome
         }
-        setup.relaunch = { spy.relaunched.append($0); spy.relaunchSources.append($1); return spy.relaunchWorks }
+        setup.relaunch = {
+            if let relaunch = spy.relaunchOverride { return await relaunch($0, $1) }
+            spy.relaunched.append($0); spy.relaunchSources.append($1)
+            return spy.relaunchWorks ? .started : .failed
+        }
         setup.openPage = { spy.opened.append($0) }
         setup.terminate = { spy.terminated += 1 }
         setup.alert = { title, _ in spy.alerts.append(title) }
@@ -360,7 +366,7 @@ struct AppControllerUpdateTests {
         let launcher = SettingsLauncher(system: fake.system)
         var asked: [URL] = []
         let opened = await UpdateSetup.relaunchLive(Self.app, from: .menu, launcher: launcher) { app, _ in asked.append(app); return false }
-        #expect(!opened && asked == [Self.app])
+        #expect(opened == .failed && asked == [Self.app])
         // Quitting for the relaunch is not Quit PureMouse: no stamp, and the next open goes ahead.
         #expect(fake.quitMarks == 0)
         launcher.open(ShowRequest())
@@ -439,7 +445,7 @@ struct AppControllerUpdateTests {
         #expect(opened == 0, "still waiting while it is alive")
         helper.exit()
         fake.runDelayed()
-        #expect(await task.value)
+        #expect(await task.value == .started)
         #expect(opened == 1)
     }
 
@@ -459,7 +465,7 @@ struct AppControllerUpdateTests {
             waited += fake.delayed.map(\.0).reduce(0, +)
             fake.runDelayed()
         }
-        #expect(await task.value)
+        #expect(await task.value == .started)
         #expect(opened == 1)
         #expect(waited >= SettingsLauncher.quitWait && waited < SettingsLauncher.quitWait + 1, "about 3 s, then on regardless")
     }
@@ -609,6 +615,51 @@ struct AppControllerUpdateTests {
         spy.gate?.release()
         await settle { ended }
         #expect(ended && spy.relaunched.isEmpty && spy.terminated == 0)
+    }
+
+    /// Quit or Hide chosen while the relaunch waits for Settings to exit: the update is on disk, the
+    /// choice stands, and the new copy starts at the next login. No second start, no alert.
+    @Test func quittingWhileTheRelaunchWaitsForSettingsStartsNothing() async {
+        let spy = InstallSpy()
+        let fake = FakeSystem()
+        let helper = FakeSystem.Helper(alive: true)
+        helper.exitsOnQuit = false
+        fake.running = [helper]
+        var opened = 0
+        let launcher = SettingsLauncher(system: fake.system)
+        spy.relaunchOverride = { app, source in
+            await UpdateSetup.relaunchLive(app, from: source, launcher: launcher) { _, _ in opened += 1; return true }
+        }
+        let controller = offered(spy)
+        controller.installUpdate()
+        await settle { helper.quitCount > 0 }
+        #expect(helper.quitCount == 1 && opened == 0)
+        var ended = false
+        controller.afterInstallEnds { ended = true }
+        helper.exit()
+        fake.runDelayed()
+        await settle { ended }
+        for _ in 0..<5 { fake.runDelayed(); await settle { false } }
+        #expect(ended)
+        #expect(opened == 0, "the replacement is not started")
+        #expect(spy.terminated == 0 && spy.alerts.isEmpty, "no update termination, no failure alert")
+    }
+
+    @Test func aRelaunchWaitEndsEarlyWhenItsTaskIsCancelled() async {
+        let fake = FakeSystem()
+        let helper = FakeSystem.Helper(alive: true)
+        helper.exitsOnQuit = false
+        fake.running = [helper]
+        let launcher = SettingsLauncher(system: fake.system)
+        var opened = 0
+        let task = Task { @MainActor in
+            await UpdateSetup.relaunchLive(Self.app, from: .menu, launcher: launcher) { _, _ in opened += 1; return true }
+        }
+        await settle { false }
+        task.cancel()
+        fake.runDelayed()   // one look, with the helper still alive
+        #expect(await task.value == .abandoned)
+        #expect(opened == 0)
     }
 
     @Test func aSecondInstallCannotStartOnceQuittingBegan() async {

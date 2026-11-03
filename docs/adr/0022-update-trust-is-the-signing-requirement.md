@@ -64,7 +64,9 @@ macOS, the same app.
   tries to reopen it (`--settings=<pane>`, once it has registered): `register` replaces the old menu
   bar app, and a helper that is quitting takes a request and exits, so a request from the old
   process would be lost. For the same reason the old process waits, up to 3 s, for the helper to
-  exit before it starts the new copy, and goes on regardless after that. Reopening is best effort:
+  exit before it starts the new copy, and goes on regardless after that. Quit or Hide chosen during the
+  wait cancels it and starts nothing, with no alert: the update is on disk and the new copy starts at the
+  next login. Reopening is best effort:
   if Settings does not come back it opens from the menu. A release older than this one ignores
   `--relaunch` and `--settings`, so it reopens nothing. `open` only says the launch was accepted,
   and the old process is gone by the time registration could fail, so `--relaunch` also has the new

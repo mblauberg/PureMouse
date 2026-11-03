@@ -22,9 +22,8 @@ struct UpdateSetup {
     var installedApp: URL? = Locations.live.installedApp
     /// The alert behind the menu row; true to go ahead.
     var confirm: @MainActor (UpdateOffer) -> Bool = Alerts.confirmUpdate
-    /// Opens the installed app the way double-clicking it does, after quitting Settings; true if
-    /// it was accepted.
-    var relaunch: @MainActor (URL, InstallSource) async -> Bool = { await UpdateSetup.relaunchLive($0, from: $1) }
+    /// Starts the installed app's new copy after quitting Settings; whether it was accepted.
+    var relaunch: @MainActor (URL, InstallSource) async -> Relaunch = { await UpdateSetup.relaunchLive($0, from: $1) }
     var openPage: @MainActor (URL) -> Void = { NSWorkspace.shared.open($0) }
     var terminate: @MainActor () -> Void = { NSApp.terminate(nil) }
     var alert: @MainActor (String, String) -> Void = Alerts.show
@@ -46,14 +45,24 @@ struct UpdateSetup {
     /// to `quitWait`) before the app is opened: a helper that was asked to quit but is still running
     /// would read the new copy's request, then exit.
     @MainActor static func relaunchLive(_ app: URL, from source: InstallSource, launcher: SettingsLauncher = .shared,
-                                        open: @MainActor (URL, ShowRequest?) -> Bool = UpdateRelaunch.open) async -> Bool {
+                                        open: @MainActor (URL, ShowRequest?) -> Bool = UpdateRelaunch.open) async -> Relaunch {
         let settingsWasOpen = await launcher.quitRunningAndWait()
         let reopening: ShowRequest? = switch source {
         case .about: ShowRequest(pane: .tab(.about))
         case .menu: settingsWasOpen ? ShowRequest() : nil
         }
-        return open(app, reopening)
+        // Quit or Hide chosen during the wait: the update is on disk and the choice stands, so the
+        // new copy starts at the next login or launch (`afterInstallEnds` cancels this task).
+        guard !Task.isCancelled else { return .abandoned }
+        return open(app, reopening) ? .started : .failed
     }
+}
+
+/// What the relaunch after an update did.
+enum Relaunch: Equatable {
+    case started, failed
+    /// Quit or Hide came first: nothing started, and that is not a failure to tell the user about.
+    case abandoned
 }
 
 /// Where an update was asked for, which decides what Settings does across the relaunch.
@@ -81,7 +90,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     private let installedApp: URL?
     private let current: String
     private let confirmUpdate: @MainActor (UpdateOffer) -> Bool
-    private let relaunch: @MainActor (URL, InstallSource) async -> Bool
+    private let relaunch: @MainActor (URL, InstallSource) async -> Relaunch
     private let openPage: @MainActor (URL) -> Void
     private let terminate: @MainActor () -> Void
     private let alert: @MainActor (String, String) -> Void
@@ -276,11 +285,13 @@ final class AppController: NSObject, NSApplicationDelegate {
             installState = .installed
             model.flush()
             guard !leaving else { return }
-            guard let installedApp, await relaunch(installedApp, source) else {
-                alert(UpdateOffer.relaunchFailed.title, UpdateOffer.relaunchFailed.body)
-                return
+            var result = Relaunch.failed
+            if let installedApp { result = await relaunch(installedApp, source) }
+            switch result {
+            case .started: terminate()
+            case .failed: alert(UpdateOffer.relaunchFailed.title, UpdateOffer.relaunchFailed.body)
+            case .abandoned: return
             }
-            terminate()
         }
     }
 

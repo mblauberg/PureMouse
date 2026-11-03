@@ -1,4 +1,5 @@
 import AppKit
+import os
 import PureMouseAppSupport
 import PureMouseKit
 
@@ -167,8 +168,14 @@ final class SettingsLauncher {
     func quitRunningAndWait(timeout: TimeInterval = SettingsLauncher.quitWait) async -> Bool {
         let (wasRunning, alive) = quitRunningWatching()
         guard wasRunning else { return false }
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            waitForExit(alive, elapsed: 0, timeout: timeout) { continuation.resume() }
+        // A cancelled caller (Quit or Hide during an update) stops waiting at the next look.
+        let cancelled = OSAllocatedUnfairLock(initialState: false)
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                waitForExit({ alive() && !cancelled.withLock { $0 } }, elapsed: 0, timeout: timeout) { continuation.resume() }
+            }
+        } onCancel: {
+            cancelled.withLock { $0 = true }
         }
         return true
     }
