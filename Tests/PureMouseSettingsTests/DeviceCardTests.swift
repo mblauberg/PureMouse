@@ -149,12 +149,14 @@ private let allButtons = Set(NamedButton.allCases)
 
     @Test func targetsOfOneDrawingDoNotOverlap() {
         for family in DeviceArt.Family.allCases {
-            let cells = DeviceArt.geometry[family] ?? [:]
+            // `Polygon.contains` builds its path on every call; build each once, or this scan holds
+            // the main actor for seconds and starves every test waiting on it.
+            let cells = (DeviceArt.geometry[family] ?? [:]).mapValues { $0.hit.path }
             var point = CGPoint.zero
             for y in stride(from: 0.25, to: DeviceArt.size.height, by: 0.5) {
                 for x in stride(from: 0.25, to: DeviceArt.size.width, by: 0.5) {
                     point = CGPoint(x: x, y: y)
-                    let inside = cells.filter { $0.value.hit.contains(point) }.map(\.key)
+                    let inside = cells.filter { $0.value.contains(point) }.map(\.key)
                     #expect(inside.count <= 1, "\(family) \(point) is in \(inside)")
                     if inside.count > 1 { return }
                 }
