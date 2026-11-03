@@ -221,13 +221,13 @@ case name the same app: the log warns, and the entry last in sorted key order ap
 
 ## Export and import
 
-General › Advanced… has **Export Settings…** and **Import Settings…**, and the Settings app's File
+General › Advanced… has a **Copy settings** row with **Export…** and **Import…** (spoken as Export Settings… and Import Settings…), and the Settings app's File
 menu has the same two items.
 
 - **Export** saves a copy of `config.json` to a file you choose (a config that does not load is not
   exported, so a saved file is always valid).
 - **Import** reads a chosen file and checks it as the daemon would load it. A file that fails is
-  refused, the config is left as it was, and the error names the field. A valid file asks "Replace
+  refused, the config is left as it was, and the error names the field (a file that is not a settings file at all reads "This file isn't a PureMouse settings file."). A valid file asks "Replace
   all settings?" and, when it holds `run` commands, says so ("This file runs commands: 3"), since
   they run as you when a button is pressed. Confirmed, it replaces the whole file atomically under
   the config lock and keeps the previous one as `config.json.bak`, as Reset All Settings does; the

@@ -142,6 +142,13 @@ import Testing
         #expect(page.contains("paneMaxHeight") && !page.contains("LazyPane.fitted"))
     }
 
+    // Off dims the segments with the rows below: the header is told whether the app is on.
+    @Test func theHeaderIsDimmedWithTheRowsWhileTheAppIsOff() throws {
+        let page = try Self.source("PureMouseSettingsUI/AppPage.swift")
+        #expect(page.contains("enabled: model.config.isAppEnabled(key)"))
+        #expect(page.contains(".disabled(!enabled)"))
+    }
+
     // A `Menu` takes its label apart into a title and an image and draws the image first, so a pop-up
     // whose label is a stack (value, then chevrons) read chevrons-first on every pop-up that is a
     // `Menu`. `PopUpLabel` is one `Text` with the chevrons set in it, and every pop-up uses it.

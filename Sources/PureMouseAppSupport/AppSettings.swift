@@ -67,7 +67,7 @@ extension ConfigTree {
     /// Turns PureMouse on or off in an app. Absent means on: on removes the key (or writes
     /// nothing); off writes `false`.
     public mutating func setAppEnabled(_ app: String, _ on: Bool) {
-        let path = Self.appScope(app).prefix + ["enabled"]
+        let path = Self.appScope(appKey(app)).prefix + ["enabled"]
         set(on ? nil : false, at: path)
     }
 

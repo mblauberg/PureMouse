@@ -32,14 +32,29 @@ public enum ConfigTransfer {
         } catch {
             throw Refusal(message: "PureMouse can't read \(url.lastPathComponent).")
         }
+        let tree: ConfigTree
         do {
             try ConfigCheck.validate(data)
-            _ = try ConfigTree(data: data)
+            tree = try ConfigTree(data: data)
         } catch {
-            throw Refusal(message: ConfigCheck.message(for: error))
+            throw Refusal(message: refusal(for: error))
         }
-        let tree = (try? ConfigTree(data: data)) ?? ConfigTree()
         return Candidate(data: data, runCommands: tree.runCommandCount, name: url.lastPathComponent)
+    }
+
+    /// What Settings says about a file that fails. A field error keeps the field named
+    /// ("dpi must be 50–25600, not 999999"); a file that is not a JSON object at all, or not JSON,
+    /// gets a plain sentence instead of the decoder's wording, which `puremouse check` still shows.
+    static func refusal(for error: Error) -> String {
+        let notSettings = "This file isn't a PureMouse settings file."
+        switch error {
+        case DecodingError.typeMismatch(_, let context) where context.codingPath.isEmpty:
+            return notSettings
+        case DecodingError.dataCorrupted(let context) where context.codingPath.isEmpty && context.underlyingError != nil:
+            return notSettings
+        default:
+            return ConfigCheck.message(for: error)
+        }
     }
 
     /// The confirmation's text: what is replaced and kept, and, when the file has them, the count of

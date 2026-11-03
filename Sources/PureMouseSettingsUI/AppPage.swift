@@ -49,7 +49,8 @@ struct AppPage: View {
         // The form is capped to what the pane's limit leaves below the header, so the two together
         // never pass it.
         VStack(spacing: 0) {
-            AppPageHeader(key: key, identity: identity, segment: segment, select: select, back: back)
+            AppPageHeader(key: key, identity: identity, segment: segment, enabled: model.config.isAppEnabled(key),
+                          select: select, back: back)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
             PaneForm {
                 useSwitch(model.config)
@@ -350,6 +351,8 @@ struct AppPageHeader: View {
     let key: String
     let identity: AppIdentities.Identity
     let segment: AppSegment
+    /// Whether PureMouse is on in this app; off dims the Scrolling segment as it dims the rows.
+    var enabled = true
     let select: (AppSegment) -> Void
     let back: () -> Void
 
@@ -376,6 +379,7 @@ struct AppPageHeader: View {
             .pickerStyle(.segmented)
             .labelsHidden()
             .fixedSize()
+            .disabled(!enabled)
             HStack(spacing: 6) {
                 Spacer(minLength: 0)
                 AppIcon(identity: identity, size: 20)

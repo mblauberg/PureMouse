@@ -567,4 +567,12 @@ extension MenuPlanTests {
         away.away = true
         #expect(lines(away).hasPrefix("header MX Master 3S, On another Mac · USB receiver · Battery 80%\n"))
     }
+
+    @Test func pausedWinsOverOffInTheApp() {
+        var paused = Self.offState()
+        paused.paused = true
+        let text = lines(paused)
+        #expect(text.hasPrefix("header MX Master 3S, Paused · USB receiver · Battery 80%\n"))
+        #expect(!text.contains("Off in Dota 2"))
+    }
 }

@@ -85,9 +85,25 @@ struct ConfigTransferTests {
         #expect(store.config.int(["dpi"]) == 1600)
 
         let notJSON = try outside("notes.json", "hello")
-        #expect(throws: ConfigTransfer.Refusal.self) { try ConfigTransfer.read(notJSON) }
         let array = try outside("array.json", "[1, 2]")
-        #expect(throws: ConfigTransfer.Refusal.self) { try ConfigTransfer.read(array) }
+        let empty = try outside("empty.json", "")
+        // A file that is not a settings file reads as a sentence, not the decoder's words.
+        for file in [notJSON, array, empty] {
+            do {
+                _ = try ConfigTransfer.read(file)
+                Issue.record("accepted \(file.lastPathComponent)")
+            } catch {
+                #expect((error as? ConfigTransfer.Refusal)?.message == "This file isn't a PureMouse settings file.")
+            }
+        }
+        // A field error keeps the field named.
+        let big = try outside("big.json", #"{"dpi": 999999}"#)
+        do {
+            _ = try ConfigTransfer.read(big)
+            Issue.record("accepted an out-of-range dpi")
+        } catch {
+            #expect((error as? ConfigTransfer.Refusal)?.message == "dpi must be 50–25600, not 999999")
+        }
         let missing = sandbox.directory.appending(path: "nothing.json")
         do {
             _ = try ConfigTransfer.read(missing)

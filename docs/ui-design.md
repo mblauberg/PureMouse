@@ -440,7 +440,8 @@ Settings
 ├─ General: Status (PureMouse; one row per device with (i) → About This Mouse sheet; a receiver row
 │            with (i) → Receiver sheet: Pair a Mouse…, Unpair…, last slice) · Open at login ·
 │            Show in menu bar · Low battery notifications · Permissions ·
-│            Advanced…: Universal Control, Config file [Open] [Export Settings…] [Import Settings…],
+│            Advanced…: Universal Control, Config file [Open] [Show in Finder],
+│            Copy settings [Export…] [Import…],
 │            Log, Reset All Settings…
 ├─ Mouse [Buttons | Scrolling | Pointer]
 │   ├─ Buttons: one row per button, its pop-up the click; Double-click and Hold as child rows once
@@ -608,7 +609,7 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
 
 | Place | Shown by default | Advanced |
 |---|---|---|
-| General | Status (the PureMouse row: a Pause switch with Active or Paused beside it, or Off with a Start button; one row per mouse the daemon knows, with its connection, battery and computer, or that its settings are being applied or were not, and an (i) that opens About This Mouse; active notices), Open at login, Show in menu bar, Low battery notifications (while macOS has them off, Open Notification Settings… in place of the switch, whose choice is kept), Permissions (status only) | Advanced… sheet: Work with Universal Control, Config file (Open, Show in Finder, Export Settings…, Import Settings…), Log, Reset All Settings…. The Settings app's File menu has Export Settings… and Import Settings… |
+| General | Status (the PureMouse row: a Pause switch with Active or Paused beside it, or Off with a Start button; one row per mouse the daemon knows, with its connection, battery and computer, or that its settings are being applied or were not, and an (i) that opens About This Mouse; active notices), Open at login, Show in menu bar, Low battery notifications (while macOS has them off, Open Notification Settings… in place of the switch, whose choice is kept), Permissions (status only) | Advanced… sheet: Work with Universal Control, Config file (Open, Show in Finder), Copy settings (Export…, Import…; the File menu has Export Settings… and Import Settings…), Log, Reset All Settings…. The Settings app's File menu has Export Settings… and Import Settings… |
 | Mouse header | Buttons, Scrolling, Pointer segments; mouse pop-up with two or more mice; Find by Pressing… and the device card on Buttons | — |
 | Mouse › Buttons | One row per button with its action | Gesture directions (disclosure, collapsed, caption summarises them; choosing Hold and Move expands it); Other controls (disclosure: named controls and bound ones, see Device card); Advanced… sheet, only while some button anywhere is Hold and Move: gesture Distance and Repeat |
 | Mouse › Scrolling | Smooth scrolling, Feel, Speed; Main Wheel: Reverse direction, Wheel mode, SmartShift; Thumb Wheel: Action (Turn left/right when Custom); each when the mouse has it | Advanced… sheet, each row only when it applies: Acceleration, Glide, Hold Shift to scroll sideways (dimmed while smooth scrolling is off); Switches at (while SmartShift is on); thumb wheel Reverse direction (when it scrolls here or in some app), Swap directions and Turn distance (when it has actions), Speed (when it scrolls) |

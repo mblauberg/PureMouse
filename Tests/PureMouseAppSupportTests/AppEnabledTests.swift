@@ -55,6 +55,18 @@ private func decode(_ config: ConfigTree) throws -> Config { try JSONDecoder().d
         #expect(config.isAppEnabled("com.other"))
     }
 
+    @Test func switchingAnAppUsesTheKeyAlreadyInTheFileWhateverItsCase() throws {
+        var config = try tree(#"{"apps": {"com.Valve.Dota2": {"buttons": {"back": "mute"}}}}"#)
+        config.setAppEnabled("com.valve.dota2", false)
+        #expect(config.appIDs == ["com.Valve.Dota2"])
+        #expect(config.bool(["apps", "com.Valve.Dota2", "enabled"]) == false)
+        #expect(!config.isAppEnabled("COM.VALVE.DOTA2"))
+        config.setAppEnabled("com.valve.dota2", true)
+        #expect(config.appIDs == ["com.Valve.Dota2"])
+        #expect(!config.contains(["apps", "com.Valve.Dota2", "enabled"]))
+        #expect(config.string(["apps", "com.Valve.Dota2", "buttons", "back"]) == "mute")
+    }
+
     @Test func theListRowReadsOffInsteadOfItsAreas() throws {
         let config = try tree(#"{"apps": {"a.b": {"enabled": false, "buttons": {"back": "mute"}}, "c.d": {"buttons": {"back": "mute"}, "enabled": true}}}"#)
         #expect(config.appSummary("a.b") == "Off")

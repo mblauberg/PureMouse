@@ -194,7 +194,7 @@ enum MenuPlan {
             }
             for device in state.devices {
                 let prefix = Standby(paused: state.paused, away: state.away).map { "\($0.title) · " } ?? ""
-                let off = state.frontmostIsOff && !state.away ? state.frontmost?.title : nil
+                let off = state.frontmostIsOff && !state.away && !state.paused ? state.frontmost?.title : nil
                 rows += header(title: device.name, subtitle: prefix + StatusText.subtitle(device, offIn: off),
                                detail: StatusText.detail(device, version: state.version))
             }
