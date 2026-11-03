@@ -17,6 +17,7 @@ struct AppControllerNotificationDeliveryTests {
     private let directory: URL
     private let locations: Locations
     private let spy = Spy()
+    private let suite = "PureMouseMenuNotifications-\(UUID().uuidString)"
 
     init() throws {
         directory = FileManager.default.temporaryDirectory.appending(path: "pm-menu-\(UUID().uuidString)")
@@ -30,7 +31,8 @@ struct AppControllerNotificationDeliveryTests {
         AppController(locations: locations, iconShown: iconShown,
                       announce: { [spy] id, _, _ in spy.announced.append(id) },
                       withdraw: { [spy] ids in spy.withdrawn.append(ids) },
-                      requestPermission: { [spy] in spy.permissionRequests += 1 })
+                      requestPermission: { [spy] in spy.permissionRequests += 1 },
+                      updates: .inert(preferences: UpdatePreferences(UserDefaults(suiteName: suite)!)))
     }
 
     private func writeConfig(lowBattery: Bool) throws {

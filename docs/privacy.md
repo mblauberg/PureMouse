@@ -1,9 +1,9 @@
 # Privacy
 
 PureMouse has no account and no telemetry, sends nothing about you anywhere, and stores nothing on
-the mouse. It makes one network request, and only when you press **Check for Updates**. This page
-lists what it is allowed to do, every file it writes and that one request, each with the source
-file that shows it.
+the mouse. Its one network request is the check for a new release: when you press **Check for
+Updates**, and once a day if you allow it. This page lists what it is allowed to do, every file it
+writes and that request, each with the source file that shows it.
 
 ## Permissions
 
@@ -28,7 +28,7 @@ SmartShift settings still apply. [Troubleshooting](troubleshooting.md#permission
 permissions.
 
 The menu bar app needs neither permission. It asks to show notifications the first time it has a
-low-battery warning to show, or when you turn the warning on
+low-battery warning or an update reminder to show, or when you turn the low-battery warning on
 ([`Sources/PureMouseMenu/Model/Notifier.swift`](../Sources/PureMouseMenu/Model/Notifier.swift)).
 The Settings helper needs no permissions either.
 
@@ -66,23 +66,56 @@ reconnects. It stores nothing on the mouse or the receiver.
 | `~/Library/Application Support/PureMouse/menu-hidden` | `puremouse menu off` ([`Sources/puremouse/LoginItem.swift`](../Sources/puremouse/LoginItem.swift)) | Empty; its presence keeps the menu bar icon hidden |
 | `~/Library/Application Support/PureMouse/show-settings` | Opening the app or Settings ([`Sources/puremouse/LoginItem.swift`](../Sources/puremouse/LoginItem.swift), [`Sources/PureMouseKit/SettingsRequest.swift`](../Sources/PureMouseKit/SettingsRequest.swift)) | Empty, or the Settings pane to show (and a sheet over it); asks for Settings to open, and is removed once seen. `show-settings.lock` beside it is an empty lock file |
 | `~/Library/Application Support/PureMouse/settings-quit` | Quit PureMouse ([`Sources/PureMouseKit/SettingsRequest.swift`](../Sources/PureMouseKit/SettingsRequest.swift)) | Empty; for 60 s, stops a Settings window that was asked for before the quit from opening after it. The next request to open Settings removes it |
-| `~/Library/Preferences/io.github.mblauberg.puremouse.menu.plist` | macOS, for the menu bar app ([`Sources/PureMouseMenu/Menu/StatusMenu.swift`](../Sources/PureMouseMenu/Menu/StatusMenu.swift), [`Sources/PureMouseAppSupport/NotificationPermission.swift`](../Sources/PureMouseAppSupport/NotificationPermission.swift)) | Where the menu bar icon sits, and whether its notifications are off in System Settings (for Settings' hint) |
+| `~/Library/Preferences/io.github.mblauberg.puremouse.menu.plist` | macOS, for the menu bar app ([`Sources/PureMouseMenu/Menu/StatusMenu.swift`](../Sources/PureMouseMenu/Menu/StatusMenu.swift), [`Sources/PureMouseAppSupport/NotificationPermission.swift`](../Sources/PureMouseAppSupport/NotificationPermission.swift)) | Where the menu bar icon sits, and whether its notifications are off in System Settings (for Settings' hint). The update check's own keys are in the next row |
+| `~/Library/Preferences/io.github.mblauberg.puremouse.menu.plist`, the `Updates…` keys | The menu bar app ([`Sources/PureMouseAppSupport/UpdateReminders.swift`](../Sources/PureMouseAppSupport/UpdateReminders.swift), `UpdatePreferences`); Settings › About writes the first one ([`Sources/PureMouseSettingsUI/AboutPane.swift`](../Sources/PureMouseSettingsUI/AboutPane.swift)) | `UpdatesAutomatic`: your answer to "Check for updates automatically?" (absent until you answer or use the switch in About). `UpdatesLaunches`: how many times the menu bar app has started with its icon shown, counted only until you answer. `UpdatesLastCheck`: when the last scheduled request was made, successful or not. `UpdatesETag`: the ETag GitHub sent with the latest release. `UpdatesLatestVersion` and `UpdatesLatestPage`: that release's version and web page. `UpdatesSkippedVersion`: the version you chose **Skip This Version** for. `UpdatesNotifiedVersion`: the newest version a reminder was shown for |
 | `~/Library/Preferences/io.github.mblauberg.puremouse.settings.plist` | macOS, for Settings ([`Sources/PureMouseSettingsUI/SettingsWindow.swift`](../Sources/PureMouseSettingsUI/SettingsWindow.swift)) | The Settings window's position and its last tab and segment |
 
 The file and channel formats are in [Configuration](configuration.md) and
 [Companion](companion.md). The low-battery warning is a local notification
 ([`Sources/PureMouseMenu/Model/Notifier.swift`](../Sources/PureMouseMenu/Model/Notifier.swift)).
 
-## The one network request
+## The network request
 
-Pressing **Check for Updates** in Settings › About makes one HTTPS GET of
-`https://api.github.com/repos/mblauberg/PureMouse/releases/latest` and compares the version it
-returns with yours ([`Sources/PureMouseAppSupport/UpdateCheck.swift`](../Sources/PureMouseAppSupport/UpdateCheck.swift)).
-It uses an ephemeral session, so no cookies or cache are kept. GitHub sees what any web request
-shows: your IP address and a standard user agent naming the app and the system version. There are
-no background checks, and the background process has no network code at all.
+PureMouse asks GitHub for its latest release in two ways. Both make one HTTPS GET of
+`https://api.github.com/repos/mblauberg/PureMouse/releases/latest` and compare the version it
+returns with yours ([`Sources/PureMouseAppSupport/UpdateCheck.swift`](../Sources/PureMouseAppSupport/UpdateCheck.swift)),
+in an ephemeral session, so no cookies or cache are kept. GitHub sees what any web request shows:
+your IP address and a standard user agent naming the app and the system version.
 
-Buttons such as **View Releases**, **Update PureMouse** and **Learn More** open a GitHub page in your browser.
+- **On demand.** Pressing **Check for Updates** in Settings › About makes the request once.
+- **Once a day, if you allow it.** On the menu bar app's second launch (or the next one that
+  finds PureMouse running with its permissions set up), it asks "Check for updates automatically?"
+  once. **Check Automatically** turns the daily check on; **Don't Check** leaves it off. The
+  switch **Check for updates automatically** in Settings › About shows the answer and changes it,
+  and turning it off ends the checks (no request is made while it is off or unanswered).
+  - **Interval.** At most one request in 24 hours, counted from the last request whether it
+    worked or not, and remembered across restarts and wakes. A failed request waits for the next
+    day. The system picks the moment (`NSBackgroundActivityScheduler`): it holds the check back while
+    the Mac sleeps or is busy, and PureMouse runs no timer of its own
+    ([`Sources/PureMouseAppSupport/BackgroundActivity.swift`](../Sources/PureMouseAppSupport/BackgroundActivity.swift),
+    [`Sources/PureMouseAppSupport/UpdateReminders.swift`](../Sources/PureMouseAppSupport/UpdateReminders.swift)).
+  - **Network limits.** The request refuses constrained networks (Low Data Mode) and expensive
+    ones (a metered hotspot), and carries `If-None-Match` with the ETag of the release it already
+    knows, so an unchanged release costs GitHub a 304 and no body.
+  - **What it sends.** The request above, with the ETag GitHub gave for the last release. It sends
+    no identifier of yours, no version history and no list of what you have set up.
+  - **What it does with the answer.** If the release is newer than the running version it posts one
+    notification for that version, which opens the release page when clicked, and shows **Update to
+    X.Y.Z…** and **Skip This Version** in the menu bar menu until PureMouse is updated or the version
+    is skipped. A newer release replaces the earlier reminder, and turning the check off takes it
+    down. Only a page under `https://github.com/mblauberg/PureMouse/releases` is ever opened. It
+    downloads and installs nothing. The reminders are in
+    [`Sources/PureMouseAppSupport/UpdateReminders.swift`](../Sources/PureMouseAppSupport/UpdateReminders.swift),
+    the schedule in [`Sources/PureMouseAppSupport/BackgroundActivity.swift`](../Sources/PureMouseAppSupport/BackgroundActivity.swift),
+    and the question in [`Sources/PureMouseMenu/AppController.swift`](../Sources/PureMouseMenu/AppController.swift).
+
+The background process (`puremouse`) has no network code at all: the check runs in the menu bar
+app, and `nm` and `strings` on `puremouse` show no URLSession, CFNetwork or endpoint symbol. To turn the
+daily check off, switch **Check for updates automatically** off in Settings › About, or choose
+**Don't Check** when asked; to forget what it stored, `defaults delete io.github.mblauberg.puremouse.menu UpdatesAutomatic`
+and the other `Updates…` keys above.
+
+Buttons such as **View Releases**, **Update PureMouse**, **Update to X.Y.Z…** and **Learn More** open a GitHub page in your browser.
 
 ## Commands you set up
 

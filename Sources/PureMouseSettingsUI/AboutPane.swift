@@ -46,7 +46,7 @@ struct AboutPane: View {
             }
             .padding(.top, 6)
             VStack(spacing: 2) {
-                Text("No account, no telemetry. The network is used only when you check for updates.")
+                Text("No account, no telemetry. The network is used only to check for updates.")
                 Text("Not affiliated with Logitech.")
             }
             .font(.footnote)
@@ -93,16 +93,35 @@ struct AboutPane: View {
     }
 }
 
-/// "Check for Updates": one request when pressed, never in the background.
+/// What the About switch does: reads and writes the answer in the menu app's preferences and
+/// nothing else. It makes no request; the menu app hears the write and arms or cancels its schedule.
+struct AutomaticUpdates {
+    let preferences: UpdatePreferences?
+    var isOn: Bool { preferences?.automatic ?? false }
+    func set(_ on: Bool) { preferences?.automatic = on }
+}
+
+/// "Check for Updates": one request when pressed. "Check for updates automatically" is the answer
+/// to the menu bar app's question (`UpdateQuestion`), kept in its preferences, where the menu app
+/// runs the daily check from (`UpdateReminders`); this process makes no request unless the button
+/// is pressed.
 private struct UpdateRow: View {
     @State private var checking = false
     @State private var outcome: UpdateCheck.Outcome?
+    @State private var automatic = false
+    @State private var watch: UpdatePreferences.Watch?
+
+    private let preferences = NotificationPermission.menuDefaults.map { UpdatePreferences($0) }
+    private var answer: AutomaticUpdates { AutomaticUpdates(preferences: preferences) }
 
     var body: some View {
         VStack(spacing: 6) {
             Button(checking ? "Checking…" : "Check for Updates") { check() }
                 .disabled(checking)
                 .accessibilityLabel("Check for Updates")
+            Toggle("Check for updates automatically", isOn: Binding(get: { automatic }, set: { setAutomatic($0) }))
+                .toggleStyle(.switch)
+                .accessibilityLabel("Check for updates automatically")
             switch outcome {
             case .upToDate?:
                 Text("PureMouse is up to date").font(.callout).foregroundStyle(.secondary)
@@ -119,6 +138,19 @@ private struct UpdateRow: View {
             }
         }
         .accessibilityElement(children: .contain)
+        .onAppear {
+            // The menu bar app stores the answer to its question, and may do so while this shows.
+            automatic = answer.isOn
+            watch = preferences.map { preferences in
+                UpdatePreferences.Watch(preferences.defaults) { automatic = answer.isOn }
+            }
+        }
+        .onDisappear { watch = nil }
+    }
+
+    private func setAutomatic(_ on: Bool) {
+        automatic = on
+        answer.set(on)
     }
 
     private func check() {

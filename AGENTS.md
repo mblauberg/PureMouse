@@ -171,7 +171,7 @@ one. This file covers how to work on it safely.
   the mice are restored (`exitReporting`).
 - Keep it light: no dependencies, and no AppKit or SwiftUI in the daemon or PureMouseKit. Only
   `PureMouseSettingsUI` and the Settings helper link SwiftUI; the menu bar app links AppKit only
-  (`otool -L .build/release/PureMouseMenu` names no SwiftUI). Idle cost is zero CPU, with one bounded exception: while a
+  (`otool -L .build/release/PureMouseMenu` names no SwiftUI). Idle cost is zero CPU (the optional daily check is run by the system's background-activity scheduler, not a timer of ours), with one bounded exception: while a
   permission needed now is missing, a `puremouse permissions` child runs after 2, 4, 8, 16 and
   32 s and then once a minute, until 10 minutes after the latest start, wake, reload, control
   change or Bluetooth attach (`Daemon.pollPermissions`). The display link runs only while a
@@ -212,7 +212,19 @@ one. This file covers how to work on it safely.
   opens), and the helper reads it there for the General pane's hint, watching it (key-value
   observing) while that pane shows;
   `UNUserNotificationCenter` needs a bundle, so a bare dev run posts nothing. "Check for Updates" (About pane, `UpdateCheck`) makes
-  one GET of the latest GitHub release per press: no background checks.
+  one GET of the latest GitHub release per press. The menu app also checks once a day when the
+  person has said yes (ADR 0021, `docs/privacy.md`): `UpdateReminders` (PureMouseAppSupport) keeps
+  the answer, the last request time (recorded before the request, so a failure waits for the next
+  window), the release's ETag and the skipped and notified versions (the last 16 of each) in the menu's defaults
+  domain; `BackgroundActivity` hands the wait to `NSBackgroundActivityScheduler` (one shot, re-armed;
+  its tolerance must stay shorter than its interval, or it raises), so the app owns no timer; the
+  scheduled request refuses constrained and expensive networks and sends `If-None-Match`
+  (`UpdateCheck.fetchScheduled`). The question is asked by `AppController` on the second launch with
+  permissions set up; Settings' About switch writes the same key, which the menu app hears by
+  key-value observing. One notification per version (`update.X.Y.Z`, quiet, opens the release
+  page), and the menu shows `Update to X.Y.Z…` and `Skip This Version` until the running version
+  catches up (`MenuPlan`). Nothing here is in `puremouse` or PureMouseKit, and the rig drives a
+  check with `--env PUREMOUSE_RIG_UPDATES=check`.
 - The DPI the menu and Mouse › Pointer show is the mouse's live value (a `cycleDPI` press
   changes it without touching the config), then the configured one; a change made in the pane
   shows until the mouse reports it (`DPIReading`).

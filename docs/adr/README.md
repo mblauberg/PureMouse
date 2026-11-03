@@ -31,3 +31,4 @@ Consequences. Keep each to about 40 lines.
 | [18](0018-login-service-seam.md) | Proposed | Start at login behind a `LoginService` seam |
 | [19](0019-developer-id-in-one-release.md) | Proposed | Developer ID and the identity switch in one release; upgrading from 0.3.x is a release-note step |
 | [20](0020-linked-sdk-and-deployment-target.md) | Accepted | App builds record the active SDK separately from the macOS 14 deployment target |
+| [21](0021-scheduled-update-check.md) | Accepted | A daily update check in the menu bar app, after asking once; the daemon stays network-free |

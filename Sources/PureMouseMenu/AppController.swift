@@ -2,6 +2,25 @@ import AppKit
 import PureMouseAppSupport
 import PureMouseKit
 
+/// What the daily update check runs on: the live ones are the system's scheduler, the network, the
+/// clock and the notification centre; a test passes its own, so nothing reaches GitHub.
+struct UpdateSetup {
+    var preferences: UpdatePreferences
+    var current: String = Locations.version
+    var fetcher: UpdateCheck.Fetcher = UpdateCheck.urlSession
+    var now: @MainActor () -> Date = { Date() }
+    var scheduler: UpdateScheduling
+    /// Asks the question; true for Check Automatically.
+    var ask: @MainActor () -> Bool
+    var announce: @MainActor (UpdateOffer) -> Void
+
+    @MainActor static var live: UpdateSetup {
+        UpdateSetup(preferences: UpdatePreferences(.standard),
+                    scheduler: BackgroundActivity(identifier: Companion.menuLabel + ".update-check"),
+                    ask: Alerts.askAboutUpdates, announce: { Notifier.post($0) })
+    }
+}
+
 /// The app delegate: owns the model and the status item. Settings is an app of its own
 /// (`SettingsLauncher`), so this process never holds a window.
 @MainActor
@@ -14,6 +33,10 @@ final class AppController: NSObject, NSApplicationDelegate {
     private let requestPermission: @MainActor () -> Void
     private var statusMenu: StatusMenu?
     private var lowBatteryNotificationsOn: Bool
+    /// The daily update check and its reminders; runs only while the icon is shown.
+    let updates: UpdateReminders
+    private let askAboutUpdates: @MainActor () -> Bool
+    private var questionSettled = false
 
     /// The defaults are the live app; a test passes a sandbox and spies for what reaches the
     /// notification centre.
@@ -21,13 +44,24 @@ final class AppController: NSObject, NSApplicationDelegate {
          iconShown: Bool = Locations.live.showsInMenuBar,
          announce: @escaping AppModel.Announce = Notifier.post,
          withdraw: @escaping AppModel.Withdraw = Notifier.removeDelivered,
-         requestPermission: @escaping @MainActor () -> Void = { Task { await Notifier.requestIfNeeded() } }) {
+         requestPermission: @escaping @MainActor () -> Void = { Task { await Notifier.requestIfNeeded() } },
+         updates setup: UpdateSetup = .live) {
         model = AppModel(locations: locations, alert: Alerts.show,
                          notifications: iconShown ? (announce, withdraw) : nil)
         self.iconShown = iconShown
         self.requestPermission = requestPermission
         lowBatteryNotificationsOn = model.lowBatteryNotificationsOn
+        updates = UpdateReminders(preferences: setup.preferences, current: setup.current, fetcher: setup.fetcher,
+                                  now: setup.now, scheduler: setup.scheduler, announce: setup.announce,
+                                  withdraw: { withdraw([$0]) })
+        askAboutUpdates = setup.ask
         super.init()
+    }
+
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // The notification centre's delegate must be set before launching ends, or the click that
+        // launched the app (a reminder, with the app not running) is lost.
+        Notifier.activate()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -35,6 +69,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         model.statusChanged = { [weak self] in self?.statusChanged() }
         model.startWatching()
         if iconShown { statusMenu = StatusMenu(model: model, app: self) }
+        startUpdates()
         // Opened by hand, or asked for Settings while starting (`puremouse` opened from the Finder
         // restarts this agent, then opens it), or with no icon to show: open Settings. With no
         // icon there is nothing left to do once it is open.
@@ -73,6 +108,40 @@ final class AppController: NSObject, NSApplicationDelegate {
             requestPermission()
         }
         lowBatteryNotificationsOn = on
+        askAboutUpdatesIfDue()
+    }
+
+    // MARK: Updates
+
+    /// Counts this launch, starts the schedule if automatic checks are on, and asks the question if
+    /// it is due. A run without the icon does none of it: it ends when Settings closes.
+    func startUpdates() {
+        guard iconShown else { return }
+        updates.noteLaunch()
+        updates.start()
+        askAboutUpdatesIfDue()
+    }
+
+    /// The question is asked once: on the second launch or a later one, when permissions are set up
+    /// (the daemon is running and nothing it needs is missing). It waits for a status from a running
+    /// daemon, which a login may write after this app starts (the file may still be the last run's,
+    /// saying it stopped), and judges the permissions on that one. An alert, not a notification,
+    /// since it needs an answer; the reminders that follow take no focus.
+    private func askAboutUpdatesIfDue() {
+        guard iconShown, !questionSettled, updates.questionDue, model.status != nil, model.daemonRunning else { return }
+        questionSettled = true
+        let permissionsSetUp = !model.accessibilityMissing && !(model.inputMonitoringMissing && model.hasBluetoothDevice)
+        guard permissionsSetUp else { return }
+        // Not inside the callback that noticed it: a modal alert there would run the rest of it nested.
+        Task { updates.setAutomatic(askAboutUpdates()) }
+    }
+
+    func openUpdate(_ page: URL) {
+        NSWorkspace.shared.open(page)
+    }
+
+    func skipUpdate() {
+        updates.skip()
     }
 
     // MARK: Lifecycle

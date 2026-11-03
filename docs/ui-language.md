@@ -46,6 +46,13 @@ and a change to this page lands with the text it changes.
   without it. macOS's own names: "Accessibility", "Input Monitoring", "Privacy & Security".
 - **Notifications.** Title: the thing and its state, without the app name ("MX Master 3S battery
   low"). Body: the fact, then what to do ("20% left. Charge it soon."). Actions in Title Case.
+- **The update question and reminders.** The question is an alert with a sentence title and its
+  question mark ("Check for updates automatically?"), a body that says what is sent and that
+  nothing installs by itself, and two buttons that name the result: "Check Automatically" (the
+  default) and "Don't Check". The reminder is a quiet notification: title "PureMouse 1.2.3 is
+  available", body "Click to read what's new.". The menu row "Update to 1.2.3…" takes an ellipsis
+  although it opens the release page in the browser, because the person is shown a page to read
+  before anything changes; it names the version so it can't read as a command to install.
 - **Tooltips** are under 75 characters and never repeat the control's name.
 - **CLI.** Success is a sentence on stdout. A failure is one line on stderr led by `puremouse: `
   ("puremouse: can't register: …") and a non-zero exit status.
@@ -99,4 +106,6 @@ One term per concept. "Retire" lists words that must not appear in UI text for t
 | Thumb wheel actions the other way round | Swap directions ("Swaps what turning left and right does."); an app row summary says "directions swapped" or "directions not swapped" | Reverse direction (for actions), Reversed, Normal direction |
 | SmartShift threshold | Switches at (Slower … Faster) | Threshold, Sooner/Later |
 | A control this mouse lacks, kept because it is set | "Not supported by this mouse." (caption) | — |
+| Checking for a new release | Check for Updates (button, on demand); "Check for updates automatically" (switch, About; sentence case); the question "Check for updates automatically?" with Check Automatically / Don't Check | Auto-update, Updater, "Look for updates", Check Now |
+| A newer release is known | "Update to 1.2.3…" (menu row); "Skip This Version" (menu row under it); notification "PureMouse 1.2.3 is available" | Upgrade, Install, Download, "New version" |
 | Support | Support PureMouse (About link); GitHub Sponsors (the destination) | Donate, Buy Me a Coffee, Pro, Free version |
