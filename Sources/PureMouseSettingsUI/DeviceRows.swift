@@ -8,24 +8,42 @@ import SwiftUI
 /// About This Mouse. Read-only: nothing here writes the config or opens a HID device.
 struct DeviceRow: View {
     let device: Status.Device
+    @Environment(AppModel.self) private var model
     /// Opens the sheet when the row appears (a dev hook only).
     var opensAtAppear = false
     @State private var showingDetails = false
 
+    private var notApplied: Bool { device.applied?.state == .notApplied }
+
     var body: some View {
         LabeledContent {
-            Button { showingDetails = true } label: {
-                // The padding is inside the label so the button's frame, its hit target, is 20 pt or more.
-                Image(systemName: "info.circle").padding(4).contentShape(Rectangle())
+            HStack(spacing: 8) {
+                if notApplied {
+                    Button("Apply Settings Again") { model.applySettingsAgain() }
+                        .buttonStyle(.bordered)
+                }
+                Button { showingDetails = true } label: {
+                    // Vertical padding only: the glyph's trailing edge is the row's, like the switches'.
+                    Image(systemName: "info.circle").padding(.vertical, 4).padding(.leading, 6).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                // The sheet's own title is the name; the button is named for the mouse it opens.
+                .accessibilityLabel("About \(device.name)")
+                .help("About this mouse")
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            // The sheet's own title is the name; the button is named for the mouse it opens.
-            .accessibilityLabel(device.name)
-            .help("About this mouse")
         } label: {
             Text(device.name)
-            Text(StatusText.row(device))
+            if notApplied {
+                Label {
+                    Text(StatusText.row(device))
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle").symbolRenderingMode(.multicolor)
+                }
+                .labelStyle(StatusLabelStyle())
+            } else {
+                Text(StatusText.row(device))
+            }
         }
         .sheet(isPresented: $showingDetails) {
             AboutMouseSheet(deviceID: device.id)
@@ -53,6 +71,7 @@ struct AboutMouseSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     private var device: Status.Device? { model.devices.first { $0.id == deviceID } }
+    private static let checkmarkGutter: CGFloat = 14
 
     var body: some View {
         if let device {
@@ -61,15 +80,22 @@ struct AboutMouseSheet: View {
                 Section {
                     ForEach(details.rows) { row in
                         LabeledContent(row.label) {
-                            VStack(alignment: .trailing) {
+                            // Leading-aligned, with the same gutter on every line of a row that marks one
+                            // (the computers), so the names line up whichever one is current.
+                            let marks = row.lines.contains { $0.current }
+                            VStack(alignment: .leading, spacing: 2) {
                                 ForEach(Array(row.lines.enumerated()), id: \.offset) { _, line in
                                     HStack(spacing: 4) {
-                                        if line.current { Image(systemName: "checkmark") }
+                                        if marks {
+                                            Image(systemName: "checkmark")
+                                                .opacity(line.current ? 1 : 0)
+                                                .frame(width: Self.checkmarkGutter)
+                                                .accessibilityHidden(true)  // "This Mac" in the text says it
+                                        }
                                         Text(line.text)
                                     }
                                 }
                             }
-                            .multilineTextAlignment(.trailing)
                             .textSelection(.enabled)
                         }
                     }

@@ -46,7 +46,7 @@ public struct DeviceDetails: Equatable, Sendable {
         rows.append(Row(label: "Connection", value: StatusText.connection(device)))
         if let hosts = Self.hosts(device.hosts) { rows.append(hosts) }
         if let firmware = device.firmware, !firmware.isEmpty { rows.append(Row(label: "Firmware", value: firmware)) }
-        if let model = Self.model(device) { rows.append(Row(label: "Model", value: model)) }
+        if let model = device.model, !model.isEmpty { rows.append(Row(label: "Model ID", value: model)) }
         self.rows = rows
     }
 
@@ -84,12 +84,6 @@ public struct DeviceDetails: Equatable, Sendable {
             return Line(text, current: current)
         }
         return Row(label: "Easy-Switch", lines: lines)
-    }
-
-    /// "MX Master 3S (b034)": the name and the product code the device key starts with.
-    static func model(_ device: Status.Device) -> String? {
-        guard let key = device.model, key.count >= 5 else { return device.model == nil ? nil : device.name }
-        return "\(device.name) (\(key.dropFirst().prefix(4)))"
     }
 
     /// The row shown on a device's line in General › Status: "Computer 1" for the current host.

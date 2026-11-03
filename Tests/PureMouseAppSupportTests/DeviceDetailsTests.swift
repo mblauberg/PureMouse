@@ -32,22 +32,22 @@ struct DeviceDetailsTests {
     @Test func theMXMaster3SShowsEveryRow() {
         let details = DeviceDetails(Self.mx3S())
         #expect(details.title == "MX Master 3S")
-        #expect(details.rows.map(\.label) == ["Battery", "Connection", "Easy-Switch", "Firmware", "Model"])
+        #expect(details.rows.map(\.label) == ["Battery", "Connection", "Easy-Switch", "Firmware", "Model ID"])
         let rows = rows(Self.mx3S())
         #expect(rows["Battery"] == ["80%, charging"])
         #expect(rows["Connection"] == ["USB receiver"])
         #expect(rows["Easy-Switch"] == ["Computer 1 · This Mac", "Computer 2 · MacBook Air", "Computer 3 · Not paired"])
         #expect(rows["Firmware"] == ["RBM 22.01 B0015"])
-        #expect(rows["Model"] == ["MX Master 3S (b034)"])
+        #expect(rows["Model ID"] == ["mb03400000000"])  // the key the config uses, lowercase
         #expect(details.rows[2].lines.map(\.current) == [true, false, false])
     }
 
     @Test func theM750HidesWhatItDoesNotReport() {
         let details = DeviceDetails(Self.m750())
-        #expect(details.rows.map(\.label) == ["Battery", "Connection", "Model"])
+        #expect(details.rows.map(\.label) == ["Battery", "Connection", "Model ID"])
         #expect(!details.rows.contains { $0.label == "Easy-Switch" || $0.label == "Firmware" })
         #expect(rows(Self.m750())["Battery"] == ["Good"])
-        #expect(rows(Self.m750())["Model"] == ["M750 (b02c)"])
+        #expect(rows(Self.m750())["Model ID"] == ["pb02c"])
     }
 
     @Test func aMouseThatReportsNothingStillNamesItsConnection() {
@@ -75,12 +75,11 @@ struct DeviceDetailsTests {
               Computer 2 · MacBook Air
               Computer 3 · Not paired
             Firmware: RBM 22.01 B0015
-            Model: MX Master 3S (b034)
+            Model ID: mb03400000000
             PureMouse: 0.5.0
             """)
         #expect(!text.contains(device.unit ?? "unit") && !text.lowercased().contains("serial"))
-        // Not the whole device key either: the unit is the only identifier of one physical mouse.
-        #expect(!text.contains("mb03400000000"))
+        // The model ID is shared by every mouse of the model; only the unit names one mouse.
     }
 
     @Test func aDevBuildSaysSo() {
@@ -94,6 +93,11 @@ struct DeviceDetailsTests {
         asleep.online = false
         asleep.applied = .init(state: .applied)
         #expect(StatusText.row(asleep) == "Asleep")
+        var failed = Self.mx3S()
+        failed.online = false
+        failed.applied = .init(state: .notApplied)
+        #expect(StatusText.row(failed) == "Settings not applied · USB receiver")
+        #expect(StatusText.subtitle(failed) == "Settings not applied")  // the menu's header keeps it short
     }
 
     @Test func theSubtitleSpeaksTheAppliedStatesAndNothingElse() {

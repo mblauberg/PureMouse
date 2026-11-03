@@ -520,7 +520,7 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
 
 | Place | Shown by default | Advanced |
 |---|---|---|
-| General | Status (PureMouse running/paused/off, Start or Stop; one row per mouse the daemon knows, with its connection, battery and computer, or that its settings are being applied or were not, and an (i) that opens About This Mouse; active notices), Open at login, Show in menu bar, Low battery notifications (a disabled switch that keeps the choice, with Open Notification Settings…, while macOS has them off), Permissions (status only) | Advanced… sheet: Work with Universal Control, Config file, Log, Reset All Settings… |
+| General | Status (PureMouse running/paused/off, Start or Stop; one row per mouse the daemon knows, with its connection, battery and computer, or that its settings are being applied or were not, and an (i) that opens About This Mouse; active notices), Open at login, Show in menu bar, Low battery notifications (while macOS has them off, a disabled switch that keeps the choice, with Open Notification Settings… in the same row before it), Permissions (status only) | Advanced… sheet: Work with Universal Control, Config file, Log, Reset All Settings… |
 | Mouse header | Buttons, Scrolling, Pointer segments; mouse pop-up with two or more mice; Find by Pressing… and the device card on Buttons | — |
 | Mouse › Buttons | One row per button with its action | Gesture directions (disclosure, collapsed, caption summarises them; choosing Hold and Move expands it); Other controls (disclosure: named controls and bound ones, see Device card); Advanced… sheet, only while some button anywhere is Hold and Move: gesture Distance and Repeat |
 | Mouse › Scrolling | Smooth scrolling, Feel, Speed; Main Wheel: Reverse direction, Wheel mode, SmartShift; Thumb Wheel: Action (Turn left/right when Custom); each when the mouse has it | Advanced… sheet, each row only when it applies: Acceleration, Glide, Hold Shift to scroll sideways (dimmed while smooth scrolling is off); Switches at (while SmartShift is on); thumb wheel Reverse direction (when it scrolls here or in some app), Swap directions and Turn distance (when it has actions), Speed (when it scrolls) |
@@ -531,10 +531,15 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
 
 **Device rows and About This Mouse.** General › Status lists each known mouse, from status and
 whatever Mouse scope is chosen, only while PureMouse runs. Its (i) is a plain button with a 20 pt
-hit target, named for the mouse. The sheet is an `AdvancedSheet` titled with the mouse's name:
+hit target at the row's trailing edge, like the switches, named "About <name>". While the mouse's
+settings are not applied, its line leads with a multicolour warning symbol ("Settings not applied
+· USB receiver") and an Apply Settings Again bordered button sits left of the (i); the row's height
+does not change. The sheet is an `AdvancedSheet` titled with the mouse's name:
 Done is the default button, Copy Details sits at the bottom-leading edge, and nothing opens from
 it. Its rows are read from status alone (the app never opens HID devices); a fact the mouse does
-not report has no row, and the current Easy-Switch computer is marked with a checkmark. There is no
+not report has no row. Values are leading-aligned, and the current Easy-Switch computer is marked
+with an SF Symbol checkmark in a gutter every Easy-Switch line has, so the names line up. The last
+row is Model ID, the key the config uses. There is no
 Switch button (#163). Copy Details copies plain text and leaves out the unit and serial numbers.
 
 ## Sources

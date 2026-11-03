@@ -57,8 +57,11 @@ public enum StatusText {
     }
 
     /// A device's line in General › Status: its subtitle, then the computer it is on where the
-    /// mouse says, "USB receiver · Battery 80% · Computer 1".
+    /// mouse says, "USB receiver · Battery 80% · Computer 1". Where the settings are not applied the
+    /// line keeps the connection, "Settings not applied · USB receiver": the row has room, and the
+    /// facts it would otherwise show are still true.
     public static func row(_ device: Status.Device) -> String {
+        if device.applied?.state == .notApplied { return [notApplied, connection(device)].joined(separator: " · ") }
         var text = subtitle(device)
         if device.online, device.applied?.state != .applying, device.applied?.state != .notApplied,
            let host = DeviceDetails.currentHost(device) { text += " · " + host }

@@ -113,20 +113,34 @@ struct GeneralPane: View {
     }
 
     /// The menu bar app posts the notifications, with or without its icon (it runs windowless when
-    /// the icon is hidden). While macOS has them off the switch is disabled and keeps what was chosen.
+    /// the icon is hidden). While macOS has them off the switch is disabled and keeps what was
+    /// chosen, and Open Notification Settings… sits in the same row, before the switch.
     private var lowBatteryRow: some View {
-        let help = notificationsDenied ? "Notifications are off for PureMouse in System Settings."
+        let help = notificationsDenied ? "Off for PureMouse in System Settings."
             : "Tells you when the battery falls to 20% and 5%."
+        let isOn = Binding(get: { model.lowBatteryNotificationsOn }, set: { setLowBatteryNotifications($0) })
         return Group {
-            Toggle(isOn: Binding(get: { model.lowBatteryNotificationsOn }, set: { setLowBatteryNotifications($0) })) {
-                RowLabel("Low battery notifications", help: help)
-            }
-            .accessibilityLabel("Low battery notifications")
-            .disabled(model.readOnly || notificationsDenied)
             if notificationsDenied {
-                // Outside the toggle: a disabled toggle would disable its label's button too.
-                Button("Open Notification Settings…") { NSWorkspace.shared.open(NotificationPermission.settingsURL) }
-                    .buttonStyle(.bordered)
+                LabeledContent {
+                    HStack(spacing: 12) {
+                        // Beside the switch, not inside its label: a disabled toggle disables its label's button too.
+                        Button("Open Notification Settings…") { NSWorkspace.shared.open(NotificationPermission.settingsURL) }
+                            .buttonStyle(.bordered)
+                            .fixedSize()
+                        Toggle("Low battery notifications", isOn: isOn)
+                            .labelsHidden()
+                            .accessibilityLabel("Low battery notifications")
+                            .disabled(true)
+                    }
+                } label: {
+                    RowLabel("Low battery notifications", help: help)
+                }
+            } else {
+                Toggle(isOn: isOn) {
+                    RowLabel("Low battery notifications", help: help)
+                }
+                .accessibilityLabel("Low battery notifications")
+                .disabled(model.readOnly)
             }
         }
     }
