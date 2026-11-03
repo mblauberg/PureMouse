@@ -944,7 +944,21 @@ final class ScriptedResponse: URLProtocol, @unchecked Sendable {
         #expect(try FileManager.default.contentsOfDirectory(atPath: world.directory.path) == ["PureMouse.app"])
     }
 
-    @Test func copyKeepsHardLinksSoTheAssetCatalogShipsOnce() async throws {
+    /// Whether this process can make a hard link in its temporary folder at all. A sandbox may not
+    /// (EPERM), and then the test has nothing to measure: it is skipped, with this reason on record.
+    static let canMakeHardLinks: Bool = {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "pm-probe-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try Data("x".utf8).write(to: directory.appending(path: "a"))
+            try FileManager.default.linkItem(at: directory.appending(path: "a"), to: directory.appending(path: "b"))
+            return true
+        } catch { return false }
+    }()
+
+    @Test(.enabled(if: LiveCommitPointTests.canMakeHardLinks, "this environment does not allow hard links in its temporary folder (EPERM), so there is no fixture to copy"))
+    func copyKeepsHardLinksSoTheAssetCatalogShipsOnce() async throws {
         let directory = try temporary()
         defer { clean(directory) }
         let source = directory.appending(path: "src", directoryHint: .isDirectory)
