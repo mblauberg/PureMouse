@@ -8,6 +8,12 @@ import notify
 /// clicking, and `PUREMOUSE_DEV_APPEARANCE=light|dark` overrides the system appearance. Settings'
 /// own hooks are the helper's (`PureMouseSettingsUI.DevHooks`).
 ///
+/// `PUREMOUSE_DEV_ICON=<directory>` writes the status icon's running, paused, off and attention
+/// states as PNGs (`running@1x.png`, `running@2x.png`, …) and exits before anything else starts.
+/// `PUREMOUSE_DEV_MICE=2` shows the menu as if two mice were online (a fixture: the status is not
+/// read for devices), and `PUREMOUSE_DEV_SUBMENU=pointer` shows Pointer Speed's rows as the menu
+/// itself, so a capture of it needs no hovering.
+///
 /// A release build has none of this unless it is built with `-DDEVHOOKS` (`scripts/measure-menu.sh`),
 /// which compiles in only `Rig`, below.
 @MainActor
@@ -73,6 +79,65 @@ enum DevHooks {
     }
 
     private static var backdrop: NSWindow?
+
+    /// `PUREMOUSE_DEV_MICE=2`: two mice online, with their own presets, whatever the daemon reports.
+    static func fixture(_ state: inout MenuState) {
+        guard ProcessInfo.processInfo.environment["PUREMOUSE_DEV_MICE"] == "2" else { return }
+        func mouse(_ name: String, key: String, dpi: Int) -> Status.Device {
+            Status.Device(id: key, name: name, connection: .receiver, online: true,
+                          battery: .init(percent: 80, level: .good, charging: false), dpi: dpi,
+                          dpiSteps: [400, 800, 1200, 1600, 2400, 3200], wheelMode: .ratchet, controls: [], model: key)
+        }
+        let master = mouse("MX Master 3S", key: "mb03400000000", dpi: 1600)
+        let anywhere = mouse("MX Anywhere 3S", key: "mb03300000000", dpi: 1000)
+        state.daemonRunning = true
+        state.devices = [master, anywhere]
+        state.mousePresets = ["mb03400000000": [800, 1600, 3200], "mb03300000000": [400, 800, 1200]]
+        state.dpiPresets = [800, 1600]
+        state.currentDPI = 1600
+    }
+
+    /// `PUREMOUSE_DEV_SUBMENU=pointer`: the rows of that submenu in place of the menu's.
+    static func submenu(_ rows: [MenuRow]) -> [MenuRow] {
+        guard ProcessInfo.processInfo.environment["PUREMOUSE_DEV_SUBMENU"] == "pointer" else { return rows }
+        for case let .item(item) in rows where item.title == "Pointer Speed" { return item.submenu ?? rows }
+        return rows
+    }
+
+    /// `PUREMOUSE_DEV_ICON=<directory>`: writes the status icon's four looks at 1x and 2x. True when
+    /// it was asked for, and the caller exits.
+    static func writeIcons() -> Bool {
+        guard let path = ProcessInfo.processInfo.environment["PUREMOUSE_DEV_ICON"] else { return false }
+        writeIcons(to: URL(filePath: path, directoryHint: .isDirectory))
+        return true
+    }
+
+    static func writeIcons(to directory: URL) {
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let looks: [(String, StatusIcon.Look, StatusIcon.Badge)] = [
+            ("running", .running, .none), ("paused", .paused, .none), ("off", .off, .none),
+            ("attention", .running, .attention),
+        ]
+        for (name, look, badge) in looks {
+            let image = StatusIcon.image(look: look, badge: badge)
+            for scale in 1...2 {
+                let size = image.size
+                guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width) * scale,
+                                                 pixelsHigh: Int(size.height) * scale, bitsPerSample: 8,
+                                                 samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                                 colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
+                      let context = NSGraphicsContext(bitmapImageRep: rep)
+                else { continue }
+                rep.size = size
+                NSGraphicsContext.saveGraphicsState()
+                NSGraphicsContext.current = context
+                image.draw(in: NSRect(origin: .zero, size: size))
+                NSGraphicsContext.restoreGraphicsState()
+                try? rep.representation(using: .png, properties: [:])?
+                    .write(to: directory.appending(path: "\(name)@\(scale)x.png"))
+            }
+        }
+    }
 
     /// `PUREMOUSE_DEV_MENU=1`: a hand-started copy opens only the menu, not Settings as well.
     static var opensMenuOnly: Bool { ProcessInfo.processInfo.environment["PUREMOUSE_DEV_MENU"] != nil }

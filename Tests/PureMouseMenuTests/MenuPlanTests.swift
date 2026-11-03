@@ -14,6 +14,8 @@ struct MenuPlanTests {
             switch row {
             case .separator:
                 return indent + "---"
+            case let .sectionHeader(title):
+                return indent + "section " + title
             case let .header(title, lines, alternate):
                 return indent + (alternate ? "⌥header " : "header ") + ([title] + lines).joined(separator: ", ")
             case let .item(item):

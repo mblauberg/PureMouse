@@ -1,11 +1,25 @@
 import AppKit
 
 /// The menu bar glyph: `MenuBarIcon.pdf` from the bundle as a template, with its state shown by
-/// shape and opacity (never colour): dimmed while paused or off, and a small badge when something
-/// needs attention or the battery is at 10% or less.
+/// shape and opacity (never colour): a diagonal slash through it while paused, dimmed while off,
+/// and a small badge when something needs attention or the battery is at 10% or less.
 @MainActor
 enum StatusIcon {
     enum Badge { case none, attention, battery }
+
+    /// How the glyph itself looks. Paused is a different shape at full opacity; off is the plain
+    /// shape dimmed, so a paused PureMouse never reads as one that is not running.
+    enum Look: Equatable {
+        case running, paused, off
+
+        var opacity: CGFloat { self == .off ? 0.4 : 1 }
+        var slashed: Bool { self == .paused }
+    }
+
+    /// Off wins: a daemon that is not running is not paused, whatever the last status said.
+    nonisolated static func look(daemonRunning: Bool, paused: Bool) -> Look {
+        daemonRunning ? (paused ? .paused : .running) : .off
+    }
 
     private static let bundled: NSImage? = {
         var url = Bundle.main.url(forResource: "MenuBarIcon", withExtension: "pdf")
@@ -21,7 +35,7 @@ enum StatusIcon {
     /// The template is drawn at its own size (18 × 18 pt, padding included), like system extras.
     private static var glyphHeight: CGFloat { bundled != nil ? glyph.size.height : 16 }
 
-    static func image(dimmed: Bool, badge: Badge) -> NSImage {
+    static func image(look: Look, badge: Badge) -> NSImage {
         let aspect = glyph.size.width / max(glyph.size.height, 1)
         let glyphSize = NSSize(width: (glyphHeight * aspect).rounded(), height: glyphHeight)
         // The bundled template has room for the badge in its padding; the fallback symbol does not.
@@ -29,7 +43,8 @@ enum StatusIcon {
         let size = NSSize(width: glyphSize.width + overhang, height: glyphHeight)
         let image = NSImage(size: size, flipped: false) { _ in
             glyph.draw(in: NSRect(origin: .zero, size: glyphSize), from: .zero, operation: .sourceOver,
-                       fraction: dimmed ? 0.4 : 1)
+                       fraction: look.opacity)
+            if look.slashed, let context = NSGraphicsContext.current?.cgContext { slash(in: glyphSize, context) }
             guard badge != .none, let context = NSGraphicsContext.current?.cgContext else { return true }
             let centre = NSPoint(x: size.width - 4.5, y: 4.5)
             // Knock a ring out of the glyph so the badge reads as separate.
@@ -60,6 +75,22 @@ enum StatusIcon {
         }
         image.isTemplate = true
         return image
+    }
+
+    /// A "/" from the bottom left to the top right (the badge sits at the bottom right): a gap cut
+    /// through the glyph with the line left standing in it, so it reads over the mouse's body.
+    private static func slash(in size: NSSize, _ context: CGContext) {
+        let line = NSBezierPath()
+        line.move(to: NSPoint(x: size.width * 0.2, y: size.height * 0.15))
+        line.line(to: NSPoint(x: size.width * 0.8, y: size.height * 0.85))
+        line.lineCapStyle = .round
+        context.setBlendMode(.clear)
+        line.lineWidth = 4
+        line.stroke()
+        context.setBlendMode(.normal)
+        NSColor.black.setStroke()
+        line.lineWidth = 1.5
+        line.stroke()
     }
 
     /// The glyph for the menu's device header, sized like the mockup (13 × 21 pt in a 22 pt row

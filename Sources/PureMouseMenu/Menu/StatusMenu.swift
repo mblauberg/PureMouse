@@ -37,23 +37,23 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     func close() { menu.cancelTracking() }
     #endif
 
-    private var shown: (dimmed: Bool, badge: StatusIcon.Badge, label: String)?
+    private var shown: (look: StatusIcon.Look, badge: StatusIcon.Badge, label: String)?
 
     /// Redraws the glyph and relabels it only when what they show has changed.
     func updateIcon() {
         guard let button = statusItem.button else { return }
         let state = MenuState(model: model)
         let badge: StatusIcon.Badge = state.needsAttention ? .attention : model.lowBattery ? .battery : .none
-        let dimmed = !state.daemonRunning || state.paused
+        let look = StatusIcon.look(daemonRunning: state.daemonRunning, paused: state.paused)
         let label = StatusText.accessibilityLabel(state, primary: model.primaryDevice)
-        if shown?.dimmed != dimmed || shown?.badge != badge {
-            button.image = StatusIcon.image(dimmed: dimmed, badge: badge)
+        if shown?.look != look || shown?.badge != badge {
+            button.image = StatusIcon.image(look: look, badge: badge)
         }
         if shown?.label != label {
             button.setAccessibilityLabel(label)
             button.toolTip = label
         }
-        shown = (dimmed, badge, label)
+        shown = (look, badge, label)
     }
 
     // MARK: Building
@@ -66,13 +66,19 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         option = option || DevHooks.holdsOption
         #endif
         var state = MenuState(model: model)
+        #if DEBUG
+        DevHooks.fixture(&state)
+        #endif
         state.update = app.updates.offer
         state.installing = app.installState
         // Read once, as the menu opens: choosing the menu does not activate PureMouse, so this is
         // still the app the person was using. No observer, no timer.
         let front = NSWorkspace.shared.frontmostApplication
         state.frontmost = FrontmostApp(bundleID: front?.bundleIdentifier, name: front?.localizedName)
-        let rows = MenuPlan.rows(for: state, option: option)
+        var rows = MenuPlan.rows(for: state, option: option)
+        #if DEBUG
+        rows = DevHooks.submenu(rows)
+        #endif
         MenuRenderer { [weak self] in self?.perform($0) }.fill(menu, with: rows)
         #if DEBUG
         // AppKit shows an alternate only for a real ⌥ at the click: a screenshot shows them in place of
@@ -100,6 +106,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         case .openLoginItems: LogiOptionsAction.openLoginItems.url.map { NSWorkspace.shared.open($0) }
         case .toggleSmoothScrolling: model.update { $0.smoothScrollEnabled.toggle() }
         case .setDPI(let dpi): model.setDPI(dpi)
+        case let .setDeviceDPI(dpi, key): model.setPointerSpeed(dpi, device: key)
         case .start: action.command.map { model.perform($0) }
         case .setPaused(let paused): model.setPaused(paused)
         case .reloadConfig: model.reloadDaemonConfig()
