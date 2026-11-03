@@ -542,7 +542,7 @@ struct ActionButton: View {
     }
 
     /// The tooltips are under 75 characters (docs/ui-language.md).
-    static let tooltipLimit = 74
+    nonisolated static let tooltipLimit = 74
 
     /// The tooltip: what a shortcut presses or a command runs, shortened to `tooltipLimit`.
     static func tooltip(for action: ButtonAction) -> String {

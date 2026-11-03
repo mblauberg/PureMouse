@@ -232,7 +232,7 @@ extension Session {
         press.deadline = nil
         guard press.stage == .down else { return }
         guard press.plan.doubleClick != nil else {
-            perform(press.plan.click ?? .none)
+            click(press.plan.click, cid)
             return
         }
         press.stage = .waiting
@@ -250,7 +250,24 @@ extension Session {
     private func clickAfterWaiting(_ cid: UInt16, _ press: Press) {
         press.deadline?.cancel()
         presses[cid] = nil
-        perform(press.plan.click ?? .none)
+        click(press.plan.click, cid)
+    }
+
+    /// The click of a press that was let go, now or after the double-click wait. nil is the
+    /// mouse's own behaviour, as on press (`performNative`), but the press is over, so a native
+    /// click is posted whole, press and release.
+    private func click(_ action: Action?, _ cid: UInt16) {
+        guard let action else {
+            switch Config.nativeBehaviour(of: cid) {
+            case .click?:
+                held.clickNatively(cid)
+                _ = held.release(cid)
+            case .action(let action)?: perform(action)
+            case nil: break
+            }
+            return
+        }
+        perform(action)
     }
 
     /// Lets go of every held button without acting on it, posting the releases of native clicks,

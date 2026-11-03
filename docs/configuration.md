@@ -406,8 +406,13 @@ what each way of pressing it does:
 
 What a table costs is only the wait it asks for. With only a click bound, the press fires
 immediately, as before. With `hold`, the click fires on release instead of on press. With
-`doubleClick`, a single click fires once the interval has passed without a second press. Hold and
-Move's directions take the place of `hold`: a table may have one or the other, and having both is an
+`doubleClick`, a single click fires once the interval has passed without a second press. A table
+with a hold, a `doubleClick` or directions and no `click` (or `"click": "none"`) leaves the click to
+the mouse, as Mouse Default does: a quick tap posts the button's ordinary click, press and release
+together (the wheel click, back and forward), the top and DPI buttons do what they do without
+PureMouse, and a control with no behaviour of its own does nothing. A table of nothing but
+`"click": "none"` is the same as a bare `"none"`: the button does nothing. Hold and Move's
+directions take the place of `hold`: a table may have one or the other, and having both is an
 error at `hold`. The `scroll` key is reserved for Hold and Scroll and is an error until it ships; any
 other unknown key is an error at that key. `precisePointer` lasts while the button is held, so it is
 accepted only as `click` or `hold` (an error elsewhere, including the thumb wheel). As the click it

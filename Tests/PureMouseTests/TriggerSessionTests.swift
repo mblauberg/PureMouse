@@ -40,13 +40,23 @@ final class ManualDeadlines {
     }
 }
 
+/// A mouse button posted for a control.
+struct NativePost: Equatable {
+    let cid: UInt16
+    let down: Bool
+}
+
 /// What a session performs and posts, in place of the system.
 @MainActor
 final class TriggerRecorder {
     let deadlines = ManualDeadlines()
     var performed: [Action] = []
+    /// What was performed, less the `none` of a click that does nothing.
+    var acted: [Action] { performed.filter { $0 != .none } }
     var left: [Bool] = []
     var middle: [Bool] = []
+    /// The ordinary mouse buttons posted for a control: its ID and whether it went down.
+    var native: [NativePost] = []
     var doubleClickSeconds: Double? = 0.4
 
     var environment: SessionEnvironment {
@@ -54,7 +64,7 @@ final class TriggerRecorder {
         environment.deadline = { [unowned self] in deadlines.arm($0, $1) }
         environment.performSystem = { [unowned self] in performed.append($0) }
         environment.heldButtons = { [unowned self] in
-            HeldButtons(post: { _, _ in true },
+            HeldButtons(post: { self.native.append(NativePost(cid: $0, down: $1)); return true },
                         postMiddle: { self.middle.append($0); return true },
                         postLeft: { self.left.append($0); return true })
         }
@@ -156,6 +166,102 @@ struct TriggerSessionTests {
         await release(h)
         await press(h, Self.back)
         #expect(r.performed == [.navigateForward, .navigateBack] && r.deadlines.pending.isEmpty)
+    }
+
+    // MARK: A table with no click is the mouse's own click
+
+    @Test func aHoldOnlyTableOnANativeButtonClicksNativelyOnAQuickRelease() async throws {
+        for cid: UInt16 in [Self.forward, Self.back, 0x52] {
+            let key = cid == Self.forward ? "forward" : cid == Self.back ? "back" : "middle"
+            let (h, r) = try await session(#"{"holdMs": 500, "buttons": {"\#(key)": {"hold": "missionControl"}}}"#)
+            defer { h.close() }
+            await press(h, cid)
+            #expect(r.native.isEmpty, "the click waits to see whether the hold comes")
+            await release(h)
+            #expect(r.native == [NativePost(cid: cid, down: true), NativePost(cid: cid, down: false)])
+            #expect(r.acted.isEmpty && h.session.presses.isEmpty && h.session.held.native.isEmpty)
+        }
+    }
+
+    @Test func aHoldOnlyTableStillFiresTheHoldWithoutAClick() async throws {
+        let (h, r) = try await session(#"{"buttons": {"forward": {"hold": "missionControl"}}}"#)
+        defer { h.close() }
+        await press(h, Self.forward)
+        r.deadlines.fire()
+        await release(h)
+        #expect(r.performed == [.missionControl] && r.native.isEmpty)
+    }
+
+    @Test func aDoubleClickOnlyTableOnANativeButtonClicksNativelyAfterTheInterval() async throws {
+        let (h, r) = try await session(#"{"buttons": {"forward": {"doubleClick": "appExpose"}}}"#)
+        defer { h.close() }
+        await press(h, Self.forward)
+        await release(h)
+        #expect(r.native.isEmpty && r.acted.isEmpty)
+        r.deadlines.fire()
+        #expect(r.native == [NativePost(cid: Self.forward, down: true), NativePost(cid: Self.forward, down: false)])
+        #expect(r.acted.isEmpty && h.session.presses.isEmpty && h.session.held.native.isEmpty)
+    }
+
+    @Test func aDoubleClickOnlyTableStillFiresTheDoubleClickWithoutAClick() async throws {
+        let (h, r) = try await session(#"{"buttons": {"forward": {"doubleClick": "appExpose"}}}"#)
+        defer { h.close() }
+        await press(h, Self.forward)
+        await release(h)
+        await press(h, Self.forward)
+        await release(h)
+        #expect(r.performed == [.appExpose] && r.native.isEmpty && r.deadlines.pending.isEmpty)
+    }
+
+    @Test func aLoneNativeClickDoesNotWaitBehindAnotherButtonsPress() async throws {
+        let (h, r) = try await session(#"{"buttons": {"forward": {"doubleClick": "appExpose"}, "back": "navigateBack"}}"#)
+        defer { h.close() }
+        await press(h, Self.forward)
+        await release(h)
+        await press(h, Self.back)
+        #expect(r.native == [NativePost(cid: Self.forward, down: true), NativePost(cid: Self.forward, down: false)])
+        #expect(r.performed == [.navigateBack])
+    }
+
+    @Test func aTableWithNoClickOnAButtonWithNoNativeBehaviourDoesNothingOnAQuickPress() async throws {
+        // The gesture button has no behaviour of its own. A top-level table is laid over the default
+        // set, so its click is named "none" here, which a table with other triggers reads as unset.
+        let gesture: UInt16 = 0x00C3
+        for json in [#"{"buttons": {"gesture": {"click": "none", "hold": "missionControl"}}}"#,
+                     #"{"buttons": {"gesture": {"click": "none", "hold": "none", "doubleClick": "appExpose"}}}"#] {
+            let (h, r) = try await session(json)
+            defer { h.close() }
+            await press(h, gesture)
+            await release(h)
+            if !r.deadlines.pending.isEmpty { r.deadlines.fire() }
+            #expect(r.native.isEmpty && r.acted.isEmpty && h.session.presses.isEmpty, "\(r.native) \(r.performed) \(json)")
+        }
+    }
+
+    @Test func aTableWithNoClickOnTheDPIButtonCyclesTheSpeedOnAQuickPress() async throws {
+        let (h, r) = try await session(#"{"dpi": 800, "dpiPresets": [800, 1600], "buttons": {"0x00fd": {"hold": "missionControl"}}}"#, .m750)
+        defer { h.close() }
+        await press(h, 0xFD)
+        #expect(h.fake.dpi == 800)
+        await release(h)
+        #expect(h.fake.dpi == 1600 && r.native.isEmpty && r.acted.isEmpty)
+    }
+
+    @Test func holdAndMoveWithNoClickLeavesAQuickReleaseToTheMouse() async throws {
+        let (h, r) = try await session(#"{"buttons": {"back": {"up": "appExpose"}}}"#)
+        defer { h.close() }
+        await press(h, Self.back)
+        await release(h)
+        #expect(r.native == [NativePost(cid: Self.back, down: true), NativePost(cid: Self.back, down: false)])
+        #expect(r.acted.isEmpty && h.session.presses.isEmpty)
+    }
+
+    @Test func aTableOfOnlyANoneClickStillDoesNothing() async throws {
+        let (h, r) = try await session(#"{"buttons": {"back": {"click": "none"}}}"#)
+        defer { h.close() }
+        await press(h, Self.back)
+        await release(h)
+        #expect(r.native.isEmpty && r.acted.isEmpty)
     }
 
     @Test func aTriggerSetToNoneIsNotWatchedForSoTheClickIsImmediate() throws {
