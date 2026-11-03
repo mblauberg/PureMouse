@@ -6,7 +6,9 @@ import PureMouseAppSupport
 /// opens Settings on a tab (`general`, `mouse`, `apps`, `about`) or a Mouse segment (`buttons`,
 /// `scrolling`, `pointer`), and `PUREMOUSE_DEV_APPEARANCE=light|dark` overrides the system
 /// appearance. On Mouse › Buttons, `PUREMOUSE_DEV_PICKER=<button>` opens a button's action picker
-/// and `PUREMOUSE_DEV_SHORTCUT=<button>` its shortcut sheet. On the Apps pane,
+/// (`<button>.<trigger>`, such as `forward.hold`, a child row's, with the row expanded),
+/// `PUREMOUSE_DEV_EXPAND=<button>` shows a button's Double-click and Hold rows (also on an app's
+/// page) and `PUREMOUSE_DEV_SHORTCUT=<button>` its shortcut sheet. On the Apps pane,
 /// `PUREMOUSE_DEV_APP=<bundle id>` opens (or adds) that app's page, `PUREMOUSE_DEV_APP_SEGMENT=
 /// buttons|scrolling` shows one of its segments, and `PUREMOUSE_DEV_SHORTCUT=<button>` opens that
 /// button's shortcut editor sheet over it.

@@ -387,7 +387,7 @@ public struct Config: Decodable, Sendable {
             /// rejected rather than read as an action.
             public static let triggers = ["click", "doubleClick", "hold", "up", "down", "left", "right"]
             public static let directions = ["up", "down", "left", "right"]
-            static let reserved = ["scroll"]
+            public static let reserved = ["scroll"]
 
             public init() {}
 
@@ -537,9 +537,14 @@ public struct Config: Decodable, Sendable {
     /// positive: 0.5 s, the system default), held to `doubleClickMsRange` so a click never waits
     /// longer than a configured one could.
     public func doubleClickInterval(systemSeconds: Double?) -> Int {
-        if let doubleClickMs { return doubleClickMs }
+        Self.doubleClickInterval(configured: doubleClickMs, systemSeconds: systemSeconds)
+    }
+
+    /// The same for a `doubleClickMs` read elsewhere (Settings reads the file, not a `Config`).
+    public static func doubleClickInterval(configured: Int?, systemSeconds: Double?) -> Int {
+        if let configured { return configured }
         let seconds = systemSeconds.flatMap { $0 > 0 && $0.isFinite ? $0 : nil } ?? 0.5
-        let range = Self.doubleClickMsRange
+        let range = doubleClickMsRange
         return min(max(Int((seconds * 1000).rounded()), range.lowerBound), range.upperBound)
     }
 

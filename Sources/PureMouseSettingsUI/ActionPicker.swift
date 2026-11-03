@@ -5,7 +5,13 @@ import SwiftUI
 
 /// One choice in the action picker.
 struct PickerEntry: Identifiable, Equatable {
-    enum Kind: Equatable { case set(ButtonAction), shortcut, command, gesture }
+    enum Kind: Equatable {
+        case set(ButtonAction), shortcut, command
+        /// Hold and Move: the button's hold form, with the standard directions.
+        case gesture
+        /// More Ways to Press: adds the button's Double-click or Hold row (`doubleClick`, `hold`).
+        case trigger(String)
+    }
 
     let id: String
     let label: String
@@ -14,33 +20,69 @@ struct PickerEntry: Identifiable, Equatable {
     let kind: Kind
     /// An SF Symbol shown before the label.
     var symbol: String?
+    /// A line under the label: what an action does, or why it is off.
+    var caption: String?
+    /// Shown but not chosen (`caption` says why).
+    var isDisabled = false
+
+    /// Which row a picker belongs to. A Click row (`nil` trigger) ends with More Ways to Press when
+    /// `allowsGesture`; a Hold row opens with No Action and Hold and Move; on Double-click and Hold
+    /// and Move's directions an unset trigger reads No Action and a while-held action (Precise
+    /// Pointer) is not offered, since Kit takes one only as a click or a hold.
+    struct Row: Equatable {
+        var trigger: String?
+        /// The click is Precise Pointer, which owns the button: More Ways to Press is off.
+        var clickOwnsButton = false
+        /// Double-click or Hold does something, so the click cannot become Precise Pointer.
+        var othersApply = false
+        /// The picker belongs to a button (not the thumb wheel): while-held actions are offered.
+        var allowsWhileHeld = true
+
+        static let click = Row()
+    }
 
     /// The picker's entries, in order. Gesture directions get neither Mouse Default nor Hold and
     /// Move. On a mouse or in an app, `inherited` (what applies elsewhere, and where from) adds the
     /// entry that removes the own binding, worded by its source, and Mouse Default then writes
     /// `"default"` as the scope's own value; but not while the wider scope already is Mouse Default
     /// (that is "Same as …" then), unless it is `current`. `haptics`: whether to list the haptic
-    /// waveforms (`ControlAvailability`).
+    /// waveforms (`ControlAvailability`). `row`: the trigger row it opens from (`Row`).
     static func all(allowsDefault: Bool, allowsGesture: Bool, inherited: InheritedValue<String>? = nil,
-                    haptics: Bool = true, current: ButtonAction = .standard) -> [PickerEntry] {
+                    haptics: Bool = true, current: ButtonAction = .standard, row: Row = .click) -> [PickerEntry] {
         var entries: [PickerEntry] = []
         if let inherited {
             entries.append(PickerEntry(id: "inherit", label: inherited.entry, detail: "(\(inherited.inherited))", group: nil,
                                        kind: .set(.standard), symbol: "globe"))
         }
+        let isTrigger = row.trigger != nil
+        let none = PickerEntry(id: "none", label: isTrigger ? Triggers.noAction : "Do Nothing", group: nil,
+                               kind: .set(.named("none")), symbol: ActionCatalog.symbol(for: "none"))
+        if row.trigger == "hold" {
+            entries.append(none)
+            entries.append(PickerEntry(id: "gesture", label: ButtonAction.gesture.label, group: nil, kind: .gesture,
+                                       symbol: Self.holdAndMoveSymbol))
+        }
         let widerIsDefault = inherited?.inherited == ButtonAction.standard.label
-        if allowsDefault, !widerIsDefault || current == .mouseDefault {
+        if allowsDefault, !isTrigger, !widerIsDefault || current == .mouseDefault {
             // Where something wider applies, Mouse Default is a value of its own ("default") and
             // "Same as …" above is the entry that removes the key; at the top level they are one.
             entries.append(PickerEntry(id: "default", label: ButtonAction.standard.label, group: nil,
                                        kind: .set(inherited == nil ? .standard : .mouseDefault)))
         }
-        entries.append(PickerEntry(id: "none", label: "Do Nothing", group: nil, kind: .set(.named("none")),
-                                   symbol: ActionCatalog.symbol(for: "none")))
+        if row.trigger != "hold" { entries.append(none) }
+        let whileHeld = row.allowsWhileHeld && (row.trigger == nil || row.trigger == "hold")
         for group in ActionCatalog.groups {
             for name in group.names {
-                entries.append(PickerEntry(id: name, label: ActionCatalog.label(for: name), group: group.title,
-                                           kind: .set(.named(name)), symbol: ActionCatalog.symbol(for: name)))
+                let holds = ButtonAction.named(name).isWhileHeld
+                if holds, !whileHeld { continue }
+                var entry = PickerEntry(id: name, label: ActionCatalog.label(for: name), group: group.title,
+                                        kind: .set(.named(name)), symbol: ActionCatalog.symbol(for: name),
+                                        caption: ActionCatalog.caption(for: name))
+                if holds, !isTrigger, row.othersApply, current != .named(name) {
+                    entry.isDisabled = true
+                    entry.caption = Self.removeOthersFirst
+                }
+                entries.append(entry)
             }
         }
         if haptics {
@@ -53,12 +95,27 @@ struct PickerEntry: Identifiable, Equatable {
                                    symbol: "keyboard"))
         entries.append(PickerEntry(id: "run", label: "Run Command…", group: "Custom", kind: .command,
                                    symbol: "terminal"))
-        if allowsGesture {
-            entries.append(PickerEntry(id: "gesture", label: ButtonAction.gesture.label, group: "Custom",
-                                       kind: .gesture, symbol: "arrow.up.and.down.and.arrow.left.and.right"))
+        if allowsGesture, !isTrigger {
+            // More Ways to Press, at the foot. A click that owns the button leaves none to add.
+            let off = row.clickOwnsButton ? Triggers.removeHoldFirst : nil
+            let ways: [(String, String, Kind, String)] = [
+                ("trigger.doubleClick", "Double-Click", .trigger("doubleClick"), "cursorarrow.click.2"),
+                ("trigger.hold", "Hold", .trigger("hold"), "hand.tap"),
+                ("gesture", ButtonAction.gesture.label, .gesture, Self.holdAndMoveSymbol),
+            ]
+            for (id, label, kind, symbol) in ways {
+                entries.append(PickerEntry(id: id, label: label, group: Triggers.moreWaysToPress, kind: kind,
+                                           symbol: symbol, caption: off, isDisabled: off != nil))
+            }
         }
         return entries
     }
+
+    static let holdAndMoveSymbol = "arrow.up.and.down.and.arrow.left.and.right"
+
+    /// Why Precise Pointer is off on a Click row whose Double-click or Hold does something: it would
+    /// own the button, and they could not be told apart from it.
+    static let removeOthersFirst = "Remove Double-click and Hold first."
 
     var isHaptic: Bool { group == ActionCatalog.hapticGroup }
 
@@ -107,6 +164,8 @@ enum PickerItem: Identifiable, Equatable {
         case .hapticGroup: Self.hapticGroupID
         }
     }
+
+    var isDisabled: Bool { if case .entry(let entry) = self { entry.isDisabled } else { false } }
 
     /// The section the row sits under: the haptic group's entries sit under its row, not a header.
     var section: String? {
@@ -190,6 +249,8 @@ struct ActionPicker: View {
                                 row(item)
                                     .tag(item.id)
                                     .id(item.id)
+                                    .selectionDisabled(item.isDisabled)
+                                    .disabled(item.isDisabled)
                                     .accessibilityAction { activate(item) }
                             }
                         } header: {
@@ -251,7 +312,7 @@ struct ActionPicker: View {
 
     private func activate(_ item: PickerItem) {
         switch item {
-        case .entry(let entry): choose(entry)
+        case .entry(let entry): if !entry.isDisabled { choose(entry) }
         case .hapticGroup: hapticsOpen.toggle()
         }
     }
@@ -279,9 +340,12 @@ private struct PickerRow: View {
                 .opacity(checked ? 1 : 0)
                 .accessibilityHidden(true)
             Label {
-                HStack(spacing: 4) {
-                    Text(entry.label)
-                    if let detail = entry.detail { Text(detail).foregroundStyle(.secondary) }
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 4) {
+                        Text(entry.label)
+                        if let detail = entry.detail { Text(detail).foregroundStyle(.secondary) }
+                    }
+                    if let caption = entry.caption { Text(caption).font(.caption).foregroundStyle(.secondary) }
                 }
             } icon: {
                 Image(systemName: entry.symbol ?? "circle")
@@ -289,6 +353,7 @@ private struct PickerRow: View {
             }
         }
         .padding(.leading, entry.isHaptic ? 12 : 0)
+        .foregroundStyle(entry.isDisabled ? .tertiary : .primary)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(checked ? .isSelected : [])
     }
@@ -399,31 +464,39 @@ struct ActionButton: View {
     var source = InheritedScope.mouseSettings
     /// The scope whose mice decide whether the haptic waveforms are listed.
     var scope = ConfigScope.global
+    /// The trigger row the pop-up is on (`PickerEntry.Row`).
+    var row = PickerEntry.Row.click
     @State private var openedFromKeyboard = false
 
-    /// A scope's binding as its row shows it: `.standard` leaves it to the inherited label.
-    static func inherited(_ action: ButtonAction, inheriting: String, source: String = InheritedScope.mouseSettings) -> InheritedValue<String> {
-        InheritedValue(own: action == .standard ? nil : action.label, inherited: inheriting, source: source)
+    /// A scope's binding as its row shows it: `.standard` leaves it to the inherited label. On a
+    /// trigger row other than the click, an unset trigger reads No Action.
+    static func inherited(_ action: ButtonAction, inheriting: String, source: String = InheritedScope.mouseSettings,
+                          trigger: Bool = false) -> InheritedValue<String> {
+        InheritedValue(own: action == .standard ? nil : trigger ? action.triggerLabel : action.label,
+                       inherited: inheriting, source: source)
     }
 
-    /// A gesture direction as its row shows it: the scope's own, else the wider gesture's (or nothing).
-    static func inherited(_ direction: AppButton.Direction, source: String) -> InheritedValue<String> {
-        inherited(direction.own, inheriting: direction.inheritedLabel, source: source)
+    /// A trigger of a table as its row shows it: the scope's own, else the wider table's (or nothing).
+    static func inherited(_ trigger: AppButton.Trigger, source: String) -> InheritedValue<String> {
+        inherited(trigger.own, inheriting: trigger.inheritedLabel, source: source, trigger: true)
     }
 
-    private var inherited: InheritedValue<String>? { sameAsInherited.map { Self.inherited(action, inheriting: $0, source: source) } }
+    private var inherited: InheritedValue<String>? {
+        sameAsInherited.map { Self.inherited(action, inheriting: $0, source: source, trigger: row.trigger != nil) }
+    }
 
     /// Longer labels (a command) are shortened in the middle to this many characters.
     static let labelLimit = 32
 
-    private var label: String { inherited?.effective ?? action.label }
+    private var label: String { inherited?.effective ?? (row.trigger != nil ? action.triggerLabel : action.label) }
 
     /// What VoiceOver reads as the value: a shortcut in words ("Shift Command 4"), not glyphs, and
     /// an inherited one with its source ("Mission Control, same as Mouse Settings").
     static func spokenValue(for action: ButtonAction, inheriting: String?, spokenInheriting: String?,
-                            source: String = InheritedScope.mouseSettings) -> String {
-        guard let inheriting else { return action.spokenLabel }
-        let own = action == .standard ? nil : action.spokenLabel
+                            source: String = InheritedScope.mouseSettings, trigger: Bool = false) -> String {
+        let spoken = trigger && [.standard, .named("none")].contains(action) ? action.triggerLabel : action.spokenLabel
+        guard let inheriting else { return spoken }
+        let own = action == .standard ? nil : spoken
         return InheritedValue(own: own, inherited: spokenInheriting ?? inheriting, source: source).spoken
     }
 
@@ -447,12 +520,13 @@ struct ActionButton: View {
         .fixedSize()
         .help(Self.tooltip(for: action))
         .accessibilityLabel(accessibilityName)
-        .accessibilityValue(Self.spokenValue(for: action, inheriting: sameAsInherited, spokenInheriting: spokenInherited, source: source))
+        .accessibilityValue(Self.spokenValue(for: action, inheriting: sameAsInherited, spokenInheriting: spokenInherited, source: source,
+                                                     trigger: row.trigger != nil))
         .accessibilityHint("Opens the list of actions")
         .popover(isPresented: $isPresented, arrowEdge: .bottom) {
             ActionPicker(current: action,
                          entries: PickerEntry.all(allowsDefault: allowsDefault, allowsGesture: allowsGesture,
-                                                  inherited: inherited, haptics: offersHaptics, current: action),
+                                                  inherited: inherited, haptics: offersHaptics, current: action, row: row),
                          focusSearch: openedFromKeyboard) { entry in
                 isPresented = false
                 choose(entry)

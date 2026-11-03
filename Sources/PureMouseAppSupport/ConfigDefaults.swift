@@ -37,7 +37,7 @@ extension ConfigTree {
     }
 
     /// `top` over `base`, key by key. Under `buttons`, a name replaces the default set's binding
-    /// for the control it spells, whatever the spelling, and a gesture layers per direction (as
+    /// for the control it spells, whatever the spelling, and a table layers per trigger (as
     /// `Config.decodeButtons` does). A `null` leaves what is underneath, as the decoder reads it.
     private static func lay(_ top: [String: Any], over base: [String: Any], path: [String]) -> [String: Any] {
         if path == ["buttons"] { return layButtons(top, over: base) }
@@ -54,8 +54,8 @@ extension ConfigTree {
     }
 
     /// `buttons`: every name the file gives a control replaces the names the default set had for
-    /// it, whatever the spelling, and a gesture object layers per direction on the default set's
-    /// gesture for that control, as `Config.decodeButtons` does with the bindings before the file.
+    /// it, whatever the spelling, and a table layers per trigger on the default set's
+    /// table for that control, as `Config.decodeButtons` does with the bindings before the file.
     private static func layButtons(_ top: [String: Any], over base: [String: Any]) -> [String: Any] {
         var out = base
         for name in top.keys.sorted() {
@@ -72,16 +72,12 @@ extension ConfigTree {
                 .flatMap { base[$0] }
             for other in base.keys where NamedButton.cid(forKey: other) == cid { out[other] = nil }
             if let over = value as? [String: Any], let under = underneath as? [String: Any],
-               isGesture(over), isGesture(under) {
-                out[name] = lay(over, over: under, path: ["buttons", name])
+               Gesture.isTable(over), Gesture.isTable(under) {
+                out[name] = Gesture.merge(over, over: under)
             } else {
                 out[name] = value
             }
         }
         return out
-    }
-
-    private static func isGesture(_ object: [String: Any]) -> Bool {
-        !object.isEmpty && object.keys.allSatisfy(Gesture.directions.contains)
     }
 }

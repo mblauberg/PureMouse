@@ -90,9 +90,14 @@ private func entry(_ id: String, _ entries: [PickerEntry]) -> PickerEntry? { ent
     for file in ["ButtonsPane.swift", "AppPage.swift"] {
         let text = try String(contentsOf: ui.appending(path: file), encoding: .utf8)
         // The button rows ask the one rule (`PickerEntry.offersMouseDefault`, tested by control in OverrideRowTests).
-        #expect(text.contains("allowsDefault: !isDirection && PickerEntry.offersMouseDefault("), "\(file)")
+        #expect(text.contains("offersMouseDefault: PickerEntry.offersMouseDefault("), "\(file)")
         #expect(!text.contains("allowsDefault: false"), "\(file)")
     }
+    // The one row both panes draw offers it on the click, while no other trigger applies, and never
+    // on a child row (a table's click is PureMouse's, so its other triggers would go).
+    let rows = try String(contentsOf: ui.appending(path: "TriggerRows.swift"), encoding: .utf8)
+    #expect(rows.contains("allowsDefault: offersMouseDefault && !othersApply"))
+    #expect(rows.components(separatedBy: "allowsDefault: false").count == 3)
 }
 
 @Test func mediaAndMiddleClickLeadTheirPickerGroups() {
@@ -160,4 +165,64 @@ private func mouse(haptics: Bool?) -> Status.Device {
     let long = ActionButton.tooltip(for: .run(String(repeating: "open -a Safari ", count: 20)))
     #expect(long.count < 75 && long.hasPrefix("Runs: open") && long.contains("…"))
     #expect(ActionButton.tooltip(for: .run("open -a Safari")) == "Runs: open -a Safari")
+}
+
+// MARK: More Ways to Press (#158)
+
+@Test func moreWaysToPressIsAtTheFootOfAClickRowsPicker() {
+    let entries = PickerEntry.all(allowsDefault: true, allowsGesture: true)
+    let foot = entries.suffix(3)
+    #expect(foot.map(\.id) == ["trigger.doubleClick", "trigger.hold", "gesture"])
+    #expect(foot.map(\.label) == ["Double-Click", "Hold", "Hold and Move"])
+    #expect(foot.allSatisfy { $0.group == "More Ways to Press" && !$0.isDisabled })
+    #expect(foot.map(\.kind) == [.trigger("doubleClick"), .trigger("hold"), .gesture])
+    // Nowhere else: Hold and Move is no longer a Custom action.
+    #expect(!entries.contains { $0.group == "Custom" && $0.kind == .gesture })
+    // A picker that adds no rows (a direction, the thumb wheel) has no such section.
+    #expect(!PickerEntry.all(allowsDefault: false, allowsGesture: false).contains { $0.group == "More Ways to Press" })
+}
+
+@Test func preciseOnTheClickTurnsMoreWaysToPressOff() {
+    let entries = PickerEntry.all(allowsDefault: true, allowsGesture: true, current: .named("precisePointer"),
+                                  row: PickerEntry.Row(clickOwnsButton: true))
+    let ways = entries.filter { $0.group == "More Ways to Press" }
+    #expect(ways.count == 3 && ways.allSatisfy { $0.isDisabled && $0.caption == "Remove Hold first." })
+    // The other way round: with Double-click or Hold set, the click cannot become Precise Pointer.
+    let busy = PickerEntry.all(allowsDefault: true, allowsGesture: true, row: PickerEntry.Row(othersApply: true))
+    #expect(entry("precisePointer", busy)?.isDisabled == true)
+    #expect(entry("dragLock", busy)?.isDisabled == false)
+}
+
+@Test func aHoldRowsPickerOpensWithNoActionAndHoldAndMove() {
+    let entries = PickerEntry.all(allowsDefault: false, allowsGesture: false, row: PickerEntry.Row(trigger: "hold"))
+    #expect(entries.prefix(2).map(\.label) == [Triggers.noAction, "Hold and Move"])
+    #expect(entries.prefix(2).map(\.kind) == [.set(.named("none")), .gesture])
+    #expect(!entries.contains { $0.label == "Do Nothing" || $0.id == "default" || $0.group == "More Ways to Press" })
+    #expect(entry("precisePointer", entries) != nil)
+    // In a mouse or app, "Same as …" still leads.
+    let inherited = ActionButton.inherited(.standard, inheriting: "Precise Pointer", source: InheritedScope.allMice, trigger: true)
+    let scoped = PickerEntry.all(allowsDefault: false, allowsGesture: false, inherited: inherited, row: PickerEntry.Row(trigger: "hold"))
+    #expect(scoped.prefix(3).map(\.id) == ["inherit", "none", "gesture"])
+}
+
+@Test func aDoubleClickOrDirectionRowReadsNoActionAndOffersNoWhileHeldAction() {
+    for trigger in ["doubleClick", "up"] {
+        let entries = PickerEntry.all(allowsDefault: false, allowsGesture: false, row: PickerEntry.Row(trigger: trigger))
+        #expect(entry("none", entries)?.label == Triggers.noAction)
+        #expect(entry("precisePointer", entries) == nil && entry("dragLock", entries) != nil)
+        #expect(entry("gesture", entries) == nil)
+    }
+    // Nor does the thumb wheel, which Kit gives no while-held action.
+    let wheel = PickerEntry.all(allowsDefault: false, allowsGesture: false, row: PickerEntry.Row(allowsWhileHeld: false))
+    #expect(entry("precisePointer", wheel) == nil)
+    #expect(ButtonAction.named("none").triggerLabel == "No Action" && ButtonAction.named("none").label == "Do Nothing")
+    #expect(ActionButton.spokenValue(for: .named("none"), inheriting: nil, spokenInheriting: nil, trigger: true) == "No Action")
+}
+
+@Test func preciseAndDragLockSitUnderMouseWithTheirCaptions() {
+    let entries = PickerEntry.all(allowsDefault: true, allowsGesture: true)
+    #expect(entry("precisePointer", entries)?.group == "Mouse")
+    #expect(entry("precisePointer", entries)?.caption == "Slows the pointer while you hold the button.")
+    #expect(entry("dragLock", entries)?.group == "Mouse")
+    #expect(entry("dragLock", entries)?.caption == "Click to start dragging, click again to let go.")
 }

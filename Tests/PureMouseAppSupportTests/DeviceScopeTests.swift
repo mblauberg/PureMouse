@@ -426,7 +426,7 @@ private let gestureTree = #"""
     let d = device(mouse)
     // A plain action replaces the gesture, so none of its directions is the top level's.
     #expect(try kitGesture(config, mouse) == nil)
-    for direction in Gesture.directions {
+    for direction in ["click"] + Gesture.directions {
         #expect(config.isOverridden(["buttons", "gesture", direction], in: d), "\(direction)")
         #expect(config.isOverridden(["buttons", "back", direction], in: d), "\(direction)")
     }
@@ -476,7 +476,7 @@ private let gestureTree = #"""
     let gesture = try #require(try kitGesture(config, mouse, cid: 0x0053))
     #expect(gesture.up == Action.none && gesture.click == Action.none)
     let resolved = config.resolved(["buttons", "back"], in: device(mouse)) as? [String: Any]
-    #expect(resolved?.keys.contains { Gesture.directions.contains($0) } == true)
+    #expect(resolved?.keys.contains { Gesture.triggers.contains($0) } == true)
     #expect(ButtonAction(json: resolved) == .gesture)
 }
 
@@ -507,13 +507,14 @@ private let gestureTree = #"""
 
 @Test func aDeviceGestureSummaryIsWhatAppliesOnThatMouse() throws {
     let config = try tree(gestureTree)
-    #expect(config.gestureSummary("gesture") == "Click: Mute, 1 direction set.")
-    // click from the top level, up and down from the mouse.
-    #expect(config.gestureSummary("gesture", in: device(mouse)) == "Click: Mute, 2 directions set.")
-    #expect(config.gestureSummary("gesture", in: device(other)) == "Click: Mute, 1 direction set.")
+    let apps = ActionCatalog.label(for: "launchpad")
+    #expect(config.scopedButton("gesture", in: .global).summary == "Hold and Move: Mission Control.")
+    // up and down from the mouse, over the top level's up.
+    #expect(config.scopedButton("gesture", in: device(mouse)).summary == "Hold and Move: \(apps), Show Desktop.")
+    #expect(config.scopedButton("gesture", in: device(other)).summary == "Hold and Move: Mission Control.")
     var quiet = config
     quiet.bind("gesture", direction: "down", to: .named("none"), in: device(mouse))
-    #expect(quiet.gestureSummary("gesture", in: device(mouse)) == "Click: Mute, 1 direction set.")
+    #expect(quiet.scopedButton("gesture", in: device(mouse)).summary == "Hold and Move: \(apps).")
 }
 
 @Test func startingAGestureOnAMouseWritesNoClickTheTopLevelAlreadySupplies() throws {
@@ -599,7 +600,7 @@ private struct TreeMaker {
     mutating func binding() -> Any {
         guard chance(0.35) else { return action() }
         var gesture: [String: Any] = [:]
-        for direction in Gesture.directions {
+        for direction in ["click"] + Gesture.directions {
             if chance(0.5) { gesture[direction] = action() } else if chance(0.12) { gesture[direction] = NSNull() }
         }
         return gesture.isEmpty ? ["click": action()] : gesture
@@ -975,7 +976,7 @@ private func kitSays(_ root: [String: Any], mouse key: String, sets path: [Strin
             for spellings in TreeMaker.spellings {
                 let name = maker.pick(spellings)
                 paths.append(["buttons", name])
-                for direction in Gesture.directions where maker.chance(0.4) { paths.append(["buttons", name, direction]) }
+                for direction in ["click"] + Gesture.directions where maker.chance(0.4) { paths.append(["buttons", name, direction]) }
             }
             for name in TreeMaker.unknownNames {
                 paths.append(["buttons", name])
@@ -1040,7 +1041,7 @@ private func kitSays(_ root: [String: Any], mouse key: String, sets path: [Strin
                 undoers.append { $0.bind(button, to: .standard, in: scope) }
             default:
                 let button = maker.pick(maker.pick(TreeMaker.spellings))
-                let direction = maker.pick(Gesture.directions)
+                let direction = maker.pick(["click"] + Gesture.directions)
                 let action = maker.pick([ButtonAction.standard, .named("none"), .named("volumeUp"), .keys("cmd+v"),
                                          .run("open -a Safari"), .haptic(HapticWaveform.allCases[0].rawValue)])
                 log.append("bind \(button).\(direction) \(action)")
@@ -1140,7 +1141,7 @@ private func kitSays(_ root: [String: Any], mouse key: String, sets path: [Strin
     #expect(config.resolved(["buttons", "back"], in: d) == nil)
     #expect(config.resolvedBinding("back", in: d) == .standard)
     #expect(config.scopedButton("back", in: d).own == .mouseDefault)
-    #expect(config.scopedButton("back", in: d).directions.isEmpty)
+    #expect(config.scopedButton("back", in: d).triggers.isEmpty)
     #expect(config.binding("back") == .named("mute"))
 
     // Same as All Mice removes the key, and the mouse follows All Mice again.
