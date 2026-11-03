@@ -122,6 +122,53 @@ private struct Rig {
     #expect(try rig.disk().string(["buttons", "back"]) == "appExpose")
 }
 
+@MainActor @Test func undoPutsBackAKeyTheFileHeldAtItsDefaultValue() throws {
+    // The default set has smoothScroll.speed 1: the file holds it anyway.
+    let rig = try Rig(#"{"smoothScroll": {"speed": 1}}"#)
+    #expect(try rig.disk().double(["smoothScroll", "speed"]) == 1)
+    rig.store.update { $0.restoreScrollingDefaults() }
+    #expect(try rig.disk().contains(["smoothScroll", "speed"]) == false)
+    #expect(rig.manager.canUndo)
+
+    rig.manager.undo()
+    #expect(try rig.disk().double(["smoothScroll", "speed"]) == 1, "the key is back, though it equals the default")
+    #expect(rig.manager.canRedo)
+    rig.manager.redo()
+    #expect(try rig.disk().contains(["smoothScroll", "speed"]) == false)
+    #expect(rig.manager.canUndo)
+}
+
+@MainActor @Test func settingAKeyBackToItsDefaultThenRestoringDefaultsUndoesAndRedoes() throws {
+    let rig = try Rig("{}")
+    rig.store.set(2.0, at: ["smoothScroll", "speed"])
+    rig.store.set(1.0, at: ["smoothScroll", "speed"])  // explicitly the default
+    #expect(try rig.disk().double(["smoothScroll", "speed"]) == 1)
+    rig.store.update { $0.restoreScrollingDefaults() }
+    #expect(try rig.disk().contains(["smoothScroll", "speed"]) == false)
+    rig.manager.undo()
+    #expect(try rig.disk().double(["smoothScroll", "speed"]) == 1)
+    rig.manager.redo()
+    #expect(try rig.disk().contains(["smoothScroll", "speed"]) == false)
+}
+
+@MainActor @Test func twoDifferentDebouncedControlsAreTwoSteps() throws {
+    let rig = try Rig()
+    rig.store.set(0.5, at: ["smoothScroll", "speed"], debounce: true)
+    rig.store.set(1600, at: ["dpi"], debounce: true)  // inside the debounce window
+    rig.store.set(0.7, at: ["smoothScroll", "speed"], debounce: true)  // and back: another step still
+    rig.clock.advance(ConfigStore.debounce)
+    #expect(try rig.disk().int(["dpi"]) == 1600)
+    rig.manager.undo()
+    #expect(try rig.disk().double(["smoothScroll", "speed"]) == 0.5)
+    #expect(try rig.disk().int(["dpi"]) == 1600)
+    rig.manager.undo()
+    #expect(try rig.disk().int(["dpi"]) == 800)
+    #expect(try rig.disk().double(["smoothScroll", "speed"]) == 0.5)
+    rig.manager.undo()
+    #expect(try rig.disk().contains(["smoothScroll", "speed"]) == false)
+    #expect(!rig.manager.canUndo)
+}
+
 // MARK: Names
 
 @MainActor private func name(_ json: String = "{}", _ edit: (inout ConfigTree) -> Void) throws -> String? {
@@ -248,6 +295,38 @@ private struct Rig {
     try rig.sandbox.write("{ broken")
     rig.manager.undo()
     #expect(rig.store.writeError != nil)
+    #expect(!rig.manager.canUndo && !rig.manager.canRedo)
+}
+
+@MainActor @Test func aDeletedFileWithAChangeWaitingClearsTheStacks() throws {
+    let rig = try Rig()
+    rig.store.set(1600, at: ["dpi"])
+    rig.store.set(0.5, at: ["smoothScroll", "speed"], debounce: true)
+    try FileManager.default.removeItem(at: rig.sandbox.config)
+    rig.store.reloadConfig()  // saves the waiting change as a new file
+    #expect(try rig.disk().double(["smoothScroll", "speed"]) == 0.5)
+    #expect(!rig.manager.canUndo && !rig.manager.canRedo)
+}
+
+@MainActor @Test func aStoreThatTurnsReadOnlyHasNoStepsToPop() throws {
+    let rig = try Rig()
+    rig.store.set(1600, at: ["dpi"])
+    var complaint: String?
+    rig.store.daemonConfigError = { complaint }
+    complaint = "The daemon rejects the config."
+    let before = try rig.sandbox.read()
+    rig.manager.undo()
+    #expect(try rig.sandbox.read() == before, "nothing written")
+    #expect(!rig.manager.canUndo && !rig.manager.canRedo)
+}
+
+@MainActor @Test func aFileThatCannotBeReadClearsTheStacks() throws {
+    let rig = try Rig()
+    rig.store.set(1600, at: ["dpi"])
+    try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: rig.sandbox.config.path)
+    defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: rig.sandbox.config.path) }
+    rig.store.reloadConfig()
+    guard rig.store.readOnly else { return }  // running as a user who can read it anyway
     #expect(!rig.manager.canUndo && !rig.manager.canRedo)
 }
 

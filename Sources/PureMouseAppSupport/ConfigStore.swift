@@ -48,11 +48,29 @@ public final class ConfigStore {
     }
 
     /// Registers every change made here on `manager` from now on, each named for the Edit menu
-    /// and undone by replaying its inverse through `update`.
+    /// and undone by replaying its inverse onto the file (`replay`).
     public func keepHistory(on manager: UndoManager) {
         undo = UndoHistory(manager: manager) { [weak self] changes in
-            self?.update { $0.apply(changes) }
+            self?.replay(changes)
         }
+    }
+
+    /// Puts an undo's or redo's keys back in the file, and registers the opposite step. This works
+    /// on the file's own keys, not the tree laid over the defaults that `update` diffs: a key the
+    /// file held at its default value is a change here, though not to `update`. A store that
+    /// refuses edits (read-only) has no steps that would do anything, so the history goes.
+    func replay(_ changes: [ConfigTree.Change]) {
+        guard !readOnly else {
+            undo?.clear()
+            return
+        }
+        let before = fileTree
+        pendingChanges += changes
+        var after = before
+        after.apply(changes)
+        config = fileTree.layered()
+        undo?.record(from: before, to: after, debounce: false)
+        flush()
     }
 
     private var file: ConfigFile { ConfigFile(url: locations.config) }
@@ -76,7 +94,11 @@ public final class ConfigStore {
         guard FileManager.default.fileExists(atPath: url.path) else {
             // Deleted while a change of ours waits: save it as a new file now.
             if !pendingChanges.isEmpty {
-                if diskBytes != nil { flush() }
+                if diskBytes != nil {
+                    // The steps were made against the file that is gone.
+                    undo?.clear()
+                    flush()
+                }
                 return
             }
             // No file: the daemon runs with the default set.
@@ -91,6 +113,8 @@ public final class ConfigStore {
         }
         guard let data = try? Data(contentsOf: url) else {
             configProblem = "PureMouse can't read \(Format.tildePath(url.path))."
+            // Read-only now, and unknown to the steps.
+            undo?.clear()
             return
         }
         guard data != diskBytes else { return }

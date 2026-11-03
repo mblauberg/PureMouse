@@ -4,9 +4,9 @@ import Foundation
 /// inverse of what it changed, with a name for the Edit menu ("Undo Pointer Speed").
 ///
 /// Only the Settings helper has one (`AppModel.undoManager`); the menu bar app's store has none and
-/// pays nothing. The inverse is `after.changes(to: before)` replayed with `ConfigTree.apply`
-/// through `ConfigStore.update`, the one write path, so undoing writes the file like any other
-/// change, and registers its own inverse as the redo.
+/// pays nothing. The inverse is `after.changes(to: before)` over the file's own keys (not the
+/// tree laid over the defaults), replayed with `ConfigTree.apply` by `ConfigStore.replay`, so
+/// undoing writes the file exactly as it was, and registers its own inverse as the redo.
 ///
 /// Foundation only: no AppKit, no SwiftUI.
 @MainActor
@@ -16,14 +16,17 @@ public final class UndoHistory {
     private final class Step {
         let before: ConfigTree
         var after: ConfigTree
-        init(before: ConfigTree, after: ConfigTree) {
+        /// The keys its first change set: a later change joins only if it touches no others.
+        let paths: Set<[String]>
+        init(before: ConfigTree, after: ConfigTree, paths: Set<[String]>) {
             self.before = before
             self.after = after
+            self.paths = paths
         }
     }
 
     let manager: UndoManager
-    /// Replays an inverse through the store's write path.
+    /// Replays an inverse onto the file.
     private let restore: @MainActor (_ changes: [ConfigTree.Change]) -> Void
     private var open: Step?
 
@@ -37,19 +40,22 @@ public final class UndoHistory {
 
     /// Registers the change from `before` to `after` as one undoable step. With `debounce`, a
     /// change that arrives before the write has flushed joins the step already open (one slider
-    /// drag is one step); any other change closes it first. An undo or redo never joins one.
+    /// drag is one step); any other change closes it first, including one to other keys than the
+    /// step's first change set (two controls inside the window are two steps). An undo or redo
+    /// never joins one.
     func record(from before: ConfigTree, to after: ConfigTree, debounce: Bool) {
         let changes = before.changes(to: after)
         guard !changes.isEmpty else { return }
+        let paths = Set(changes.map(\.path))
         let replaying = manager.isUndoing || manager.isRedoing
-        if !debounce || replaying { open = nil }
+        if !debounce || replaying || open.map({ !paths.isSubset(of: $0.paths) }) == true { open = nil }
         if let step = open {
             // The step keeps the name its first change gave it: the group it was registered in is
             // closed, and naming one that is closed is an error.
             step.after = after
             return
         }
-        let step = Step(before: before, after: after)
+        let step = Step(before: before, after: after, paths: paths)
         if debounce { open = step }
         // An undo or redo is already inside its own group, which the step it registers joins.
         if !replaying { manager.beginUndoGrouping() }

@@ -355,6 +355,22 @@ private struct ShortPane: View {
         #expect(controller.windowWillReturnUndoManager(window) === manager)
     }
 
+    @Test func anyTextViewKeepsItsOwnUndoToo() throws {
+        let manager = UndoManager()
+        let (controller, _, folder) = try controller(undoManager: manager)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 300, height: 100), styleMask: [.titled], backing: .buffered, defer: true)
+        // TextEditor and NSTextView are not field editors, but they register typing undo too: on
+        // the model's manager (groups by hand) that raises "must begin a group".
+        let textView = NSTextView(frame: NSRect(x: 10, y: 10, width: 200, height: 60))
+        textView.isEditable = true
+        window.contentView?.addSubview(textView)
+        #expect(controller.windowWillReturnUndoManager(window) === manager)
+        #expect(window.makeFirstResponder(textView))
+        #expect(!textView.isFieldEditor)
+        #expect(controller.windowWillReturnUndoManager(window) == nil)
+    }
+
     @Test func aWindowWithoutAModelUndoManagerReturnsNone() throws {
         let (controller, _, folder) = try controller()
         defer { try? FileManager.default.removeItem(at: folder) }
