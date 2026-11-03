@@ -235,12 +235,17 @@ private let allButtons = Set(NamedButton.allCases)
 
     // MARK: Which mouse
 
-    @Test func theCardIsForTheChosenMouseOrTheSoleKnownOne() {
+    @Test func theCardIsForTheChosenMouseOrForAllMiceOfOneModel() {
         let a = KnownMouse(key: mx3s, name: "MX Master 3S", reported: true)
+        let a2 = KnownMouse(key: "pb034", name: "MX Master 3S", reported: false)
         let b = KnownMouse(key: m750, name: "Signature M750", reported: true)
-        #expect(DeviceCardPlan.mouse(selected: a, known: [a, b]) == a)
+        let unknown = KnownMouse(key: "m999900000000", name: "Mystery", reported: true)
+        #expect(DeviceCardPlan.mouse(selected: a, known: [a, b]) == a, "a chosen mouse shows its own card")
         #expect(DeviceCardPlan.mouse(selected: nil, known: [a, b]) == nil, "All Mice with two models has no card")
-        #expect(DeviceCardPlan.mouse(selected: nil, known: [a]) == a, "All Mice with one model shows it")
+        #expect(DeviceCardPlan.mouse(selected: nil, known: [a, unknown]) == nil, "a known and an unknown mouse have no card")
+        #expect(DeviceCardPlan.mouse(selected: nil, known: [unknown]) == nil, "an unknown mouse alone has no card")
+        #expect(DeviceCardPlan.mouse(selected: nil, known: [a]) == a, "All Mice with one mouse shows it")
+        #expect(DeviceCardPlan.mouse(selected: nil, known: [a, a2]) == a, "two mice of one model show the card")
         #expect(DeviceCardPlan.mouse(selected: nil, known: []) == nil)
     }
 

@@ -237,8 +237,10 @@ centred on the card as one group. Nothing else shows it: not Scrolling or Pointe
 with no listed model. A trackball (MX Ergo), a vertical mouse (MX Vertical, Lift), the 2S, a G
 series mouse and any unknown product get no card and keep every row in the list (#56).
 
-- **Which mouse.** The chosen mouse; with All Mice, the only mouse known (one device key), even
-  when a pop-up is offered; otherwise, with two or more mice under All Mice, no card.
+- **Which mouse.** The chosen mouse shows its own card. Under All Mice the card shows only when
+  every known mouse is the same model (two MX Master 3S do; one mouse does), whether or not a
+  pop-up is offered. A mouse with no key or no listed model counts as a different one, so an MX
+  Master 3S with an unknown mouse has no card.
 - **Parts.** Each part of the drawing is an accessible button with its own label ("Back button,
   set to Mouse Default") and a hint. A click on a button's part selects its row: the row scrolls
   into view and is marked, and a capture, or opening a row's picker, selects it too. The thumb

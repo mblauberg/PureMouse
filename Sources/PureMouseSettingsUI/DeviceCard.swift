@@ -93,11 +93,13 @@ struct DeviceCardPlan: Equatable {
         DeviceArt.part(at: point, in: family, among: Set(targets.map(\.part)))
     }
 
-    /// The mouse the card shows: the one chosen, else the only mouse known (one device key, even
-    /// when a pop-up offers All Mice). With two or more mice and All Mice no one drawing is right.
+    /// The mouse the card shows: the one chosen, else, under All Mice, the first mouse when every
+    /// known mouse is the same model (a pop-up offered or not). A mouse with no model counts as a
+    /// different one, so a known and an unknown mouse together have no card.
     static func mouse(selected: KnownMouse?, known: [KnownMouse]) -> KnownMouse? {
         if let selected { return selected }
-        return known.count == 1 ? known.first : nil
+        guard let first = known.first, let model = DeviceArt.model(forKey: first.key) else { return nil }
+        return known.allSatisfy { DeviceArt.model(forKey: $0.key) == model } ? first : nil
     }
 
     // MARK: Words
