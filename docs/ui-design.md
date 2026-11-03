@@ -141,6 +141,11 @@ Each level has one mechanism, and each label says what it reveals.
 - No sheet opens from a sheet; inside a sheet, use disclosures. The editors (keyboard shortcut,
   shell command) are always sheets, an app's page included: it is a page of the Apps tab, not a sheet.
 - Every advanced control has a safe default that the pane's Restore Defaults covers.
+- **Restore Defaults** returns the pane's own keys to the one default set
+  ([docs/configuration.md#defaults](configuration.md#defaults)), which a first run, Reset All
+  Settings and `{}` also give: Scrolling's leaves smooth scrolling on at Balanced, Buttons' leaves
+  Back, Forward and the gesture bound as the set says, Pointer's leaves the mouse's own DPI. A
+  pane never offers a different "default" of its own; Feel shows Balanced on a fresh config.
 - **Hide or dim.** Dim a row when a switch above turns its feature off. Hide rows that do not apply
   to the current mode or mouse. A control is hidden for the mouse only when the mice it describes (the chosen mouse; for All Mice
   every known mouse, once all are connected), online with PureMouse running, report every capability
@@ -157,9 +162,11 @@ Each level has one mechanism, and each label says what it reveals.
 - Clicking the icon shows an `NSMenu`, never a popover.
 - The icon is a template image (black and clear, 18 pt), never coloured or badged. A changed state
   (paused, off) is a different shape, not a colour.
-- People choose whether the icon shows (General › Show in menu bar). Nothing depends on it
-  except low-battery notifications, which live in the menu app and stop while the icon is hidden.
-  With the icon hidden, opening PureMouse from the Finder opens Settings.
+- People choose whether the icon shows (General › Show in menu bar). Nothing depends on it: with
+  the icon hidden the menu app keeps running without a status item (windowless), so low-battery
+  notifications and the daily update check carry on, and both switches stay available. The
+  footprint of that process is budgeted ([ADR 10](adr/0010-menu-memory-budgets.md)). Opening
+  PureMouse from the Finder opens Settings, and Show in menu bar there brings the icon back.
 - Order: device header, attention rows (only while active), then the most used items, Settings…,
   "Settings for <app>…" (for the app in use, when there is one), Quit PureMouse. Separators between
   groups; submenus only for presets, one level deep.
@@ -194,6 +201,14 @@ Each level has one mechanism, and each label says what it reveals.
 - An empty state is a `ContentUnavailableView` with what is missing and one next step, as a
   button where one exists: no mouse found, Bluetooth off, PureMouse paused or off, Logi Options+
   running, permission not allowed, no apps added.
+- **No mouse.** With PureMouse running and not paused, and no mouse known (none adopted, none waiting, none in the config), the Mouse
+  pane has no header (no segments, no Find by Pressing…) and no boxed card: a plain "No Mouse Found"
+  `ContentUnavailableView` with one bordered button, Open Bluetooth Settings…. General's row reads
+  "No mouse found." with a caption and no button. A Bluetooth mouse that is seen but waiting for
+  Input Monitoring is not "no mouse": the pane, General and the menu say "<Mouse> is waiting for
+  Input Monitoring" and offer Allow Input Monitoring…. While that notice shows, General's
+  Permissions row is status only. The row reads "Not needed" when no Bluetooth mouse is in play.
+  A pane's content stays within 600 pt.
 - An error shows next to the control it concerns. Alerts only for an actionable failure or an
   action that cannot be undone (Reset All Settings…, Use Last Working Config…); never at launch,
   never for information.
@@ -396,7 +411,13 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
   `onScrollVisibilityChange`. Applications is never listed; adding goes through an open panel or
   the running apps.
 - **Notices.** `BannerPlan.items` gives them in order: config error, unsaved change, status too
-  new, PureMouse off, paused, Logi Options+, Accessibility on the panes that need it. A pane shows
+  new, PureMouse off, paused, Input Monitoring (a Bluetooth mouse is waiting), Logi Options+,
+  Accessibility on the panes that need it, no mouse (General only; the Mouse panes say it in
+  place). The Logi Options+ notice offers Quit Logi Options+ as its only bordered button
+  (`LogiOptionsAction.quit`: asks the app to quit through `NSRunningApplication.terminate()`,
+  never a signal, and never starts it) and Open Login Items Settings… as a link-style button
+  under its caption, in the banner, General's row and the menu. It appears and clears in
+  place, as the daemon re-checks (see [How it works](how-it-works.md#permissions)). A pane shows
   only the first, with "N more notices" opening General, whose Status section lists them all as rows
   (off is its PureMouse row). Use Last Working Config… asks before it replaces the file.
 - **Labels.** Settings controls carry their own accessibility label where a `RowLabel` (title plus
@@ -406,7 +427,7 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
 
 | Place | Shown by default | Advanced |
 |---|---|---|
-| General | Status (PureMouse running/paused/off, Start or Stop, active notices), Open at login, Show in menu bar, Low battery notification, Permissions | Advanced… sheet: Work with Universal Control, Config file, Log, Reset All Settings… |
+| General | Status (PureMouse running/paused/off, Start or Stop, active notices), Open at login, Show in menu bar, Low battery notifications (a disabled switch that keeps the choice, with Open Notification Settings…, while macOS has them off), Permissions (status only) | Advanced… sheet: Work with Universal Control, Config file, Log, Reset All Settings… |
 | Mouse header | Buttons, Scrolling, Pointer segments; mouse pop-up with two or more mice; Find by Pressing… and the device card on Buttons | — |
 | Mouse › Buttons | One row per button with its action | Gesture directions (disclosure, collapsed, caption summarises them; choosing Hold and Move expands it); Other controls (disclosure: named controls and bound ones, see Device card); Advanced… sheet, only while some button anywhere is Hold and Move: gesture Distance and Repeat |
 | Mouse › Scrolling | Smooth scrolling, Feel, Speed; Main Wheel: Reverse direction, Wheel mode, SmartShift; Thumb Wheel: Action (Turn left/right when Custom); each when the mouse has it | Advanced… sheet, each row only when it applies: Acceleration, Glide, Hold Shift to scroll sideways (dimmed while smooth scrolling is off); Switches at (while SmartShift is on); thumb wheel Reverse direction (when it scrolls here or in some app), Swap directions and Turn distance (when it has actions), Speed (when it scrolls) |

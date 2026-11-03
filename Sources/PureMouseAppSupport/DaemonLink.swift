@@ -72,6 +72,17 @@ public final class DaemonLink {
 
     public var hasBluetoothDevice: Bool { devices.contains { $0.connection == .bluetooth } }
 
+    /// Bluetooth mice the daemon has seen but cannot use until Input Monitoring is allowed.
+    public var waitingForInputMonitoring: [Status.WaitingDevice] {
+        daemonRunning ? status?.waiting ?? [] : []
+    }
+
+    /// Input Monitoring matters only to a Bluetooth mouse (a receiver works without it): one in use,
+    /// or one seen and waiting.
+    public var inputMonitoringNeeded: Bool {
+        inputMonitoringMissing && (hasBluetoothDevice || !waitingForInputMonitoring.isEmpty)
+    }
+
     /// The daemon's complaint about the config file, while it runs.
     public var configError: String? { daemonRunning ? status?.config.error : nil }
 
@@ -174,6 +185,13 @@ public final class DaemonLink {
             controlFailed(error)
             return false
         }
+    }
+
+    /// Rings the control doorbell without changing `control.json`: the daemon looks at what it
+    /// otherwise learns only when something happens (Logi Options+ running, permissions) and
+    /// writes a fresh status if it changed. For Settings opening and Logi Options+ having quit.
+    public func askDaemonToRecheck() {
+        ring()
     }
 
     /// Asks the daemon to reload the config now (it also reloads on its own when the file changes).

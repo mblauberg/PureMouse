@@ -112,12 +112,12 @@ struct AppControllerUpdateTests {
     }
 
     /// One launch of the menu app: a new controller over the same preferences.
-    private func launch(iconShown: Bool = true) -> AppController {
+    private func launch(iconShown: Bool = true, resident: Bool? = nil) -> AppController {
         let questions = questions
         let setup = UpdateSetup.inert(preferences: preferences, scheduler: scheduler,
                                       ask: { questions.asked += 1; return questions.answer })
         let withdrawn = withdrawn
-        let controller = AppController(locations: locations, iconShown: iconShown, announce: { _, _, _ in },
+        let controller = AppController(locations: locations, iconShown: iconShown, resident: resident, announce: { _, _, _ in },
                                        withdraw: { withdrawn.ids.append($0) }, requestPermission: {}, updates: setup)
         controller.startUpdates()
         return controller
@@ -207,6 +207,19 @@ struct AppControllerUpdateTests {
         #expect(preferences.launches == 0 && questions.asked == 0 && scheduler.delays.isEmpty)
     }
 
+    /// Show in menu bar off hides the status item, not the process: the launchd-run menu app goes on
+    /// counting launches, scheduling the check and asking the question (docs/ui-design.md).
+    @Test func theResidentRunWithoutTheIconStillCountsAsksAndSchedules() async throws {
+        try writeStatus()
+        _ = launch(iconShown: false, resident: true)
+        let second = launch(iconShown: false, resident: true)
+        await settle { questions.asked > 0 }
+        #expect(questions.asked == 1)
+        #expect(preferences.automatic == true)
+        #expect(!scheduler.delays.isEmpty)  // the check is scheduled, not run
+        _ = second
+    }
+
     @Test func turningTheChecksOffTakesTheDeliveredReminderDown() {
         preferences.automatic = true
         preferences.latest = UpdateCheck.Release(version: UpdateCheck.Version("0.6.0")!, page: URL(string: "https://github.com/mblauberg/PureMouse/releases/tag/v0.6.0")!)
@@ -261,7 +274,8 @@ struct AppControllerUpdateTests {
     private static let app = URL(fileURLWithPath: "/Applications/PureMouse.app")
 
     /// A launch with 0.6.0 on offer and every outside effect recorded.
-    private func offered(_ spy: InstallSpy) -> AppController {
+    private func offered(_ spy: InstallSpy,
+                         menuOff: ((@escaping @MainActor (Bool) -> Void) -> Void)? = nil) -> AppController {
         preferences.automatic = true
         preferences.latest = UpdateCheck.Release(version: UpdateCheck.Version("0.6.0")!, page: Self.page)
         var setup = UpdateSetup.inert(preferences: preferences, scheduler: scheduler)
@@ -286,7 +300,38 @@ struct AppControllerUpdateTests {
         setup.alert = { title, _ in spy.alerts.append(title) }
         setup.replyToTerminate = { spy.replies.append($0) }
         return AppController(locations: locations, iconShown: true, announce: { _, _, _ in },
-                             withdraw: { _ in }, requestPermission: {}, updates: setup)
+                             withdraw: { _ in }, requestPermission: {}, updates: setup, menuOff: menuOff)
+    }
+
+    /// Hiding the icon leaves the process running, so it must not turn later installs away; one
+    /// that fails to hide does not either.
+    @Test(arguments: [true, false])
+    func installsAreAcceptedAgainAfterHidingTheIcon(hideWorks: Bool) async {
+        let spy = InstallSpy()
+        var hides = 0
+        let controller = offered(spy, menuOff: { done in hides += 1; done(hideWorks) })
+        controller.hideMenuBarIcon()
+        await settle { false }
+        #expect(hides == 1)
+        controller.installUpdate()
+        await settle { spy.installs.count == 1 }
+        #expect(spy.confirmed.count == 1 && spy.installs.count == 1)
+    }
+
+    /// While the hide is still running (its command not yet answered) an install is held back.
+    @Test func anInstallWaitsForAHideInProgress() async {
+        let spy = InstallSpy()
+        var finish: (@MainActor (Bool) -> Void)?
+        let controller = offered(spy, menuOff: { finish = $0 })
+        controller.hideMenuBarIcon()
+        await settle { finish != nil }
+        controller.installUpdate()
+        await settle { false }
+        #expect(spy.confirmed.isEmpty && spy.installs.isEmpty)
+        finish?(true)
+        controller.installUpdate()
+        await settle { spy.installs.count == 1 }
+        #expect(spy.installs.count == 1)
     }
 
     @Test func choosingUpdateAsksFirstAndInstallsOnlyOnAYes() async {

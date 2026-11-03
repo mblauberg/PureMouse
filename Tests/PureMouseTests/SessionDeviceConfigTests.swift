@@ -54,7 +54,7 @@ struct SessionDeviceConfigTests {
 
     @Test(arguments: [true, false])
     func captureAimedAtOneMouseDivertsOnlyItsControls(aimed: Bool) async throws {
-        let h = try DaemonHarness("{}")
+        let h = try DaemonHarness(SessionHarness.nothingJSON)
         defer { h.close() }
         let mx = FakeDevice.mxMaster3S, other = FakeDevice.synthetic
         let s1 = try await h.adopt(mx), s2 = try await h.adopt(other)
@@ -72,7 +72,7 @@ struct SessionDeviceConfigTests {
     }
 
     @Test func aMouseAdoptedDuringAnAimedCaptureJoinsOnlyIfItMatches() async throws {
-        let h = try DaemonHarness("{}")
+        let h = try DaemonHarness(SessionHarness.nothingJSON)
         defer { h.close() }
         let mx = FakeDevice.mxMaster3S
         _ = try await h.adopt(mx)
@@ -165,7 +165,9 @@ struct SessionDeviceConfigTests {
         defer { h.close() }
         h.daemon.handle(Control(paused: true))
         m750.announce(product: 0xB02C)
-        try await eventually { m750.control(0x56)?.diverted == false }
+        // The pause hands back everything the default set diverts, the wheel and the back button
+        // included; the writes are done once none is diverted.
+        try await eventually { m750.controls.allSatisfy { !$0.diverted } && !m750.lowResWheelDiverted }
         #expect(try await writes(to: m750) == 0)
         #expect(h.daemon.sessions.isEmpty)
         #expect(m750.control(0x53)?.diverted == false && m750.dpi != 800)

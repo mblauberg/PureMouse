@@ -186,8 +186,12 @@ struct SessionStatusTests {
     @Test func withoutAccessibilityAMouseWithNoWheelsLogsNoWheelError() async throws {
         let log = CapturedLog()
         try await Log.$testOutput.withValue(.lines { log.append($0) }) {
-            let h = try await SessionHarness(.m750WithoutWheelFeature, config: SessionHarness.config(#"{"smoothScroll": {}}"#),
-                                             environment: .init(canPostEvents: false))
+            // The default set's back, forward and gesture bindings are set aside: without
+            // Accessibility they are logged, correctly, as left native, and this test is about wheels.
+            let h = try await SessionHarness(
+                .m750WithoutWheelFeature,
+                config: SessionHarness.config(#"{"smoothScroll": {}, "buttons": {"back": "default", "forward": "default", "gesture": "default"}}"#),
+                environment: .init(canPostEvents: false))
             defer { h.close() }
             try await h.session.apply()
             try await h.session.apply()
@@ -208,10 +212,11 @@ struct SessionStatusTests {
             defer { h.close() }
             try await h.session.apply()
             try await h.session.apply()
-            // Only what it has: its DPI, its main wheel and its buttons.
+            // Only what it has: its DPI, its main wheel and its buttons (the default set binds
+            // forward as well).
             #expect(h.fake.dpi == 1650)
             #expect(h.fake.mainWheelDiverted)
-            #expect(Set(h.fake.controls.filter(\.diverted).map(\.cid)) == [0x52, 0x53])
+            #expect(Set(h.fake.controls.filter(\.diverted).map(\.cid)) == [0x52, 0x53, 0x56])
             #expect(h.fake.transport.sent.allSatisfy { h.fake.feature(of: $0) != nil })
         }
         #expect(log.lines.filter { $0.level != "debug" }.isEmpty, "\(log.lines)")

@@ -19,7 +19,7 @@ The decisions behind this design, and the alternatives rejected, are recorded in
 - **The Settings helper** (`Contents/Helpers/PureMouse Settings.app`) is the Settings window, as an
   app of its own that runs only while the window is open. It edits the config.
 
-Either runs without the other: with the menu bar icon hidden or quit, the mouse behaves exactly as
+Either runs without the other: with the menu bar app quit, or its icon hidden, the mouse behaves exactly as
 configured. They talk through two small JSON files and a Darwin notification after each write, so
 neither polls. [companion.md](companion.md) is the contract.
 
@@ -210,7 +210,8 @@ touches.
   SIGTERM, before restoring the mouse).
 - Idle cost is zero CPU. The optional daily update check is run by the system's
   background-activity scheduler, not a timer of ours. The display link runs only while a scroll is
-  gliding. The bounded exceptions are the permission poll and the adoption retries below.
+  gliding. The bounded exceptions are the permission poll and the adoption retries below;
+  `IdleCostTests` fails on a new timer or poll in the daemon sources.
 
 ### Sessions
 
@@ -356,6 +357,25 @@ may be taken over; Input Monitoring with a Bluetooth mouse or when opening HID d
 child runs after 2, 4, 8, 16 and 32 s and then once a minute, until `Daemon.permissionPollLength`
 (10 minutes) after the latest start, wake, reload, control change or Bluetooth attach; each of those
 starts or extends it. Without Input Monitoring a Bluetooth mouse is not retried after its first try.
+
+Only needed permissions are asked for: at start, on a Bluetooth attach and after a HID open failure
+the daemon requests `missingPermissions` (the needed ones not yet allowed), never both by reflex,
+so a user with no Bluetooth mouse is not asked for Input Monitoring and Settings shows it as "Not
+needed". A Bluetooth mouse that is seen but cannot be identified without Input Monitoring is listed
+in `Status.waitingForInputMonitoring` (the name heuristic is `Daemon.mayBeMouse`, so a keyboard is
+not listed), and the menu, the Mouse pane and General each offer Allow Input Monitoring for it. This
+adds a status field and no timer or poll (`IdleCostTests`).
+
+### Logi Options+
+
+Whether Logi Options+ is running is looked up again, not once at start: `Daemon.recheckLogiOptions`
+scans the process table at start, wake, reload, a control doorbell and each permission check, and
+rewrites the status when the answer changed, so the notice appears or clears in place. A control
+doorbell with no change (`AppModel.askDaemonToRecheck`) is what the Settings helper rings when its
+window is shown (`SettingsWindowController.show`), and what the menu bar app or Settings rings when
+Logi Options+ has quit after Quit Logi Options+ (a KVO watch on the app's `isTerminated`). No timer and no polling were added (`IdleCostTests`); process
+launch notifications are not used, as they need AppKit in the daemon. The scan sees only this user's
+processes (see [Troubleshooting](troubleshooting.md#logi-options)).
 
 ### Battery and DPI
 

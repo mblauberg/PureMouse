@@ -3,63 +3,113 @@ enum ConfigGoldenExpected {
     static let text = #"""
 ### config.example.json
 config: Config
-  dpi: 1650
-  dpiPresets: [0]
+  dpi: 1600
+  dpiPresets: [3]
+    -: 800
+    -: 1600
+    -: 3200
   scrollWheel: ScrollWheel
-    inverted: true
-    mode: freespin
-    smartShiftThreshold: 255
+    inverted: false
+    mode: ratchet
+    smartShiftThreshold: 30
   thumbWheel: ThumbWheel
-    inverted: true
+    inverted: nil
     reversed: false
-    mode: scroll
+    mode: actions
+      actions: (left: Action, right: Action)
+        left: zoomOut
+        right: zoomIn
     step: 3
   smoothScroll: SmoothScroll
     enabled: true
-    speed: 0.7
+    speed: 1.0
     horizontalSpeed: 1.0
     acceleration: 1.0
-    smoothingMs: 350.0
+    smoothingMs: 125.0
     shiftScrollsHorizontally: true
-  buttons: [5]
+  buttons: [4]
     back: action
       action: navigateBack
-    forward: action
-      action: navigateForward
     gesture: gesture
       gesture: Gesture
         click: missionControl
-        up: missionControl
+        up: none
         down: appExpose
         left: spaceLeft
         right: spaceRight
     middle: action
       action: toggleScrollMode
     top: action
-      action: showDesktop
+      action: keys
+        keys: Keystroke
+          key: 21
+          modifiers: CGEventFlags
+            rawValue: 1179648
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [5]
+  bindings: [4]
     195: gesture
       gesture: Gesture
         click: missionControl
-        up: missionControl
+        up: none
         down: appExpose
         left: spaceLeft
         right: spaceRight
     196: action
-      action: showDesktop
+      action: keys
+        keys: Keystroke
+          key: 21
+          modifiers: CGEventFlags
+            rawValue: 1179648
     82: action
       action: toggleScrollMode
     83: action
       action: navigateBack
-    86: action
-      action: navigateForward
   unknownButtons: [0]
-  apps: [0]
+  apps: [1]
+    com.apple.safari: AppSettings
+      bindings: [5]
+        195: gesture
+          gesture: Gesture
+            click: missionControl
+            up: none
+            down: appExpose
+            left: spaceLeft
+            right: spaceRight
+        196: action
+          action: keys
+            keys: Keystroke
+              key: 21
+              modifiers: CGEventFlags
+                rawValue: 1179648
+        82: action
+          action: toggleScrollMode
+        83: action
+          action: previousTab
+        86: action
+          action: nextTab
+      thumbWheel: ThumbWheel
+        inverted: nil
+        reversed: false
+        mode: actions
+          actions: (left: Action, right: Action)
+            left: zoomOut
+            right: zoomIn
+        step: 3
+      smoothScroll: SmoothScroll
+        enabled: true
+        speed: 1.0
+        horizontalSpeed: 1.0
+        acceleration: 1.0
+        smoothingMs: 125.0
+        shiftScrollsHorizontally: true
+      buttons: {83, 86}
+      setsButtons: true
+      setsThumbWheel: false
+      setsSmoothScroll: false
   warnings: [0]
 
 ### err-apps-button-unknown-action
@@ -124,14 +174,42 @@ config: Config
   dpiPresets: [0]
   scrollWheel: nil
   thumbWheel: nil
-  smoothScroll: nil
-  buttons: [0]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [0]
   warnings: [0]
@@ -282,26 +360,69 @@ config: Config
   dpiPresets: [0]
   scrollWheel: nil
   thumbWheel: nil
-  smoothScroll: nil
-  buttons: [0]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [1]
     com.apple.safari: AppSettings
-      bindings: [1]
+      bindings: [3]
+        195: gesture
+          gesture: Gesture
+            click: missionControl
+            up: missionControl
+            down: appExpose
+            left: spaceLeft
+            right: spaceRight
         83: action
           action: none
+        86: action
+          action: navigateForward
       thumbWheel: ThumbWheel
         inverted: nil
         reversed: false
         mode: scroll
         step: 3
-      smoothScroll: nil
+      smoothScroll: SmoothScroll
+        enabled: true
+        speed: 1.0
+        horizontalSpeed: 1.0
+        acceleration: 1.0
+        smoothingMs: 125.0
+        shiftScrollsHorizontally: true
       buttons: {83}
       setsButtons: true
       setsThumbWheel: false
@@ -315,24 +436,69 @@ config: Config
   dpiPresets: [0]
   scrollWheel: nil
   thumbWheel: nil
-  smoothScroll: nil
-  buttons: [0]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [1]
     a: AppSettings
-      bindings: [0]
+      bindings: [3]
+        195: gesture
+          gesture: Gesture
+            click: missionControl
+            up: missionControl
+            down: appExpose
+            left: spaceLeft
+            right: spaceRight
+        83: action
+          action: navigateBack
+        86: action
+          action: navigateForward
       thumbWheel: ThumbWheel
         inverted: nil
         reversed: false
         mode: scroll
         step: 3
-      smoothScroll: nil
+      smoothScroll: SmoothScroll
+        enabled: true
+        speed: 1.0
+        horizontalSpeed: 1.0
+        acceleration: 1.0
+        smoothingMs: 125.0
+        shiftScrollsHorizontally: true
       buttons: {}
       setsButtons: false
       setsThumbWheel: false
@@ -345,14 +511,42 @@ config: Config
   dpiPresets: [0]
   scrollWheel: nil
   thumbWheel: nil
-  smoothScroll: nil
-  buttons: [0]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [0]
   warnings: [0]
@@ -363,8 +557,18 @@ config: Config
   dpiPresets: [0]
   scrollWheel: nil
   thumbWheel: nil
-  smoothScroll: nil
-  buttons: [1]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
     gesture: action
       action: launchpad
   gesture: GestureSettings
@@ -372,13 +576,17 @@ config: Config
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [1]
+  bindings: [3]
     195: action
       action: launchpad
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [1]
     x: AppSettings
-      bindings: [1]
+      bindings: [3]
         195: gesture
           gesture: Gesture
             click: none
@@ -386,12 +594,22 @@ config: Config
             down: none
             left: none
             right: none
+        83: action
+          action: navigateBack
+        86: action
+          action: navigateForward
       thumbWheel: ThumbWheel
         inverted: nil
         reversed: false
         mode: scroll
         step: 3
-      smoothScroll: nil
+      smoothScroll: SmoothScroll
+        enabled: true
+        speed: 1.0
+        horizontalSpeed: 1.0
+        acceleration: 1.0
+        smoothingMs: 125.0
+        shiftScrollsHorizontally: true
       buttons: {195}
       setsButtons: true
       setsThumbWheel: false
@@ -418,14 +636,16 @@ config: Config
     acceleration: 1.0
     smoothingMs: 300.0
     shiftScrollsHorizontally: true
-  buttons: [3]
+  buttons: [4]
     back: action
       action: navigateBack
+    forward: action
+      action: navigateForward
     gesture: gesture
       gesture: Gesture
         click: missionControl
-        up: none
-        down: none
+        up: missionControl
+        down: appExpose
         left: spaceLeft
         right: spaceRight
     middle: action
@@ -435,33 +655,37 @@ config: Config
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [3]
+  bindings: [4]
     195: gesture
       gesture: Gesture
         click: missionControl
-        up: none
-        down: none
+        up: missionControl
+        down: appExpose
         left: spaceLeft
         right: spaceRight
     82: action
       action: missionControl
     83: action
       action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [4]
     com.apple.music: AppSettings
-      bindings: [3]
+      bindings: [4]
         195: gesture
           gesture: Gesture
             click: missionControl
-            up: none
-            down: none
+            up: missionControl
+            down: appExpose
             left: spaceLeft
             right: spaceRight
         82: action
           action: missionControl
         83: action
           action: navigateBack
+        86: action
+          action: navigateForward
       thumbWheel: ThumbWheel
         inverted: true
         reversed: false
@@ -482,18 +706,20 @@ config: Config
       setsThumbWheel: true
       setsSmoothScroll: false
     com.apple.preview: AppSettings
-      bindings: [3]
+      bindings: [4]
         195: gesture
           gesture: Gesture
             click: missionControl
-            up: none
-            down: none
+            up: missionControl
+            down: appExpose
             left: spaceLeft
             right: spaceRight
         82: action
           action: missionControl
         83: action
           action: navigateBack
+        86: action
+          action: navigateForward
       thumbWheel: ThumbWheel
         inverted: true
         reversed: false
@@ -511,12 +737,12 @@ config: Config
       setsThumbWheel: true
       setsSmoothScroll: true
     com.apple.safari: AppSettings
-      bindings: [4]
+      bindings: [5]
         195: gesture
           gesture: Gesture
             click: missionControl
-            up: none
-            down: none
+            up: missionControl
+            down: appExpose
             left: navigateBack
             right: spaceRight
         196: action
@@ -529,6 +755,8 @@ config: Config
               key: 33
               modifiers: CGEventFlags
                 rawValue: 1048576
+        86: action
+          action: navigateForward
       thumbWheel: ThumbWheel
         inverted: true
         reversed: false
@@ -549,18 +777,20 @@ config: Config
       setsThumbWheel: false
       setsSmoothScroll: false
     com.google.chrome: AppSettings
-      bindings: [3]
+      bindings: [4]
         195: gesture
           gesture: Gesture
             click: missionControl
-            up: none
-            down: none
+            up: missionControl
+            down: appExpose
             left: spaceLeft
             right: spaceRight
         82: action
           action: missionControl
         83: action
           action: navigateBack
+        86: action
+          action: navigateForward
       thumbWheel: ThumbWheel
         inverted: true
         reversed: false
@@ -595,18 +825,57 @@ config: Config
         left: volumeDown
         right: volumeUp
     step: 8
-  smoothScroll: nil
-  buttons: [0]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [4]
     a: AppSettings
-      bindings: [0]
+      bindings: [3]
+        195: gesture
+          gesture: Gesture
+            click: missionControl
+            up: missionControl
+            down: appExpose
+            left: spaceLeft
+            right: spaceRight
+        83: action
+          action: navigateBack
+        86: action
+          action: navigateForward
       thumbWheel: ThumbWheel
         inverted: nil
         reversed: false
@@ -615,13 +884,30 @@ config: Config
             left: mute
             right: volumeUp
         step: 8
-      smoothScroll: nil
+      smoothScroll: SmoothScroll
+        enabled: true
+        speed: 1.0
+        horizontalSpeed: 1.0
+        acceleration: 1.0
+        smoothingMs: 125.0
+        shiftScrollsHorizontally: true
       buttons: {}
       setsButtons: false
       setsThumbWheel: true
       setsSmoothScroll: false
     b: AppSettings
-      bindings: [0]
+      bindings: [3]
+        195: gesture
+          gesture: Gesture
+            click: missionControl
+            up: missionControl
+            down: appExpose
+            left: spaceLeft
+            right: spaceRight
+        83: action
+          action: navigateBack
+        86: action
+          action: navigateForward
       thumbWheel: ThumbWheel
         inverted: nil
         reversed: false
@@ -630,13 +916,30 @@ config: Config
             left: volumeDown
             right: volumeUp
         step: 8
-      smoothScroll: nil
+      smoothScroll: SmoothScroll
+        enabled: true
+        speed: 1.0
+        horizontalSpeed: 1.0
+        acceleration: 1.0
+        smoothingMs: 125.0
+        shiftScrollsHorizontally: true
       buttons: {}
       setsButtons: false
       setsThumbWheel: true
       setsSmoothScroll: false
     c: AppSettings
-      bindings: [0]
+      bindings: [3]
+        195: gesture
+          gesture: Gesture
+            click: missionControl
+            up: missionControl
+            down: appExpose
+            left: spaceLeft
+            right: spaceRight
+        83: action
+          action: navigateBack
+        86: action
+          action: navigateForward
       thumbWheel: ThumbWheel
         inverted: nil
         reversed: false
@@ -645,13 +948,30 @@ config: Config
             left: zoomOut
             right: zoomIn
         step: 3
-      smoothScroll: nil
+      smoothScroll: SmoothScroll
+        enabled: true
+        speed: 1.0
+        horizontalSpeed: 1.0
+        acceleration: 1.0
+        smoothingMs: 125.0
+        shiftScrollsHorizontally: true
       buttons: {}
       setsButtons: false
       setsThumbWheel: true
       setsSmoothScroll: false
     d: AppSettings
-      bindings: [0]
+      bindings: [3]
+        195: gesture
+          gesture: Gesture
+            click: missionControl
+            up: missionControl
+            down: appExpose
+            left: spaceLeft
+            right: spaceRight
+        83: action
+          action: navigateBack
+        86: action
+          action: navigateForward
       thumbWheel: ThumbWheel
         inverted: nil
         reversed: false
@@ -660,7 +980,13 @@ config: Config
             left: zoomOut
             right: mute
         step: 5
-      smoothScroll: nil
+      smoothScroll: SmoothScroll
+        enabled: true
+        speed: 1.0
+        horizontalSpeed: 1.0
+        acceleration: 1.0
+        smoothingMs: 125.0
+        shiftScrollsHorizontally: true
       buttons: {}
       setsButtons: false
       setsThumbWheel: true
@@ -680,18 +1006,57 @@ config: Config
         left: volumeDown
         right: volumeUp
     step: 2
-  smoothScroll: nil
-  buttons: [0]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [3]
     a: AppSettings
-      bindings: [0]
+      bindings: [3]
+        195: gesture
+          gesture: Gesture
+            click: missionControl
+            up: missionControl
+            down: appExpose
+            left: spaceLeft
+            right: spaceRight
+        83: action
+          action: navigateBack
+        86: action
+          action: navigateForward
       thumbWheel: ThumbWheel
         inverted: true
         reversed: true
@@ -700,13 +1065,30 @@ config: Config
             left: previousTab
             right: nextTab
         step: 3
-      smoothScroll: nil
+      smoothScroll: SmoothScroll
+        enabled: true
+        speed: 1.0
+        horizontalSpeed: 1.0
+        acceleration: 1.0
+        smoothingMs: 125.0
+        shiftScrollsHorizontally: true
       buttons: {}
       setsButtons: false
       setsThumbWheel: true
       setsSmoothScroll: false
     b: AppSettings
-      bindings: [0]
+      bindings: [3]
+        195: gesture
+          gesture: Gesture
+            click: missionControl
+            up: missionControl
+            down: appExpose
+            left: spaceLeft
+            right: spaceRight
+        83: action
+          action: navigateBack
+        86: action
+          action: navigateForward
       thumbWheel: ThumbWheel
         inverted: true
         reversed: false
@@ -715,15 +1097,30 @@ config: Config
             left: previousTab
             right: nextTab
         step: 3
-      smoothScroll: nil
+      smoothScroll: SmoothScroll
+        enabled: true
+        speed: 1.0
+        horizontalSpeed: 1.0
+        acceleration: 1.0
+        smoothingMs: 125.0
+        shiftScrollsHorizontally: true
       buttons: {}
       setsButtons: false
       setsThumbWheel: true
       setsSmoothScroll: false
     c: AppSettings
-      bindings: [1]
+      bindings: [3]
+        195: gesture
+          gesture: Gesture
+            click: missionControl
+            up: missionControl
+            down: appExpose
+            left: spaceLeft
+            right: spaceRight
         83: action
           action: none
+        86: action
+          action: navigateForward
       thumbWheel: ThumbWheel
         inverted: true
         reversed: true
@@ -732,7 +1129,13 @@ config: Config
             left: volumeDown
             right: volumeUp
         step: 2
-      smoothScroll: nil
+      smoothScroll: SmoothScroll
+        enabled: true
+        speed: 1.0
+        horizontalSpeed: 1.0
+        acceleration: 1.0
+        smoothingMs: 125.0
+        shiftScrollsHorizontally: true
       buttons: {83}
       setsButtons: true
       setsThumbWheel: false
@@ -745,18 +1148,57 @@ config: Config
   dpiPresets: [0]
   scrollWheel: nil
   thumbWheel: nil
-  smoothScroll: nil
-  buttons: [0]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [1]
     com.apple.safari: AppSettings
-      bindings: [0]
+      bindings: [3]
+        195: gesture
+          gesture: Gesture
+            click: missionControl
+            up: missionControl
+            down: appExpose
+            left: spaceLeft
+            right: spaceRight
+        83: action
+          action: navigateBack
+        86: action
+          action: navigateForward
       thumbWheel: ThumbWheel
         inverted: nil
         reversed: false
@@ -781,36 +1223,98 @@ config: Config
   dpiPresets: [0]
   scrollWheel: nil
   thumbWheel: nil
-  smoothScroll: nil
-  buttons: [0]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [2]
     b.app: AppSettings
-      bindings: [0]
+      bindings: [3]
+        195: gesture
+          gesture: Gesture
+            click: missionControl
+            up: missionControl
+            down: appExpose
+            left: spaceLeft
+            right: spaceRight
+        83: action
+          action: navigateBack
+        86: action
+          action: navigateForward
       thumbWheel: ThumbWheel
         inverted: nil
         reversed: false
         mode: scroll
         step: 3
-      smoothScroll: nil
+      smoothScroll: SmoothScroll
+        enabled: true
+        speed: 1.0
+        horizontalSpeed: 1.0
+        acceleration: 1.0
+        smoothingMs: 125.0
+        shiftScrollsHorizontally: true
       buttons: {}
       setsButtons: false
       setsThumbWheel: false
       setsSmoothScroll: false
     com.apple.safari: AppSettings
-      bindings: [0]
+      bindings: [3]
+        195: gesture
+          gesture: Gesture
+            click: missionControl
+            up: missionControl
+            down: appExpose
+            left: spaceLeft
+            right: spaceRight
+        83: action
+          action: navigateBack
+        86: action
+          action: navigateForward
       thumbWheel: ThumbWheel
         inverted: nil
         reversed: false
         mode: scroll
         step: 3
-      smoothScroll: nil
+      smoothScroll: SmoothScroll
+        enabled: true
+        speed: 1.0
+        horizontalSpeed: 1.0
+        acceleration: 1.0
+        smoothingMs: 125.0
+        shiftScrollsHorizontally: true
       buttons: {}
       setsButtons: true
       setsThumbWheel: true
@@ -839,13 +1343,35 @@ config: Config
     acceleration: 10.0
     smoothingMs: 2000.0
     shiftScrollsHorizontally: true
-  buttons: [0]
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 50.0
     repeatIntervalMs: 5000
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [0]
   warnings: [0]
@@ -866,13 +1392,35 @@ config: Config
     acceleration: 0.0
     smoothingMs: 0.0
     shiftScrollsHorizontally: true
-  buttons: [0]
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 0.5
     repeatIntervalMs: 0
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [0]
   warnings: [0]
@@ -883,8 +1431,14 @@ config: Config
   dpiPresets: [0]
   scrollWheel: nil
   thumbWheel: nil
-  smoothScroll: nil
-  buttons: [4]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [5]
     0x53: action
       action: none
     53: action
@@ -898,12 +1452,26 @@ config: Config
         down: none
         left: none
         right: none
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [2]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
     83: action
       action: none
     86: gesture
@@ -923,8 +1491,25 @@ config: Config
   dpiPresets: [0]
   scrollWheel: nil
   thumbWheel: nil
-  smoothScroll: nil
-  buttons: [3]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [6]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
     qq: action
       action: none
     qq : action
@@ -936,7 +1521,18 @@ config: Config
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [3]
     -: qq
     -: qq 
@@ -950,14 +1546,42 @@ config: Config
   dpiPresets: [0]
   scrollWheel: nil
   thumbWheel: nil
-  smoothScroll: nil
-  buttons: [0]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [0]
   warnings: [0]
@@ -968,8 +1592,18 @@ config: Config
   dpiPresets: [0]
   scrollWheel: nil
   thumbWheel: nil
-  smoothScroll: nil
-  buttons: [1]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
     gesture: gesture
       gesture: Gesture
         click: missionControl
@@ -982,7 +1616,7 @@ config: Config
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [1]
+  bindings: [3]
     195: gesture
       gesture: Gesture
         click: missionControl
@@ -990,6 +1624,10 @@ config: Config
         down: appExpose
         left: spaceLeft
         right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [0]
   warnings: [0]
@@ -1000,15 +1638,25 @@ config: Config
   dpiPresets: [0]
   scrollWheel: nil
   thumbWheel: nil
-  smoothScroll: nil
-  buttons: [2]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [4]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
     gesture: gesture
       gesture: Gesture
-        click: none
+        click: missionControl
         up: missionControl
-        down: none
-        left: none
-        right: none
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
     top: gesture
       gesture: Gesture
         click: haptic
@@ -1022,14 +1670,14 @@ config: Config
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [2]
+  bindings: [4]
     195: gesture
       gesture: Gesture
-        click: none
+        click: missionControl
         up: missionControl
-        down: none
-        left: none
-        right: none
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
     196: gesture
       gesture: Gesture
         click: haptic
@@ -1038,6 +1686,10 @@ config: Config
         down: none
         left: none
         right: none
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [0]
   warnings: [0]
@@ -1048,8 +1700,14 @@ config: Config
   dpiPresets: [0]
   scrollWheel: nil
   thumbWheel: nil
-  smoothScroll: nil
-  buttons: [4]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [6]
     00fd: action
       action: mute
     0X01A0: action
@@ -1063,12 +1721,28 @@ config: Config
     back: action
       action: run
         run: true
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [4]
+  bindings: [6]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
     196: action
       action: keys
         keys: Keystroke
@@ -1082,6 +1756,8 @@ config: Config
     83: action
       action: run
         run: true
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [0]
   warnings: [0]
@@ -1092,7 +1768,13 @@ config: Config
   dpiPresets: [0]
   scrollWheel: nil
   thumbWheel: nil
-  smoothScroll: nil
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
   buttons: [6]
     back: action
       action: navigateBack
@@ -1136,12 +1818,27 @@ config: Config
   dpiPresets: [0]
   scrollWheel: nil
   thumbWheel: nil
-  smoothScroll: nil
-  buttons: [4]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [6]
     0xzz: action
       action: none
     back: action
       action: none
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
     qq: action
       action: mute
     zz: action
@@ -1151,9 +1848,18 @@ config: Config
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [1]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
     83: action
       action: none
+    86: action
+      action: navigateForward
   unknownButtons: [3]
     -: 0xzz
     -: qq
@@ -1170,8 +1876,25 @@ config: Config
     -: 3200
   scrollWheel: nil
   thumbWheel: nil
-  smoothScroll: nil
-  buttons: [1]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [4]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
     top: action
       action: cycleDPI
   gesture: GestureSettings
@@ -1179,9 +1902,20 @@ config: Config
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [1]
+  bindings: [4]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
     196: action
       action: cycleDPI
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [0]
   warnings: [0]
@@ -1192,14 +1926,42 @@ config: Config
   dpiPresets: [0]
   scrollWheel: nil
   thumbWheel: nil
-  smoothScroll: nil
-  buttons: [0]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [0]
   warnings: [0]
@@ -1218,14 +1980,42 @@ config: Config
     -: 25600
   scrollWheel: nil
   thumbWheel: nil
-  smoothScroll: nil
-  buttons: [0]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [0]
   warnings: [0]
@@ -1236,14 +2026,42 @@ config: Config
   dpiPresets: [0]
   scrollWheel: nil
   thumbWheel: nil
-  smoothScroll: nil
-  buttons: [0]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [0]
   warnings: [0]
@@ -1273,18 +2091,20 @@ config: Config
     acceleration: 1.0
     smoothingMs: 350.0
     shiftScrollsHorizontally: true
-  buttons: [4]
+  buttons: [5]
     0x00fd: action
       action: cycleDPI
     back: action
       action: navigateBack
+    forward: action
+      action: navigateForward
     gesture: gesture
       gesture: Gesture
         click: missionControl
-        up: none
-        down: none
-        left: none
-        right: none
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
     zz: action
       action: none
   gesture: GestureSettings
@@ -1292,34 +2112,38 @@ config: Config
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: false
-  bindings: [3]
+  bindings: [4]
     195: gesture
       gesture: Gesture
         click: missionControl
-        up: none
-        down: none
-        left: none
-        right: none
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
     253: action
       action: cycleDPI
     83: action
       action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [1]
     -: zz
   apps: [1]
     com.apple.safari: AppSettings
-      bindings: [3]
+      bindings: [4]
         195: gesture
           gesture: Gesture
             click: missionControl
             up: appExpose
-            down: none
-            left: none
-            right: none
+            down: appExpose
+            left: spaceLeft
+            right: spaceRight
         253: action
           action: cycleDPI
         83: action
           action: none
+        86: action
+          action: navigateForward
       thumbWheel: ThumbWheel
         inverted: true
         reversed: true
@@ -1347,14 +2171,42 @@ config: Config
   dpiPresets: [0]
   scrollWheel: nil
   thumbWheel: nil
-  smoothScroll: nil
-  buttons: [0]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [0]
   warnings: [0]
@@ -1365,14 +2217,42 @@ config: Config
   dpiPresets: [0]
   scrollWheel: nil
   thumbWheel: nil
-  smoothScroll: nil
-  buttons: [0]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 12.5
     repeatIntervalMs: 250
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [0]
   warnings: [0]
@@ -1386,14 +2266,42 @@ config: Config
     mode: freespin
     smartShiftThreshold: 20
   thumbWheel: nil
-  smoothScroll: nil
-  buttons: [0]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [0]
   warnings: [0]
@@ -1407,14 +2315,42 @@ config: Config
     mode: nil
     smartShiftThreshold: nil
   thumbWheel: nil
-  smoothScroll: nil
-  buttons: [0]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [0]
   warnings: [0]
@@ -1428,14 +2364,42 @@ config: Config
     mode: ratchet
     smartShiftThreshold: nil
   thumbWheel: nil
-  smoothScroll: nil
-  buttons: [0]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [0]
   warnings: [0]
@@ -1453,13 +2417,35 @@ config: Config
     acceleration: 3.0
     smoothingMs: 200.0
     shiftScrollsHorizontally: false
-  buttons: [0]
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [0]
   warnings: [0]
@@ -1477,13 +2463,35 @@ config: Config
     acceleration: 1.0
     smoothingMs: 125.0
     shiftScrollsHorizontally: true
-  buttons: [0]
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [0]
   warnings: [0]
@@ -1501,13 +2509,35 @@ config: Config
     acceleration: 1.0
     smoothingMs: 125.0
     shiftScrollsHorizontally: true
-  buttons: [0]
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [0]
   warnings: [0]
@@ -1522,14 +2552,42 @@ config: Config
     reversed: false
     mode: scroll
     step: 3
-  smoothScroll: nil
-  buttons: [0]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [0]
   warnings: [0]
@@ -1544,14 +2602,42 @@ config: Config
     reversed: false
     mode: scroll
     step: 3
-  smoothScroll: nil
-  buttons: [0]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [0]
   warnings: [0]
@@ -1569,14 +2655,42 @@ config: Config
         left: none
         right: mute
     step: 36
-  smoothScroll: nil
-  buttons: [0]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [0]
   warnings: [0]
@@ -1591,14 +2705,42 @@ config: Config
     reversed: false
     mode: scroll
     step: 3
-  smoothScroll: nil
-  buttons: [0]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [0]
   warnings: [0]
@@ -1616,14 +2758,42 @@ config: Config
         left: spaceLeft
         right: spaceRight
     step: 6
-  smoothScroll: nil
-  buttons: [0]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [0]
   warnings: [0]
@@ -1641,14 +2811,42 @@ config: Config
         left: previousTab
         right: nextTab
     step: 3
-  smoothScroll: nil
-  buttons: [0]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [0]
   warnings: [0]
@@ -1670,14 +2868,42 @@ config: Config
               rawValue: 1048576
         right: missionControl
     step: 2
-  smoothScroll: nil
-  buttons: [0]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [0]
   warnings: [0]
@@ -1695,14 +2921,42 @@ config: Config
         left: zoomOut
         right: zoomIn
     step: 3
-  smoothScroll: nil
-  buttons: [0]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [0]
   warnings: [0]
@@ -1713,14 +2967,42 @@ config: Config
   dpiPresets: [0]
   scrollWheel: nil
   thumbWheel: nil
-  smoothScroll: nil
-  buttons: [0]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: true
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [0]
   warnings: [0]
@@ -1731,14 +3013,42 @@ config: Config
   dpiPresets: [0]
   scrollWheel: nil
   thumbWheel: nil
-  smoothScroll: nil
-  buttons: [0]
+  smoothScroll: SmoothScroll
+    enabled: true
+    speed: 1.0
+    horizontalSpeed: 1.0
+    acceleration: 1.0
+    smoothingMs: 125.0
+    shiftScrollsHorizontally: true
+  buttons: [3]
+    back: action
+      action: navigateBack
+    forward: action
+      action: navigateForward
+    gesture: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
   gesture: GestureSettings
     distanceMm: 4.0
     repeatIntervalMs: 400
   universalControl: UniversalControl
     handOff: false
-  bindings: [0]
+  bindings: [3]
+    195: gesture
+      gesture: Gesture
+        click: missionControl
+        up: missionControl
+        down: appExpose
+        left: spaceLeft
+        right: spaceRight
+    83: action
+      action: navigateBack
+    86: action
+      action: navigateForward
   unknownButtons: [0]
   apps: [0]
   warnings: [0]

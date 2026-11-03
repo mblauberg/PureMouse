@@ -225,13 +225,13 @@ private func makeModel(config: String = "{}", devices: [Status.Device], defaults
     config.setSmoothScroll(nil, in: scope(mx))
     #expect(config.smoothScrollOwn(in: scope(mx)) == nil && !config.smoothScrollEnabled(in: scope(mx)))
     #expect(!config.contains(["devices", mx]))
-    // With All Mice off by having no smoothScroll, giving back removes a mouse's whole object,
-    // whose presence would otherwise turn it on.
-    var bare = try tree(#"{"devices": {"\#(mx)": {"name": "MX", "smoothScroll": {"speed": 2}, "dpi": 800}}}"#)
-    #expect(bare.smoothScrollEnabled(in: scope(mx)) && bare.smoothScrollOwn(in: scope(mx)) == true)
+    // Tuning on a mouse says nothing about on or off: it follows All Mice (on in the default set).
+    // Giving back removes only the mouse's `enabled`, so its tuning stays.
+    var bare = try tree(#"{"devices": {"\#(mx)": {"name": "MX", "smoothScroll": {"speed": 2, "enabled": false}, "dpi": 800}}}"#)
+    #expect(!bare.smoothScrollEnabled(in: scope(mx)) && bare.smoothScrollOwn(in: scope(mx)) == false)
     bare.setSmoothScroll(nil, in: scope(mx))
-    #expect(!bare.smoothScrollEnabled(in: scope(mx)))
-    #expect(!bare.contains(["devices", mx, "smoothScroll"]) && bare.int(["devices", mx, "dpi"]) == 800)
+    #expect(bare.smoothScrollEnabled(in: scope(mx)) && bare.smoothScrollOwn(in: scope(mx)) == nil)
+    #expect(bare.double(["devices", mx, "smoothScroll", "speed"]) == 2 && bare.int(["devices", mx, "dpi"]) == 800)
 }
 
 @Test func feelOnAMouseIsReadFromItsValuesOverAllMices() throws {
@@ -419,4 +419,51 @@ private func kitWheel(_ config: ConfigTree, _ key: String) throws -> Config.Thum
     let own = try tree(#"{"thumbWheel":{"action":"zoom"},"devices":{"\#(m750Key)":{"name":"M750","thumbWheel":{"action":"volume"}}}}"#)
     #expect(own.holds(["thumbWheel"], in: scope(m750Key)))
     #expect(ScrollingLayout(config: own, devices: [m750], scope: scope(m750Key)).availability(.thumbWheelAction) == .unsupportedButConfigured)
+}
+
+// MARK: No mouse, and a Bluetooth mouse waiting for Input Monitoring
+
+@MainActor @Test func noMouseAtAllIsOnlyWhenRunningWithNothingKnown() throws {
+    let (empty, _) = try makeModel(devices: [])
+    #expect(empty.hasNoMouse)
+    // A mouse, a mouse waiting for Input Monitoring, or a devices entry (a mouse that is away) each
+    // mean there is one to show.
+    #expect(try !makeModel(devices: [mxMaster]).0.hasNoMouse)
+    let sandbox = try Sandbox()
+    try sandbox.write("{}")
+    try sandbox.writeStatus(daemonStatus(pid: getpid(), inputMonitoring: false,
+                                         waiting: [.init(id: "2", name: "MX Anywhere 3S")]))
+    let waiting = AppModel(locations: sandbox.locations, defaults: UserDefaults(suiteName: "pm-\(UUID().uuidString)")!,
+                           alert: { _, _ in })
+    waiting.reloadStatus()
+    #expect(!waiting.hasNoMouse)
+    #expect(waiting.waitingForInputMonitoring.map(\.name) == ["MX Anywhere 3S"])
+    #expect(waiting.inputMonitoringNeeded)
+    #expect(try !makeModel(config: #"{"devices": {"\#(mx)": {"dpi": 800}}}"#, devices: []).0.hasNoMouse)
+    // Not while PureMouse is paused (it reports no mice then) or off.
+    let paused = try Sandbox()
+    try paused.write("{}")
+    try paused.writeStatus(daemonStatus(pid: getpid(), paused: true))
+    let model = AppModel(locations: paused.locations, defaults: UserDefaults(suiteName: "pm-\(UUID().uuidString)")!,
+                         alert: { _, _ in })
+    model.reloadStatus()
+    #expect(!model.hasNoMouse)
+    let off = try Sandbox()
+    try off.write("{}")
+    let none = AppModel(locations: off.locations, defaults: UserDefaults(suiteName: "pm-\(UUID().uuidString)")!,
+                        alert: { _, _ in })
+    none.reloadStatus()
+    #expect(!none.hasNoMouse)
+}
+
+@MainActor @Test func inputMonitoringIsNeededOnlyForBluetoothMice() throws {
+    // Missing, with a receiver mouse only: not needed (General reads "Not needed").
+    let sandbox = try Sandbox()
+    try sandbox.write("{}")
+    try sandbox.writeStatus(daemonStatus(pid: getpid(), devices: [mxMaster], inputMonitoring: false))
+    let model = AppModel(locations: sandbox.locations, defaults: UserDefaults(suiteName: "pm-\(UUID().uuidString)")!,
+                         alert: { _, _ in })
+    model.reloadStatus()
+    #expect(model.inputMonitoringMissing && !model.inputMonitoringNeeded)
+    #expect(BannerPlan.items(for: BannerPlan.State(model: model, needsAccessibility: true)).isEmpty)
 }

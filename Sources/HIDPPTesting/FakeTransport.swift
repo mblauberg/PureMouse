@@ -8,6 +8,7 @@ public final class FakeTransport: HIDPPTransport {
     public var productID: Int
     public let isReceiver: Bool
     public var timing: Timing = .nextTurn
+    public var usagePairs: [HIDUsagePair] = []
     public var sent: [Report] = []
     public var answer: ((Report) throws -> Report?)?
     private var subscribers: [UInt8: (Report) -> Void] = [:]

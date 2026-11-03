@@ -286,7 +286,7 @@ struct ThumbWheelRows: View {
         switch choice {
         // Only reached for a wheel with nothing in effect to describe.
         case .inherit: ""
-        case .scroll: "Scrolls sideways."
+        case .scroll: ""  // the value says it
         case .preset("zoom"): reversed ? "Turn left to zoom in, right to zoom out." : "Turn left to zoom out, right to zoom in."
         case .preset("volume"): reversed ? "Turn left for louder, right for quieter." : "Turn left for quieter, right for louder."
         case .preset("tabs"):

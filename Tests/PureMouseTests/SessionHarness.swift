@@ -13,7 +13,7 @@ struct SessionHarness {
 
     /// `identify` reads the fake's identity as adoption does (`Identification.read`) and gives the
     /// session the config resolved for it (`Config.forDevice`).
-    init(_ fake: FakeDevice = .mxMaster3S, config: Config = .empty,
+    init(_ fake: FakeDevice = .mxMaster3S, config: Config = SessionHarness.nothing,
          inheriting inherited: Session.Inherited = .init(),
          environment: SessionEnvironment = .init(canPostEvents: true, configureRetryDelay: .milliseconds(1)),
          identify: Bool = false) async throws {
@@ -30,22 +30,55 @@ struct SessionHarness {
 
     /// A session taking over from `session` on the same endpoint, as a reload makes one: by
     /// default with what `session` hands down now.
-    func replacement(config: Config = .empty, inheriting inherited: Session.Inherited? = nil,
+    func replacement(config: Config = SessionHarness.nothing, inheriting inherited: Session.Inherited? = nil,
                      environment: SessionEnvironment = .init(canPostEvents: true)) -> Session {
         Session(device: device, name: fake.name, identity: session.identity, id: "replacement",
                 controls: Array(session.controls.values), config: config.forDevice(session.deviceKey),
                 inheriting: inherited ?? session.inheritance, environment: environment)
     }
 
+    /// Nothing configured: smooth scrolling off and no button bound, as a user who turned off
+    /// everything the default set turns on. Sessions that test what a mouse is left alone with
+    /// start from this, not from `Config.defaults`.
+    static let nothing: Config = {
+        do { return try config(nothingJSON) } catch { preconditionFailure("\(error)") }
+    }()
+
+    static let nothingJSON = #"{"smoothScroll": {"enabled": false}, "buttons": {"back": "default", "forward": "default", "gesture": "default"}}"#
+
     static func config(_ json: String) throws -> Config {
         try JSONDecoder().decode(Config.self, from: Data(json.utf8))
     }
 
-    static func example() throws -> Config {
-        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent()
-        return try Config.load(from: root.appendingPathComponent("config.example.json"))
-    }
+    /// A fully set-up config (the author's own setup when the sessions were first tested): a DPI,
+    /// both wheels, smooth scrolling tuned, a gesture, back, forward and top buttons. The shipped
+    /// example is neutral and the default set is not this, so session tests that want every kind of
+    /// setting present use this copy.
+    static func example() throws -> Config { try config(exampleJSON) }
+
+    static let exampleJSON = #"""
+{
+  "dpi": 1650,
+  "scrollWheel": { "inverted": true, "mode": "freespin", "smartShiftThreshold": 255 },
+  "thumbWheel": { "inverted": true },
+  "smoothScroll": { "speed": 0.7, "horizontalSpeed": 1.0, "acceleration": 1.0, "smoothingMs": 350 },
+  "buttons": {
+    "gesture": {
+      "click": "missionControl",
+      "up": "missionControl",
+      "down": "appExpose",
+      "left": "spaceLeft",
+      "right": "spaceRight"
+    },
+    "back": "navigateBack",
+    "forward": "navigateForward",
+    "top": "showDesktop",
+    "middle": "toggleScrollMode"
+  },
+  "gesture": { "distanceMm": 4, "repeatIntervalMs": 400 },
+  "universalControl": { "handOff": true }
+}
+"""#
 
     func close() {
         session.close()
@@ -106,12 +139,15 @@ final class DaemonHarness {
     let daemon: Daemon
     private var endpoints: [HIDPPDevice] = []
 
-    init(_ json: String, adoptionSleep: ((Duration) async throws -> Void)? = nil) throws {
+    init(_ json: String, permissions: Permissions = .all,
+         logiOptions: @escaping () -> [String] = { [] },
+         adoptionSleep: ((Duration) async throws -> Void)? = nil) throws {
         url = FileManager.default.temporaryDirectory.appending(path: "puremouse-\(UUID().uuidString).json")
         try Data(json.utf8).write(to: url)
         var environment = SessionEnvironment(canPostEvents: true, configureRetryDelay: .milliseconds(1))
         if let adoptionSleep { environment.adoptionSleep = adoptionSleep }
-        daemon = Daemon(configURL: url, environment: environment)
+        daemon = Daemon(configURL: url, environment: environment, permissions: permissions,
+                        logiOptions: logiOptions)
     }
 
     /// Adopts `fake` and waits for its first configure to end.

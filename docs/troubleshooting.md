@@ -32,9 +32,22 @@ the examples below call it `puremouse`.
 ## Logi Options+
 
 Logi Options+ and PureMouse both take over the mouse's buttons and wheels, and only one can hold
-them at a time. When PureMouse sees Options+ running (its agent is `com.logi.cp-dev-mgr`), the
-menu and the log say so. Quit Options+, or remove it with Logitech's uninstaller. PureMouse can read
-only your own processes' names, so an Options+ updater running as root goes unseen.
+them at a time. When PureMouse sees Options+ running, the menu, the Settings banner and General say
+so, and the log names the process. PureMouse looks again after the Mac wakes, when the config
+reloads, when Settings opens and when you use the menu bar app, so the notice goes away by itself
+once Options+ has quit, and comes back if it starts again.
+
+1. **Quit Logi Options+** (in the notice or the menu) asks the app to quit, as its own Quit item
+   would. It does not force anything, and PureMouse never starts it.
+2. Options+ starts again at login and restarts its background agent unless you remove its login item.
+   **Open Login Items Settings…** opens System Settings › General › Login Items; under "Allow in the
+   Background" turn off Logi Options+ (its agent is `com.logi.cp-dev-mgr`). It may also be listed
+   under "Open at Login".
+3. To remove Options+ for good, run Logitech's uninstaller (the Logi Options+ installer app, or
+   Uninstall in its own menu). Dragging the app to the Bin leaves the agent and the login item behind.
+
+PureMouse can read only your own processes' names, so an Options+ updater running as root goes
+unseen.
 
 ## Permissions
 
@@ -69,11 +82,11 @@ clear the flag afterwards.
 |---|---|
 | `puremouse register` | Adds the login items and starts PureMouse (what opening the app does) |
 | `puremouse stop` | Stops PureMouse and the menu bar icon until the next login (**Quit PureMouse**) |
-| `puremouse start` | Starts PureMouse (and the menu bar icon, unless hidden) again after `stop`, without changing whether they start at login |
+| `puremouse start` | Starts PureMouse and the menu bar app again after `stop`, without changing whether they start at login |
 | `puremouse login on` / `off` | Starts PureMouse at login, or not, without starting or stopping it now. With login off it keeps running until you run `stop` or log out |
 | `puremouse login-status` | Prints whether PureMouse and the menu bar icon start at login, as JSON |
 | `puremouse unregister` | Stops both and removes the login items. Your config is kept |
-| `puremouse menu off` / `on` | Hides or shows the menu bar icon. PureMouse keeps working without it |
+| `puremouse menu off` / `on` | Hides or shows the menu bar icon. PureMouse keeps working without it, and so do low battery notifications and update checks (the menu bar app runs on without the icon) |
 
 ## Inspecting a mouse
 

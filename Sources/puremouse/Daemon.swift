@@ -18,7 +18,8 @@ final class Daemon {
     /// they were does not reload.
     private var configBytes: Data?
     private let startedAt = Date.now
-    private let permissions = Permissions.current
+    /// What this process may do; macOS caches it for the life of the process.
+    let permissions: Permissions
     /// Asking a child process for new grants (`pollPermissions`), while it runs.
     private var permissionPoll: Task<Void, Never>?
     /// When the poll stops asking; each re-arm pushes it back (`pollPermissions`).
@@ -26,7 +27,10 @@ final class Daemon {
     static let permissionPollLength: Duration = .seconds(600)
     /// Opening HID devices failed, usually for want of Input Monitoring.
     private var hidOpenFailed = false
-    private let logiOptionsRunning = !LogiOptions.running().isEmpty
+    /// Names of the running Logi Options+ processes (`LogiOptions.running`, or a test's), looked up
+    /// again at the moments in `recheckLogiOptions`, never on a timer.
+    private let logiOptionsProbe: () -> [String]
+    private var logiOptionsRunning = false
     private var channel: StatusChannel?
     private var watcher: ConfigWatcher?
     /// Numbers interfaces in attach order, for device IDs that stay stable while the daemon runs.
@@ -112,10 +116,13 @@ final class Daemon {
         }
     }
 
-    init(configURL: URL, environment: SessionEnvironment = .live) {
+    init(configURL: URL, environment: SessionEnvironment = .live, permissions: Permissions = .current,
+         logiOptions: @escaping () -> [String] = LogiOptions.running) {
         self.configURL = configURL
         self.environment = environment
-        config = .empty
+        self.permissions = permissions
+        logiOptionsProbe = logiOptions
+        config = .defaults
         if !loadConfig() {
             // Stay up with nothing configured rather than crash-loop under launchd; fixing the
             // file reloads it.
@@ -138,6 +145,8 @@ final class Daemon {
         }
     }
 
+    /// The file's bytes, or the default set's when there is no file: a new install has none, and
+    /// that is the defaults, not an error. A file that exists but cannot be read still fails.
     private func readConfig() throws -> Data {
         do {
             let data = try Data(contentsOf: configURL)
@@ -145,13 +154,16 @@ final class Daemon {
             return data
         } catch {
             configBytes = nil
+            if !FileManager.default.fileExists(atPath: configURL.path) {
+                return Data(Config.defaultSetJSON.utf8)
+            }
             throw error
         }
     }
 
     func start() {
         requestPermissions()
-        LogiOptions.warnIfRunning()
+        recheckLogiOptions()
         StatusChannel.clearControl()
         channel = StatusChannel { [unowned self] in self.status(running: !self.exiting) }
         channel?.writeNow()
@@ -164,6 +176,7 @@ final class Daemon {
         let status = monitor.start()
         if status != kIOReturnSuccess {
             hidOpenFailed = true
+            requestPermissions()
             Log.error("opening HID devices failed: 0x\(String(UInt32(bitPattern: status), radix: 16)) (Input Monitoring permission?)")
         }
         pollPermissions()
@@ -189,7 +202,8 @@ final class Daemon {
             logiOptionsRunning: logiOptionsRunning,
             config: .init(path: configURL.path, error: configError),
             devices: running ? sessions.values.map(\.status).sorted { $0.id < $1.id } : [],
-            capture: capture, away: running && handingOff)
+            capture: capture, away: running && handingOff,
+            waitingForInputMonitoring: running ? waitingForInputMonitoring : [])
     }
 
     private func statusChanged() {
@@ -201,8 +215,10 @@ final class Daemon {
     /// The menu bar app changed `control.json`. A missing file means no requests.
     private func controlChanged() {
         guard !shuttingDown else { return }
-        // Someone is at the Mac, perhaps granting a permission in System Settings.
+        // Someone is at the Mac, perhaps granting a permission in System Settings, or quitting
+        // Logi Options+ (Settings opening rings this doorbell too).
         pollPermissions()
+        recheckLogiOptions()
         let control: Control
         if FileManager.default.fileExists(atPath: Companion.controlURL.path) {
             guard let read = Companion.read(Control.self, from: Companion.controlURL) else {
@@ -345,14 +361,46 @@ final class Daemon {
         signalSources.append(source)
     }
 
+    /// Asks for what is needed now and missing, when something may have changed that: at start, when
+    /// a Bluetooth mouse attaches, and when opening HID devices failed.
     private func requestPermissions() {
-        Permissions.requestMissing(permissions)
+        let missing = missingPermissions
+        if !missing.isEmpty { Permissions.request(missing) }
     }
 
     /// The permissions PureMouse needs for its config and mice now but lacks.
-    private var missingPermissions: Permissions {
-        Permissions.needed(postsEvents: Self.postsEvents(config), bluetooth: monitor.interfaces.contains { !$0.isReceiver },
+    var missingPermissions: Permissions {
+        Permissions.needed(postsEvents: Self.postsEvents(config), bluetooth: !bluetoothMice.isEmpty,
                            hidOpenFailed: hidOpenFailed).subtracting(permissions)
+    }
+
+    /// Bluetooth devices that may be mice, adopted or not: the reason Input Monitoring is needed.
+    /// Without that permission a device's replies never arrive, so it cannot be told from a
+    /// keyboard by asking; its name has to do.
+    private var bluetoothMice: [(key: Key, device: HIDPPDevice)] {
+        endpoints.filter { key, device in
+            !device.interface.isReceiver && !ignored.contains(key) && Self.mayBeMouse(product: device.interface.product, usages: device.interface.usagePairs)
+        }.map { ($0.key, $0.value) }
+    }
+
+    /// The Bluetooth mice seen but not adopted for want of Input Monitoring, for the status.
+    var waitingForInputMonitoring: [Status.WaitingDevice] {
+        guard !permissions.contains(.inputMonitoring) else { return [] }
+        return bluetoothMice.filter { sessions[$0.key] == nil }.map {
+            Status.WaitingDevice(id: deviceID($0.key), name: $0.device.interface.product)
+        }.sorted { $0.id < $1.id }
+    }
+
+    /// Whether a Bluetooth HID++ device might be a mouse: a keyboard is not worth asking Input
+    /// Monitoring for. The usages its descriptor declares decide first (a Generic Desktop Mouse or
+    /// Pointer is a mouse; a Keyboard or Keypad without one is not). Only a device that declares
+    /// neither, or nothing, is judged by its name, which is a guess: a name with no keyboard word
+    /// passes.
+    static func mayBeMouse(product: String, usages: [HIDUsagePair] = []) -> Bool {
+        if usages.contains(where: \.isPointing) { return true }
+        if usages.contains(where: \.isTyping) { return false }
+        let name = product.lowercased()
+        return !["keyboard", "keys", "keypad"].contains { name.contains($0) }
     }
 
     /// Whether some mouse may need to post events (Accessibility): any scope of the top level or
@@ -361,6 +409,24 @@ final class Daemon {
         config.everyScope.contains {
             !$0.bindings.isEmpty || $0.smoothScroll?.enabled == true || $0.thumbWheel.mode != .scroll
         }
+    }
+
+    /// Looks for Logi Options+ again and writes the status if the answer changed, so the notice
+    /// appears or clears in place. Called at start, wake, reload, a control change (the menu or
+    /// Settings opening, or Logi Options+ being quit from either) and each permission check: one
+    /// process-table scan at moments the daemon is awake anyway, never a timer or a poll.
+    func recheckLogiOptions() {
+        let names = logiOptionsProbe()
+        let running = !names.isEmpty
+        guard running != logiOptionsRunning else { return }
+        logiOptionsRunning = running
+        if running {
+            Log.error("Logi Options+ is running (\(names.joined(separator: ", "))) and will fight PureMouse over the mouse; "
+                      + "quit it, or remove its login item and uninstall it")
+        } else {
+            Log.info("Logi Options+ is no longer running")
+        }
+        statusChanged()
     }
 
     /// A fresh child process (`puremouse permissions`) sees new grants that this one cannot. While
@@ -380,6 +446,7 @@ final class Daemon {
             while !shuttingDown, ContinuousClock.now < permissionPollEnd {
                 try? await Task.sleep(for: .seconds(delay))
                 delay = min(delay * 2, 60)
+                recheckLogiOptions()
                 let missing = missingPermissions
                 guard !missing.isEmpty else { return }  // no longer needed, say after a reload
                 if !(await Self.permissions(checkedBy: executable)).intersection(missing).isEmpty {
@@ -421,7 +488,10 @@ final class Daemon {
         } else {
             let device = listen(interface, index: directDeviceIndex)
             Task { await adoptRetrying(device) }
-            pollPermissions()  // a Bluetooth mouse needs Input Monitoring
+            // A Bluetooth mouse needs Input Monitoring: ask now, and let the menu say it is waiting.
+            requestPermissions()
+            pollPermissions()
+            statusChanged()
         }
     }
 
@@ -735,6 +805,7 @@ final class Daemon {
             sessions.values.forEach { $0.configure() }
             retryMissingNotifications()
             pollPermissions()
+            recheckLogiOptions()
             await adoptStragglers()
         }
     }
@@ -763,6 +834,7 @@ final class Daemon {
     func reload() {
         guard !shuttingDown else { return }
         defer { statusChanged() }
+        recheckLogiOptions()
         let previous = config
         let wasHandingOff = handingOff
         guard loadConfig() else {

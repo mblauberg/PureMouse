@@ -11,16 +11,71 @@ import Testing
     @Test func exampleConfigParses() throws {
         let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .appending(path: "../../config.example.json").standardized
-        // The example mirrors the live config, so check its shape rather than particular values.
+        // The example documents the format; it is not a default and nothing seeds it. It must
+        // decode, and set what the default set leaves unset.
         let config = try Config.load(from: url)
-        #expect(config.dpi != nil && config.smoothScroll != nil)
+        #expect(config.dpi != nil && config.scrollWheel != nil)
         #expect(config.bindings.count == config.buttons.count)  // every button name resolves
         #expect(config.bindings.values.contains { if case .gesture = $0 { true } else { false } })
     }
 
+    @Test func noFileAndAnEmptyObjectAreTheDefaultSet() throws {
+        let config = try decode("{}")
+        expectDefaultSet(config)
+        expectDefaultSet(Config.defaults)
+        expectDefaultSet(Config.defaults)
+    }
+
+    @Test func theDefaultSetIsTheDecisionInTheIssue() throws {
+        let config = try decode("{}")
+        // Unset: left as the mouse has them.
+        #expect(config.dpi == nil && config.scrollWheel == nil && config.dpiPresets.isEmpty)
+        // Smooth scrolling on at Balanced.
+        let smooth = try #require(config.smoothScroll)
+        #expect(smooth.enabled && smooth.acceleration == 1 && smooth.smoothingMs == 125 && smooth.speed == 1)
+        // Wheel press and the top button: Mouse Default (no binding).
+        #expect(config.bindings[Config.Button.middle.cid] == nil && config.bindings[Config.Button.top.cid] == nil)
+        guard case .action(.navigateBack) = config.bindings[Config.Button.back.cid] else { Issue.record("back"); return }
+        guard case .action(.navigateForward) = config.bindings[Config.Button.forward.cid] else { Issue.record("forward"); return }
+        guard case .gesture(let g) = config.bindings[Config.Button.gesture.cid] else { Issue.record("gesture"); return }
+        #expect(g.click == .missionControl && g.up == .missionControl && g.down == .appExpose)
+        #expect(g.left == .spaceLeft && g.right == .spaceRight)
+        let thumb = config.thumbWheel ?? Config.ThumbWheel()  // a key left out means this
+        #expect(thumb.mode == .scroll && thumb.reversed == false)
+        #expect(config.universalControl.handOff)
+    }
+
+    @Test func aFileLayersOnTheDefaultSet() throws {
+        // A binding replaces the default for its control, whatever name spells it.
+        let named = try decode(#"{"buttons": {"0x0053": "mute"}}"#)
+        guard case .action(.mute) = named.bindings[0x0053] else { Issue.record("hex"); return }
+        #expect(named.buttons["back"] == nil)
+        guard case .action(.navigateForward) = named.bindings[0x0056] else { Issue.record("forward"); return }
+        // "default" at the top level removes the default set's binding: Mouse Default.
+        let native = try decode(#"{"buttons": {"back": "default", "gesture": "default"}}"#)
+        #expect(native.bindings[0x0053] == nil && native.bindings[0x00C3] == nil)
+        #expect(native.buttons["back"] == nil && native.buttons["gesture"] == nil)
+        // A gesture keeps the directions the file leaves out, and "none" turns one off.
+        let gesture = try decode(#"{"buttons": {"gesture": {"up": "none", "click": "launchpad"}}}"#)
+        guard case .gesture(let g) = gesture.bindings[0x00C3] else { Issue.record("gesture"); return }
+        #expect(g.up == .none && g.click == .launchpad && g.down == .appExpose && g.left == .spaceLeft)
+        // Smooth scrolling is off only when the file says so, and keeps the default tuning.
+        let off = try decode(#"{"smoothScroll": {"enabled": false}}"#)
+        #expect(off.smoothScroll?.enabled == false && off.smoothScroll?.smoothingMs == 125)
+    }
+
+    private func expectDefaultSet(_ config: Config, sourceLocation: SourceLocation = #_sourceLocation) {
+        #expect(config.smoothScroll?.enabled == true, sourceLocation: sourceLocation)
+        #expect(Set(config.buttons.keys) == ["back", "forward", "gesture"], sourceLocation: sourceLocation)
+        #expect(Set(config.bindings.keys) == [0x0053, 0x0056, 0x00C3], sourceLocation: sourceLocation)
+        #expect(config.dpi == nil && config.scrollWheel == nil, sourceLocation: sourceLocation)
+        #expect((config.thumbWheel ?? Config.ThumbWheel()).mode == .scroll, sourceLocation: sourceLocation)
+        #expect(config.universalControl.handOff, sourceLocation: sourceLocation)
+    }
+
     @Test func emptyConfigIsValid() throws {
         let config = try decode("{}")
-        #expect(config.buttons.isEmpty && config.dpi == nil && config.gesture.distanceMm == 4)
+        #expect(config.dpi == nil && config.gesture.distanceMm == 4)
     }
 
     @Test func universalControlHandOffDefaultsOn() throws {
@@ -68,9 +123,14 @@ import Testing
     }
 
     @Test func partialGestureDefaultsToNone() throws {
-        let b = try decode(#"{"buttons": {"gesture": {"up": "missionControl"}}}"#).bindings
+        // On a gesture button the default set binds, a gesture keeps the directions it leaves out.
+        let b = try decode(#"{"buttons": {"gesture": {"up": "launchpad"}}}"#).bindings
         guard case .gesture(let g) = b[0x00C3] else { Issue.record("gesture"); return }
-        #expect(g.up == .missionControl && g.click == Action.none)
+        #expect(g.up == .launchpad && g.click == .missionControl && g.left == .spaceLeft)
+        // On any other button the directions it leaves out do nothing.
+        let top = try decode(#"{"buttons": {"top": {"up": "missionControl"}}}"#).bindings
+        guard case .gesture(let t) = top[0x00C4] else { Issue.record("top"); return }
+        #expect(t.up == .missionControl && t.click == Action.none)
     }
 
     @Test(arguments: [
@@ -145,7 +205,7 @@ import Testing
 @Suite struct ConfigKitTests {
     @Test func unknownButtonsAreCollectedNotFatal() throws {
         let config = try JSONDecoder().decode(Config.self, from: Data(#"{"buttons": {"zz": "none", "back": "none"}}"#.utf8))
-        #expect(config.unknownButtons == ["zz"] && config.bindings.keys.sorted() == [0x53])
+        #expect(config.unknownButtons == ["zz"] && config.bindings.keys.sorted() == [0x53, 0x56, 0xC3])
     }
 
     @Test func configCheckUsesTheRealDecoder() {

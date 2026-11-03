@@ -75,7 +75,7 @@ Each app can work its own way.
 Change speed on the fly, and hear about the battery before it runs out.
 
 - DPI presets you can cycle from a button or the menu.
-- Battery in the menu, and a notification at 20% and 5% (needs the menu bar icon).
+- Battery in the menu, and a notification at 20% and 5%.
 - If a mouse PureMouse recognises comes back already low, it warns once.
 
 ### Stays out of the way

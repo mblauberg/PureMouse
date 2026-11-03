@@ -81,7 +81,18 @@ public final class AppModel {
     public var accessibilityMissing: Bool { link.accessibilityMissing }
     public var inputMonitoringMissing: Bool { link.inputMonitoringMissing }
     public var logiOptionsRunning: Bool { link.logiOptionsRunning }
+
     public var hasBluetoothDevice: Bool { link.hasBluetoothDevice }
+    public var waitingForInputMonitoring: [Status.WaitingDevice] { link.waitingForInputMonitoring }
+    public var inputMonitoringNeeded: Bool { link.inputMonitoringNeeded }
+
+    /// PureMouse is running and sees no mouse at all: none connected, none waiting for Input
+    /// Monitoring, and none in the config (a `devices` entry names one that is simply away). Not
+    /// while off or paused, when it reports no mice for another reason.
+    public var hasNoMouse: Bool {
+        daemonRunning && !paused && status != nil && devices.isEmpty && waitingForInputMonitoring.isEmpty
+            && config.deviceEntries.isEmpty
+    }
 
     public var lowBattery: Bool {
         guard let battery = liveDevice?.battery, !battery.charging else { return false }
@@ -145,6 +156,9 @@ public final class AppModel {
 
     /// Asks the daemon to reload the config now (it also reloads on its own when the file changes).
     public func reloadDaemonConfig() { link.reloadDaemonConfig() }
+
+    /// See `DaemonLink.askDaemonToRecheck`.
+    public func askDaemonToRecheck() { link.askDaemonToRecheck() }
 
     // MARK: Config
 

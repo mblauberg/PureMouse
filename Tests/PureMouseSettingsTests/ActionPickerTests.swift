@@ -58,12 +58,16 @@ private func entry(_ id: String, _ entries: [PickerEntry]) -> PickerEntry? { ent
     tree.bind("back", to: same, in: mouse)
     #expect(!tree.contains(["devices"]))
     #expect(tree.string(["buttons", "back"]) == "mute")
-    // Under All Mice, Mouse Default removes the key.
+    // Under All Mice, Mouse Default removes the key where the default set binds nothing, and
+    // writes "default" where it binds something (Back), so the default set does not return.
     guard case .set(let global)? = entry("default", PickerEntry.all(allowsDefault: true, allowsGesture: true))?.kind else {
         Issue.record("global"); return
     }
     tree.bind("back", to: global)
-    #expect(!tree.contains(["buttons", "back"]))
+    #expect(tree.string(["buttons", "back"]) == "default")
+    tree.bind("middle", to: .named("mute"))
+    tree.bind("middle", to: global)
+    #expect(!tree.contains(["buttons", "middle"]))
 }
 
 @MainActor @Test func theAppPageWritesTheChoiceItOffers() throws {

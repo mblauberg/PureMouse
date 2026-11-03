@@ -10,6 +10,7 @@ public final class HIDInterface: HIDPPTransport {
     public let productID: Int
     public let usagePage: Int
     public let transport: String
+    public let usagePairs: [HIDUsagePair]
 
     /// A receiver multiplexes up to six devices by slot index; a Bluetooth device is index 0xFF.
     public var isReceiver: Bool { usagePage == 0xFF00 }
@@ -22,6 +23,11 @@ public final class HIDInterface: HIDPPTransport {
         productID = device.property(kIOHIDProductIDKey) ?? 0
         usagePage = device.property(kIOHIDPrimaryUsagePageKey) ?? 0
         transport = device.property(kIOHIDTransportKey) ?? "?"
+        let pairs: [[String: Int]] = device.property(kIOHIDDeviceUsagePairsKey) ?? []
+        usagePairs = pairs.compactMap { pair in
+            guard let page = pair[kIOHIDDeviceUsagePageKey], let usage = pair[kIOHIDDeviceUsageKey] else { return nil }
+            return HIDUsagePair(page: page, usage: usage)
+        }
     }
 
     public func send(_ report: Report) throws {

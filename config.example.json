@@ -1,21 +1,19 @@
 {
-  "dpi": 1650,
-  "scrollWheel": { "inverted": true, "mode": "freespin", "smartShiftThreshold": 255 },
-  "thumbWheel": { "inverted": true },
-  "smoothScroll": { "speed": 0.7, "horizontalSpeed": 1.0, "acceleration": 1.0, "smoothingMs": 350 },
+  "dpi": 1600,
+  "dpiPresets": [800, 1600, 3200],
+  "scrollWheel": { "inverted": false, "mode": "ratchet", "smartShiftThreshold": 30 },
+  "thumbWheel": { "action": "zoom", "reversed": false },
+  "smoothScroll": { "speed": 1.0, "acceleration": 1.0, "smoothingMs": 125 },
   "buttons": {
-    "gesture": {
-      "click": "missionControl",
-      "up": "missionControl",
-      "down": "appExpose",
-      "left": "spaceLeft",
-      "right": "spaceRight"
-    },
     "back": "navigateBack",
-    "forward": "navigateForward",
-    "top": "showDesktop",
-    "middle": "toggleScrollMode"
+    "forward": "default",
+    "middle": "toggleScrollMode",
+    "top": { "keys": "cmd+shift+4" },
+    "gesture": { "click": "missionControl", "left": "spaceLeft", "right": "spaceRight", "up": "none" }
   },
   "gesture": { "distanceMm": 4, "repeatIntervalMs": 400 },
-  "universalControl": { "handOff": true }
+  "universalControl": { "handOff": true },
+  "apps": {
+    "com.apple.Safari": { "buttons": { "back": "previousTab", "forward": "nextTab" } }
+  }
 }

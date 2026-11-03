@@ -10,7 +10,7 @@ import Testing
     @Test func scrollsByDefault() throws {
         let t = try thumb(#"{"inverted": true}"#)
         #expect(t.mode == .scroll && t.inverted == true)
-        #expect(Config.empty.global.thumbWheel.mode == .scroll)
+        #expect(Config.defaults.global.thumbWheel.mode == .scroll)
     }
 
     @Test func reversedIsItsOwnKeyApartFromInverted() throws {
@@ -82,7 +82,7 @@ import Testing
     @Test func noAppsMeansNoLookup() throws {
         let config = try decode("{\(Self.base)}")
         #expect(config.apps.isEmpty && config.settings(forApp: "com.apple.Safari") == nil)
-        #expect(config.boundControls == [0x53, 0x52, 0xC3])
+        #expect(config.boundControls == [0x53, 0x52, 0xC3, 0x56])  // forward is the default set's
     }
 
     @Test func buttonsOverrideOnlyWhatTheyName() throws {
@@ -120,7 +120,7 @@ import Testing
         let config = try decode(#"{"apps": {"com.example.x": {"buttons": {"top": "default"}}}}"#)
         let app = try #require(config.settings(forApp: "com.example.x"))
         #expect(app.bindings[0xC4] == nil && app.buttons == [0xC4])
-        #expect(config.boundControls.isEmpty)
+        #expect(config.boundControls == [0x53, 0x56, 0xC3])  // the default set's buttons only
     }
 
     @Test func defaultInAnAppAppliesOnTopOfADeviceThatBindsTheButton() throws {
@@ -143,7 +143,7 @@ import Testing
         guard case .gesture(let g) = config.settings(forApp: "com.apple.Safari")?.bindings[0xC3] else {
             Issue.record("gesture"); return
         }
-        #expect(g.left == .navigateBack && g.right == .spaceRight && g.click == .missionControl && g.up == .none)
+        #expect(g.left == .navigateBack && g.right == .spaceRight && g.click == .missionControl && g.up == .missionControl)  // up is the default set's
         // Over an action binding, a gesture starts from nothing.
         let other = try decode(#"{"buttons": {"gesture": "launchpad"}, "apps": {"x": {"buttons": {"gesture": {"up": "appExpose"}}}}}"#)
         guard case .gesture(let fresh) = other.settings(forApp: "x")?.bindings[0xC3] else { Issue.record("fresh"); return }
@@ -185,10 +185,14 @@ import Testing
         #expect(d.mode == .actions(left: .zoomOut, right: .mute) && d.step == 5)
     }
 
-    @Test func smoothScrollInAnAppWorksWithoutAGlobalOne() throws {
-        let config = try decode(#"{"apps": {"com.apple.Safari": {"smoothScroll": {}}}}"#)
-        #expect(config.smoothScroll == nil)
-        #expect(config.settings(forApp: "com.apple.Safari")?.smoothScroll?.enabled == true)
+    @Test func smoothScrollInAnAppInheritsTheDefaultSet() throws {
+        let config = try decode(#"{"apps": {"com.apple.Safari": {"smoothScroll": {"speed": 3}}}}"#)
+        #expect(config.smoothScroll?.enabled == true)
+        let app = config.settings(forApp: "com.apple.Safari")?.smoothScroll
+        #expect(app?.enabled == true && app?.speed == 3 && app?.smoothingMs == 125)
+        // The global switch off stays off in an app that leaves `enabled` out.
+        let off = try decode(#"{"smoothScroll": {"enabled": false}, "apps": {"x": {"smoothScroll": {"speed": 3}}}}"#)
+        #expect(off.settings(forApp: "x")?.smoothScroll?.enabled == false)
     }
 
     @Test func bundleIDsMatchWithoutCase() throws {

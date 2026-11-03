@@ -16,7 +16,7 @@ struct ScrollingPane: View {
     /// How long the outline stays before it fades.
     static let outlineDuration: Duration = .milliseconds(1500)
 
-    static let restoreMessage = "Scrolling and thumb wheel settings return to the mouse's defaults. App settings don't change."
+    static let restoreMessage = "Scrolling and thumb wheel settings return to PureMouse's defaults. App settings don't change."
 
     /// What Restore Defaults says for one mouse: its own values go, and it follows All Mice.
     static func restoreMessage(for mouse: String) -> String {

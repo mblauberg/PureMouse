@@ -10,9 +10,12 @@ import Testing
     @Test func everyNoticeAtOnceKeepsTheOrder() {
         let state = BannerPlan.State(configError: true, writeError: true, statusTooNew: true, daemonRunning: false,
                                      paused: true, logiOptionsRunning: true, accessibilityMissing: true,
-                                     needsAccessibility: true)
+                                     needsAccessibility: true, inputMonitoringNeeded: true, noMouse: true)
         #expect(BannerPlan.items(for: state)
-            == [.configError, .writeError, .statusTooNew, .off, .paused, .logiOptions, .accessibility])
+            == [.configError, .writeError, .statusTooNew, .off, .paused, .inputMonitoring, .logiOptions,
+                .accessibility, .noMouse])
+        // The plan's order is the notices' own order, so a new notice cannot slip out of place.
+        #expect(BannerPlan.items(for: state) == Notice.allCases)
         #expect(BannerPlan.items(for: BannerPlan.State()).isEmpty)
     }
 
@@ -23,6 +26,61 @@ import Testing
         needing.needsAccessibility = true
         #expect(BannerPlan.items(for: needing) == [.accessibility])
         #expect(BannerPlan.items(for: BannerPlan.State(needsAccessibility: true)).isEmpty)
+    }
+
+    @Test func inputMonitoringAndNoMouseHaveTheirOwnNotices() {
+        #expect(BannerPlan.items(for: BannerPlan.State(inputMonitoringNeeded: true)) == [.inputMonitoring])
+        #expect(BannerPlan.items(for: BannerPlan.State(noMouse: true)) == [.noMouse])
+        // A Bluetooth mouse waiting outranks Logi Options+ and Accessibility; no mouse comes last.
+        let state = BannerPlan.State(logiOptionsRunning: true, accessibilityMissing: true, needsAccessibility: true,
+                                     inputMonitoringNeeded: true, noMouse: true)
+        #expect(BannerPlan.items(for: state).first == .inputMonitoring)
+        #expect(BannerPlan.items(for: state).last == .noMouse)
+    }
+
+    /// The Logi Options+ notice offers to ask the app to quit and to open Login Items; no other
+    /// notice carries these, and neither action signals or starts a process.
+    @Test func theLogiOptionsNoticeOffersQuitAndLoginItems() {
+        #expect(Notice.logiOptions.logiOptionsActions == [.quit])
+        #expect(Notice.logiOptions.logiOptionsLink == .openLoginItems)
+        for notice in Notice.allCases where notice != .logiOptions {
+            #expect(notice.logiOptionsActions.isEmpty && notice.logiOptionsLink == nil, "\(notice)")
+        }
+        #expect(LogiOptionsAction.quit.title == "Quit Logi Options+")
+        #expect(LogiOptionsAction.quit.url == nil)
+        #expect(LogiOptionsAction.openLoginItems.title == "Open Login Items Settings…")
+        #expect(LogiOptionsAction.openLoginItems.url == OpenAtLogin.settingsURL)
+    }
+
+    /// Quit asks the agent (the login item) and the app, by bundle identifier, and nothing else.
+    @Test func quitReachesLogiOptionsAppsOnly() {
+        #expect(LogiOptionsAction.isLogiOptions(bundleIdentifier: "com.logi.cp-dev-mgr"))
+        #expect(LogiOptionsAction.isLogiOptions(bundleIdentifier: "com.logi.optionsplus"))
+        #expect(LogiOptionsAction.isLogiOptions(bundleIdentifier: "com.logi.optionsplus.updater"))
+        #expect(!LogiOptionsAction.isLogiOptions(bundleIdentifier: "io.github.mblauberg.puremouse.menu"))
+        #expect(!LogiOptionsAction.isLogiOptions(bundleIdentifier: "com.logitech.manager"))
+        #expect(!LogiOptionsAction.isLogiOptions(bundleIdentifier: nil))
+    }
+
+    /// General's Input Monitoring row says "Not needed" with no Bluetooth mouse, and offers the
+    /// allow only when one needs it.
+    @Test func aPermissionNobodyNeedsReadsNotNeeded() {
+        #expect(PermissionState(granted: false, needed: false) == .notNeeded)
+        #expect(PermissionState(granted: false, needed: false).word == "Not needed")
+        #expect(PermissionState(granted: false, needed: true) == .notAllowed)
+        #expect(PermissionState(granted: true, needed: false) == .allowed)
+        #expect(PermissionState(granted: nil, needed: true) == .unavailable)
+    }
+
+    @Test func theInputMonitoringMessageNamesTheMiceOrBluetoothMice() {
+        #expect(Notice.inputMonitoringTitle(waiting: ["MX Anywhere 3S"]) == "MX Anywhere 3S is waiting for Input Monitoring.")
+        #expect(Notice.inputMonitoringTitle(waiting: ["MX Anywhere 3S", "M750"]) == "MX Anywhere 3S and M750 are waiting for Input Monitoring.")
+        #expect(Notice.inputMonitoringTitle(waiting: ["A", "B", "C"]) == "A, B and C are waiting for Input Monitoring.")
+        #expect(Notice.inputMonitoringTitle(waiting: []) == "PureMouse needs Input Monitoring.")
+        #expect(Notice.inputMonitoringMessage(waiting: ["MX Anywhere 3S"])
+                == "PureMouse can't see it until you allow it in System Settings. It restarts itself once you do.")
+        #expect(Notice.inputMonitoringMessage(waiting: ["A", "B"]).contains("can't see them"))
+        #expect(Notice.inputMonitoringMessage(waiting: []).contains("your Bluetooth mouse"))
     }
 
     @Test func aBannerCountsTheNoticesBehindIt() {
@@ -54,5 +112,24 @@ import Testing
         #expect(message.contains("replaces the whole config file"))
         #expect(message.contains("config.json.bak"))
         #expect(!UseLastWorkingConfirmation.button.hasSuffix("…"))
+    }
+}
+
+@Suite struct OneObservationEachTests {
+    @Test func askingTwiceKeepsOneObservationPerProcess() {
+        var held = OneObservationEach<Int, String>()
+        var made = 0
+        #expect(held.start(10) { made += 1; return "a" })
+        #expect(!held.start(10) { made += 1; return "b" })
+        #expect(held.start(11) { made += 1; return "c" })
+        #expect(made == 2 && held.count == 2)
+    }
+
+    @Test func aQuitProcessReleasesItsObservation() {
+        var held = OneObservationEach<Int, String>()
+        held.start(10) { "a" }
+        held.finish(10)
+        #expect(held.count == 0)
+        #expect(held.start(10) { "again" }, "a later ask for the same pid is watched afresh")
     }
 }

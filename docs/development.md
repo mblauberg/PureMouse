@@ -136,6 +136,7 @@ the full list. The ones used most:
 | Variable | Effect |
 |---|---|
 | `PUREMOUSE_DEV_APPEARANCE=light\|dark` | Overrides the appearance (menu and helper) |
+| `PUREMOUSE_DEV_HIDDEN=1` | The menu app runs as if Show in menu bar were off: resident, no status item (`Locations.showsInMenuBar`) |
 | `PUREMOUSE_DEV_MENU=1` | Opens the status menu over a plain backdrop, since its glass shows whatever is behind it |
 | `PUREMOUSE_DEV_PANE=<pane>` | Opens a tab (`general`, `mouse`, `apps`, `about`) or a Mouse segment (`buttons`, `scrolling`, `pointer`) |
 | `PUREMOUSE_DEV_PICKER=<button>` | A button's action picker on Mouse › Buttons only |
@@ -200,7 +201,8 @@ scenario and both numbers) and 2 when the rig itself fails. Samples are in
 `.build/rig/results/measure-menu-<time>.tsv` (`--tsv` picks another path), one row per sample with
 a `unit` column (MB, or ms for a cold start). `--blocks` exits 2 if `heap` fails or lists no blocks.
 A budgets file without a whole-number limit for `fresh`, `open-1`, `open-10`, `doorbells-200`,
-`helper-closed`, `helper-closed-5`, `helper` and `helper-cold-start` is also exit 2. `scripts/measure-bare-appkit.sh` measures the bare AppKit comparison.
+`helper-closed`, `helper-closed-5`, `helper`, `helper-cold-start`, `hidden`, `hidden-doorbells-200`,
+`hidden-helper-closed` and `hidden-updates` is also exit 2. `scripts/measure-bare-appkit.sh` measures the bare AppKit comparison.
 
 The rig is isolated from the installed app. It builds the release menu and Settings helper with
 `-DDEVHOOKS` into `.build/rig`, wraps each, with the functions that assemble the shipped ones
@@ -235,6 +237,7 @@ Scenarios, each a median of the runs, in MB of physical footprint (`footprint`),
 | `helper-cold-start` | ms from the menu being asked for Settings to the helper's window on screen, the helper not running: `settings-visible`'s modification time minus the request's |
 | `helper` | the Settings helper's own footprint, 2 s after its window is on screen |
 | `helper-open`, `helper-closed` | the menu app's footprint while the helper is open (informational), and 1.5 s after it quits |
+| `hidden`, `hidden-doorbells-200`, `hidden-helper-closed`, `hidden-updates` | the menu app with Show in menu bar off (`PUREMOUSE_DEV_HIDDEN=1`: resident, no status item), fresh; after 200 status doorbells, the last one a low battery; after the helper has opened and quit once; and after an update check (`PUREMOUSE_RIG_UPDATES=check`) |
 | `helper-closed-5` | the menu app's footprint after five opens and quits of the helper |
 
 `scripts/measure-menu.budgets` holds `scenario<TAB>limit` lines in the scenario's unit; a scenario
