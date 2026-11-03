@@ -8,10 +8,17 @@ public final class BackgroundActivity: UpdateScheduling {
     private let identifier: String
     private var scheduler: NSBackgroundActivityScheduler?
 
-    /// How long after the nominal time the system may wait for a convenient moment.
-    static let tolerance: TimeInterval = 60 * 60
+    /// The most the system may wait after the nominal time for a convenient moment.
+    static let maximumTolerance: TimeInterval = 60 * 60
     /// The shortest nominal delay; a check that is already due still waits this long after launch.
     static let minimumDelay: TimeInterval = 60
+
+    /// The scheduler's interval and tolerance for a wanted delay. The scheduler raises an
+    /// exception unless the tolerance is less than the interval, so a short wait gets a short tolerance.
+    static func timing(after delay: TimeInterval) -> (interval: TimeInterval, tolerance: TimeInterval) {
+        let interval = max(delay, minimumDelay)
+        return (interval, min(maximumTolerance, interval / 2))
+    }
 
     public init(identifier: String) { self.identifier = identifier }
 
@@ -20,8 +27,9 @@ public final class BackgroundActivity: UpdateScheduling {
         cancel()
         let scheduler = NSBackgroundActivityScheduler(identifier: identifier)
         scheduler.repeats = false
-        scheduler.interval = max(delay, Self.minimumDelay)
-        scheduler.tolerance = Self.tolerance
+        let timing = Self.timing(after: delay)
+        scheduler.interval = timing.interval
+        scheduler.tolerance = timing.tolerance
         scheduler.qualityOfService = .utility
         self.scheduler = scheduler
         let handle = SchedulerBox(scheduler)
