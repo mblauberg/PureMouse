@@ -491,6 +491,15 @@ private func resolved(_ wheel: Config.ThumbWheel) -> Resolved {
     #expect(ButtonRows.named(deviceCIDs: nil, configKeys: ["0x01A0"]).contains(.thumbPanel))
 }
 
+/// The rows' order (Buttons and the app sheet): the side buttons first, then the wheel and the top
+/// of the mouse, then the thumb's.
+@Test func namedButtonsListBackAndForwardFirst() {
+    #expect(NamedButton.allCases == [.back, .forward, .middle, .top, .gesture, .thumbPanel])
+    #expect(ButtonRows.named(deviceCIDs: nil, configKeys: []) == [.back, .forward, .middle, .top, .gesture])
+    let mx4: Set<UInt16> = [0x1A0, 0xC4, 0xC3, 0x56, 0x53, 0x52]
+    #expect(ButtonRows.named(deviceCIDs: mx4, configKeys: []) == NamedButton.allCases)
+}
+
 // MARK: Replaying app edits
 
 @Test func aFirstAppSettingMergesIntoAppsAddedByHand() throws {

@@ -160,9 +160,11 @@ public enum ActionCatalog {
     }
 }
 
-/// The named buttons the Buttons pane lists, in order, with their control IDs.
+/// The named buttons the Buttons pane lists, with their control IDs. The order is the rows' order
+/// (and the Apps sheet's): the side buttons first, then the wheel and the top of the mouse, then the
+/// thumb's (`DeviceCard` draws them where they are).
 public enum NamedButton: String, CaseIterable, Sendable {
-    case gesture, back, forward, top, middle, thumbPanel
+    case back, forward, middle, top, gesture, thumbPanel
 
     public var label: String {
         switch self {
