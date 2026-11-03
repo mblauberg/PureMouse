@@ -119,7 +119,9 @@ extension Session {
         let changes = unwanted.sorted().map { ($0, false) } + wanted.sorted().map { ($0, true) }
         try await Independently.each([nil] + changes.map(Optional.some), stopsOn: { self.stops($0) }) { change in
             guard let (cid, divert) = change else { return try await releaseAll() }
-            try await setDiverted(cid, divert, rawXY: divert && bound[cid] == true)
+            // A control held now keeps its pointer free: its release (`setPointerFree`) turns the
+            // motion back on, so an apply that was waiting when it was pressed must not.
+            try await setDiverted(cid, divert, rawXY: divert && bound[cid] == true && !pointerFree.contains(cid))
         }
     }
 

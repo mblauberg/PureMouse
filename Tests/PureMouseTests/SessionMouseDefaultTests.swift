@@ -123,4 +123,45 @@ import Testing
         try await h.session.apply()
         #expect(h.fake.control(0xC3)?.rawXY == true)
     }
+
+    // MARK: A press held across a pending apply
+
+    /// Presses `cid` while a delayed configure is still waiting, and lets it apply while held.
+    private func holdAcrossPendingApply(_ json: String, cid: UInt16) async throws -> SessionHarness {
+        let h = try await SessionHarness(config: try SessionHarness.config(json))
+        try await h.session.apply()
+        #expect(h.fake.control(cid)?.rawXY == true)
+        h.session.configure(after: .milliseconds(150))
+        await press(h, cid)
+        #expect(h.session.pointerFree == [cid])
+        #expect(h.fake.control(cid)?.rawXY == false)
+        try await Task.sleep(for: .milliseconds(400))
+        await h.session.diversion.drain()
+        #expect(!h.session.isConfiguring)
+        return h
+    }
+
+    @Test func aPendingApplyDoesNotReFreezeAHeldPlainActionOnAGestureControl() async throws {
+        let h = try await holdAcrossPendingApply("""
+            {"buttons": {"gesture": "mute"},
+             "apps": {"com.example.x": {"buttons": {"gesture": {"click": "none", "up": "volumeUp"}}}}}
+            """, cid: 0xC3)
+        defer { h.close() }
+        #expect(h.fake.control(0xC3)?.diverted == true && h.fake.control(0xC3)?.rawXY == false)
+        await release(h)
+        #expect(h.fake.control(0xC3)?.diverted == true && h.fake.control(0xC3)?.rawXY == true)
+        #expect(h.session.pointerFree.isEmpty)
+    }
+
+    @Test func aPendingApplyDoesNotReFreezeAHeldMouseDefaultControl() async throws {
+        let h = try await holdAcrossPendingApply("""
+            {"buttons": {"top": "default"},
+             "apps": {"com.example.x": {"buttons": {"top": {"click": "none", "up": "volumeUp"}}}}}
+            """, cid: 0xC4)
+        defer { h.close() }
+        #expect(h.fake.control(0xC4)?.diverted == true && h.fake.control(0xC4)?.rawXY == false)
+        await release(h)
+        #expect(h.fake.control(0xC4)?.diverted == true && h.fake.control(0xC4)?.rawXY == true)
+        #expect(h.session.pointerFree.isEmpty)
+    }
 }
