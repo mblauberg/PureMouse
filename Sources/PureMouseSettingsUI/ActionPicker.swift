@@ -395,20 +395,20 @@ struct ActionButton: View {
     var sameAsEverywhere: String?
     /// `sameAsEverywhere` as VoiceOver says it (a shortcut in words); the label itself when nil.
     var spokenEverywhere: String?
-    /// The wider scope `sameAsEverywhere` comes from: Everywhere for an app, All Mice for a mouse.
-    var source = InheritedScope.everywhere
+    /// The wider scope `sameAsEverywhere` comes from: Mouse Settings for an app, All Mice for a mouse.
+    var source = InheritedScope.mouseSettings
     /// The scope whose mice decide whether the haptic waveforms are listed.
     var scope = ConfigScope.global
     @State private var openedFromKeyboard = false
 
     /// A scope's binding as its row shows it: `.standard` leaves it to `everywhere`.
-    static func inherited(_ action: ButtonAction, everywhere: String, source: String = InheritedScope.everywhere) -> InheritedValue<String> {
+    static func inherited(_ action: ButtonAction, everywhere: String, source: String = InheritedScope.mouseSettings) -> InheritedValue<String> {
         InheritedValue(own: action == .standard ? nil : action.label, inherited: everywhere, source: source)
     }
 
     /// A gesture direction as its row shows it: the scope's own, else the wider gesture's (or nothing).
     static func inherited(_ direction: AppButton.Direction, source: String) -> InheritedValue<String> {
-        inherited(direction.own, everywhere: direction.inherited.label, source: source)
+        inherited(direction.own, everywhere: direction.inheritedLabel, source: source)
     }
 
     private var inherited: InheritedValue<String>? { sameAsEverywhere.map { Self.inherited(action, everywhere: $0, source: source) } }
@@ -419,9 +419,9 @@ struct ActionButton: View {
     private var label: String { inherited?.effective ?? action.label }
 
     /// What VoiceOver reads as the value: a shortcut in words ("Shift Command 4"), not glyphs, and
-    /// an inherited one with its source ("Mission Control, same as Everywhere").
+    /// an inherited one with its source ("Mission Control, same as Mouse Settings").
     static func spokenValue(for action: ButtonAction, everywhere: String?, spokenEverywhere: String?,
-                            source: String = InheritedScope.everywhere) -> String {
+                            source: String = InheritedScope.mouseSettings) -> String {
         guard let everywhere else { return action.spokenLabel }
         let own = action == .standard ? nil : action.spokenLabel
         return InheritedValue(own: own, inherited: spokenEverywhere ?? everywhere, source: source).spoken

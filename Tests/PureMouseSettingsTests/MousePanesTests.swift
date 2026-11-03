@@ -158,17 +158,17 @@ import Testing
 
 @MainActor @Test func aMouseAndAnAppShowAnInheritedValueThroughTheSameType() {
     // One type, one rule: an inherited value has no caption and no mark; an own one says "Set for <owner>."
-    let app = InheritedValue<String>(own: nil, inherited: "Mute", source: InheritedScope.everywhere)
+    let app = InheritedValue<String>(own: nil, inherited: "Mute", source: InheritedScope.mouseSettings)
     let mouse = InheritedValue<String>(own: nil, inherited: "Mute", source: InheritedScope.allMice)
     #expect(type(of: app) == type(of: mouse))
     #expect(app.effective == mouse.effective && app.caption == nil && mouse.caption == nil)
     let notes = [app.note {}, mouse.note {}]
     #expect(notes.allSatisfy { $0 == nil })
-    let ownApp = InheritedValue<String>(own: "Volume Up", inherited: "Mute", source: InheritedScope.everywhere)
+    let ownApp = InheritedValue<String>(own: "Volume Up", inherited: "Mute", source: InheritedScope.mouseSettings)
     let ownMouse = InheritedValue<String>(own: "Volume Up", inherited: "Mute", source: InheritedScope.allMice)
     #expect(ownApp.effective == "Volume Up" && ownMouse.effective == "Volume Up")
     #expect(ownApp.caption == "Set for this app." && ownMouse.caption == "Set for this mouse.")
-    #expect(ownApp.resetTitle == "Use Everywhere Setting" && ownMouse.resetTitle == "Use All Mice Setting")
+    #expect(ownApp.resetTitle == "Use Mouse Setting" && ownMouse.resetTitle == "Use All Mice Setting")
     // The Buttons list builds both from the same function.
     let button = ActionButton.inherited(.standard, everywhere: "Mission Control", source: InheritedScope.allMice)
     #expect(button.caption == nil && button.effective == "Mission Control")
@@ -218,7 +218,7 @@ import Testing
         try String(contentsOf: ui.appending(path: name), encoding: .utf8)
     }
 
-    private static let files = ["PointerPane", "ScrollingPane", "ButtonsPane", "ThumbWheelRows", "AppSheet", "Components", "PresetsSheet"]
+    private static let files = ["PointerPane", "ScrollingPane", "ButtonsPane", "ThumbWheelRows", "AppPage", "Components", "PresetsSheet"]
 
     @Test func nothingDimsAnInheritedValueOrHidesATrailingSlot() throws {
         let everything = try (Self.files + ["InheritedValue", "ActionPicker"]).map { try Self.source($0 + ".swift") }.joined(separator: "\n")

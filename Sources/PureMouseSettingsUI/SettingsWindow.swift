@@ -251,7 +251,7 @@ extension NSApplication {
     ///
     /// Ending the sheets is not always enough: a SwiftUI sheet whose state still says it is shown
     /// is attached again while `terminate(_:)` runs, which then returns without quitting (seen in
-    /// the bundled helper with an app's sheet open). So when it returns, finish the quit as it
+    /// the bundled helper with a sheet open). So when it returns, finish the quit as it
     /// would have: announce `willTerminate` (the delegate saves) and exit.
     public func terminateClosingSheets() {
         for window in windows {

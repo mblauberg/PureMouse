@@ -4,7 +4,7 @@ import notify
 
 /// "Show Settings": the `show-settings` file, stamped with its time and naming the pane to open
 /// (empty: the last one shown) and, after a dot, a sheet to open over it ("pointer.presets"), or,
-/// after a colon, the bundle identifier of an app whose sheet to open in Apps ("apps:com.apple.Safari"),
+/// after a colon, the bundle identifier of an app whose page to open in Apps ("apps:com.apple.Safari"),
 /// plus a doorbell, so a process still starting up (and not yet listening) sees it too. Only a request
 /// from the last 5 s counts (docs/companion.md).
 public struct ShowRequest: Equatable, Sendable {
@@ -12,7 +12,7 @@ public struct ShowRequest: Equatable, Sendable {
     public var pane: SettingsPane?
     /// The sheet to open over the pane.
     public var sheet: SettingsSheet?
-    /// The bundle identifier of an app whose sheet opens in Apps, listing the app first when it is
+    /// The bundle identifier of an app whose page opens in Apps, listing the app first when it is
     /// not there (nothing is written until a setting is chosen).
     public var app: String?
 
@@ -21,7 +21,7 @@ public struct ShowRequest: Equatable, Sendable {
         self.sheet = sheet
     }
 
-    /// A request for this app's sheet in Apps; an empty identifier asks for nothing.
+    /// A request for this app's page in Apps (the one its row opens); an empty identifier asks for nothing.
     public init(app: String) {
         let id = app.trimmingCharacters(in: .whitespacesAndNewlines)
         self.init(pane: .tab(.apps))
@@ -42,7 +42,7 @@ public struct ShowRequest: Equatable, Sendable {
         let parts = (split.first ?? "").split(separator: ".", maxSplits: 1, omittingEmptySubsequences: false)
         self.init(pane: parts.first.flatMap { SettingsPane(rawValue: String($0)) },
                   sheet: parts.dropFirst().first.flatMap { SettingsSheet(rawValue: String($0)) })
-        // An app's sheet lives in Apps, whatever pane the text names.
+        // An app's page lives in Apps, whatever pane the text names.
         if let id = split.dropFirst().first.map(String.init), !id.isEmpty {
             app = id
             pane = .tab(.apps)

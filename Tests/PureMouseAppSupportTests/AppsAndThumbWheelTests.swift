@@ -325,22 +325,22 @@ private func resolved(_ wheel: Config.ThumbWheel) -> Resolved {
 
 @Test func appSummaries() throws {
     let config = try tree(#"{"apps": {"a.b": {"thumbWheel": {"action": "tabs"}, "buttons": {"back": "mute", "top": "zoomIn"}, "smoothScroll": {"speed": 2}}, "c.d": {"buttons": {"back": "mute"}}}}"#)
-    #expect(config.appSummary("a.b") == "Thumb wheel: Switch Tabs, 2 buttons changed, Custom scrolling")
-    #expect(config.appSummary("c.d") == "1 button changed")
+    #expect(config.appSummary("a.b") == "Buttons, Scrolling")
+    #expect(config.appSummary("c.d") == "Buttons")
     #expect(config.appSummary("e.f") == "No custom settings")
-    // Direction alone is an override too.
+    // Direction alone is an override too, and it is a Scrolling one.
     let directions = try tree(#"{"apps": {"a.b": {"thumbWheel": {"reversed": true}}, "c.d": {"thumbWheel": {"reversed": false}}, "e.f": {"thumbWheel": {"action": "tabs", "reversed": true}}}}"#)
-    #expect(directions.appSummary("a.b") == "Thumb wheel: Directions swapped")
-    #expect(directions.appSummary("c.d") == "Thumb wheel: Directions not swapped")
-    #expect(directions.appSummary("e.f") == "Thumb wheel: Switch Tabs, directions swapped")
+    #expect(directions.appSummary("a.b") == "Scrolling")
+    #expect(directions.appSummary("c.d") == "Scrolling")
+    #expect(directions.appSummary("e.f") == "Scrolling")
 }
 
 @Test func customScrollingSaysWhatTheAppsScrollingDoes() throws {
     // Off: the app follows Scrolling.
-    #expect(try tree(#"{"smoothScroll": {}}"#).customScrollingCaption("a.b") == "Uses Scrolling's speed and glide.")
+    #expect(try tree(#"{"smoothScroll": {}}"#).customScrollingCaption("a.b") == "Uses Mouse Settings' speed and glide.")
     // On, smooth scrolling as everywhere.
     #expect(try tree(#"{"smoothScroll": {}, "apps": {"a.b": {"smoothScroll": {"speed": 2}}}}"#).customScrollingCaption("a.b")
-        == "Smooth scrolling is on, as set in Scrolling.")
+        == "Smooth scrolling is on, as set in Mouse Settings.")
     // On, and smooth scrolling is on nowhere else: the app's smoothScroll turns it on there.
     let only = try tree(#"{"apps": {"a.b": {"smoothScroll": {"speed": 2}}}}"#)
     #expect(only.customScrollingCaption("a.b") == "Smooth scrolling is on in this app only.")
@@ -376,7 +376,7 @@ private func resolved(_ wheel: Config.ThumbWheel) -> Resolved {
     #expect(own.own == .gesture && !own.inheritsGesture)
     #expect(own.directions.first { $0.name == "up" } == .init(name: "up", own: .standard, everywhere: .named("appExpose")))
     #expect(own.directions.first { $0.name == "left" }?.own == .named("spaceLeft"))
-    // Back to Same as Everywhere: the app's entry goes.
+    // Back to Same as Mouse Settings: the app's entry goes.
     edited.bindInApp("a.b", button: "gesture", direction: "left", to: .standard)
     #expect(!edited.contains(["apps"]))
 }
@@ -402,14 +402,14 @@ private func resolved(_ wheel: Config.ThumbWheel) -> Resolved {
     #expect(list.ids(in: config) == ["com.apple.Safari", "a.b"])
     #expect(list.summary("a.b", in: config) == "No custom settings")
     #expect(!config.contains(["apps", "a.b"]))
-    // Remove… confirmed in the open sheet: the entry goes and the sheet closes.
-    list.open = "com.apple.Safari"
+    // Remove… confirmed on the open page: the entry goes and the page closes.
+    list.show("com.apple.Safari")
     list.remove("com.apple.Safari", from: &config)
     #expect(list.open == nil)
     #expect(!config.contains(["apps"]))
     #expect(list.ids(in: config) == ["a.b"])
-    // Removing another app leaves an open sheet alone.
-    list.open = "a.b"
+    // Removing another app leaves the open page alone.
+    list.show("a.b")
     list.remove("c.d", from: &config)
     #expect(list.open == "a.b")
     list.remove("a.b", from: &config)
@@ -417,7 +417,7 @@ private func resolved(_ wheel: Config.ThumbWheel) -> Resolved {
 }
 
 /// "Settings for <app>…": the helper hands the request's identifier to `AppList.add`.
-@Test func anAppRequestedFromTheMenuOpensItsSheetWithoutWriting() throws {
+@Test func anAppRequestedFromTheMenuOpensItsPageWithoutWriting() throws {
     let config = try tree(#"{"apps": {"com.apple.Safari": {"buttons": {"back": "mute"}}}}"#)
     let before = config.data()
     // Unlisted: listed and opened, nothing written.

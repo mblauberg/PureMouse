@@ -60,7 +60,7 @@ struct RowLabel: View {
 
 /// A pop-up's closed face as the form's own pop-up menus draw it: the value, then the up/down
 /// chevrons. One drawing for every pop-up in Settings (`PopUpMenu`, `ActionButton`), so the
-/// action rows on Buttons, Scrolling and an app's sheet read alike.
+/// action rows on Buttons, Scrolling and an app's page read alike.
 struct PopUpLabel: View {
     let text: String
 
