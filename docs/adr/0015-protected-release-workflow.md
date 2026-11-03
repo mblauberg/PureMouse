@@ -20,8 +20,10 @@ pull-request trigger. Pull-request CI runs the same script as a dry run. The job
 commit against `origin/main` before reading credentials. Stable tags require the identity and both
 signing secrets; an RC with neither signing secret explicitly uses ad hoc signing. Partial signing
 or notary credentials fail. A temporary keychain and private notary key are removed on exit, with
-an unconditional cleanup step as a backstop. Raw build and notary output is withheld because it
-can contain secrets; failures retain the exit code. The release files are retained as a workflow
+an unconditional cleanup step as a backstop; the keychain does not auto-lock during the job. Build
+and notary output stays in the job log for diagnosis: release.sh prints no credential and Actions
+masks every secret. The build keeps the default umask, so the bundle is readable by every account;
+only the credential folder is private. The release files are retained as a workflow
 artefact for seven days.
 
 ## Alternatives rejected

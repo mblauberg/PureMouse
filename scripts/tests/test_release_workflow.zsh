@@ -25,7 +25,7 @@ SCRIPT
     cat > "$tmp/repo/scripts/release.sh" <<'SCRIPT'
 #!/bin/bash
 printf '%s' "$PUREMOUSE_SIGN_IDENTITY" > "$RUNNER_TEMP/identity"
-echo "secret output: ${SIGNING_CERT_PASSWORD:-}"
+echo "release diagnostics"
 exit "${RELEASE_STATUS:-0}"
 SCRIPT
     chmod +x "$tmp/bin/"* "$tmp/repo/scripts/release.sh"
@@ -60,13 +60,14 @@ test_release_workflow_cleanup_and_exit_status_on_success_and_failure() {
     export NOTARY_API_KEY_P8_BASE64=cDg= NOTARY_KEY_ID=key-id NOTARY_ISSUER_ID=issuer-id
     local output rc
     output=$(workflow_build 2>&1)
-    [[ $output != *secret-password* && $(<"$RUNNER_TEMP/identity") == PureMouse ]]
+    [[ $(<"$RUNNER_TEMP/identity") == PureMouse ]]
+    grep -q '^set-keychain-settings$' "$RUNNER_TEMP/security-calls"
     [[ ! -e "$RUNNER_TEMP/puremouse-release" && ! -e "$tmp/repo/.build/notary" ]]
     grep -q '^set-key-partition-list$' "$RUNNER_TEMP/security-calls"
     grep -q '^delete-keychain$' "$RUNNER_TEMP/security-calls"
     rc=0
     output=$(RELEASE_STATUS=23 workflow_build 2>&1) || rc=$?
-    [[ $rc == 23 && $output != *secret-password* && ! -e "$RUNNER_TEMP/puremouse-release" ]]
+    [[ $rc == 23 && $output == *'release diagnostics'* && ! -e "$RUNNER_TEMP/puremouse-release" ]]
     rc=0
     IMPORT_FAIL=1 workflow_build >/dev/null 2>&1 || rc=$?
     [[ $rc != 0 && ! -e "$RUNNER_TEMP/puremouse-release" ]]

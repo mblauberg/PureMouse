@@ -262,7 +262,7 @@ signature from that team.
    `main` before importing credentials, then signs, builds and attests the dmg.
 3. Review the draft GitHub release and publish it manually. It contains the dmg and `SHA256SUMS`;
    `shasum -a 256 -c SHA256SUMS` checks the download. RC tags produce draft prereleases. Workflow
-   artefacts are kept for seven days; raw build and notary output is withheld to protect secrets.
+   artefacts are kept for seven days. A failed run's log shows the build and notary output.
 
 Stable releases require the configured identity and signing secrets. An RC with neither signing
 secret is explicitly signed ad hoc and says so in the job summary; partial credentials fail. The
