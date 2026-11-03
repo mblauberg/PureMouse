@@ -183,9 +183,12 @@ A release build carries none of this; with `-DDEVHOOKS` it carries only the rig'
 
 Take captures and README screenshots on a macOS 27 host from a build linked against the macOS 27
 SDK ([UI design](ui-design.md#motion-sound-and-accessibility)). `PUREMOUSE_DEV_CAPTURE` covers
-Settings. For the menu, `PUREMOUSE_DEV_MENU=1` opens it; a window capture (`screencapture -l`)
-leaves out the menu's blur, so the README's menu shots take the shape and shadow from a window
-capture and the body from a screen capture of the same rect.
+Settings. For the menu, `PUREMOUSE_DEV_MENU=1` opens it and `PUREMOUSE_DEV_CAPTURE=<png>` writes
+it. With Screen Recording permission that is the window server's image of the open menu; without
+it, which would be blank, the menu is drawn from its own views over the window background colour,
+with no glass: enough to check its rows and words in either appearance. A window capture
+(`screencapture -l`) leaves out the menu's blur, so the README's menu shots take the shape and
+shadow from a window capture and the body from a screen capture of the same rect.
 
 ### UI matrix
 

@@ -404,7 +404,8 @@ cost. Planned or built (epic #114):
   of a session that began with no config file leaves an empty `{}` file, not no file.
 - **Settings for the app in use** (built). The status menu offers "Settings for <app>…" below
   Settings… for the frontmost app (not Finder, the Dock or any PureMouse bundle, nor one without a
-  bundle identifier), opening its page in Apps. `NSWorkspace.shared.frontmostApplication` is read
+  bundle identifier, nor anything but an ordinary app: not the login window, which is frontmost
+  while the screen is locked, or an agent), opening its page in Apps. `NSWorkspace.shared.frontmostApplication` is read
   once as the menu opens, with no observer or timer; opening a status item's menu does not
   activate PureMouse, so it still names the app in use.
 - **Feel a haptic.** Choosing a haptic action in the picker plays it once on a mouse with haptics,

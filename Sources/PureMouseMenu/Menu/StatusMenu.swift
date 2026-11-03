@@ -74,7 +74,8 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         // Read once, as the menu opens: choosing the menu does not activate PureMouse, so this is
         // still the app the person was using. No observer, no timer.
         let front = NSWorkspace.shared.frontmostApplication
-        state.frontmost = FrontmostApp(bundleID: front?.bundleIdentifier, name: front?.localizedName)
+        state.frontmost = FrontmostApp(bundleID: front?.bundleIdentifier, name: front?.localizedName,
+                                       isRegular: front?.activationPolicy == .regular)
         var rows = MenuPlan.rows(for: state, option: option)
         #if DEBUG
         rows = DevHooks.submenu(rows)
