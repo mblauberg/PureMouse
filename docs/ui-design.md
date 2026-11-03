@@ -39,8 +39,9 @@ answering a question people have, and a good default means most people never tou
   size: the size always comes from the pane (no frame autosave).
 - Mouse's header strip has a leading slot for the mouse pop-up (`MousePopUp`: All Mice, then each
   known mouse), shown with two or more mice known or any `devices` entry. Its closed text is the
-  mouse's name, truncated at the tail by the width the strip leaves it (one line, never over the
-  centred segments). The Apps note ("Apps are the same for every mouse.") is the
+  mouse's name, in a pop-up as wide as the name needs, up to 240 pt and the width the strip leaves it
+  (as a macOS pop-up draws, no dead space after the name), then cut with an ellipsis that keeps the
+  chevron (one line, never over the centred segments). The Apps note ("Apps are the same for every mouse.") is the
   pop-up's last menu item, a tooltip and its accessibility hint rather than a line under it: a line
   costs 15 pt in a strip every segment shares, and Scrolling has 6 pt to spare. "Settings you don't
   change follow All Mice." is the menu's other note, said once. A pane under a chosen mouse
@@ -140,7 +141,8 @@ Each level has one mechanism, and each label says what it reveals.
 
 - **Advanced…** A push button at the trailing edge of the pane's last row (`PaneFooter`, in the
   last section's footer, so it scrolls with the form; nothing is pinned to the window's bottom
-  edge). Restore Defaults sits at the leading edge of the same row. Either is optional.
+  edge). Restore Defaults sits at the leading edge of the same row. Either is optional. Both end
+  flush with the grouped boxes, as Find by Pressing… does in the strip above.
 - **Advanced sheet** (`AdvancedSheet`): a title, a grouped form and one **Done** button. Its
   settings apply live, like the pane's, so there is nothing for Cancel to undo (house rule: System
   Settings › Mouse › Advanced… does the same; the HIG pairs Done with Cancel for sheets that hold
@@ -268,7 +270,8 @@ series mouse and any unknown product get no card and keep every row in the list 
 - **Which mouse.** The chosen mouse shows its own card. Under All Mice the card shows only when
   every known mouse is the same model (two MX Master 3S do; one mouse does), whether or not a
   pop-up is offered. A mouse with no key or no listed model counts as a different one, so an MX
-  Master 3S with an unknown mouse has no card.
+  Master 3S with an unknown mouse has no card, whether that mouse is a known one the art has no
+  model for or a reported one with no device key (it is not in the pop-up, but still counts).
 - **Parts.** Each part of the drawing is an accessible button with its own label ("Back button,
   set to Mouse Default") and a hint. A click on a button's part selects its row: the row scrolls
   into view and is marked, and a capture, or opening a row's picker, selects it too. The thumb
@@ -285,15 +288,17 @@ series mouse and any unknown product get no card and keep every row in the list 
 - **States.** One continuous hover over the drawing finds the part under the pointer from its hit
   cells, which partition the art. Hover fills the part's outline with the accent colour at 0.6
   opacity and selection fills it solid; each is edged in the accent colour, so a small part reads
-  in both appearances. Neither moves anything. The caption slot is fixed at two lines, so
-  hovering never changes the card's height. A caption is a full sentence ("The Back button is set
+  in both appearances. Neither moves anything. The caption slot is two lines high and as wide as
+  the widest caption the mouse can show (up to 240 pt), so the drawing and text centre on the card
+  and hovering never moves or resizes it. A caption is a full sentence ("The Back button is set
   to Mouse Default.", "Click to open the thumb wheel's scrolling settings.").
 - **Find by Pressing.** A press that finds a row marks the row and lights its part on the drawing
   in the state a click on the part gives, with the caption to match.
 - **Marking a row (#133).** A grouped `Form` ignores `listRowBackground`, so a row is marked in
   its own content: a row-high rounded band behind it (a shape in a stack, since the scan keeps
   `.background` out of Settings) in the accent tint, 18 % for the selected row and 30 % with a 1 pt
-  accent stroke for Find by Pressing's match, which stays a few seconds. The title stays primary,
+  accent stroke for Find by Pressing's match, which stays a few seconds. The band is 4 pt inside
+  the form's box on every side, the first and last rows included. The title stays primary,
   for contrast. The mark must be visible in both appearances.
 - **Size.** The art is drawn at 1.5x (150 x 186 pt); every part's cell is at least 20 x 20 pt
   there. The Buttons pane must stay within 600 pt of content with the card (check the capture:
