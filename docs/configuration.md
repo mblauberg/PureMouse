@@ -40,7 +40,7 @@ own keys. A file is laid over it, so a key left out means the default set's valu
 | Setting | Default |
 |---|---|
 | Smooth scrolling | On, Balanced (`speed` 1, `acceleration` 1, `smoothingMs` 125) |
-| Wheel direction, wheel mode, SmartShift, DPI | Not set: the mouse keeps its own |
+| Wheel direction, wheel mode, SmartShift, DPI | Not set: the mouse keeps its own. Settings' wheel rows show it as a value (not reversed, the mouse's reported mode, SmartShift on) and always write the choice, SmartShift on as 12: the daemon leaves the mouse as it last set it, so a removed key would not undo anything. Only a mouse's choice equal to an explicit All Mice value removes its key |
 | Wheel press (`middle`), top button | Mouse Default |
 | `back`, `forward` | `navigateBack`, `navigateForward` |
 | `gesture` | Click Mission Control, up Mission Control, down App Exposé, left and right Spaces |

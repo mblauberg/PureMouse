@@ -138,6 +138,20 @@ import Testing
         #expect(!picker.contains(".frame(width: 168)"))
     }
 
+    @Test func theWheelRowsAlwaysShowAValueAndSwitchesAtKeepsItsCaption() throws {
+        let scrolling = try Self.source("ScrollingPane.swift")
+        let start = try #require(scrolling.range(of: "private func reverseDirection(")?.lowerBound)
+        let end = try #require(scrolling.range(of: "/// Scrolling's Advanced… sheet")?.lowerBound)
+        let rows = String(scrolling[start..<end])
+        // No caption for an unset value, and no segmented control that can hold no selection.
+        #expect(!rows.contains("mouseDefault"))
+        #expect(!rows.contains("String?"))
+        #expect(rows.contains("WheelDefaults.mode(") && rows.contains("model.liveDevice(in: scope)?.wheelMode"))
+        // Switches at, in Advanced…, still says the mouse keeps its own.
+        let switchesAt = try #require(scrolling.range(of: "private func switchesAt(")?.lowerBound)
+        #expect(scrolling[switchesAt...].contains("mouseDefault: threshold == nil"))
+    }
+
     @MainActor @Test func restoreDefaultsAsksFirstOnBothSegments() throws {
         #expect(ButtonsPane.restoreMessage == "Buttons and gestures return to PureMouse's defaults. App settings don't change.")
         #expect(ScrollingPane.restoreMessage

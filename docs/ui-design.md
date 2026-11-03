@@ -135,6 +135,14 @@ answering a question people have, and a good default means most people never tou
   variable colour only for a changing value (battery).
 - **Typography.** Text styles only; macOS has no Dynamic Type, so nothing smaller than `.caption`.
 
+The main wheel's rows always show a concrete value (`WheelDefaults`): while nothing is set,
+Reverse direction is off, Wheel mode is the mode the mouse reports (Ratchet if it reports none)
+and SmartShift is on, with no "Using the mouse's own setting." caption (Switches at, in Advanced…,
+keeps it). A choice is always written (Reverse off as `false`, SmartShift on as 12), because the
+daemon leaves the mouse as it last set it: a removed key would not undo anything, and Settings
+would show a value the mouse does not have. Only a mouse's choice equal to an explicit All Mice
+value removes its key, since the daemon applies that value to it anyway.
+
 ## Disclosure
 
 Each level has one mechanism, and each label says what it reveals.
@@ -346,9 +354,6 @@ use. PureMouse goes further only where the HIG's own principles (feedback, forgi
 manipulation) lead and the system still draws everything: standard controls, no new chrome, no idle
 cost. Planned or built (epic #114):
 
-- **Try it.** A collapsed "Try it" disclosure under Feel and Speed on Scrolling reveals a short
-  plain-text scroll area, so smoothing is felt where it is set. Trackpad shows its gestures; Mouse
-  shows nothing.
 - **Undo.** ⌘Z and ⇧⌘Z undo and redo each settings change, named in the Edit menu ("Undo Pointer
   Speed"). One slider drag is one step.
 - **Settings for the app in use** (built). The status menu offers "Settings for <app>…" below
@@ -362,7 +367,9 @@ cost. Planned or built (epic #114):
 Not adopted: a 3D or photographic mouse map with glowing callouts (the device card stays original
 art, with no markers or callouts, #56); an acceleration curve editor (macOS owns acceleration, so it
 would duplicate System Settings); a floating per-app indicator (it polls and covers content);
-display-density DPI hints and live gesture highlighting (more text and motion than they earn).
+display-density DPI hints and live gesture highlighting (more text and motion than they earn); a
+"Try it" scroll sample on Scrolling (it broke the 600 pt pane, and people can try a setting by
+scrolling any window).
 
 ## Planned structure (#155)
 

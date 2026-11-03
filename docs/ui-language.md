@@ -95,7 +95,7 @@ One term per concept. "Retire" lists words that must not appear in UI text for t
 | The JSON file | config file; button "Open Config File" | "Config" alone, "Settings" for the file |
 | Mouse resolution | Pointer speed (row), Pointer Speed (menu, action); Slow / Fast slider ends; "DPI" beside a number in Exact value; help "Faster moves the pointer further for the same movement."; footer "Tracking speed in System Settings applies on top." and "Open Mouse Settings" | Resolution, Tracking (except as System Settings' own name) |
 | Saved pointer speeds | presets; "Edit Presets…" (Pointer row, menu; "Add Presets…" in the menu when none), "Add Preset" (sheet "+") | chips, steps, Add Current |
-| A value left unset | "Using the mouse's own setting." (caption); "Mouse Default" (picker entry) | "Mouse default." fragment, "Works as Normal", bare "Default" |
+| A value left unset | "Using the mouse's own setting." (caption, only where no concrete value is shown, as on Switches at; the main wheel's rows show the default value instead); "Mouse Default" (picker entry) | "Mouse default." fragment, "Works as Normal", bare "Default" |
 | A per-tab reset | Restore Defaults (pane footer; resets everything on that tab, advanced rows included); "Restore Defaults…" when it asks first | Reset |
 | Settings moved off the default view | Advanced… (pane footer button, opens a sheet) | More, Fine-tuning, Expert |
 | Running now vs at login | Start / Stop change only whether PureMouse runs now; "Open at login" is the separate switch | Start that also turns on login |
