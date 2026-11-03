@@ -62,7 +62,8 @@ and a change to this page lands with the text it changes.
   certificate", "The update isn't signed", "The update's files don't match its signature", "The
   update isn't newer than this version", "The update isn't the release that was announced", "The
   update was stopped", "Couldn't download the update"; a copy that can't be
-  replaced says "Can't update: this copy needs an administrator" (or "is on a read-only disk").
+  replaced says "Can't update: this copy needs an administrator" (or "is on a read-only disk", or
+  "doesn't verify, so a saved copy from an earlier update is kept").
   After a swap that can't reopen the app: "PureMouse is updated." / "Open it from Applications to
   finish."
 - **Tooltips** are under 75 characters and never repeat the control's name.

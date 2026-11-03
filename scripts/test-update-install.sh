@@ -299,6 +299,46 @@ check "installed $new_version" [ "$output" = "installed $new_version" ]
 check "the stale staged copy and work folder are gone" [ -z "$(leftovers)" ]
 check "the stale image was detached" [ "$(mounted)" = 0 ]
 
+# A copy an earlier install preserved is the only good one when the installed app is damaged, so the
+# next install keeps it and refuses, without downloading, until the installed app verifies.
+print -- "== a preserved copy is kept while the installed app is damaged"
+fresh_install
+ditto $new_app $apps/.PureMouse-update-cafe1234
+config=$apps/PureMouse.app/Contents/Resources/config.example.json
+cp $config $work/config.original
+print -- "damaged" >> $config
+kept_before=$(fingerprint $apps/.PureMouse-update-cafe1234)
+output=$(run_probe $fixtures/good $apps/PureMouse.app $old_version) || true
+print -- "  menu would say: ${output#*| }"
+check "refused as a damaged copy, and opens the release page" \
+    [ "${output%% |*}" = "failed cannotInstallHere(PureMouseAppSupport.UpdateInstallFailure.Place.damaged)" ]
+check "nothing was downloaded" [ -z "$(grep '^download' $work/stderr)" ]
+check "the preserved copy is still there, byte for byte" [ "$(fingerprint $apps/.PureMouse-update-cafe1234)" = "$kept_before" ]
+check "the preserved copy verifies (strict, deep)" codesign --verify --strict --deep $apps/.PureMouse-update-cafe1234
+cp $work/config.original $config
+output=$(run_probe $fixtures/good $apps/PureMouse.app $old_version) || true
+check "once the installed app verifies again, the install goes ahead" [ "$output" = "installed $new_version" ]
+check "and the preserved copy is swept" [ -z "$(leftovers)" ]
+
+# The swap can also throw before anything is replaced (an ACL on the folder that denies deleting its
+# entries passes the writability check and then refuses the rename, Cocoa 513). Here the app at the install path has the running version in its Info.plist but fails its signature,
+# so the disk does not say it is the old app: the staged new copy, which may be the only good one, stays.
+print -- "== the swap throws with a damaged old app in place: the staged copy is kept"
+fresh_install
+config=$apps/PureMouse.app/Contents/Resources/config.example.json
+print -- "damaged" >> $config
+chmod +a "everyone deny delete_child" $apps
+output=$(run_probe $fixtures/good $apps/PureMouse.app $old_version) || true
+chmod -a "everyone deny delete_child" $apps
+print -- "  $output"
+kept=$(print -l $apps/.PureMouse-update-*(N))
+check "failed as a failed install" [ "${output%% |*}" = "failed installFailed" ]
+check "exactly one staged copy was kept" [ "$(print -l $apps/.PureMouse-update-*(N) | grep -c .)" = 1 ]
+check "the old app was not replaced" [ "$(plist_value $apps/PureMouse.app/Contents/Info.plist CFBundleShortVersionString)" = $old_version ]
+check "the kept copy is $new_version and verifies (strict, deep)" \
+    [ "$(plist_value $kept/Contents/Info.plist CFBundleShortVersionString)" = $new_version ] && codesign --verify --strict --deep $kept
+check "no image still mounted" [ "$(mounted)" = 0 ]
+
 # The swap can throw after the new app is in place (an immutable resource, a deny-delete ACL). The disk
 # decides: the new app is installed, it verifies, and the old copy that could not be deleted is cleaned.
 for fault in immutable-flag deny-delete-acl; do

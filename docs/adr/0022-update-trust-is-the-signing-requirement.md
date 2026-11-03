@@ -61,18 +61,27 @@ macOS, the same app.
 - **The commit point is read from the disk.** `replaceItemAt` can throw after the new bundle is in
   place (an immutable flag or a deny-delete ACL on the old bundle gives Cocoa error 513 once the
   rename is done), leaving the old bundle at the staging path. So a throw is not a verdict. The
-  installer reads the install path: the found version with a passing signature means the update is
-  installed (success; the old copy is removed best-effort, clearing flags and ACLs); the running
-  version means it failed (the staged new copy is removed); anything else (missing, another
-  version, a failed check) keeps the staged copy, logs where it is, and reports a failure. The only
+  installer reads the install path, and either verdict needs the bundle there to pass the full
+  signature check against the running requirement, not just carry a version in its `Info.plist`:
+  the found version means the update is installed (success; the old copy is removed best-effort,
+  clearing flags and ACLs); the running version means it failed (the staged new copy is removed);
+  anything else (missing, another version, a bundle that fails its check) keeps the staged copy,
+  logs where it is, and reports a failure. The only
   good copy is never deleted. Both causes are reproduced with real files in the workshop proof.
 - **Cancel and sweep.** The install runs as a task the menu app keeps. Quit and Hide Menu Bar Icon
   cancel it and wait for it to finish (answering `.terminateLater`), so no image stays mounted and no
   staged copy is left. Cancellation is checked after the download, before the attach, before the
   copy and before the replace; after the replace there is nothing left to stop, and an install that
-  commits while the app is leaving does not relaunch. At the start of an install, stale
-  `.PureMouse-update-*` folders beside the app and `PureMouse-update-*` work folders (a killed run's
-  leftovers) are detached and removed.
+  commits while the app is leaving does not relaunch. The installer is reserved from the
+  confirmation on, so a second request (the menu row again, About, another process writing the
+  preference) arriving while the alert is up is refused, `leaving` is checked again after the alert,
+  and Quit has exactly one installer to drain. At the start of an install, `PureMouse-update-*` work
+  folders (a killed run's leftovers, any image still mounted in them detached first) are removed.
+  Staged `.PureMouse-update-*` copies beside the app may be the only good copy (a kept one is what
+  an unsettled swap leaves), so they are removed only once the installed app passes the full
+  signature check against the running requirement and has a version; otherwise they are all kept,
+  nothing is downloaded, and the menu says "Can't update: this copy doesn't verify, so a saved copy
+  from an earlier update is kept" with the release page.
 - **No prompt and no helper.** If the installed app is on a read-only volume (or running from
   a translocated path), or it, its folder or a folder inside it is not writable by the person
   (an administrator copied it), nothing is downloaded: PureMouse opens the release page and the
