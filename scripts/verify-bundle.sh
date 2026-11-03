@@ -101,5 +101,12 @@ for component in $components; do
     fi
 done
 
+# Only the Settings helper draws device art (build-app.sh copies the silhouettes there): the menu bar
+# app and the daemon's own resources must hold none.
+for resources in "$(component_path $app "$(menu_component)")" $app/Contents/Resources; do
+    stray=$(find $resources -path '*silhouettes*' -name '*.pdf' 2>/dev/null | head -1)
+    [[ -z $stray ]] || fail "${stray#$app/}: device art belongs to the Settings helper alone"
+done
+
 (( failed == 0 )) || exit 1
 print "verified $app ($app_version, build $app_build$( (( release )) && print ', release'))"
