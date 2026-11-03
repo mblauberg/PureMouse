@@ -1,3 +1,4 @@
+import AppKit
 import PureMouseAppSupport
 import PureMouseKit
 import SwiftUI
@@ -10,6 +11,9 @@ import SwiftUI
 /// when they differ; one it sets says "Set for this app." (`InheritedValue`). Choosing a segment
 /// writes nothing, and the page has no Pointer: an app sets buttons, the thumb wheel and scrolling.
 struct AppPage: View {
+    /// The header strip's height, with the margin under it, which the form's cap leaves room for.
+    private static let headerHeight: CGFloat = 60
+
     @Environment(AppModel.self) private var model
     /// The app's key under `apps`.
     let key: String
@@ -39,24 +43,36 @@ struct AppPage: View {
         BindingTarget(button: button, direction: direction, app: key, appName: identity.name)
     }
 
+    /// The screen's height less the window's toolbar and the page's header strip.
+    private static var maxFormHeight: CGFloat {
+        LazyPane.fitted(NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)).height - headerHeight
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            AppPageHeader(key: key, identity: identity, segment: segment, select: select, back: back)
-            PaneForm {
-                switch segment {
-                case .buttons: buttons(model.config)
-                case .scrolling: scrolling(model.config)
-                }
-                Section {} footer: {
-                    HStack {
-                        Button("Remove App…") { confirmingRemove = true }
-                            .accessibilityLabel("Remove \(identity.name)'s settings")
-                        Spacer()
-                    }
-                    .padding(.top, 4)
-                }
+        // The form is the root, as in every other pane, and the header an inset above it that stays
+        // in view as the form scrolls. A stack of the two let the window grow past the screen.
+        PaneForm {
+            switch segment {
+            case .buttons: buttons(model.config)
+            case .scrolling: scrolling(model.config)
             }
-            .disabled(model.readOnly)
+            Section {} footer: {
+                HStack {
+                    Button("Remove App…") { confirmingRemove = true }
+                        .accessibilityLabel("Remove \(identity.name)'s settings")
+                    Spacer()
+                }
+                .padding(.top, 4)
+            }
+        }
+        .disabled(model.readOnly)
+        // As tall as its rows, up to what the screen leaves, then it scrolls (as `AdvancedSheet`'s
+        // form does). Left to be proposed the window's height, the form read as unbounded now and
+        // then and took the window past the screen.
+        .frame(maxHeight: Self.maxFormHeight)
+        .fixedSize(horizontal: false, vertical: true)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            AppPageHeader(key: key, identity: identity, segment: segment, select: select, back: back)
         }
         .actionEditorSheet($editor, save: apply)
         .removeAppAlert(name: identity.name, isPresented: $confirmingRemove, remove: remove)
@@ -65,7 +81,9 @@ struct AppPage: View {
         .onChange(of: showOthers) { settings?.refit() }
         #if DEBUG
         .onAppear {
-            // With PUREMOUSE_DEV_APP: opens a button's shortcut editor over the page.
+            // With PUREMOUSE_DEV_APP: PUREMOUSE_DEV_OTHERS=1 opens "Other controls", and
+            // PUREMOUSE_DEV_SHORTCUT opens a button's shortcut editor sheet over the page.
+            if ProcessInfo.processInfo.environment["PUREMOUSE_DEV_OTHERS"] != nil { showOthers = true }
             if let button = ProcessInfo.processInfo.environment["PUREMOUSE_DEV_SHORTCUT"] {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     editor = SheetRequest(kind: .shortcut, target: bindingTarget(button), initial: "cmd+w")
