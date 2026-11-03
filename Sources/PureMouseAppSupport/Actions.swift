@@ -160,9 +160,11 @@ public enum ActionCatalog {
     }
 }
 
-/// The named buttons the Buttons pane lists, in order, with their control IDs.
+/// The named buttons the Buttons pane lists, with their control IDs. The order is the rows' order
+/// (and the Apps sheet's): the side buttons first, then the wheel and the top of the mouse, then the
+/// thumb's (`DeviceCard` draws them where they are).
 public enum NamedButton: String, CaseIterable, Sendable {
-    case gesture, back, forward, top, middle, thumbPanel
+    case back, forward, middle, top, gesture, thumbPanel
 
     public var label: String {
         switch self {
@@ -216,12 +218,14 @@ public enum ButtonRows {
     }
 
 
-    /// Controls without a name: the connected mice's, as hex IDs, plus any the config binds that
-    /// they do not have. A hex key for a named control ("0x0053") shows under its name instead.
+    /// The controls that are not a named button: those the connected mice report that Kit has a
+    /// name for ("DPI button"), plus any the config binds, whether or not a mouse has them. A
+    /// control with no name is no row until the config binds it: it is not a button anyone can
+    /// find by its ID. A hex key for a named control ("0x0053") shows under its name instead.
     public static func others(deviceCIDs: [UInt16], configKeys: [String]) -> [String] {
         var seen = Set(NamedButton.allCases.map(\.cid))
         var keys: [String] = []
-        for cid in deviceCIDs where seen.insert(cid).inserted { keys.append(NamedButton.hex(cid)) }
+        for cid in deviceCIDs where ControlNames.name(cid) != nil && seen.insert(cid).inserted { keys.append(NamedButton.hex(cid)) }
         for key in configKeys.sorted() {
             guard let cid = NamedButton.cid(forKey: key), seen.insert(cid).inserted else { continue }
             keys.append(key)

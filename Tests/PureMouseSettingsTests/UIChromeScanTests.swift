@@ -264,7 +264,7 @@ enum ChromeScan {
             reason: "A slider's readout column is one width, so rows with short and long values (2.2, 300 ms) keep their tracks in line."),
         ChromeAllowance(
             file: "Sheets.swift", fragment: ".frame(width: 400)",
-            reason: "The shortcut and command editors open as popovers inside an app's sheet, so they are narrower than the sheet; text fields have no width of their own."),
+            reason: "The shortcut and command editors are small sheets, narrower than the Advanced… sheets; text fields have no width of their own."),
     ]
 
     @Test func theSettingsSourcesLetTheSystemDrawTheChrome() throws {

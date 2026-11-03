@@ -7,6 +7,9 @@ extension AppModel {
     /// The mice to choose from (`MouseScope.known`).
     public var knownMice: [KnownMouse] { MouseScope.known(devices: devices, config: config) }
 
+    /// A reported mouse cannot be told apart from the others (`MouseScope.hasUnidentified`).
+    public var hasUnidentifiedMouse: Bool { MouseScope.hasUnidentified(devices: devices) }
+
     /// The pop-up shows: two or more mice are known, or the config has a `devices` entry.
     public var showsMouseMenu: Bool { MouseScope.offersChoice(known: knownMice, config: config) }
 

@@ -8,6 +8,9 @@ struct ButtonsPane: View {
     /// The control whose picker is open: a button key, or "button.direction".
     @State private var presented: String?
     @State private var highlighted: String?
+    /// A control Find by Pressing found that no row lists yet (the mouse has no name for it): it
+    /// gets one until Settings closes, so its picker can open.
+    @State private var capturedKey: String?
     @State private var sheet: SheetRequest?
     /// Gesture buttons whose directions show; collapsed until opened or chosen.
     @State private var expanded: Set<String> = []
@@ -27,14 +30,24 @@ struct ButtonsPane: View {
     var body: some View {
         let usesGestures = model.config.usesGestures
         let scope = model.scope, target = model.scopeTarget
+        // What the rows and the card are drawn from, worked out once for this render.
+        let named = namedRows, others = otherRows, mouse = cardMouse
+        let plan = cardPlan(for: mouse, listing: named)
+        ScrollViewReader { proxy in
         PaneForm {
             PaneBanners(needsAccessibility: true)
+            if let plan, let mouse {
+                Section {
+                    DeviceCard(plan: plan, name: mouse.name, actions: cardActions(for: named), selected: card?.button,
+                               activate: { settings?.activate($0) })
+                }
+            }
             Section {
-                ForEach(namedRows, id: \.self) { key in row(key) }
-                if !otherRows.isEmpty {
+                ForEach(named, id: \.self) { key in row(key) }
+                if !others.isEmpty {
                     DisclosureLabel(title: "Other controls", isExpanded: $showOthers)
                     if showOthers {
-                        ForEach(otherRows, id: \.self) { key in row(key, indented: true) }
+                        ForEach(others, id: \.self) { key in row(key, indented: true) }
                     }
                 }
             } header: {
@@ -54,6 +67,13 @@ struct ButtonsPane: View {
             }
             .disabled(model.readOnly)
         }
+        // Choosing a part of the drawing brings its row into view, by request rather than by the
+        // highlight: choosing the same part again scrolls to it again.
+        .onChange(of: settings?.rowRequest) { _, request in
+            guard let request else { return }
+            proxy.scrollTo(request.button.rawValue)
+        }
+        }
         .sheet(isPresented: $showingAdvanced) {
             ButtonsAdvancedSheet().environment(model)
         }
@@ -70,6 +90,13 @@ struct ButtonsPane: View {
             if DevHooks.sheet(on: "buttons") == .advanced, usesGestures { showingAdvanced = true }
             let environment = ProcessInfo.processInfo.environment
             if environment["PUREMOUSE_DEV_OTHERS"] != nil { showOthers = true }
+            // After the card's first `follow`, which clears a selection made for another mouse.
+            if let key = environment["PUREMOUSE_DEV_BUTTON"].flatMap(NamedButton.init(rawValue:)) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { card?.select(key) }
+            }
+            if let key = environment["PUREMOUSE_DEV_FOUND"] {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { found(key) }
+            }
             if let key = environment["PUREMOUSE_DEV_PICKER"] {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { presented = key }
             }
@@ -83,14 +110,28 @@ struct ButtonsPane: View {
         .onChange(of: model.captureOutcome) { settings?.refit() }
         .onChange(of: expanded) { settings?.refit() }
         .onChange(of: showOthers) { settings?.refit() }
+        // The card comes and goes with the mouse chosen, which changes the pane's height.
+        .onChange(of: plan != nil) { settings?.refit() }
+        .onChange(of: mouse?.key, initial: true) { _, key in card?.follow(mouse: key) }
         .onChange(of: model.capturedButton) { _, key in
             guard let key else { return }
             model.capturedButton = nil
-            if !namedRows.contains(key) { showOthers = true }
-            highlighted = key
+            if !named.contains(key) {
+                capturedKey = key
+                showOthers = true
+            }
+            found(key)
             presented = key
-            DispatchQueue.main.asyncAfter(deadline: .now() + 4) { if highlighted == key { highlighted = nil } }
         }
+    }
+
+    /// Find by Pressing found `key`: its row is marked for a few seconds, and the drawing lights its
+    /// part (`CardSelection.found`), the same state a click on the part gives.
+    private func found(_ key: String) {
+        highlighted = key
+        card?.found(key)
+        if let button = NamedButton(rawValue: key) { settings?.requestRow(button) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { if highlighted == key { highlighted = nil } }
     }
 
     // MARK: Rows
@@ -101,10 +142,46 @@ struct ButtonsPane: View {
         return cids.isEmpty ? nil : Set(cids)
     }
 
-    private var configKeys: [String] { model.boundButtonKeys(in: scope) }
+    /// The keys the config binds in this scope, and the control just found that has no row yet.
+    private var configKeys: [String] { model.boundButtonKeys(in: scope) + (capturedKey.map { [$0] } ?? []) }
 
     private var namedRows: [String] {
         ButtonRows.named(deviceCIDs: deviceCIDs, configKeys: configKeys).map(\.rawValue)
+    }
+
+    private var card: CardSelection? { settings?.card }
+
+    /// The mouse the device card draws: the chosen one, else the only one known.
+    private var cardMouse: KnownMouse? {
+        DeviceCardPlan.mouse(selected: model.selectedMouse, known: model.knownMice,
+                             unidentified: model.hasUnidentifiedMouse)
+    }
+
+    /// The card's parts, from what the mouse has and what Scrolling shows for it; nil for a mouse
+    /// with no drawing (a trackball, a vertical mouse, an unknown one: its rows are all it has).
+    private func cardPlan(for mouse: KnownMouse?, listing named: [String]) -> DeviceCardPlan? {
+        guard let mouse, let art = DeviceArt.model(forKey: mouse.key) else { return nil }
+        let layout = ScrollingLayout(config: model.config, devices: model.capabilityDevices(in: scope), scope: scope)
+        return DeviceCardPlan(model: art, listed: Set(named.compactMap { NamedButton(rawValue: $0) }),
+                              mainWheelSettings: !layout.mainWheelRows.isEmpty, thumbWheelSettings: layout.showsThumbWheel)
+    }
+
+    /// Each listed button's action, as its row shows it and as VoiceOver says it.
+    private func cardActions(for named: [String]) -> [NamedButton: DeviceCardPlan.ActionText] {
+        var actions: [NamedButton: DeviceCardPlan.ActionText] = [:]
+        for key in named {
+            guard let button = NamedButton(rawValue: key) else { continue }
+            let action = shownAction(key)
+            actions[button] = .init(shown: ActionButton.shortened(action.label), spoken: action.spokenLabel)
+        }
+        return actions
+    }
+
+    /// The action a row shows for a button: the mouse's own, else what it inherits.
+    private func shownAction(_ key: String) -> ButtonAction {
+        guard isMouse else { return model.config.binding(key) }
+        let state = model.config.scopedButton(key, in: scope)
+        return state.own == .standard ? state.everywhere : state.own
     }
 
     private var otherRows: [String] {
@@ -127,38 +204,41 @@ struct ButtonsPane: View {
     }
 
     /// A button on a mouse: the binding that applies, shown as in All Mice; with its own, the row
-    /// says "Set for this mouse." (`InheritedValue`, as in an app's sheet).
+    /// says "Set for this mouse." (`InheritedValue`, as on an app's page).
     @ViewBuilder
     private func mouseRow(_ key: String, indented: Bool) -> some View {
         let state = model.config.scopedButton(key, in: scope)
-        let everywhere = state.everywhere.label
-        let spokenEverywhere = state.everywhere.spokenLabel
+        let inheritedLabel = state.everywhere.label
+        let inheritedSpoken = state.everywhere.spokenLabel
         let target = BindingTarget(button: key)
-        let note = ActionButton.inherited(state.own, everywhere: everywhere, source: InheritedScope.allMice)
+        let mark = RowMark.of(key, selected: card?.button, found: highlighted)
+        let note = ActionButton.inherited(state.own, inheriting: inheritedLabel, source: InheritedScope.allMice)
             .note { apply(.standard, to: target) }
         if state.directions.isEmpty {
             let help = caption(key)
             LabeledContent {
-                actionButton(state.own, target: target, sameAsEverywhere: everywhere, spokenEverywhere: spokenEverywhere)
+                actionButton(state.own, target: target, sameAsInherited: inheritedLabel, spokenInherited: inheritedSpoken)
             } label: {
                 RowLabel(NamedButton.title(forKey: key), help: help, note: note)
             }
             .overridable(note, help: help)
             .padding(.leading, indented ? 16 : 0)
-            .listRowBackground(rowFill(key))
+            .rowMark(mark)
+            .id(key)
         } else {
             let isExpanded = Binding(get: { expanded.contains(key) },
                                      set: { if $0 { expanded.insert(key) } else { expanded.remove(key) } })
             let help = model.config.gestureSummary(key, in: scope)
             LabeledContent {
-                actionButton(state.own, target: target, sameAsEverywhere: everywhere, spokenEverywhere: spokenEverywhere)
+                actionButton(state.own, target: target, sameAsInherited: inheritedLabel, spokenInherited: inheritedSpoken)
             } label: {
                 DisclosureLabel(title: NamedButton.title(forKey: key), help: help, note: note,
                                 spokenTitle: "\(NamedButton.title(forKey: key)) directions", isExpanded: isExpanded)
             }
             .overridable(note, help: help)
             .padding(.leading, indented ? 16 : 0)
-            .listRowBackground(rowFill(key))
+            .rowMark(mark)
+            .id(key)
             if isExpanded.wrappedValue {
                 Text("Hold the button and move the mouse. Release without moving to click.")
                     .foregroundStyle(.secondary)
@@ -169,8 +249,8 @@ struct ButtonsPane: View {
                     let target = BindingTarget(button: key, direction: direction.name)
                     let note = ActionButton.inherited(direction, source: InheritedScope.allMice).note { apply(.standard, to: target) }
                     LabeledContent {
-                        actionButton(direction.own, target: target, sameAsEverywhere: direction.inherited.label,
-                                     spokenEverywhere: direction.inherited.spokenLabel)
+                        actionButton(direction.own, target: target, sameAsInherited: direction.inherited.label,
+                                     spokenInherited: direction.inherited.spokenLabel)
                     } label: {
                         RowLabel(Gesture.label(direction.name), note: note, spokenTitle: target.title)
                     }
@@ -184,6 +264,7 @@ struct ButtonsPane: View {
     @ViewBuilder
     private func globalRow(_ key: String, indented: Bool) -> some View {
         let action = model.config.binding(key)
+        let mark = RowMark.of(key, selected: card?.button, found: highlighted)
         if action == .gesture {
             let isExpanded = Binding(get: { expanded.contains(key) },
                                      set: { if $0 { expanded.insert(key) } else { expanded.remove(key) } })
@@ -194,7 +275,8 @@ struct ButtonsPane: View {
                                 spokenTitle: "\(NamedButton.title(forKey: key)) directions", isExpanded: isExpanded)
             }
             .padding(.leading, indented ? 16 : 0)
-            .listRowBackground(rowFill(key))
+            .rowMark(mark)
+            .id(key)
             if isExpanded.wrappedValue {
                 Text("Hold the button and move the mouse. Release without moving to click.")
                     .foregroundStyle(.secondary)
@@ -214,30 +296,29 @@ struct ButtonsPane: View {
                 RowLabel(NamedButton.title(forKey: key), help: caption(key))
             }
             .padding(.leading, indented ? 16 : 0)
-            .listRowBackground(rowFill(key))
+            .rowMark(mark)
+            .id(key)
         }
     }
 
-    /// The row Find by Pressing found, for a few seconds: the system's selection fill.
-    private func rowFill(_ key: String) -> Color? {
-        highlighted == key ? Color(nsColor: .unemphasizedSelectedContentBackgroundColor) : nil
-    }
-
-    private func actionButton(_ action: ButtonAction, target: BindingTarget, sameAsEverywhere: String? = nil,
-                              spokenEverywhere: String? = nil) -> some View {
+    private func actionButton(_ action: ButtonAction, target: BindingTarget, sameAsInherited: String? = nil,
+                              spokenInherited: String? = nil) -> some View {
         let id = target.direction.map { "\(target.button).\($0)" } ?? target.button
         let isDirection = target.direction != nil
-        let inherits = sameAsEverywhere != nil
+        let inherits = sameAsInherited != nil
         return ActionButton(
             action: isDirection && action == .standard && !inherits ? .named("none") : action,
             // On a mouse, Mouse Default is its own value ("default") beside "Same as All Mice".
             allowsDefault: !isDirection && PickerEntry.offersMouseDefault(for: target.button, inMouseOrApp: isMouse, current: action),
             allowsGesture: !isDirection,
-            isPresented: Binding(get: { presented == id }, set: { presented = $0 ? id : nil }),
+            isPresented: Binding(get: { presented == id }, set: { open in
+                presented = open ? id : nil
+                if open, let button = NamedButton(rawValue: target.button) { card?.select(button) }
+            }),
             choose: { entry in choose(entry, for: target, current: action) },
             accessibilityName: target.title + (inherits && model.selectedMouse != nil ? ", \(model.selectedMouse?.name ?? "")" : ""),
-            sameAsEverywhere: sameAsEverywhere,
-            spokenEverywhere: spokenEverywhere,
+            sameAsInherited: sameAsInherited,
+            spokenInherited: spokenInherited,
             source: InheritedScope.allMice,
             scope: scope)
     }

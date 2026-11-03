@@ -382,7 +382,17 @@ private func mouse(_ id: String, online: Bool, dpi: Int?, steps: [Int] = []) -> 
 @Test func otherControlsSkipNamedOnesAndDuplicates() {
     let rows = ButtonRows.others(deviceCIDs: [0x0053, 0x00c5, 0x00d7],
                                  configKeys: ["0x0053", "back", "0xC5", "1a0", "nonsense"])
-    #expect(rows == ["0x00c5", "0x00d7"])
+    #expect(rows == ["0x00d7", "0xC5"], "0xC5 has no name: it is a row because the config binds it")
+}
+
+@Test func otherControlsListsOnlyNamedControlsAndTheOnesTheConfigBinds() {
+    // 0x0100 and 0x01E5 have no name: a mouse reporting them adds no row, a binding keeps its row.
+    #expect(ButtonRows.others(deviceCIDs: [0x0100, 0x01E5, 0x00D7], configKeys: []) == ["0x00d7"])
+    #expect(ButtonRows.others(deviceCIDs: [0x0100, 0x00D7], configKeys: ["0x0100"]) == ["0x00d7", "0x0100"])
+    #expect(ButtonRows.others(deviceCIDs: [0x00D7], configKeys: ["0x01e5"]) == ["0x00d7", "0x01e5"])
+    for key in ButtonRows.others(deviceCIDs: [0x0100, 0x00D7], configKeys: []) {
+        #expect(!NamedButton.title(forKey: key).hasPrefix("Control"))
+    }
 }
 
 // MARK: Saving

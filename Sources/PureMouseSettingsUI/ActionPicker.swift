@@ -392,26 +392,26 @@ struct ActionButton: View {
     let choose: (PickerEntry) -> Void
     var accessibilityName: String
     /// In an app or on a mouse: what applies elsewhere, which `.standard` shows (`InheritedValue`).
-    var sameAsEverywhere: String?
-    /// `sameAsEverywhere` as VoiceOver says it (a shortcut in words); the label itself when nil.
-    var spokenEverywhere: String?
-    /// The wider scope `sameAsEverywhere` comes from: Everywhere for an app, All Mice for a mouse.
-    var source = InheritedScope.everywhere
+    var sameAsInherited: String?
+    /// `sameAsInherited` as VoiceOver says it (a shortcut in words); the label itself when nil.
+    var spokenInherited: String?
+    /// The wider scope `sameAsInherited` comes from: Mouse Settings for an app, All Mice for a mouse.
+    var source = InheritedScope.mouseSettings
     /// The scope whose mice decide whether the haptic waveforms are listed.
     var scope = ConfigScope.global
     @State private var openedFromKeyboard = false
 
-    /// A scope's binding as its row shows it: `.standard` leaves it to `everywhere`.
-    static func inherited(_ action: ButtonAction, everywhere: String, source: String = InheritedScope.everywhere) -> InheritedValue<String> {
-        InheritedValue(own: action == .standard ? nil : action.label, inherited: everywhere, source: source)
+    /// A scope's binding as its row shows it: `.standard` leaves it to the inherited label.
+    static func inherited(_ action: ButtonAction, inheriting: String, source: String = InheritedScope.mouseSettings) -> InheritedValue<String> {
+        InheritedValue(own: action == .standard ? nil : action.label, inherited: inheriting, source: source)
     }
 
     /// A gesture direction as its row shows it: the scope's own, else the wider gesture's (or nothing).
     static func inherited(_ direction: AppButton.Direction, source: String) -> InheritedValue<String> {
-        inherited(direction.own, everywhere: direction.inherited.label, source: source)
+        inherited(direction.own, inheriting: direction.inheritedLabel, source: source)
     }
 
-    private var inherited: InheritedValue<String>? { sameAsEverywhere.map { Self.inherited(action, everywhere: $0, source: source) } }
+    private var inherited: InheritedValue<String>? { sameAsInherited.map { Self.inherited(action, inheriting: $0, source: source) } }
 
     /// Longer labels (a command) are shortened in the middle to this many characters.
     static let labelLimit = 32
@@ -419,12 +419,12 @@ struct ActionButton: View {
     private var label: String { inherited?.effective ?? action.label }
 
     /// What VoiceOver reads as the value: a shortcut in words ("Shift Command 4"), not glyphs, and
-    /// an inherited one with its source ("Mission Control, same as Everywhere").
-    static func spokenValue(for action: ButtonAction, everywhere: String?, spokenEverywhere: String?,
-                            source: String = InheritedScope.everywhere) -> String {
-        guard let everywhere else { return action.spokenLabel }
+    /// an inherited one with its source ("Mission Control, same as Mouse Settings").
+    static func spokenValue(for action: ButtonAction, inheriting: String?, spokenInheriting: String?,
+                            source: String = InheritedScope.mouseSettings) -> String {
+        guard let inheriting else { return action.spokenLabel }
         let own = action == .standard ? nil : action.spokenLabel
-        return InheritedValue(own: own, inherited: spokenEverywhere ?? everywhere, source: source).spoken
+        return InheritedValue(own: own, inherited: spokenInheriting ?? inheriting, source: source).spoken
     }
 
     /// The haptic waveforms, unless the mouse is known to have no motor; a bound one still shows.
@@ -447,7 +447,7 @@ struct ActionButton: View {
         .fixedSize()
         .help(Self.tooltip(for: action))
         .accessibilityLabel(accessibilityName)
-        .accessibilityValue(Self.spokenValue(for: action, everywhere: sameAsEverywhere, spokenEverywhere: spokenEverywhere, source: source))
+        .accessibilityValue(Self.spokenValue(for: action, inheriting: sameAsInherited, spokenInheriting: spokenInherited, source: source))
         .accessibilityHint("Opens the list of actions")
         .popover(isPresented: $isPresented, arrowEdge: .bottom) {
             ActionPicker(current: action,

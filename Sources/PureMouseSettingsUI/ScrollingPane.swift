@@ -5,7 +5,16 @@ import SwiftUI
 /// when the mouse can use it (`ScrollingLayout`); the rest in the Advanced… sheet.
 struct ScrollingPane: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.settings) private var settings
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showingAdvanced = false
+    /// The section the device card sent the person to: outlined for a moment (`ArrivalOutline`).
+    @State private var outline = ArrivalOutlineState()
+    @State private var outlineTask: Task<Void, Never>?
+    @AccessibilityFocusState private var focused: ScrollingSection?
+
+    /// How long the outline stays before it fades.
+    static let outlineDuration: Duration = .milliseconds(1500)
 
     static let restoreMessage = "Scrolling and thumb wheel settings return to PureMouse's defaults. App settings don't change."
 
@@ -19,6 +28,7 @@ struct ScrollingPane: View {
         let scope = model.scope, target = model.scopeTarget
         let layout = ScrollingLayout(config: config, devices: model.capabilityDevices(in: scope), scope: scope)
         let smooth = config.smoothScrollEnabled(in: scope)
+        ScrollViewReader { proxy in
         PaneForm {
             PaneBanners(needsAccessibility: true)
             if layout.isEmpty {
@@ -48,20 +58,28 @@ struct ScrollingPane: View {
 
             // Built from its rows: a notched wheel has Reverse direction without Wheel mode or SmartShift.
             if !layout.mainWheelRows.isEmpty {
-                Section("Main Wheel") {
-                    if layout.shows(.reverseDirection) { reverseDirection(layout.availability(.reverseDirection)) }
-                    if layout.shows(.wheelMode) { wheelMode(layout.availability(.wheelMode)) }
-                    if layout.shows(.smartShift) { smartShift(layout.availability(.smartShift)) }
+                Section {
+                    Group {
+                        if layout.shows(.reverseDirection) { reverseDirection(layout.availability(.reverseDirection)) }
+                        if layout.shows(.wheelMode) { wheelMode(layout.availability(.wheelMode)) }
+                        if layout.shows(.smartShift) { smartShift(layout.availability(.smartShift)) }
+                    }
+                    .arrivalBounds(.mainWheel)
+                } header: {
+                    sectionHeader(.mainWheel)
                 }
             }
 
             if layout.showsThumbWheel {
-                Section("Thumb Wheel") {
+                Section {
                     ThumbWheelRows(path: config.prefix(of: scope) + ["thumbWheel"], rows: .standard,
                                    base: ThumbWheelRows.base(config, scope),
                                    inherited: scope.deviceKey == nil ? nil : config.thumbWheelChoice(at: ["thumbWheel"]),
                                    source: InheritedScope.allMice, scope: scope,
                                    availability: layout.availability(.thumbWheelAction))
+                        .arrivalBounds(.thumbWheel)
+                } header: {
+                    sectionHeader(.thumbWheel)
                 }
             }
 
@@ -71,14 +89,51 @@ struct ScrollingPane: View {
                            advanced: layout.hasAdvanced ? { showingAdvanced = true } : nil)
             }
         }
+        .overlayPreferenceValue(ArrivalBoundsKey.self) { bounds in
+            ArrivalOutline(section: outline.section, bounds: bounds, reduceMotion: reduceMotion)
+        }
         .disabled(model.readOnly)
+        // A request from the device card: scroll to the section, outline it and move VoiceOver to its header.
+        .onChange(of: settings?.arrival, initial: true) { _, section in
+            guard let section else { return }
+            arrive(at: section, proxy: proxy)
+        }
+        }
         .sheet(isPresented: $showingAdvanced) {
             ScrollingAdvancedSheet().environment(model)
         }
         .onChange(of: layout.hasAdvanced) { _, has in if !has { showingAdvanced = false } }
         #if DEBUG
-        .onAppear { if DevHooks.sheet(on: "scrolling") == .advanced, layout.hasAdvanced { showingAdvanced = true } }
+        .onAppear {
+            if DevHooks.sheet(on: "scrolling") == .advanced, layout.hasAdvanced { showingAdvanced = true }
+            if let section = ProcessInfo.processInfo.environment["PUREMOUSE_DEV_ARRIVAL"].flatMap(ScrollingSection.init(rawValue:)) {
+                settings?.arrival = section
+            }
+        }
         #endif
+    }
+
+    private func sectionHeader(_ section: ScrollingSection) -> some View {
+        Text(section.title)
+            .id(section)
+            .accessibilityFocused($focused, equals: section)
+    }
+
+    private func arrive(at section: ScrollingSection, proxy: ScrollViewProxy) {
+        settings?.arrival = nil
+        proxy.scrollTo(section, anchor: .top)
+        let token = outline.begin(section)
+        outlineTask?.cancel()
+        // Let the pane lay out before VoiceOver is moved.
+        DispatchQueue.main.async { focused = section }
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["PUREMOUSE_DEV_ARRIVAL_HOLD"] != nil { return }
+        #endif
+        outlineTask = Task { @MainActor in
+            try? await Task.sleep(for: Self.outlineDuration)
+            guard !Task.isCancelled else { return }
+            outline.expire(token)
+        }
     }
 
     private var target: ScopeTarget { model.scopeTarget }
@@ -214,7 +269,7 @@ private struct ScrollingAdvancedSheet: View {
                                         standing: model.standing(of: [["smoothScroll", "acceleration"]], in: target))
                         }
                         if layout.shows(.glide) {
-                            ValueSlider(title: "Glide", help: "0 scrolls instantly.",
+                            ValueSlider(title: "Glide", help: "Short glides stop sooner.",
                                         value: model.number(["smoothScroll", "smoothingMs"], default: 125, step: 25, in: target),
                                         range: 0...500, low: "Short", high: "Long", format: Format.milliseconds,
                                         availability: layout.availability(.glide),
@@ -269,5 +324,72 @@ private struct ScrollingAdvancedSheet: View {
                            format: { String(Int($0.rounded())) },
                            availability: availability, mouseDefault: threshold == nil,
                            standing: model.standing(of: [path], in: target))
+    }
+}
+
+// MARK: Arriving from the device card
+
+/// Where each section's rows are, in the form's coordinates (anchors, so they follow the scroll).
+private struct ArrivalBoundsKey: PreferenceKey {
+    static let defaultValue: [ScrollingSection: [Anchor<CGRect>]] = [:]
+
+    static func reduce(value: inout [ScrollingSection: [Anchor<CGRect>]], nextValue: () -> [ScrollingSection: [Anchor<CGRect>]]) {
+        value.merge(nextValue()) { $0 + $1 }
+    }
+}
+
+private extension View {
+    /// Reports these rows' bounds as part of `section`.
+    func arrivalBounds(_ section: ScrollingSection) -> some View {
+        anchorPreference(key: ArrivalBoundsKey.self, value: .bounds) { [section: [$0]] }
+    }
+}
+
+/// Which section is outlined after an arrival from the device card, and whose timeout may end it:
+/// each arrival takes a token, and only the latest arrival's timeout clears the outline, so an
+/// earlier one cannot cut a newer one short.
+struct ArrivalOutlineState: Equatable {
+    private(set) var section: ScrollingSection?
+    private var latest = 0
+
+    /// Outlines `section`; the token is the arrival's, for `expire`.
+    mutating func begin(_ section: ScrollingSection) -> Int {
+        latest += 1
+        self.section = section
+        return latest
+    }
+
+    /// Ends the outline, unless a later arrival has replaced the one `token` belongs to.
+    mutating func expire(_ token: Int) {
+        if token == latest { section = nil }
+    }
+}
+
+/// The accent outline around the section the device card sent the person to. It fades after
+/// `ScrollingPane.outlineDuration`; with Reduce Motion it appears and disappears without a fade.
+private struct ArrivalOutline: View {
+    let section: ScrollingSection?
+    let bounds: [ScrollingSection: [Anchor<CGRect>]]
+    let reduceMotion: Bool
+
+    /// How far the outline stands off the rows, to the section's box.
+    private static let margin: CGFloat = 10
+    private static let corner = RectangleCornerRadii(topLeading: 12, bottomLeading: 12, bottomTrailing: 12, topTrailing: 12)
+
+    var body: some View {
+        GeometryReader { proxy in
+            if let section, let anchors = bounds[section], let first = anchors.first {
+                let rect = anchors.dropFirst().reduce(proxy[first]) { $0.union(proxy[$1]) }
+                    .insetBy(dx: -Self.margin, dy: -Self.margin)
+                UnevenRoundedRectangle(cornerRadii: Self.corner)
+                    .strokeBorder(.tint, lineWidth: 2)
+                    .frame(width: rect.width, height: rect.height)
+                    .position(x: rect.midX, y: rect.midY)
+                    .transition(reduceMotion ? .identity : .opacity)
+            }
+        }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.4), value: section)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }

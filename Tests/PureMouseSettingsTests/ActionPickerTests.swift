@@ -6,9 +6,9 @@ import Testing
 
 // The action picker's entries (`PickerEntry`, in the Settings view code).
 
-@Test func anAppPickerOffersSameAsEverywhereInsteadOfDefault() {
-    let entries = PickerEntry.all(allowsDefault: false, allowsGesture: true, inherited: ActionButton.inherited(.standard, everywhere: "Mission Control"))
-    #expect(entries.first?.label == "Same as Everywhere")
+@Test func anAppPickerOffersTheInheritedValueInsteadOfDefault() {
+    let entries = PickerEntry.all(allowsDefault: false, allowsGesture: true, inherited: ActionButton.inherited(.standard, inheriting: "Mission Control"))
+    #expect(entries.first?.label == "Same as Mouse Settings")
     #expect(entries.first?.detail == "(Mission Control)")
     #expect(entries.first?.matches(.standard) == true)
     #expect(!entries.contains { $0.id == "default" })
@@ -18,8 +18,8 @@ import Testing
 
 private func entry(_ id: String, _ entries: [PickerEntry]) -> PickerEntry? { entries.first { $0.id == id } }
 
-@MainActor @Test func aMouseOrAppPickerOffersMouseDefaultAsAValueOfItsOwnBesideSameAsEverywhere() {
-    let inherited = ActionButton.inherited(.standard, everywhere: "Mute", source: InheritedScope.allMice)
+@MainActor @Test func aMouseOrAppPickerOffersMouseDefaultAsAValueOfItsOwnBesideTheInheritedValue() {
+    let inherited = ActionButton.inherited(.standard, inheriting: "Mute", source: InheritedScope.allMice)
     let entries = PickerEntry.all(allowsDefault: true, allowsGesture: true, inherited: inherited)
     let same = entry("inherit", entries)
     let native = entry("default", entries)
@@ -36,12 +36,12 @@ private func entry(_ id: String, _ entries: [PickerEntry]) -> PickerEntry? { ent
 }
 
 @MainActor @Test func aRowWhoseOwnValueIsMouseDefaultShowsItAndSaysItIsSet() {
-    let mouse = ActionButton.inherited(.mouseDefault, everywhere: "Mute", source: InheritedScope.allMice)
+    let mouse = ActionButton.inherited(.mouseDefault, inheriting: "Mute", source: InheritedScope.allMice)
     #expect(mouse.effective == "Mouse Default" && mouse.caption == "Set for this mouse.")
-    let app = ActionButton.inherited(.mouseDefault, everywhere: "Mute")
+    let app = ActionButton.inherited(.mouseDefault, inheriting: "Mute")
     #expect(app.effective == "Mouse Default" && app.caption == "Set for this app.")
-    #expect(ActionButton.spokenValue(for: .mouseDefault, everywhere: "Mute", spokenEverywhere: nil) == "Mouse Default")
-    #expect(ActionButton.inherited(.standard, everywhere: "Mute").caption == nil)
+    #expect(ActionButton.spokenValue(for: .mouseDefault, inheriting: "Mute", spokenInheriting: nil) == "Mouse Default")
+    #expect(ActionButton.inherited(.standard, inheriting: "Mute").caption == nil)
 }
 
 @MainActor @Test func theMouseButtonsPaneWritesTheChoiceItOffers() throws {
@@ -49,7 +49,7 @@ private func entry(_ id: String, _ entries: [PickerEntry]) -> PickerEntry? { ent
     let mouse = try #require(ConfigScope.device("mb03400000000"))
     var tree = ConfigTree(["buttons": ["back": "mute"]])
     let entries = PickerEntry.all(allowsDefault: true, allowsGesture: true,
-                                  inherited: ActionButton.inherited(.standard, everywhere: "Mute", source: InheritedScope.allMice))
+                                  inherited: ActionButton.inherited(.standard, inheriting: "Mute", source: InheritedScope.allMice))
     guard case .set(let native) = entry("default", entries)?.kind, case .set(let same) = entry("inherit", entries)?.kind else {
         Issue.record("entries"); return
     }
@@ -70,11 +70,11 @@ private func entry(_ id: String, _ entries: [PickerEntry]) -> PickerEntry? { ent
     #expect(!tree.contains(["buttons", "middle"]))
 }
 
-@MainActor @Test func theAppSheetWritesTheChoiceItOffers() throws {
-    // AppSheet applies a picked entry with `bindInApp(_:button:to:)`.
+@MainActor @Test func theAppPageWritesTheChoiceItOffers() throws {
+    // AppPage applies a picked entry with `bindInApp(_:button:to:)`.
     var tree = ConfigTree(["buttons": ["back": "mute"]])
     let entries = PickerEntry.all(allowsDefault: true, allowsGesture: true,
-                                  inherited: ActionButton.inherited(.standard, everywhere: "Mute"))
+                                  inherited: ActionButton.inherited(.standard, inheriting: "Mute"))
     guard case .set(let native) = entry("default", entries)?.kind, case .set(let same) = entry("inherit", entries)?.kind else {
         Issue.record("entries"); return
     }
@@ -87,7 +87,7 @@ private func entry(_ id: String, _ entries: [PickerEntry]) -> PickerEntry? { ent
 @Test func bothPanesOfferMouseDefaultOnAButtonRowAndNotOnADirection() throws {
     let ui = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         .appending(path: "Sources/PureMouseSettingsUI")
-    for file in ["ButtonsPane.swift", "AppSheet.swift"] {
+    for file in ["ButtonsPane.swift", "AppPage.swift"] {
         let text = try String(contentsOf: ui.appending(path: file), encoding: .utf8)
         // The button rows ask the one rule (`PickerEntry.offersMouseDefault`, tested by control in OverrideRowTests).
         #expect(text.contains("allowsDefault: !isDirection && PickerEntry.offersMouseDefault("), "\(file)")
@@ -128,16 +128,16 @@ private func mouse(haptics: Bool?) -> Status.Device {
 // MARK: Spoken value and tooltip
 
 @MainActor @Test func aShortcutBindingIsReadAsWordsNotGlyphs() {
-    #expect(ActionButton.spokenValue(for: .keys("shift+cmd+4"), everywhere: nil, spokenEverywhere: nil) == "Shift Command 4")
-    #expect(ActionButton.spokenValue(for: .keys("cmd+shift+4"), everywhere: nil, spokenEverywhere: nil) == "Shift Command 4")
-    #expect(ActionButton.spokenValue(for: .standard, everywhere: nil, spokenEverywhere: nil) == "Mouse Default")
-    #expect(ActionButton.spokenValue(for: .named("missionControl"), everywhere: nil, spokenEverywhere: nil)
+    #expect(ActionButton.spokenValue(for: .keys("shift+cmd+4"), inheriting: nil, spokenInheriting: nil) == "Shift Command 4")
+    #expect(ActionButton.spokenValue(for: .keys("cmd+shift+4"), inheriting: nil, spokenInheriting: nil) == "Shift Command 4")
+    #expect(ActionButton.spokenValue(for: .standard, inheriting: nil, spokenInheriting: nil) == "Mouse Default")
+    #expect(ActionButton.spokenValue(for: .named("missionControl"), inheriting: nil, spokenInheriting: nil)
         == ButtonAction.named("missionControl").label)
-    // An app's own shortcut, and one it leaves to Everywhere, are both in words.
-    #expect(ActionButton.spokenValue(for: .keys("ctrl+left"), everywhere: "⇧⌘4", spokenEverywhere: "Shift Command 4")
+    // An app's own shortcut, and one it leaves to the wider scope, are both in words.
+    #expect(ActionButton.spokenValue(for: .keys("ctrl+left"), inheriting: "⇧⌘4", spokenInheriting: "Shift Command 4")
         == "Control Left")
-    #expect(ActionButton.spokenValue(for: .standard, everywhere: "⇧⌘4", spokenEverywhere: "Shift Command 4")
-        == "Shift Command 4, same as Everywhere")
+    #expect(ActionButton.spokenValue(for: .standard, inheriting: "⇧⌘4", spokenInheriting: "Shift Command 4")
+        == "Shift Command 4, same as Mouse Settings")
     #expect(ButtonAction.keys("shift+cmd+4").spokenLabel != ButtonAction.keys("shift+cmd+4").label)
 }
 

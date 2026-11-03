@@ -1,6 +1,6 @@
 import PureMouseKit
 
-/// The thumb wheel's rows in an Advanced… sheet (Scrolling's, or an app's), each shown only while
+/// The thumb wheel's rows in an Advanced… sheet (Scrolling's), each shown only while
 /// it applies to what the wheel does.
 public enum ThumbWheelAdvancedRow: Hashable, CaseIterable, Sendable {
     /// `inverted`: scrolling only, and global only.

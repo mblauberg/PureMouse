@@ -60,21 +60,22 @@ struct RowLabel: View {
 
 /// A pop-up's closed face as the form's own pop-up menus draw it: the value, then the up/down
 /// chevrons. One drawing for every pop-up in Settings (`PopUpMenu`, `ActionButton`), so the
-/// action rows on Buttons, Scrolling and an app's sheet read alike.
+/// action rows on Buttons, Scrolling and an app's page read alike.
 struct PopUpLabel: View {
     let text: String
 
     var body: some View {
-        HStack(spacing: 4) {
-            // Primary, as the form's own pop-ups draw the value (a `LabeledContent` makes it secondary).
-            Text(text)
-                .lineLimit(1)
-                .foregroundStyle(.primary)
-            Image(systemName: "chevron.up.chevron.down")
-                .imageScale(.small)
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-        }
+        // One `Text` with the chevrons set in it, not a stack: a `Menu` takes a label apart into
+        // title and image and draws the image first, which put the chevrons before the value on every
+        // pop-up that is a `Menu` (`PopUpMenu`). Primary for the value, as the form's own pop-ups
+        // draw it (a `LabeledContent` makes it secondary). Cut in the middle when it is too long, so
+        // the chevrons stay.
+        (Text(text).foregroundStyle(.primary)
+            + Text(" ")
+            + Text(Image(systemName: "chevron.up.chevron.down")).font(.footnote).foregroundStyle(.secondary))
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .accessibilityLabel(text)
     }
 }
 
@@ -83,8 +84,11 @@ struct PopUpLabel: View {
 /// in a grouped form can draw as a borderless pull-down with a circled chevron instead.
 struct PopUpMenu<Content: View>: View {
     let text: String
-    /// Takes the width it is given and cuts its text with an ellipsis, rather than its own width.
-    var flexible = false
+    /// Nil: the width its text needs. A width: the width its text needs up to that, as a macOS
+    /// pop-up draws, then it takes what room it is given and cuts the text with an ellipsis. A
+    /// `Menu` in a stack otherwise takes all the width it is offered, with its text at the leading
+    /// edge and dead space after it.
+    var maxWidth: CGFloat?
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -95,7 +99,18 @@ struct PopUpMenu<Content: View>: View {
         }
         .menuStyle(.button)
         .menuIndicator(.hidden)
-        if flexible { menu } else { menu.fixedSize() }
+        if let maxWidth {
+            // The first that fits the width on offer (the cap, or the room if that is less); the
+            // second, which fills it, is for text too long for it.
+            ViewThatFits(in: .horizontal) {
+                menu.fixedSize()
+                menu
+            }
+            // Leading, so a pop-up narrower than the room it is offered sits at the edge, not in the middle.
+            .frame(maxWidth: maxWidth, alignment: .leading)
+        } else {
+            menu.fixedSize()
+        }
     }
 }
 
@@ -121,13 +136,18 @@ struct ValueSlider: View {
     var mouseDefault = false
     /// On a mouse or in an app: whether the value is its own rather than the wider scope's.
     var standing = RowStanding.none
+    /// In an app: said to VoiceOver in place of the number while the mice the app leaves the value
+    /// to differ, since the slider's position is then only the first mouse's ("Varies by Mouse").
+    /// The readout says the short "Varies", which fits the room every slider row shares, so the
+    /// track stays where it is on Mouse › Scrolling.
+    var variesText: String?
     private var note: InheritedOverride? { standing.note }
 
     var body: some View {
         LabeledContent {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 EndLabeledSlider(title: spokenTitle ?? title, value: $value, range: range, low: low, high: high)
-                    .accessibilityValue(standing.spoken(format(value)))
+                    .accessibilityValue(standing.spoken(variesText ?? format(value)))
                     .frame(width: 200)
                 // The readout takes the room of the widest value it can show, hidden, so the
                 // slider does not shift as the digits change, and at least one shared width, so
@@ -135,7 +155,7 @@ struct ValueSlider: View {
                 ZStack(alignment: .trailing) {
                     Text(format(range.lowerBound)).hidden()
                     Text(format(range.upperBound)).hidden()
-                    Text(format(value))
+                    Text(variesText == nil ? format(value) : Applied<Double>.variesReadout)
                 }
                 .frame(minWidth: 56, alignment: .trailing)
                 .monospacedDigit()
@@ -247,8 +267,14 @@ struct PaneFooter: View {
             Spacer()
             if let advanced { Button("Advanced…", action: advanced) }
         }
+        // A section's footer is set in by the form's row padding on both sides, so its buttons sat
+        // 10 pt inside the grouped boxes, where the header strip's Find by Pressing… ends flush.
+        .padding(.horizontal, -Self.formInset)
         .padding(.top, 4)
     }
+
+    /// How far the grouped form sets a section footer in from the edge of its boxes.
+    private static let formInset: CGFloat = 10
 }
 
 /// What an `AdvancedSheet` spends on its title, its buttons row and their padding, so the form

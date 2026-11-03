@@ -93,7 +93,7 @@ struct SheetBanners: View {
 /// A notice at the top of a pane: its title with its symbol, the message under it, and its buttons
 /// to the side, with a link to the rest in General. A row of its own, since `LabeledContent` would
 /// squeeze a long message beside the buttons. The symbol sits in the title's line, so the message
-/// starts at the form's own text edge. General's rows and the Apps tab's suggestion use it too.
+/// starts at the form's own text edge. General's rows use it too.
 struct Banner<Actions: View, Link: View>: View {
     let title: String
     let message: String
