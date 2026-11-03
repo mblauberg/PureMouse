@@ -119,6 +119,7 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
     public func show(_ request: ShowRequest?) {
         // Someone is looking: let the daemon check what it only learns by looking (Logi Options+).
         model.askDaemonToRecheck()
+        if let request { model.select(for: request) }
         if let pane = request?.pane { tabs.open(pane) }
         guard let window else { return }
         if !window.isVisible, !restorePosition(of: window) { window.center() }

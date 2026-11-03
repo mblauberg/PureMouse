@@ -8,6 +8,10 @@ import PureMouseKit
 MainActor.assumeIsolated {
     let app = NSApplication.shared
     app.setActivationPolicy(.accessory)
+    #if DEBUG
+    // `PUREMOUSE_DEV_ICON`: the icon's PNGs, before anything reads a config or talks to a daemon.
+    if DevHooks.writeIcons() { exit(0) }
+    #endif
 
     // Single instance: a second launch (the Finder, `open`) opens Settings, then exits; the
     // running copy keeps the icon. A copy on an overridden channel (`PUREMOUSE_COMPANION_DIR`, the dev

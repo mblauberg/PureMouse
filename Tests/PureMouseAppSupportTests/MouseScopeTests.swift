@@ -113,6 +113,37 @@ private func makeModel(config: String = "{}", devices: [Status.Device], defaults
     #expect(second.rememberedMouse == m750Key)
 }
 
+@MainActor @Test func aShowRequestOpensTheScopeItNames() throws {
+    // Two mice: the menu's sections each name their mouse, and the sheet opens in its scope.
+    let (model, _) = try makeModel(devices: [mxMaster, m750])
+    model.select(for: ShowRequest(sheet: .presets, device: m750Key))
+    #expect(model.scope == scope(m750Key))
+    // Edit Presets… of the top level opens All Mice, whatever was chosen before.
+    model.select(for: ShowRequest(sheet: .presets))
+    #expect(model.scope == .global)
+    // Any other request leaves the choice alone.
+    model.selectMouse(mx)
+    model.select(for: ShowRequest(pane: .mouse(.pointer)))
+    model.select(for: ShowRequest(app: "com.apple.Safari"))
+    #expect(model.scope == scope(mx))
+    // One mouse whose entry sets the speed: the entry's scope.
+    let (lone, _) = try makeModel(config: #"{"devices": {"\#(mx)": {"dpiPresets": [800]}}}"#, devices: [mxMaster])
+    lone.select(for: ShowRequest(sheet: .presets, device: mx))
+    #expect(lone.scope == scope(mx))
+    // A mouse the pop-up does not list is All Mice.
+    let (flat, _) = try makeModel(devices: [mxMaster])
+    flat.select(for: ShowRequest(sheet: .presets, device: mx))
+    #expect(flat.scope == .global)
+}
+
+@Test func aDeviceKeyIsTheFoldedModelWhenKitAcceptsIt() {
+    #expect(mouse("A", key: mx.uppercased()).deviceKey == mx)
+    #expect(mouse("A", key: nil).deviceKey == nil)
+    #expect(mouse("A", key: "not-a-key").deviceKey == nil)
+    #expect(MouseScope.hasUnidentified(devices: [mxMaster, mouse("B", key: "nope")]))
+    #expect(!MouseScope.hasUnidentified(devices: [mxMaster, m750]))
+}
+
 // MARK: What shows
 
 @Test func anOmittedCapabilityKeyShowsItsRowsAndFalseHidesThem() {
