@@ -52,7 +52,7 @@ public enum ConfigTransferActions {
         do {
             candidate = try ConfigTransfer.read(url)
         } catch {
-            return .refused((error as? ConfigTransfer.Refusal)?.message ?? error.localizedDescription)
+            return .refused(error.message)
         }
         guard confirm(candidate) else { return .cancelled }
         if let problem = model.importSettings(candidate) { return .refused(problem) }

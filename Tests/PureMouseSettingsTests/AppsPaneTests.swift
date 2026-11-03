@@ -142,11 +142,13 @@ import Testing
         #expect(page.contains("paneMaxHeight") && !page.contains("LazyPane.fitted"))
     }
 
-    // Off dims the segments with the rows below: the header is told whether the app is on.
-    @Test func theHeaderIsDimmedWithTheRowsWhileTheAppIsOff() throws {
+    // Off dims what both segments show, below the switch; the segments stay live, so a person can
+    // still look at either segment's settings while PureMouse is off in the app.
+    @Test func offDimsBothSegmentsRowsButNotTheSegmentsThemselves() throws {
         let page = try Self.source("PureMouseSettingsUI/AppPage.swift")
-        #expect(page.contains("enabled: model.config.isAppEnabled(key)"))
-        #expect(page.contains(".disabled(!enabled)"))
+        #expect(page.contains("case .scrolling: scrolling(model.config)"))
+        #expect(page.contains(".disabled(!model.config.isAppEnabled(key))"))
+        #expect(!page.contains("var enabled = true"))
     }
 
     // A `Menu` takes its label apart into a title and an image and draws the image first, so a pop-up
