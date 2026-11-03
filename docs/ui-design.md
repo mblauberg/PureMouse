@@ -148,6 +148,11 @@ Each level has one mechanism, and each label says what it reveals.
   Settings › Mouse › Advanced… does the same; the HIG pairs Done with Cancel for sheets that hold
   edits). A sheet that holds edits until confirmed, such as the shortcut recorder, has Cancel and a
   verb. Each sheet has a fixed width and fits its content.
+- **Shortcut sheet** leads with the recorder (Record Shortcut, then Recording…) and teaches no
+  syntax. "Enter as Text…" shows the text field and its caption ("macOS keeps some shortcuts, such
+  as ⌃←. Enter those instead."). A recording that ends on modifiers alone, released with no key,
+  shows the same field: a shortcut macOS keeps often never reaches the app's key monitor.
+  `PUREMOUSE_DEV_SHORTCUT_TEXT=1` opens it with the field shown.
 - **Disclosure triangle** only for a control's own children (gesture directions, Exact value);
   at most one per row.
 - **⌥ alternates** only in the status menu, and each also has a home in Settings (see Status menu).

@@ -53,9 +53,11 @@ struct SheetRequest: Identifiable {
     var id: String { "\(kind)\(target.app ?? "")\(target.button)\(target.direction ?? "")" }
 }
 
-/// Records a keyboard shortcut: press it, or type it as the config spells it.
+/// Records a keyboard shortcut. The recorder leads; typing it as the config spells it is behind
+/// "Enter as Text…", or shows once a recording ends on modifiers alone (`ShortcutRecorder`).
 struct ShortcutSheet: View {
     static let title = "Keyboard Shortcut"
+    static let enterAsText = "Enter as Text…"
     static let typingPrompt = "Or enter it, such as ctrl+left"
     static let caption = "macOS keeps some shortcuts, such as ⌃←. Enter those instead."
     static let syntaxError = "Use cmd, shift, opt or ctrl with a key, such as a, 4, left, f11, space or return."
@@ -67,8 +69,19 @@ struct ShortcutSheet: View {
     @State private var recorder = ShortcutRecorder()
     @State private var typed = ""
     @FocusState private var typing: Bool
+    /// "Enter as Text…" was pressed.
+    @State private var typingRequested = false
+
+    /// The text field and its caption show once asked for, or when a recording ended on modifiers.
+    private var showsTyping: Bool { typingRequested || recorder.endedOnModifiers }
 
     private var typedValid: Bool { ShortcutCheck.isValid(typed) }
+
+    /// Shows the text field and moves focus to it on the next turn, once the field is in the view.
+    private func revealTyping() {
+        typingRequested = true
+        DispatchQueue.main.async { typing = true }
+    }
 
     /// The spec Save writes: the typed one while that field has text, else the recorded one.
     private var result: String? {
@@ -83,29 +96,37 @@ struct ShortcutSheet: View {
                 Text(request.target.subtitle).foregroundStyle(.secondary)
             }
             RecorderField(recorder: recorder)
-            VStack(alignment: .leading, spacing: 4) {
-                TextField(Self.typingPrompt, text: $typed)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.body.monospaced())
-                    .focused($typing)
-                    .onChange(of: typing) { _, focused in if focused { recorder.stop() } }
-                    .accessibilityLabel("Enter the shortcut")
-                Text(Self.caption)
-                    .font(.callout).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                if !typed.isEmpty {
-                    if typedValid, let display = Shortcut.display(typed) {
-                        Label(display, systemImage: "checkmark.circle.fill").foregroundStyle(.secondary)
-                            .labelStyle(StatusLabelStyle())
-                    } else {
-                        Label {
-                            Text(Self.syntaxError)
-                        } icon: {
-                            Image(systemName: "exclamationmark.triangle.fill").symbolRenderingMode(.multicolor)
-                        }
-                        .font(.callout)
+            if showsTyping {
+                VStack(alignment: .leading, spacing: 4) {
+                    TextField(Self.typingPrompt, text: $typed)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.body.monospaced())
+                        .focused($typing)
+                        .onChange(of: typing) { _, focused in if focused { recorder.stop() } }
+                        .accessibilityLabel("Enter the shortcut")
+                    Text(Self.caption)
+                        .font(.callout).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
+                    if !typed.isEmpty {
+                        if typedValid, let display = Shortcut.display(typed) {
+                            Label(display, systemImage: "checkmark.circle.fill").foregroundStyle(.secondary)
+                                .labelStyle(StatusLabelStyle())
+                        } else {
+                            Label {
+                                Text(Self.syntaxError)
+                            } icon: {
+                                Image(systemName: "exclamationmark.triangle.fill").symbolRenderingMode(.multicolor)
+                            }
+                            .font(.callout)
+                            .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
+                }
+            } else {
+                HStack {
+                    Button(Self.enterAsText) { revealTyping() }
+                        .buttonStyle(.bordered)
+                    Spacer(minLength: 0)
                 }
             }
             HStack {
@@ -132,7 +153,12 @@ struct ShortcutSheet: View {
                 typing = false
                 recorder.start()
             }
+            #if DEBUG
+            if DevHooks.shortcutTextRequested { typingRequested = true }
+            #endif
         }
+        // A recording that ended on modifiers alone moves on to typing, as "Enter as Text…" does.
+        .onChange(of: recorder.endedOnModifiers) { _, ended in if ended { revealTyping() } }
         .onDisappear { recorder.stop() }
     }
 }
@@ -144,7 +170,16 @@ final class ShortcutRecorder {
     private(set) var recording = false
     /// Modifiers held so far, shown while recording.
     private(set) var held: Shortcut.Modifiers = []
+    /// Set when a recording ended on modifiers alone (`endsWithoutKey`). macOS keeps some shortcuts,
+    /// and their key often never reaches the app, so the sheet then offers to enter the text.
+    private(set) var endedOnModifiers = false
     @ObservationIgnored private var monitor: Any?
+
+    /// Whether a change from `held` to `now` ends a recording with no key: some modifiers were held
+    /// and now none are.
+    static func endsWithoutKey(held: Shortcut.Modifiers, now: Shortcut.Modifiers) -> Bool {
+        !held.isEmpty && now.isEmpty
+    }
 
     func start() {
         guard monitor == nil else { return }
@@ -172,6 +207,11 @@ final class ShortcutRecorder {
     private func handle(_ event: NSEvent) -> NSEvent? {
         let modifiers = Self.modifiers(event.modifierFlags)
         if event.type == .flagsChanged {
+            if Self.endsWithoutKey(held: held, now: modifiers) {
+                endedOnModifiers = true
+                stop()
+                return nil
+            }
             held = modifiers
             return nil
         }
