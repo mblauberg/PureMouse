@@ -80,6 +80,19 @@ import Testing
         #expect(Receiver.productID(up) == 0xB034 && Receiver.productID(down) == 0xB034)  // MX Master 3S
         #expect(Receiver.productID(Report(bytes: [0x10, 0x02, 0x41, 0x10, 0x02])!) == nil)
     }
+
+    /// Only a short HID++ 1.0 report from a receiver is a connection notification: a long event at
+    /// index 0x41 belongs to the feature there, on a receiver slot or a direct device.
+    @Test func onlyAShortReceiverReportAtSubID41IsAConnectionNotification() {
+        let short = Report(bytes: [0x10, 0x02, 0x41, 0x10, 0x02, 0x34, 0xB0])!
+        let long = Report(bytes: [0x11, 0x02, 0x41, 0x00, 0x4B, 0x04, 0x00])!
+        let direct = Report(bytes: [0x11, 0xFF, 0x41, 0x00, 0x4B, 0x04, 0x00])!
+        #expect(Receiver.isConnectionNotification(short, onReceiver: true))
+        #expect(!Receiver.isConnectionNotification(short, onReceiver: false))
+        #expect(!Receiver.isConnectionNotification(long, onReceiver: true))
+        #expect(!Receiver.isConnectionNotification(direct, onReceiver: false))
+        #expect(!Receiver.isConnectionNotification(Report(bytes: [0x10, 0x02, 0x42, 0x10, 0x02])!, onReceiver: true))
+    }
 }
 
 struct WheelEventTests {

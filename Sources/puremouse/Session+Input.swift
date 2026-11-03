@@ -25,7 +25,7 @@ extension Session {
 
     func handle(_ report: Report) {
         guard !finished else { return }
-        if report.featureIndex == Receiver.connectionNotification {
+        if Receiver.isConnectionNotification(report, onReceiver: device.interface.isReceiver) {
             if onConnection?(report) == true { return }
             if Receiver.isLinkEstablished(report) {
                 Log.info("\(name): link up")

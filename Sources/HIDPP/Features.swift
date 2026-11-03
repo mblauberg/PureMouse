@@ -736,6 +736,14 @@ public enum Receiver {
     /// Sub-ID of the "device connected/disconnected" notification sent for a slot.
     public static let connectionNotification: UInt8 = 0x41
 
+    /// Whether `report`, heard on an endpoint of a receiver (`onReceiver`), is a slot's
+    /// connection notification: a short HID++ 1.0 report with sub-ID 0x41. Index 0x41 is only a
+    /// sub-ID in that framing; in a long HID++ 2.0 report, or on a Bluetooth device, it is the
+    /// feature at that index (a feature table can run past 64 entries), whose events must reach it.
+    public static func isConnectionNotification(_ report: Report, onReceiver: Bool) -> Bool {
+        onReceiver && report.reportID == .short && report.featureIndex == connectionNotification
+    }
+
     /// For a 0x41 notification, whether the link is up. Bit 6 of the flags byte is "link not
     /// established". The flags byte is report byte 4, which `Report` parses as `params[0]`.
     public static func isLinkEstablished(_ report: Report) -> Bool {

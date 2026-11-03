@@ -22,10 +22,18 @@ public final class HIDPPDevice {
     private var nextSoftwareID: UInt8
     private var closed = false
     private var busy = false
-    private var waiters: [CheckedContinuation<Void, Never>] = []
+    /// Requests queued behind the one in flight, oldest first. Each has an identity so that a
+    /// caller that gives up leaves the queue at once (`acquire`).
+    private var waiters: [Waiter] = []
     private var nextToken = 0
     /// Requests waiting behind the one in flight, so tests can tell a request has queued.
     public var queuedRequests: Int { waiters.count }
+
+    private struct Waiter {
+        let id: Int
+        /// True: the endpoint is handed to the caller. False: it left the queue unserved.
+        let continuation: CheckedContinuation<Bool, Never>
+    }
 
     private struct Pending {
         let token: Int
@@ -51,7 +59,7 @@ public final class HIDPPDevice {
         failPending(HIDPPError.closed)
         let queued = waiters
         waiters = []
-        queued.forEach { $0.resume() }  // each wakes, sees `closed` and throws
+        queued.forEach { $0.continuation.resume(returning: true) }  // each wakes, sees `closed` and throws
     }
 
     // MARK: Requests
@@ -73,7 +81,7 @@ public final class HIDPPDevice {
 
     private func send(_ request: Report, rotatingSoftwareID: Bool = false) async throws -> [UInt8] {
         guard !closed else { throw HIDPPError.closed }
-        await acquire()
+        try await acquire()
         defer { release() }
         // A request queued behind others must not go out once its caller has given up.
         guard !closed else { throw HIDPPError.closed }
@@ -204,13 +212,36 @@ public final class HIDPPDevice {
         return id
     }
 
-    private func acquire() async {
+    /// Waits for the endpoint. A caller cancelled while it waits leaves the queue at once and
+    /// throws `CancellationError`, rather than staying suspended until the owner's reply or
+    /// timeout. The queue entry is removed and resumed exactly once, by whichever of the
+    /// hand-over, the cancellation and `close` reaches it first.
+    private func acquire() async throws {
         guard busy else { busy = true; return }
-        await withCheckedContinuation { waiters.append($0) }
+        nextToken += 1
+        let id = nextToken
+        let granted = await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+                guard !Task.isCancelled else { continuation.resume(returning: false); return }
+                waiters.append(Waiter(id: id, continuation: continuation))
+            }
+        } onCancel: {
+            // Runs wherever the canceller is, perhaps before the entry is queued: hop and look.
+            // An entry already handed the endpoint is gone from the queue, and its caller
+            // checks for cancellation (and releases) itself.
+            Task { @MainActor [weak self] in self?.abandon(id) }
+        }
+        // A grant that raced a cancellation is still ours to release, which `send` does.
+        if !granted { throw CancellationError() }
+    }
+
+    private func abandon(_ id: Int) {
+        guard let position = waiters.firstIndex(where: { $0.id == id }) else { return }
+        waiters.remove(at: position).continuation.resume(returning: false)
     }
 
     private func release() {
-        if waiters.isEmpty { busy = false } else { waiters.removeFirst().resume() }
+        if waiters.isEmpty { busy = false } else { waiters.removeFirst().continuation.resume(returning: true) }
     }
 }
 

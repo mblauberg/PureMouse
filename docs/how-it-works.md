@@ -35,6 +35,10 @@ The mouse forgets every setting PureMouse gives it whenever it sleeps, reconnect
 between a receiver and Bluetooth. PureMouse reapplies them on every reconnect, after the Mac wakes
 and on each config reload.
 
+Which mouse it is decides which settings apply (a `devices` entry on top of the top level). If the
+mouse does not answer when asked who it is, it gets the top-level settings meanwhile, and is asked
+again after each configure until it answers, then switches to its own entry. Nothing is polled.
+
 On quit or logout it hands the wheels and buttons back to the mouse first. Nothing is stored on
 the mouse or receiver, so they behave normally on any other computer.
 
@@ -308,11 +312,15 @@ touches.
   (`Daemon.replaceEndpoint`). An ignored slot is identified again, and an identification of the old
   endpoint that finishes afterwards is discarded. The first announcement after attach only records
   the product.
-- Identity is read once per adoption (`Identification.read`): the name (0x0005), kind (0x0005
+- Identity is read at adoption (`Identification.read`): the name (0x0005), kind (0x0005
   getDeviceType), and model and unit IDs (0x0003), which give the key (`Config.deviceKey`). A mouse
   whose 0x0003 answers with an error, or that lacks it, is keyed by its product ID: the
   interface's for Bluetooth, the slot's wireless product ID on a receiver. A 0x0003 that times out
-  leaves the key absent rather than guess, and that mouse uses the top-level settings. A model or
+  leaves the key absent rather than guess, and that mouse uses the top-level settings and its
+  identity `unresolved`: after each configure that succeeds it is read again, once
+  (`Daemon.resolveIdentity`), and a mouse that now has a key is replaced by a session on that key's
+  settings. A reload or reconnect configures again, so it is retried then, never in a loop or on a
+  timer. An answer that arrives before the slot's first announcement is completed with the product it names (`Daemon.current`). An answer, an error included, is final, so a known identity is never read again. A model or
   unit ID of all zeros or all 0xFF counts as absent. The key is in the adoption log line
   (`model=`). Two mice of one model share a key, so they share `devices.<key>` and are both reached
   by a `device` request.
@@ -325,10 +333,19 @@ touches.
   per session; `toggleScrollMode` without SmartShift, and smooth scrolling without either 0x2121 or
   0x2130 (`Session.smoothScrollUnsupported`), an info line once per session.
 - HID++ software IDs rotate per request, so a late reply cannot complete a newer request. A
-  cancelled request fails at once instead of holding the endpoint until its timeout. Only events
-  reach `onEvent` (`Report.isEvent`): software ID 0, or a short HID++ 1.0 notification (sub-ID
-  0x40 to 0x7F); a long report at those indices with another software ID is another program's
-  reply.
+  cancelled request fails at once instead of holding the endpoint until its timeout, and so does
+  one still queued behind another (`HIDPPDevice.acquire` removes its entry). Only events reach
+  `onEvent` (`Report.isEvent`): software ID 0, or a short HID++ 1.0 notification (sub-ID 0x40 to
+  0x7F); a long report at those indices with another software ID is another program's reply. A
+  connection notification is only a short report with sub-ID 0x41 heard on a receiver endpoint
+  (`Receiver.isConnectionNotification`, used by `Session.handle` and `Daemon.watch`): a long event
+  at feature index 0x41, on a receiver slot or a Bluetooth mouse, routes to its feature.
+- A control is diverted only if one of its bindings can be performed (`Session.bound`,
+  `Config.Binding.isPerformable`): device actions, `run` and `none` always can; an action that
+  posts events (click, key, swipe, scroll, media) needs Accessibility; a gesture needs one
+  direction that can act. Without the permission such a button stays native instead of being taken
+  and doing nothing, and the log says so once. The permission is read once per process, so a grant
+  restarts the daemon (`Daemon.pollPermissions`) and its new sessions divert as normal.
 
 ### Permissions
 
@@ -390,9 +407,22 @@ how the daemon fills them:
   take over, 0x2121 or 0x2130; false when the notched wheel refused), `battery` (0x1004, 0x1000,
   0x1001). They are kept across reloads.
 - The config file is watched as well as its directory, since editors that write in place leave the
-  directory unchanged. A reload that fails leaves the previous config in effect and reports
-  `config.error` (`ConfigCheck.message`, which names the field); the next successful load clears
-  it.
+  directory unchanged. A symlinked directory (a dotfiles setup) is watched at the folder it points
+  to, and so is the parent of the directory as written and of every link in the chain its name
+  leads through (up to 8, each folder once), so a link or its target swapped or replaced at any
+  hop is followed. Every event
+  re-resolves the path and re-arms the watches (`ConfigWatcher.arm`); a change to a parent alone
+  reloads only if the directory the path leads to changed. While the directory is absent
+  (deleted, renamed away, a dangling link or never created) the nearest existing ancestor of where
+  it leads is watched instead. The config in effect stays until the directory returns, and then it
+  reloads once; an absent directory is logged but does not set `config.error`. Two changes go
+  unnoticed until SIGHUP reloads: renaming a real directory above those watched parents, and
+  swapping a link in the middle of a hop's target (`hop/current/config` where `current` is itself
+  a link), since only each hop's last component is followed. Only file-system
+  sources are used, so idle costs nothing, and a watcher's descriptors close when it stops or is
+  released.
+- A reload that fails leaves the previous config in effect and reports `config.error`
+  (`ConfigCheck.message`, which names the field); the next successful load clears it.
 
 ## Protocol references
 
