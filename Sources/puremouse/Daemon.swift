@@ -82,6 +82,7 @@ final class Daemon {
     /// The last capture token acted on, so re-reading `control.json` does not restart it.
     private var lastCaptureToken: Int?
     private var lastDPIToken: Int?
+    private var lastReapplyToken: Int?
     static let captureDuration: Duration = .seconds(10)
     /// Whether new sessions may be created.
     private var accepting: Bool { !shuttingDown && pauseGate.allowsAdoption }
@@ -243,6 +244,10 @@ final class Daemon {
         if let token = control.useConfiguredDPI, token != lastDPIToken {
             lastDPIToken = token
             sessions.values.filter { Self.targets(control.device, $0) }.forEach { $0.useConfiguredDPI() }
+        }
+        if let token = control.reapply, token != lastReapplyToken {
+            lastReapplyToken = token
+            sessions.values.filter { Self.targets(control.device, $0) }.forEach { $0.reapply() }
         }
     }
 
@@ -798,11 +803,13 @@ final class Daemon {
     // MARK: Reconfiguration
 
     private func reconfigureAll() {
-        // Give the receiver and Bluetooth stack a moment after wake.
+        // The settings are reapplied at once; the retries cover a mouse still waking
+        // (`SessionEnvironment.live`). Only what looks for new endpoints waits for the Bluetooth
+        // stack to settle.
+        sessions.values.forEach { $0.configureAfterWake() }
         Task {
             try? await Task.sleep(for: .seconds(2))
             guard !shuttingDown else { return }
-            sessions.values.forEach { $0.configure() }
             retryMissingNotifications()
             pollPermissions()
             recheckLogiOptions()

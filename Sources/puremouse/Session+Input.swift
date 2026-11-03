@@ -29,11 +29,13 @@ extension Session {
             if onConnection?(report) == true { return }
             if Receiver.isLinkEstablished(report) {
                 Log.info("\(name): link up")
+                linkDown = false
                 configure()
             } else {
                 // The mouse is off or out of range: its releases will not arrive.
                 scroll?.stop()
                 dropHeld()
+                linkDown = true
                 if state.online {
                     state.online = false
                     changed()

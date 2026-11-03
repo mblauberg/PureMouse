@@ -14,7 +14,9 @@ public final class HIDPPDevice {
     /// programs sharing a device (the daemon and `puremouse probe`) use disjoint ranges.
     public nonisolated let softwareIDs: ClosedRange<UInt8>
     public static let defaultSoftwareIDs: ClosedRange<UInt8> = 0x8...0xF
-    public var timeout: Duration = .milliseconds(1500)
+    /// How long a request waits for its reply unless `timeout` says otherwise.
+    public static let defaultTimeout: Duration = .milliseconds(1500)
+    public var timeout: Duration = HIDPPDevice.defaultTimeout
 
     private var featureIndices: [UInt16: UInt8] = [0x0000: 0]
     private var absentFeatures: Set<UInt16> = []
