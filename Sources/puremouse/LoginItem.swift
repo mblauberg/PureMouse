@@ -44,9 +44,10 @@ struct LoginItem {
         var seedConfig: () -> Void
         /// The bundled Settings helper, absent from builds that do not include it.
         var settingsApp: URL?
-        /// Asks for Settings to open: writes the request (`SettingsRequest`) and rings the doorbell,
-        /// so a helper that starts later reads the file and one already running is told to.
-        var requestSettings: () -> Void
+        /// Asks for Settings to open on the pane with this word (empty: the last one shown): writes the
+        /// request (`SettingsRequest`) and rings the doorbell, so a helper that starts later reads the
+        /// file and one already running is told to.
+        var requestSettings: (String) -> Void
         /// Whether the request is still in the file: the helper removes it when it reads it.
         var requestPending: () -> Bool
         /// Whether Quit PureMouse has stamped a quit since the last request was written (a request
@@ -215,6 +216,39 @@ struct LoginItem {
         return FinderLaunch(outcome: outcome, settingsOpened: openSettings())
     }
 
+    /// What the copy an update starts is told (`open -n <app> --args register --relaunch
+    /// [--settings=<pane>]`, `UpdateRelaunch`): to say so if it cannot register, since nothing else
+    /// will, and to bring Settings back, on this pane, if the old copy had it open.
+    struct RelaunchOptions: Equatable {
+        /// The pane word to open Settings on (empty: the last one shown); nil leaves Settings closed.
+        var reopening: String?
+
+        /// Nil unless `--relaunch` is among the arguments.
+        init?(_ arguments: [String]) {
+            guard arguments.contains("--relaunch") else { return nil }
+            let word = arguments.first { $0.hasPrefix("--settings=") }.map { String($0.dropFirst("--settings=".count)) }
+            // Only a pane's word (and its sheet, after a dot) is passed on to the request file.
+            reopening = word.flatMap { $0.allSatisfy { $0.isLetter || $0 == "." } ? $0 : nil }
+        }
+
+        init(reopening: String?) { self.reopening = reopening }
+    }
+
+    /// Starting the new copy after an update: `register`, then Settings if it was showing. The alert
+    /// to show, if registering failed: the old copy does not wait for this one (`open` only says it
+    /// was launched), so this is the only place that can tell the user. It is the Finder launch's.
+    /// Settings that does not open leaves registration done and says nothing: it opens from the menu.
+    func relaunch(reopening pane: String?) -> (title: String, body: String)? {
+        do {
+            _ = try register()
+        } catch {
+            Log.error("Relaunch after an update failed: \(error)")
+            return Self.startFailureAlert(error)
+        }
+        if let pane { _ = openSettings(pane: pane) }
+        return nil
+    }
+
     /// How long `openSettings` waits for the helper to read the request, and how often it looks.
     static let settingsWait: (total: TimeInterval, interval: TimeInterval) = (2, 0.2)
 
@@ -228,12 +262,12 @@ struct LoginItem {
     /// Quit PureMouse stamped a quit meanwhile: writing again would clear the stamp and bring
     /// Settings back after a quit, so nothing more is done (true, so no alert either). False if the
     /// build has no helper or `open` fails.
-    func openSettings() -> Bool {
+    func openSettings(pane: String = "") -> Bool {
         guard let settings = host.settingsApp else { return false }
-        host.requestSettings()
+        host.requestSettings(pane)
         guard host.open(settings, 2) else { return false }
         if requestTaken() || host.quitStamped() { return true }
-        host.requestSettings()
+        host.requestSettings(pane)
         return host.open(settings, 2)
     }
 
@@ -255,8 +289,8 @@ struct LoginItem {
     }
 
     /// Writes the Settings request and rings the doorbell a running helper listens on.
-    private static func requestSettings() {
-        SettingsRequest.write("")
+    private static func requestSettings(_ pane: String) {
+        SettingsRequest.write(pane)
         notify_post(Companion.showSettingsNotification)
     }
 

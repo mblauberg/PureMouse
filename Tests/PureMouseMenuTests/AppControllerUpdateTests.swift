@@ -359,7 +359,7 @@ struct AppControllerUpdateTests {
         let fake = FakeSystem()
         let launcher = SettingsLauncher(system: fake.system)
         var asked: [URL] = []
-        let opened = UpdateSetup.relaunchLive(Self.app, from: .menu, launcher: launcher) { asked.append($0); return false }
+        let opened = UpdateSetup.relaunchLive(Self.app, from: .menu, launcher: launcher) { app, _ in asked.append(app); return false }
         #expect(!opened && asked == [Self.app])
         // Quitting for the relaunch is not Quit PureMouse: no stamp, and the next open goes ahead.
         #expect(fake.quitMarks == 0)
@@ -372,7 +372,7 @@ struct AppControllerUpdateTests {
         let helper = FakeSystem.Helper(alive: true)
         fake.running = [helper]
         var quitsWhenOpened = -1
-        _ = UpdateSetup.relaunchLive(Self.app, from: .menu, launcher: SettingsLauncher(system: fake.system)) { _ in
+        _ = UpdateSetup.relaunchLive(Self.app, from: .menu, launcher: SettingsLauncher(system: fake.system)) { _, _ in
             quitsWhenOpened = helper.quitCount
             return true
         }
@@ -381,45 +381,56 @@ struct AppControllerUpdateTests {
 
     // MARK: Settings across the relaunch
 
-    /// Runs `relaunchLive` and records what was asked of Settings before the app was opened.
-    private func relaunch(from source: InstallSource, settingsRunning: Bool) -> (fake: FakeSystem, atOpen: [ShowRequest], helper: FakeSystem.Helper) {
+    /// Runs `relaunchLive` and records what was asked of the new copy, and of Settings by this process.
+    private func relaunch(from source: InstallSource, settingsRunning: Bool) -> (fake: FakeSystem, reopening: ShowRequest??, helper: FakeSystem.Helper) {
         let fake = FakeSystem()
         let helper = FakeSystem.Helper(alive: settingsRunning)
         fake.running = settingsRunning ? [helper] : []
-        var atOpen: [ShowRequest] = []
-        _ = UpdateSetup.relaunchLive(Self.app, from: source, launcher: SettingsLauncher(system: fake.system)) { _ in
-            atOpen = fake.posts
+        var reopening: ShowRequest??
+        _ = UpdateSetup.relaunchLive(Self.app, from: source, launcher: SettingsLauncher(system: fake.system)) { _, reopen in
+            reopening = .some(reopen)
             return true
         }
-        return (fake, atOpen, helper)
+        return (fake, reopening, helper)
     }
 
     @Test func aMenuRowInstallWithoutSettingsOpenAsksForNoSettingsWindow() {
         let run = relaunch(from: .menu, settingsRunning: false)
+        #expect(run.reopening == .some(nil))
         #expect(run.fake.posts.isEmpty && run.fake.opens.isEmpty)
     }
 
-    @Test func aMenuRowInstallWithSettingsOpenReopensItWhereItWasAfterwards() {
+    /// This process is replaced by `register`, and a helper that is quitting takes a request and
+    /// exits, so the old process opening Settings is lost twice over. The new copy does it.
+    @Test func aMenuRowInstallWithSettingsOpenLeavesReopeningItToTheNewCopy() {
         let run = relaunch(from: .menu, settingsRunning: true)
         #expect(run.helper.quitCount == 1)
-        #expect(run.fake.posts == [ShowRequest()] && run.fake.opens.count == 1)
-        // Asked for before the app is opened, so a menu bar app that register replaces cannot lose it.
-        #expect(run.atOpen == [ShowRequest()])
+        #expect(run.reopening == .some(ShowRequest()))
+        #expect(run.fake.posts.isEmpty && run.fake.opens.isEmpty, "this process asks for nothing: it is about to be replaced")
     }
 
-    @Test func anAboutInstallReopensSettingsOnAbout() {
+    @Test func anAboutInstallLeavesReopeningSettingsOnAboutToTheNewCopy() {
         let run = relaunch(from: .about, settingsRunning: true)
-        #expect(run.fake.posts == [ShowRequest(pane: .tab(.about))] && run.fake.opens.count == 1)
-        #expect(run.atOpen == [ShowRequest(pane: .tab(.about))])
+        #expect(run.reopening == .some(ShowRequest(pane: .tab(.about))))
+        #expect(run.fake.posts.isEmpty && run.fake.opens.isEmpty)
     }
 
-    @Test func anAboutInstallReopensAboutEvenIfSettingsHadJustGone() {
+    @Test func anAboutInstallAsksForAboutEvenIfSettingsHadJustGone() {
         let run = relaunch(from: .about, settingsRunning: false)
-        #expect(run.fake.posts == [ShowRequest(pane: .tab(.about))])
+        #expect(run.reopening == .some(ShowRequest(pane: .tab(.about))))
     }
 
     @Test func theRelaunchOpensTheNewCopyToRegisterAndNothingMore() {
-        #expect(UpdateRelaunch.arguments(for: Self.app) == ["-n", Self.app.path, "--args", "register"])
+        #expect(UpdateRelaunch.arguments(for: Self.app, reopening: nil)
+                == ["-n", Self.app.path, "--args", "register", "--relaunch"])
+    }
+
+    @Test func theRelaunchCarriesWhichPaneToReopenIntoTheNewCopy() {
+        #expect(UpdateRelaunch.arguments(for: Self.app, reopening: ShowRequest(pane: .tab(.about)))
+                == ["-n", Self.app.path, "--args", "register", "--relaunch", "--settings=about"])
+        // Empty: the pane Settings last showed.
+        #expect(UpdateRelaunch.arguments(for: Self.app, reopening: ShowRequest())
+                == ["-n", Self.app.path, "--args", "register", "--relaunch", "--settings="])
     }
 
     @Test func theMenuRowAndAboutTellTheRelaunchWhereTheyCameFrom() async {

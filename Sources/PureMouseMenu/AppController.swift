@@ -40,16 +40,17 @@ struct UpdateSetup {
     /// Quits Settings, then starts the installed app's new copy (`register`, which opens no
     /// window). The quit is the reversible one: if the app does not open, this process stays and
     /// Settings opens again from its menu. Settings comes back only if it was showing, where it
-    /// was, or on About for an update asked for from About, and is asked for before the app is
-    /// opened: `register` replaces this process, which may not get to ask after.
+    /// was, or on About for an update asked for from About. The new copy does the reopening
+    /// (`--settings=`): `register` replaces this process, and a helper that is quitting takes a
+    /// request and exits, so a request from here would be lost.
     @MainActor static func relaunchLive(_ app: URL, from source: InstallSource, launcher: SettingsLauncher = .shared,
-                                        open: @MainActor (URL) -> Bool = UpdateRelaunch.open) -> Bool {
+                                        open: @MainActor (URL, ShowRequest?) -> Bool = UpdateRelaunch.open) -> Bool {
         let settingsWasOpen = launcher.quitRunning()
-        switch source {
-        case .about: launcher.open(ShowRequest(pane: .tab(.about)))
-        case .menu: if settingsWasOpen { launcher.open(ShowRequest()) }
+        let reopening: ShowRequest? = switch source {
+        case .about: ShowRequest(pane: .tab(.about))
+        case .menu: settingsWasOpen ? ShowRequest() : nil
         }
-        return open(app)
+        return open(app, reopening)
     }
 }
 

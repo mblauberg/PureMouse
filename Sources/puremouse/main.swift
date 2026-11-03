@@ -88,6 +88,14 @@ case "register", "unregister", "stop", "start", "login", "menu":
     setsid()
     switch (arguments.first, arguments.dropFirst().first) {
     case ("register", _):
+        // Started by an update (`UpdateRelaunch`): nobody reads this output, so failure is an alert.
+        if let relaunch = LoginItem.RelaunchOptions(Array(arguments)) {
+            if let alert = login.relaunch(reopening: relaunch.reopening) {
+                LoginItem.alert(alert.title, alert.body)
+                exit(1)
+            }
+            exit(0)
+        }
         do {
             print(try login.register())
         } catch {

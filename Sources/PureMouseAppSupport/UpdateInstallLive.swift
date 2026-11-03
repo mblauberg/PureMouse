@@ -303,19 +303,23 @@ struct LiveUpdateFiles: UpdateFiles {
     }
 }
 
-/// Starts the installed app's new copy through LaunchServices, as `puremouse register`, which
-/// replaces the running background process and menu bar app with the new copy's. Not the bare
+/// Starts the installed app's new copy through LaunchServices, as `puremouse register --relaunch`,
+/// which replaces the running background process and menu bar app with the new copy's. Not the bare
 /// double-click (`LoginItem.finderLaunch`), which also opens Settings: an update that was started
 /// from the menu must not put a window on screen. A new instance is asked for (`-n`), since
-/// arguments are only passed to one that is launched.
+/// arguments are only passed to one that is launched. `--relaunch` makes the new copy say so if it
+/// cannot register (this process is gone by then), and `--settings=<pane>` has it open Settings
+/// there once it has: this process is replaced by the register, so it cannot do that itself.
 public enum UpdateRelaunch {
-    public static func arguments(for app: URL) -> [String] { ["-n", app.path, "--args", "register"] }
+    public static func arguments(for app: URL, reopening: ShowRequest?) -> [String] {
+        ["-n", app.path, "--args", "register", "--relaunch"] + (reopening.map { ["--settings=" + $0.body] } ?? [])
+    }
 
-    /// Whether `open` accepted the app.
-    public static func open(_ app: URL) -> Bool {
+    /// Whether `open` accepted the app. It says nothing of whether the new copy then registered.
+    public static func open(_ app: URL, reopening: ShowRequest?) -> Bool {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        process.arguments = arguments(for: app)
+        process.arguments = arguments(for: app, reopening: reopening)
         process.standardError = FileHandle.nullDevice
         guard (try? process.run()) != nil else { return false }
         process.waitUntilExit()
