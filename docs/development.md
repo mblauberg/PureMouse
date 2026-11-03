@@ -67,6 +67,26 @@ keychain in the search list, restore it with the command in the script's header
 run it on a spare Mac (the workshop), not in CI; it never touches `/Applications` or the real login
 agents.
 
+## Measuring input cost
+
+`scripts/measure-input.sh [seconds]` measures the daemon in still and moving windows (default 20
+seconds). Keep one `puremouse` daemon running. The script checks that exactly one process exists,
+confirms `top` reports PID, CPU, idle wakeups and execution time, then prompts before each window.
+For a useful comparison, leave the mouse still for the first prompt and move it normally for the
+second. It prints the PID, requested duration, measured sample count, mean idle wakeups per second,
+mean CPU percentage and CPU milliseconds for each window. The first three `top` samples are
+discarded as warm-up; the first has no prior sample for its CPU percentage, and the next two let the
+sampler establish a stable counter baseline.
+
+```sh
+scripts/measure-input.sh       # 20 seconds per window
+scripts/measure-input.sh 5
+scripts/tests/run.sh measure_input
+```
+
+Attach owner-collected Bluetooth and receiver still/moving results to issue #33 with the macOS
+version and build identifier. Those hardware baselines remain pending until collected.
+
 `scripts/tests/run.sh <name>` runs only the tests whose names contain `<name>`. The Swift tests
 cover pure logic. Device behaviour is tested against `HIDPPTesting` fakes (`FakeDevice`,
 `FakeTransport`) built from `puremouse probe` dumps in `Tests/Fixtures/probe`, so the probe's
