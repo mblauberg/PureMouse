@@ -8,7 +8,8 @@ import Testing
 // which mice get a drawing, where each part is, what each part opens and how a selection and the
 // row it marks are kept.
 
-private let mx3s = "mb03440910000"
+private let mx3s = "mb03400000000"  // the development mouse's own key
+private let mx3sReceiver = "mb03440910000"
 private let mx3 = "m4082b0230000"
 private let mx4 = "pb042"
 private let anywhere3s = "pb037"
@@ -29,7 +30,7 @@ private let allButtons = Set(NamedButton.allCases)
 
     @Test func aMouseIsKnownByAnyOfItsProductIDsInAnyOrderAndCase() {
         // Bluetooth, receiver and a zero word, in the orders a read can give them.
-        for key in ["mb03440910000", "m4091b0340000", "m0000b0344091", "MB03440910000", "p4091", "pB034"] {
+        for key in ["mb03400000000", "mb03440910000", "m4091b0340000", "m0000b0344091", "MB03440910000", "p4091", "pB034"] {
             #expect(DeviceArt.model(forKey: key)?.name == DeviceArt.model(forKey: mx3s)?.name, "\(key)")
         }
         #expect(DeviceArt.model(forKey: mx3s) == DeviceArt.model(forKey: mx3), "the 3 and the 3S share one drawing and binds")
@@ -63,7 +64,7 @@ private let allButtons = Set(NamedButton.allCases)
     }
 
     @Test func productIDsAreReadFromTheKeyOnly() {
-        #expect(DeviceArt.productIDs(inKey: "mb03440910000") == [0xB034, 0x4091])
+        #expect(DeviceArt.productIDs(inKey: mx3sReceiver) == [0xB034, 0x4091])
         #expect(DeviceArt.productIDs(inKey: "pb042") == [0xB042])
         #expect(DeviceArt.productIDs(inKey: "MX Master 3S") == nil)
     }

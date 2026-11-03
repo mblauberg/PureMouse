@@ -84,7 +84,11 @@ struct ButtonsPane: View {
             if DevHooks.sheet(on: "buttons") == .advanced, usesGestures { showingAdvanced = true }
             let environment = ProcessInfo.processInfo.environment
             if environment["PUREMOUSE_DEV_OTHERS"] != nil { showOthers = true }
-            if let key = environment["PUREMOUSE_DEV_BUTTON"].flatMap(NamedButton.init(rawValue:)) { card?.select(key) }
+            // After the card's first `follow`, which clears a selection made for another mouse.
+            if let key = environment["PUREMOUSE_DEV_BUTTON"].flatMap(NamedButton.init(rawValue:)) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { card?.select(key) }
+            }
+            if let key = environment["PUREMOUSE_DEV_FOUND"] { highlighted = key }
             if let key = environment["PUREMOUSE_DEV_PICKER"] {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { presented = key }
             }

@@ -13,6 +13,11 @@ import PureMouseAppSupport
 /// or a sheet on the pane shown (`DevSheet`).
 /// `PUREMOUSE_DEV_MOUSE=<device key>` edits that mouse's settings, as the Mouse pop-up would
 /// (`SettingsWindowController.init`); `PUREMOUSE_DEV_OTHERS=1` opens Buttons' "Other controls".
+/// On Buttons' device card, `PUREMOUSE_DEV_HOVER=<part>` (`middle`, `top`, `forward`, `back`, `thumbWheel`,
+/// `thumbRest`) shows that part hovered, `PUREMOUSE_DEV_BUTTON=<button>` selects a button as a click
+/// would and `PUREMOUSE_DEV_FOUND=<button>` marks the row Find by Pressing found. On Scrolling,
+/// `PUREMOUSE_DEV_ARRIVAL=mainWheel|thumbWheel` arrives as the card sends one there, and
+/// `PUREMOUSE_DEV_ARRIVAL_HOLD=1` keeps its outline from fading.
 /// `PUREMOUSE_DEV_CAPTURE=<file.png>` saves the windows to that file and quits (`DevCapture`).
 /// `PUREMOUSE_DEV_AX_DUMP=1` prints every control's accessibility role, label and size for each
 /// tab and segment, or for what the hooks above open, and quits (`DevAXDump`).
