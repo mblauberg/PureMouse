@@ -3,7 +3,8 @@ import PureMouseKit
 import notify
 
 /// "Show Settings": the `show-settings` file, stamped with its time and naming the pane to open
-/// (empty: the last one shown) and, after a dot, a sheet to open over it ("pointer.presets"), or,
+/// (empty: the last one shown) and, after a dot, a sheet to open over it ("pointer.presets"), after an
+/// at sign, the device key of the mouse whose scope to open ("pointer.presets@mb03400000000"), or,
 /// after a colon, the bundle identifier of an app whose page to open in Apps ("apps:com.apple.Safari"),
 /// plus a doorbell, so a process still starting up (and not yet listening) sees it too. Only a request
 /// from the last 5 s counts (docs/companion.md).
@@ -12,13 +13,18 @@ public struct ShowRequest: Equatable, Sendable {
     public var pane: SettingsPane?
     /// The sheet to open over the pane.
     public var sheet: SettingsSheet?
+    /// The device key of the mouse whose scope Mouse opens in, as the status menu showed it. Nil
+    /// leaves the scope alone, except that a presets sheet opens under All Mice.
+    public var device: String?
     /// The bundle identifier of an app whose page opens in Apps, listing the app first when it is
     /// not there (nothing is written until a setting is chosen).
     public var app: String?
 
-    public init(pane: SettingsPane? = nil, sheet: SettingsSheet? = nil) {
+    public init(pane: SettingsPane? = nil, sheet: SettingsSheet? = nil, device: String? = nil) {
         self.pane = pane ?? sheet?.pane
         self.sheet = sheet
+        // Only a key Kit accepts: anything else is All Mice, as `selectMouse` treats it.
+        self.device = device.map { $0.lowercased() }.flatMap { Config.isDeviceKey($0) ? $0 : nil }
     }
 
     /// A request for this app's page in Apps (the one its row opens); an empty identifier asks for nothing.
@@ -30,18 +36,22 @@ public struct ShowRequest: Equatable, Sendable {
 
     static let freshness: TimeInterval = 5
 
-    /// The file's body: the pane's word, then ".sheet" or ":bundle id" when there is one.
+    /// The file's body: the pane's word, then ".sheet", "@device key" and ":bundle id" when there are any.
     var body: String {
-        (pane?.rawValue ?? "") + (sheet.map { "." + $0.rawValue } ?? "") + (app.map { ":" + $0 } ?? "")
+        (pane?.rawValue ?? "") + (sheet.map { "." + $0.rawValue } ?? "") + (device.map { "@" + $0 } ?? "")
+            + (app.map { ":" + $0 } ?? "")
     }
 
     init(body: String) {
         // A bundle identifier holds dots, so the app is split off first, at the colon.
         let text = body.trimmingCharacters(in: .whitespacesAndNewlines)
         let split = text.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
-        let parts = (split.first ?? "").split(separator: ".", maxSplits: 1, omittingEmptySubsequences: false)
+        // The device key follows an at sign, after the sheet.
+        let located = (split.first ?? "").split(separator: "@", maxSplits: 1, omittingEmptySubsequences: false)
+        let parts = (located.first ?? "").split(separator: ".", maxSplits: 1, omittingEmptySubsequences: false)
         self.init(pane: parts.first.flatMap { SettingsPane(rawValue: String($0)) },
-                  sheet: parts.dropFirst().first.flatMap { SettingsSheet(rawValue: String($0)) })
+                  sheet: parts.dropFirst().first.flatMap { SettingsSheet(rawValue: String($0)) },
+                  device: located.dropFirst().first.map(String.init))
         // An app's page lives in Apps, whatever pane the text names.
         if let id = split.dropFirst().first.map(String.init), !id.isEmpty {
             app = id

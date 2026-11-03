@@ -14,6 +14,8 @@ struct MenuRenderer {
         switch row {
         case .separator:
             return .separator()
+        case let .sectionHeader(title):
+            return NSMenuItem.sectionHeader(title: title)
         case let .header(title, lines, alternate):
             let header = headerItem(title: title, lines: lines)
             if alternate {
@@ -45,6 +47,7 @@ struct MenuRenderer {
                                         accessibilityDescription: "Needs attention")
         }
         item.isEnabled = plan.enabled
+        if let spoken = plan.spoken { item.setAccessibilityLabel(spoken) }
         if let rows = plan.submenu {
             let submenu = NSMenu()
             submenu.autoenablesItems = false

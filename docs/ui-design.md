@@ -188,8 +188,14 @@ Each level has one mechanism, and each label says what it reveals.
 ## Status menu and menu bar icon
 
 - Clicking the icon shows an `NSMenu`, never a popover.
-- The icon is a template image (black and clear, 18 pt), never coloured or badged. A changed state
-  (paused, off) is a different shape, not a colour.
+- The icon is a template image (black and clear, 18 pt), never coloured. A changed state is a
+  different shape or opacity, not a colour: running is the plain glyph; **paused** is the same glyph
+  at full opacity with a diagonal slash knocked out of it ("/", bottom left to top right: a 2 pt
+  line with a 1 pt gap on its upper-left side only, as the system's `.slash` symbols have it, its
+  ends on whole or half points, clearing the badge's ring by at least 1 pt); **off** (PureMouse not running) is the plain glyph dimmed to 40%. Off wins: a status
+  left saying paused by a daemon that has stopped reads off. A small badge (attention, or a battery
+  at 10% or less) sits at the bottom right of any of them (`StatusIcon.Look`, decided by
+  `StatusIcon.look(daemonRunning:paused:)`).
 - People choose whether the icon shows (General › Show in menu bar). Nothing depends on it: with
   the icon hidden the menu app keeps running without a status item (windowless), so low-battery
   notifications and the daily update check carry on, and both switches stay available. The
@@ -201,6 +207,24 @@ Each level has one mechanism, and each label says what it reveals.
   shown only for a mouse that reports host switching: one row holds both the status (a checkmark
   on this Mac) and the command, where flat "Switch to Computer N" items would add rows for an
   occasional task. With two or more mice it stays one submenu, with a section header per mouse.
+- **Pointer Speed with two or more mice.** One submenu, not one per mouse. With two or more mice
+  online (one per device key: mice of one model share their settings; a mouse with no key counts
+  alone; a mouse that reports no pointer speed to set counts for nothing and gets no rows), it has
+  a section header (`NSMenuItem.sectionHeader`) per mouse, bearing the mouse's name, then that
+  mouse's presets (its own list over the top level's) with the one its DPI is on checked, or
+  "Custom: N DPI" when it is on none, and that mouse's own Edit Presets… (Add Presets… while it
+  has none; spoken "Edit Presets for <mouse>"). Choosing a preset under a mouse writes
+  `devices.<key>.dpi` and asks only that mouse to apply it (`Control.device`), and Edit Presets…
+  opens Settings on Mouse › Pointer in that mouse's scope (`ShowRequest.device`). A mouse with no
+  key has no entry to write, and writing the top level would move the other mice: its section is
+  its current speed as one disabled row, with no presets (left out when it reports none). With one
+  mouse online the rows are those of a single mouse, and the choice goes to the top level, so a
+  single-mouse config stays flat, unless that mouse's own entry already sets `dpi` or `dpiPresets`
+  (the top level would not reach it): then it goes there, the rows list that mouse's presets, and
+  Edit Presets… opens its scope; otherwise it opens All Mice. When every mouse online reports no
+  pointer speed, Pointer Speed is disabled. VoiceOver reads a preset under a section with its mouse
+  ("1,600 DPI, MX Master 3S"), and the status item's label ends "2 mice connected" (the mice
+  answering, so two of one model are two) from two.
 - **Quiet when applied.** The menu reports a problem, not that all is well. The header's second
   line reads "Applying settings…" or "Settings not applied" only while that is true. "Applying
   settings…" starts once the mouse has answered, so a mouse still silent after a wake keeps reading
@@ -406,7 +430,7 @@ tab and no new Mouse segment. What does something is an action in the one picker
 Menu bar icon (NSMenu)
 ├─ Device header: second line "Bolt · 80%" | "Applying settings…" | "Settings not applied" | "Off in <App>"
 ├─ Attention rows, only while true: Apply Settings Again · Allow… · Update to X.Y.Z…
-├─ Smooth Scrolling · Pointer Speed ▸ · Easy-Switch ▸ (only if the mouse reports it) · Pause PureMouse
+├─ Smooth Scrolling · Pointer Speed ▸ (a section per mouse from two) · Easy-Switch ▸ (only if the mouse reports it) · Pause PureMouse
 ├─ Settings…  ·  Settings for <frontmost app>…  ·  Quit PureMouse
 └─ ⌥: detail line (adds "Settings applied at 09:14") · Reload Config · Show Log in Finder · Hide Menu Bar Icon
 
@@ -521,10 +545,12 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
   manager unless any text responder (`NSText`: field editor or text view) is first responder, or
   the config is read-only, when AppKit falls back to the window's own, so typing undoes first. Restore Defaults on a pane is an ordinary change and can be undone; Reset All
   Settings and Use Last Working Config replace the file and clear the history.
-- **Global actions.** Reset All and the status menu stay global (`setDPI` without a target writes
-  the top level). Settings' Pointer pane passes the mouse, and Find by Pressing and "use configured
-  DPI" carry its key (`Control.device`, `Control.capture.device`), a press selecting that mouse's
-  scope.
+- **Global actions.** Reset All stays global, and so does the status menu's Pointer Speed unless
+  it is ambiguous: `setDPI` without a target writes the top level, and the menu passes a mouse
+  (`AppModel.setPointerSpeed`) only with two or more mice online or when that mouse's entry sets
+  `dpi` or `dpiPresets` (Status menu, above). Settings' Pointer pane passes the mouse, and Find by
+  Pressing and "use configured DPI" carry its key (`Control.device`, `Control.capture.device`), a
+  press selecting that mouse's scope.
 - **Buttons.** Mouse › Buttons and the Apps tab list a named button when a connected mouse reports it
   or the config binds it; with no report, those in `NamedButton.listedByDefault` (not the MX Master
   4's thumb panel) (`ButtonRows.named`). Haptic picker entries come from Kit's
