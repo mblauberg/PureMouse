@@ -26,6 +26,9 @@ public final class ConfigStore {
     @ObservationIgnored public var daemonConfigError: @MainActor () -> String? = { nil }
 
     @ObservationIgnored public let locations: Locations
+    /// Undo and redo for the changes made here: only the Settings helper has one
+    /// (`AppModel.undoManager`), so the menu bar app keeps no history.
+    @ObservationIgnored private(set) var undo: UndoHistory?
     @ObservationIgnored private let clock: Clock
     @ObservationIgnored private var diskBytes: Data?
     @ObservationIgnored private var lastGood: Data?
@@ -42,6 +45,14 @@ public final class ConfigStore {
     public init(locations: Locations, clock: Clock = .main) {
         self.locations = locations
         self.clock = clock
+    }
+
+    /// Registers every change made here on `manager` from now on, each named for the Edit menu
+    /// and undone by replaying its inverse through `update`.
+    public func keepHistory(on manager: UndoManager) {
+        undo = UndoHistory(manager: manager) { [weak self] changes in
+            self?.update { $0.apply(changes) }
+        }
     }
 
     private var file: ConfigFile { ConfigFile(url: locations.config) }
@@ -70,6 +81,7 @@ public final class ConfigStore {
             }
             // No file: the daemon runs with the default set.
             if diskBytes != nil || configProblem != nil || JSON.encode(config.root) != JSON.encode(ConfigTree.defaults.root) {
+                undo?.clear()
                 config = ConfigTree.defaults
                 configProblem = nil
                 diskBytes = nil
@@ -82,6 +94,8 @@ public final class ConfigStore {
             return
         }
         guard data != diskBytes else { return }
+        // Someone else changed the file: what the steps would put back no longer fits it.
+        undo?.clear()
         // Edited by hand while a change of ours waits: save ours on top of the new file now.
         if !pendingChanges.isEmpty {
             flush()
@@ -107,10 +121,17 @@ public final class ConfigStore {
 
     public func update(debounce: Bool = false, _ change: (inout ConfigTree) -> Void) {
         guard !readOnly else { return }
-        var tree = config
+        let before = config
+        let fileBefore = undo == nil ? nil : fileTree
+        var tree = before
         change(&tree)
-        pendingChanges += config.changes(to: tree)
+        let changes = before.changes(to: tree)
+        pendingChanges += changes
         config = tree.layered()
+        if var fileAfter = fileBefore {
+            fileAfter.apply(changes)
+            undo?.record(from: fileBefore!, to: fileAfter, debounce: debounce)
+        }
         if debounce {
             cancelPendingWrite?()
             cancelPendingWrite = clock.after(Self.debounce) { [weak self] in self?.flush() }
@@ -119,11 +140,21 @@ public final class ConfigStore {
         }
     }
 
+    /// The file as it will be once the edits waiting are saved: only what it holds, without the
+    /// default set under it. Undo puts back these keys, so a setting the file never held does not
+    /// appear in it with the default's value.
+    private var fileTree: ConfigTree {
+        var tree = diskBytes.flatMap { try? ConfigTree(data: $0) } ?? ConfigTree()
+        tree.apply(pendingChanges)
+        return tree
+    }
+
     /// Saves pending edits now (also when Settings closes and before quitting). Writes nothing
     /// when there are none, and never builds on a file that does not load.
     public func flush() {
         cancelPendingWrite?()
         cancelPendingWrite = nil
+        undo?.flushed()
         defer { flushed() }
         guard !pendingChanges.isEmpty else { return }
         let changes = pendingChanges
@@ -137,6 +168,7 @@ public final class ConfigStore {
             if directoryWatch == nil { startWatching() }
         } catch {
             // Show the file as it is now, then say why the change did not land.
+            undo?.clear()
             diskBytes = nil
             reloadConfig()
             writeError = describeSave(error)
@@ -178,6 +210,7 @@ public final class ConfigStore {
 
     private func replace(with data: Data) {
         guard let tree = try? ConfigTree(data: data) else { return }
+        undo?.clear()
         cancelPendingWrite?()
         cancelPendingWrite = nil
         pendingChanges = []
