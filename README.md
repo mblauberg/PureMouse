@@ -39,7 +39,7 @@ the mouse is idle, so is PureMouse.
 | Memory | Background process: 4-6 MB. Menu bar app: about 9 MB fresh, about 14 MB once its menu has been opened. Settings: about 36 MB in its own process while its window is open, then nothing (medians of 5 on macOS 27.0.1) |
 | Idle CPU | Zero in normal use: no polling, no timers, no wake-ups* |
 | Processes | Two: the background process and an optional menu bar app, plus Settings while its window is open |
-| Network | None, unless you press **Check for Updates** |
+| Network | One small update check a day if you allow it, or when you press **Check for Updates** |
 | Privacy | No account, no telemetry, nothing stored on the mouse |
 
 The background process uses only system frameworks and no UI toolkit. Settings is a separate app
@@ -81,7 +81,8 @@ connects is retried once a minute until it does.</sub>
   is running: **Stop** returns the mouse to normal and leaves login as it is.
 - **Universal Control:** when the pointer moves to another Mac, the wheels and buttons carry on
   working there.
-- **Check for Updates** in Settings › About, only when you ask.
+- **Update reminders:** after asking once, PureMouse checks for a new release at most once a day
+  and shows one quiet notification per version. Turn it off in Settings › About.
 - Settings return after every reconnect and wake. Quitting hands the mouse straight back to
   macOS, and nothing is written to the mouse, so it behaves normally on any other computer.
 
@@ -199,8 +200,8 @@ copy. Your settings and permissions carry over.
 
 ## Privacy and security
 
-No account and no telemetry. PureMouse writes only to your home folder and goes online only when
-you press **Check for Updates**. [Privacy](docs/privacy.md) lists every permission, file and
+No account and no telemetry. PureMouse writes only to your home folder and goes online only to check
+for updates: once a day if you allow it, or when you press **Check for Updates**. [Privacy](docs/privacy.md) lists every permission, file and
 request; [Security](SECURITY.md) says how to report a vulnerability.
 
 ## Documentation
@@ -211,7 +212,7 @@ request; [Security](SECURITY.md) says how to report a vulnerability.
   device support, scrolling, source layout
 - [Architecture decisions](docs/adr/README.md): why it is built this way
 - [Development](docs/development.md): building, testing, signing and releases
-- [Privacy](docs/privacy.md): permissions, files written and the one network request
+- [Privacy](docs/privacy.md): permissions, files written and the update check
 
 Bug reports and ideas are welcome in [Issues](https://github.com/mblauberg/PureMouse/issues);
 [Contributing](CONTRIBUTING.md) explains how to ask for a mouse and how to send a change.

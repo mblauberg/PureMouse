@@ -27,8 +27,8 @@ is worth reporting:
 - **The config and companion files** in your home folder are read and written by PureMouse
   ([Privacy](docs/privacy.md) lists them). Parsing bugs that crash or misbehave on a hostile file
   are in scope.
-- **The update check** is one HTTPS GET to the GitHub API, made only when you press
-  **Check for Updates**. A way to make it fetch or open anything else is in scope.
+- **The update check** is one HTTPS GET to the GitHub API, made when you press
+  **Check for Updates**, or at most once a day if you allowed automatic checks. A way to make it fetch or open anything else is in scope.
 - **The signed app and the release process**: a tampered download that still verifies, or a way
   into the release workflow's signing secrets.
 
