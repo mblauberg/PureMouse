@@ -475,9 +475,23 @@ which is its click, or a table of triggers ([ADR 24](adr/0024-one-action-model.m
   with Hold and Move as its Hold row. There is no "Several Actions" value.
 - A trigger exists in the UI only once it is added (More Ways to Press), so a fresh install looks as
   it does today plus one device row in General › Status.
-- The picker stays one popover: the app's actions first on an app page, sections over six rows fold
-  to five and "Show All (N)", search matches everything, and it shows only what the mouse reports.
-  No trigger strip, category strip, recents or favourites.
+- The picker stays one popover:
+  - On an app page for an app with a pack, the app's actions follow the top entries (Same as…,
+    Mouse Default, Do Nothing) in a section named for the app ("Zoom"), before the generic groups.
+    Every other page, and an app without a pack, lists what it did before.
+  - The app's section over six rows folds to five and "Show All (N)"; the click expands it inline.
+    It starts open when the current binding is one of its folded actions.
+  - Search matches everything, keeping the sections and the haptic group as they are. An app's
+    actions also match their category (shown beside the label while searching), whole-word
+    keywords, and their shortcut as glyphs ("⇧⌘A"), a spec ("shift+cmd+a") or words in any order
+    ("command shift a"). Search ignores folding.
+  - In Mouse scope, a search that finds nothing but matches some apps' actions says so in one line:
+    "Also in Zoom and Adobe Photoshop. Choose them on the app's page."
+  - A pack action's row shows its shortcut at the trailing edge. One whose shortcut depends on the
+    person's keyboard layout or keymap (Final Cut Pro, VS Code) says "Depends on your keymap" in
+    secondary text under its label; the button's tooltip on the app page keeps the shortcut
+    ("Presses ⌘B. Depends on your keymap.").
+  - No trigger strip, category strip, recents or favourites.
 - An editor inside the Sequence or Action Ring sheet swaps that sheet's content; it never opens a
   second sheet.
 

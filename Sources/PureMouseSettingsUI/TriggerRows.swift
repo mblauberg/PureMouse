@@ -23,6 +23,8 @@ struct TriggerRows: View {
     /// The live double-click interval, for the Double-click row's caption.
     let doubleClickMs: Int
     var scope = ConfigScope.global
+    /// The bundle ID of the app whose pack actions the pickers offer (an app's page).
+    var app: String?
     /// Rows whose children show, by button key.
     @Binding var expanded: Set<String>
     /// Child rows added from More Ways to Press that do nothing yet, as "button.trigger".
@@ -145,7 +147,8 @@ struct TriggerRows: View {
             spokenInherited: inherited?.1,
             source: source ?? InheritedScope.mouseSettings,
             scope: scope,
-            row: row)
+            row: row,
+            app: app)
     }
 
     private func pick(_ entry: PickerEntry, for target: BindingTarget, current: ButtonAction) {

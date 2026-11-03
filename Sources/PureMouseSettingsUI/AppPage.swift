@@ -79,13 +79,19 @@ struct AppPage: View {
         #if DEBUG
         .onAppear {
             // With PUREMOUSE_DEV_APP: PUREMOUSE_DEV_OTHERS=1 opens "Other controls",
-            // PUREMOUSE_DEV_EXPAND=<button> shows a button's Double-click and Hold rows, and
-            // PUREMOUSE_DEV_SHORTCUT opens a button's shortcut editor sheet over the page.
+            // PUREMOUSE_DEV_EXPAND=<button> shows a button's Double-click and Hold rows,
+            // PUREMOUSE_DEV_SHORTCUT opens a button's shortcut editor sheet over the page, and
+            // PUREMOUSE_DEV_PICKER opens a button's action picker popover.
             if ProcessInfo.processInfo.environment["PUREMOUSE_DEV_OTHERS"] != nil { showOthers = true }
             if let button = ProcessInfo.processInfo.environment["PUREMOUSE_DEV_EXPAND"] { expanded.insert(button) }
             if let button = ProcessInfo.processInfo.environment["PUREMOUSE_DEV_SHORTCUT"] {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     editor = SheetRequest(kind: .shortcut, target: bindingTarget(button), initial: "cmd+w")
+                }
+            }
+            if let button = ProcessInfo.processInfo.environment["PUREMOUSE_DEV_PICKER"] {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    presented = button
                 }
             }
         }
@@ -138,7 +144,7 @@ struct AppPage: View {
             key: button, state: state, source: InheritedScope.mouseSettings, spokenSuffix: spoken, indented: indented,
             offersMouseDefault: PickerEntry.offersMouseDefault(for: button, inMouseOrApp: true, current: state.click),
             doubleClickMs: config.doubleClickMilliseconds(systemSeconds: ConfigTree.systemDoubleClickSeconds),
-            expanded: $expanded, wanted: $wanted, presented: $presented,
+            app: key, expanded: $expanded, wanted: $wanted, presented: $presented,
             choose: { entry, target, current in choose(entry, for: bindingTarget(target.button, direction: target.direction),
                                                        current: current) })
     }

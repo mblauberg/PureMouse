@@ -151,6 +151,7 @@ One term per concept. "Retire" lists words that must not appear in UI text for t
 | Hold forms | Hold and Move (the Hold row's second entry and the More Ways to Press entry; caption "Hold the button and move the mouse. Release without moving to click."); its rows Move up, Move down, Move left, Move right | chord, combo, gesture (for the form) |
 | Click lock | Drag Lock (picker › Mouse; "Click to start dragging, click again to let go.") | Click Lock, Hold to drag |
 | Precision hold | Precise Pointer (picker › Mouse; "Slows the pointer while you hold the button."); on a Click row it owns the button, so Double-Click and Hold are dimmed with "Remove Hold first.", and Precise Pointer is dimmed with "Remove Double-click and Hold first." while they apply | Precision While Held, sniper, DPI shift |
+| Per-app catalogue | the app's name as the picker section ("Zoom", "Adobe Photoshop"); "Zoom's actions" in prose; "Depends on your keymap" under an action whose shortcut the person can change in the app | pack, plugin, profile, Smart Actions |
 
 ## Planned (#155)
 
@@ -166,7 +167,6 @@ code says, so "Run Command" stays until Run Script… replaces it.
 | Debounce | Ignore repeated clicks ("For a worn button that clicks twice.") | debounce, chatter |
 | Per-app off | Use PureMouse in this app (switch); Off (Apps row); Off in <App> (menu) | disable, exclude, bypass |
 | Host switching | Switch to Computer 2 (the command; the status words are in the Glossary) | host, channel, slot |
-| Per-app catalogue | the app's name as the section; "Zoom's actions" in prose | pack, plugin, profile, Smart Actions |
 | New actions | Open…, Run Shortcut…, Menu Item…, Insert Text…, Run Script… (AppleScript \| Shell), Sequence… (Add Step, Wait), Action Ring… | Run Command, Type Text, Launch, Macro, Workflow |
 | Config transfer | Export Settings…, Import Settings… | Backup, Sync |
 | Receiver | Logi Bolt receiver, Unifying receiver; Pair a Mouse…, Unpair… | dongle, link |
