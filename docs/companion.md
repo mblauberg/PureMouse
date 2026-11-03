@@ -314,6 +314,31 @@ itself is a plain `NSMenu` built on open (`menuNeedsUpdate`). `scripts/measure-m
 holds the limits the rig checks; measure with the rig, or `footprint`/`vmmap --summary`, before and
 after each change, and the menu app again after Settings has opened and closed.
 
+### With automatic update checks on
+
+The menu app now owns the daily update check (ADR 0021, `docs/privacy.md`): `NSBackgroundActivityScheduler`
+holds the wait, so there is still no timer of ours and an idle app wakes for nothing. The rig can
+turn the checks on and run one at launch (`--env PUREMOUSE_RIG_UPDATES=check`, a DEVHOOKS-only
+hook that writes what the check found to `update-check`; the rig's version is not a release number,
+so any release counts as newer and a notification is attempted). Medians of 5 runs, shipped
+configuration, the same Mac and day (macOS 27.0.1, 2026-11-03), a check having finished before each
+"fresh" sample; the Mac's screen was locked, so only the menu app's scenarios could run (the
+Settings helper's need a window on screen), and a copy of `main` was run the same way for comparison:
+
+| Menu app, release build | `main`, MB | With checks on and a check run, MB | Budget, MB |
+|---|---|---|---|
+| fresh, about 4.5 s after launch | 9.25 | 9.63 | 11 |
+| after 1 menu open | 13.69 | 14.30 | 15 |
+| after 10 menu opens | 14.05 | 14.59 | 15 |
+| after 200 status doorbells | 8.94 | 9.31 | 11 |
+
+The check costs about 0.4 to 0.6 MB (the URL loading stack, once a request has been made), and the
+scenarios stay under their budgets, so no short-lived process is used. The headroom after 10 opens
+is 0.4 MB: the next change to the menu app should repeat the rig. The Settings helper's rows
+(cold start, its own footprint, closed) were not run on a locked screen; with the window created but
+not on screen, the helper measured 27.99 MB against 27.75 MB for `main` (5 runs each), so the new
+switch adds about 0.2 MB. Repeat the whole rig on an unlocked Mac before a release.
+
 ## Daemon decisions
 
 Choices the contract left open, as the daemon implements them:

@@ -187,7 +187,8 @@ Each level has one mechanism, and each label says what it reveals.
 
 ## Support, About and the icon
 
-- About shows the icon, name, version, Check for Updates, links and one **Support PureMouse**
+- About shows the icon, name, version, Check for Updates with the **Check for updates
+  automatically** switch beside it, links and one **Support PureMouse**
   link to GitHub Sponsors. Support appears nowhere else: no prompts, badges or reminders.
 - The app icon is the Icon Composer document (`assets/AppIcon.icon`, AGENTS.md). Check it at 16
   to 1024 px in default, dark, clear and tinted, in the Dock, Finder, About and alerts.
@@ -227,8 +228,8 @@ display-density DPI hints and live gesture highlighting (more text and motion th
 | Mouse › Scrolling | Smooth scrolling, Feel, Speed; Main Wheel: Reverse direction, Wheel mode, SmartShift; Thumb Wheel: Action (Turn left/right when Custom); each when the mouse has it | Advanced… sheet, each row only when it applies: Acceleration, Glide, Hold Shift to scroll sideways (dimmed while smooth scrolling is off); Switches at (while SmartShift is on); thumb wheel Reverse direction (when it scrolls here or in some app), Swap directions and Turn distance (when it has actions), Speed (when it scrolls) |
 | Mouse › Pointer | Pointer Speed slider with its value; Presets summary row; both only when the mouse can adjust its speed (else one "Not supported by this mouse." row, unless a value is set) | Exact value (disclosure); Edit Presets… sheet (also opened from the menu) |
 | Apps | App list with summaries, Add App (bordered pull-down) in the footer, routing note; empty state with an Add App… button that opens the Applications panel | Each app opens in a sheet; inside it, gesture directions, other controls and more thumb wheel options are disclosures |
-| About | Icon, name, version, Check for Updates, links, Support PureMouse | — |
-| Status menu | Device header, attention rows when active, Smooth Scrolling, Pointer Speed, Start/Pause/Resume, Settings…, Settings for <app>… (the frontmost app, if any), Quit PureMouse | ⌥: detail line, Show Log in Finder, Hide Menu Bar Icon |
+| About | Icon, name, version, Check for Updates, Check for updates automatically (switch), links, Support PureMouse | — |
+| Status menu | Device header, attention rows when active, Update to X.Y.Z… with Skip This Version under it (while a newer release is known), Smooth Scrolling, Pointer Speed, Start/Pause/Resume, Settings…, Settings for <app>… (the frontmost app, if any), Quit PureMouse | ⌥: detail line, Show Log in Finder, Hide Menu Bar Icon |
 
 ## Sources
 
