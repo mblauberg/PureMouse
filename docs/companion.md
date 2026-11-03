@@ -17,6 +17,16 @@ PureMouse is two resident processes in one app bundle, plus Settings on demand:
 Either works without the other. With the menu bar app quit or hidden, the mouse behaves exactly as
 configured; with the daemon stopped, the menu shows "PureMouse Is Off" and can start it.
 
+The menu bar app and the Settings helper never open HID devices: they edit the config file and talk
+to the daemon only through this channel and the daemon CLI. Neither polls: they wake on
+notifications, file events and the daemon's process exit. The resident menu process never holds a
+window or SwiftUI, and never restarts itself; its menu is rebuilt on open. The helper quits when its
+window closes, saving its edits and cancelling a select by pressing as it goes
+(`applicationWillTerminate`, also on SIGTERM). Every quit from outside (SIGTERM, the quit event, a
+capture) ends any open sheet first, since AppKit ignores `terminate` while one is attached, and
+finishes the quit itself (`willTerminate`, then exit) when SwiftUI attaches a sheet again whose state
+still shows it (`terminateClosingSheets`).
+
 ## Channel
 
 All files live in `~/Library/Application Support/PureMouse/` (`Companion.directory`), are written
@@ -78,9 +88,17 @@ missing or stale file means "PureMouse Is Off".
 
 ### Config (menu → daemon)
 
-The menu edits `config.json` as a JSON tree: it changes only the keys a control owns, keeps unknown
-keys, and writes with `.prettyPrinted, .sortedKeys`. Before writing, it validates the whole file
-with `ConfigCheck.validate`, which runs the daemon's own decoder.
+The menu edits `config.json` as a JSON tree (`ConfigTree`): it changes only the keys a control owns
+and keeps every other key, unknown ones included. It records edits as the keys they set, and
+`ConfigFile.save` replays them onto the file as it is when saving, so a hand edit made meanwhile
+survives. A new object is recorded key by key, so it merges with one added by hand; an emptied one is
+removed whole; removing a key that is not there is a no-op, so it never prunes an ancestor. With no
+pending edit nothing is written. It refuses to build on a file that does not parse or validate, and
+writes through `JSON.encode` (shortest decimals, sorted keys, whole and big numbers kept digit for
+digit), never `JSONSerialization`. Before writing, it validates the whole file with
+`ConfigCheck.validate`, which runs the daemon's own decoder. Only Reset All Settings and Restore Last
+Working replace the whole file (`ConfigFile.replace`, keeping `config.json.bak`); Open Config File
+only creates a missing file (`createIfMissing`).
 
 Every config write (a save, Reset All Settings or Restore Last Working with its `config.json.bak`,
 creating a missing file) is one read-merge-replace under an exclusive `flock` on `config.json.lock`
@@ -146,6 +164,18 @@ The daemon CLI owns every launchd change (`LoginItem.swift` holds the policy; a 
 `LaunchdAgentService`, holds the mechanism, so the policy is tested against a fake). The menu app
 and the Settings helper run these commands through the daemon binary in the app they are nested
 in, `PureMouse.app/Contents/MacOS/puremouse` (`Locations`).
+
+`LoginService.stop` waits for a running instance to finish restoring the mouse before it
+returns: `LaunchdAgentService` boots the job out and polls until launchd no longer has it loaded
+(up to 50 looks, 0.1 s apart), and throws if it is still there, so a replacement never starts
+while the old daemon is still handing the wheels and controls back. Keep that wait in `stop`.
+
+"Hidden" is remembered by a `menu-hidden` file in `Companion.directory`, written by `menu off`
+and removed by `menu on`; `unregister` keeps it. The CLI calls `setsid()` and boots the menu agent
+out last, after removing its plist, because launchd kills the menu job's process group (which
+includes the CLI it spawned). When the menu bar app itself runs `register` or `menu on` and its
+agent is already loaded, the agent is left running (the plist is still rewritten); restarting it
+would quit the caller.
 
 "Starts at login" and "is running now" are separate, and each command changes only the axis the
 table gives:
@@ -237,6 +267,32 @@ The helper runs `menu on` and `menu off` itself. It is not in the menu agent's p
 hiding the icon from Settings leaves Settings open. Turning on Open at login there runs `login on`,
 which restarts nothing. Quit PureMouse quits the helper first, which saves its edits and cancels a select by pressing
 still listening, then runs `stop`. Quit in the helper's own menu (⌘Q) quits only Settings.
+
+## Low-battery notifications
+
+The low-battery notification (`BatteryAlert`, `Notifier`) lives in the menu bar app. It is decided
+on each status the daemon writes, and on each config change, from the band already announced per
+mouse, kept in `battery-alerts.json` in the companion directory so a restart cannot repeat it.
+
+- A mouse is keyed by its device key plus its 0x0003 unit ID when the status has both
+  (`Status.Device.unit`), else by its status device id. With a stable key and a recorded band, a
+  reconnect (or the menu app starting) is judged against that band, so a mouse that drained while
+  away still warns once; otherwise the first reading after it connects only records, since a
+  reconnect cannot be told from a different mouse.
+- `BatteryAlertStore.process` is the pure decision: it returns the alerts to post and the
+  notification ids (`battery.<key>.<band>`) to take down (`Notifier.removeDelivered`) when the mouse
+  recharges (charging, or 25% and up), when a deeper band replaces a shallower one, and once when
+  the switch is turned off. A post still waiting for permission is cancelled by a withdrawal of its
+  id (`NotificationDelivery`).
+- The file is versioned; one in any other format is discarded and alerts start fresh.
+- Nothing runs while the icon is hidden: a hidden-icon run gets no notification callbacks, so it
+  neither posts nor consumes a band, and never asks for permission (`AppController`).
+- Permission is requested lazily: at the first notification, or when the menu app sees the switch
+  turned on in the config. macOS asks per app, so the helper cannot ask. The menu app records a
+  denial in its own defaults domain as it learns it (`NotificationPermission`, read at launch and as
+  Settings opens), and the helper reads it there for the General pane's hint, watching it
+  (key-value observing) while that pane shows.
+- `UNUserNotificationCenter` needs a bundle, so a bare dev run posts nothing.
 
 ## Footprint
 
@@ -345,60 +401,6 @@ switch adds about 0.2 MB. Repeat the whole rig on an unlocked Mac before a relea
 
 ## Daemon decisions
 
-Choices the contract left open, as the daemon implements them:
-
-- **Status.** A write is skipped when nothing in `Status` changed. `Device.id` is
-  `<interface number>-<device index>`, the interface numbered in attach order. `dpiSteps` lists
-  every value (157 on an MX Master 3S). `controls` leaves out virtual controls (flag 0x80, e.g.
-  0x00d7), which cannot be pressed. While paused, `devices` is empty: the sessions are dropped.
-- **Battery** comes from HID++ 0x1004 (getStatus, then its broadcast events). `charging` is true
-  while charging or charging slowly, false once complete. As in Linux, the level bits are masked
-  by getCapabilities and the highest wins; a mouse that reports a percentage has its levels
-  ignored, so `level` is derived from the percentage. Mice without 0x1004 fall back to
-  the older 0x1000 (its status, then its broadcast events), whose percentage of 0 means unknown.
-- **Config watching** watches the file as well as its directory, since editors that write in place
-  leave the directory unchanged. A reload that fails leaves the previous config in effect and
-  reports `config.error` (`ConfigCheck.message`, which names the field); the next successful load
-  clears it.
-- **cycleDPI** picks the smallest preset above the current DPI, else the smallest, after snapping
-  the presets to the sensor's list. With no `dpiPresets` it does nothing and logs an error.
-- **Universal Control.** `away` is true while the pointer is on another Mac and
-  `universalControl.handOff` is on: each session keeps its settings but leaves the wheels and
-  controls native (`Session.setAway`). Going away cancels a listening capture. The menu shows "On
-  another Mac" in the device line.
-- **Capture.** Only controls not already bound are diverted for it (bound ones already reach the
-  daemon). A capture still listening when the config reloads or the daemon pauses reports
-  `cancelled`. A mouse adopted during a capture joins it; one lost during it simply drops out.
-  The daemon acts on a capture token once, so rewriting `control.json` with the same token does
-  not restart it. With `capture.device`, only mice with that key listen, and only they join when
-  adopted during it; a mouse with no key is reached only by a request without `device`.
-- **Identity.** Read at adoption (`Identification.read`): the name (0x0005), kind (0x0005
-  getDeviceType), and model and unit IDs (0x0003). A mouse whose 0x0003 answers with an error, or
-  that lacks it, is keyed by its product ID: the interface's for Bluetooth, the slot's wireless
-  product ID on a receiver. A 0x0003 that times out leaves `model` absent rather than guess, and that
-  mouse uses the top-level settings until a later configure, reconnect or reload reads it again
-  (once per configure, only while unanswered) and gives it its key. A model ID of all zeros or all 0xFF counts as absent, as does
-  such a unit ID. A receiver mouse keyed by its product but found before its slot announced one
-  gets its key when the slot next announces it linked up, with a session on that key's settings.
-  The key is in the adoption log line (`model=`). Two mice of one model share a key,
-  so they share `devices.<key>` and are both reached by a `device` request.
-- **Capabilities** come only from lookups apply has already made (`HIDPPDevice.knownPresence`), so
-  building them sends nothing. Haptics (0x19B0) is looked up only by a haptic action, so it is
-  absent until one runs; a capability learned that way after apply is published then. A member is
-  true when its feature is present, false when known absent (`smartShift`: both 0x2110 and 0x2111;
-  `battery`: both 0x1004 and 0x1000; `smoothScroll`: the main wheel PureMouse can take over, 0x2121
-  for now), and left out when unknown. They are kept across reloads.
-  `controls` lists only divertable, non-virtual controls, and `gestures` follows the control's
-  raw-XY flag. `schema` is 2.
-- **Settings per mouse.** Each session gets `Config.forDevice` for its key, at adoption and on
-  reload. A mouse without DPI is adopted only for a control bound in its own settings. A
-  reload keeps a mouse's live DPI unless its own resolved `dpi` or `dpiPresets` changed. A setting
-  the mouse cannot use is skipped quietly: a bound control it lacks is a debug line once per
-  session, `toggleScrollMode` without SmartShift and smooth scrolling without 0x2121 an info line
-  once per session, and a DPI snapped to the sensor's list is logged once per mouse, not per reload.
-- **Login.** "Hidden" is remembered by a `menu-hidden` file in `Companion.directory`, written by
-  `menu off` and removed by `menu on`; `unregister` keeps it. The CLI calls `setsid()` and boots
-  the menu agent out last, after removing its plist, because launchd kills the menu job's process
-  group (which includes the CLI it spawned). When the menu bar app itself runs `register` or
-  `menu on` and its agent is already loaded, the agent is left running (the plist is still
-  rewritten); restarting it would quit the caller.
+How the daemon fills in what this contract leaves open (status writes, capabilities, battery
+source, identity and keys, capture, Universal Control, config watching, skipped settings) is in
+[How it works](how-it-works.md#status) and the invariants beside it.

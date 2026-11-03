@@ -1,543 +1,143 @@
 # PureMouse: agent notes
 
-Read `README.md` first for what PureMouse does, then `docs/how-it-works.md` for its layout and
-`docs/configuration.md` for the config. Architecture decisions, with their status and the
-alternatives rejected, are in `docs/adr/`: cite them, and amend the record when a change alters
-one. This file covers how to work on it safely.
+PureMouse is a native macOS utility for Logitech mice, in Swift 6 with no dependencies. A headless
+daemon speaks HID++ 2.0 to the mouse, a menu bar app shows status, and an on-demand Settings helper
+edits `~/.config/puremouse/config.json`. `README.md` says what it does for users.
 
-## Workflow
+**Quality bar:** reliable, lightweight, intuitive, modern, macOS native feeling, clean, minimalistic,
+configurable, flexible and easy to maintain. Footprint: [ADR 10](docs/adr/0010-menu-memory-budgets.md),
+[development](docs/development.md#ci). Native and minimal: [ui-design](docs/ui-design.md#principles).
+Configurable: [configuration](docs/configuration.md). Maintainable:
+[how-it-works](docs/how-it-works.md#invariants), [ADR 11](docs/adr/0011-shared-logic-library.md).
 
-- Build and test: `swift build && swift test`. Device behaviour is tested against `HIDPPTesting`
-  fakes (`FakeDevice`, `FakeTransport`) built from `puremouse probe` dumps in `Tests/Fixtures/probe`,
-  so the probe's output format is a fixture contract. Real mice still need a live check.
-- Live check: `.build/debug/puremouse probe` is read-only and safe alongside the daemon (it uses its
-  own HID++ software IDs). To run a dev build, stop the agent first (two daemons fight over the
-  mouse) with `/Applications/PureMouse.app/Contents/MacOS/puremouse unregister`, then run
-  `.build/debug/puremouse --verbose run ./config.example.json`. A terminal-run daemon uses the
-  terminal's permissions and never restarts itself. Finish with `./scripts/install.sh`, which
-  rebuilds, re-signs and restarts the agent, and check `~/Library/Logs/PureMouse.log`.
-  The daemon owns that file: `run` attaches stderr to it unless stderr is a terminal (`LogFile`),
-  and rotates it to `PureMouse.log.1` past `Log.rotateAt` (1 MiB). The agent plists set no
-  `StandardErrorPath`, and the menu bar app keeps no log. Any non-terminal stderr counts, so a dev
-  run piped or redirected also writes to that file. Only the daemon's own lines are counted, so
-  `run` commands get /dev/null for stdout and stderr (`SystemActions.shell`); a failure is logged
-  once.
-  (`puremouse permissions` answers for whoever launches it, so from a terminal it reports the
-  terminal's permissions, not the app's.)
-- Menu bar app (`Sources/PureMouseMenu`) and Settings helper (`Sources/PureMouseSettings`): run
-  `.build/debug/PureMouseMenu` or `.build/debug/PureMouseSettings` alongside the installed agent,
-  but point it away from the real files first: `PUREMOUSE_CONFIG` (config file),
-  `PUREMOUSE_DAEMON` (the binary it runs for register/stop/menu commands; a stub script is fine)
-  and `PUREMOUSE_COMPANION_DIR` (the status/control channel; a fixture `status.json` there stands
-  in for the daemon). Without them it edits the live config and drives the installed agent. The
-  menu opens the helper it finds by `SettingsLookup` (`PUREMOUSE_SETTINGS`, the nested app, then
-  the sibling `PureMouseSettings` binary) and passes it the `PUREMOUSE_*` variables. Debug builds
-  of the menu take `PUREMOUSE_DEV_MENU=1` and `PUREMOUSE_DEV_APPEARANCE=light|dark`
-  (`Sources/PureMouseMenu/DevHooks.swift`); `--login` launches it as launchd does (no Settings).
-  Debug builds of the helper take `PUREMOUSE_DEV_PANE=<pane>` (a tab, `general`, `mouse`, `apps`,
-  `about`, or a Mouse segment, `buttons`, `scrolling`, `pointer`), `PUREMOUSE_DEV_APPEARANCE`,
-  `PUREMOUSE_DEV_PICKER=<button>`, `PUREMOUSE_DEV_SHORTCUT=<button>` (Mouse › Buttons, or with
-  `PUREMOUSE_DEV_APP` the app sheet's editor popover), `PUREMOUSE_DEV_MOUSE=<device key>|all` (chooses that mouse on Mouse, or All Mice;
-  `PUREMOUSE_DEV_OTHERS=1` opens Buttons' Other controls) and `PUREMOUSE_DEV_APP=<bundle id>` (Apps
-  tab; adds the app without writing and opens its sheet) and `PUREMOUSE_DEV_SHEET=<name>` (a
-  sheet: `presets` on Mouse › Pointer, or `advanced` on the pane shown, `DevSheet`) for screenshots
-  (`Sources/PureMouseSettingsUI/DevHooks.swift`), and `PUREMOUSE_DEV_CAPTURE=<file.png>` saves its
-  own windows to that file and quits, which needs no Screen Recording permission, so it works over
-  SSH (`DevCapture`). `PUREMOUSE_DEV_AX_DUMP=1` prints each control's accessibility role, label and
-  size for every tab and Mouse segment (or, with `PUREMOUSE_DEV_PANE`, for what the sheet, picker
-  and shortcut hooks open) and exits 1 on an unlabelled or duplicate control or one under 20 × 20 pt
-  (`DevAXDump`; the workshop Mac, not the one in use). `PUREMOUSE_DEV_MENU=1` puts a plain backdrop
-  under the menu, since its glass shows whatever is behind it. A window capture
-  (`screencapture -l`) leaves out that blur, so the README's menu shots take the shape and shadow
-  from one and the body from a screen capture of the same rect. Check the menu's footprint with
-  `footprint <pid>` before and after opening and closing Settings, or reproduce the published
-  figures with `scripts/measure-menu.sh` on a spare Mac (never the one whose PureMouse you use;
-  `docs/development.md`, "Footprint rig"). Its release build carries `DevHooks` only with
-  `-DDEVHOOKS`, and acts only when `PUREMOUSE_COMPANION_DIR` is set, which also gives the
-  doorbells names of their own (`Companion.doorbell`), so a debug build with
-  `PUREMOUSE_COMPANION_DIR` set no longer hears the installed daemon's bell.
-- CI builds with Xcode 26 (Swift 6.3); a local Xcode 27 can pass what CI cannot. A macOS 27-only
-  API goes inside `#if compiler(>=6.4)`. Never pass a method as a SwiftUI closure argument
-  (`Binding(get:set: select)`): Swift 6.3 crashes in IRGen on its `@isolated(any)` thunk, so write
-  `set: { select($0) }`.
+This file is the always-loaded summary. Durable detail lives in `docs/`; read the doc for the area
+you touch (see [Where things are](#where-things-are)).
+
+## Process
+
+- Work is tracked in GitHub issues on `mblauberg/PureMouse` (forms: epic, feature, task, bug,
+  device). The issue owns scope and status; docs own durable rules.
+- Branch off `main`, one change per pull request, and fill in
+  [the template](.github/pull_request_template.md), including Agent evidence. Merging needs the
+  `test` check, which the `main` ruleset requires.
+- A change that alters behaviour updates the doc that owns it in the same pull request:
+  `docs/configuration.md`'s field tables for config, the UI pages for UI, and the ADR when a
+  decision changes (amend the record; [ADR index](docs/adr/README.md)).
+- Releases are the owner's: a `v*` tag ruleset lets only the owner create release tags. The steps
+  are in [development.md, Releases](docs/development.md#releases).
+
+## Commands
+
+```sh
+swift build && swift test                 # every change; CI runs the same
+swift test --filter <Suite>               # one suite while iterating
+scripts/tests/run.sh [name]               # the build and release scripts' tests
+.build/debug/puremouse probe              # read-only; safe beside the installed daemon
+scripts/release.sh --dry-run --version 0.0.0-ci.local   # what CI's bundle step does
+```
+
+There is no linter; the compiler and the tests are the checks. Running a dev daemon, the menu or
+Settings from a build, the dev hooks and screenshots are in
+[development.md](docs/development.md#test).
+
+## Swift 6.3 in CI
+
+CI builds with Xcode 26 (Swift 6.3); a local Xcode 27 (Swift 6.4) can pass what CI cannot.
+
+- A macOS 27-only API goes inside `#if compiler(>=6.4)`.
+- Never pass a method as a SwiftUI closure argument (`Binding(get:set: select)`): Swift 6.3 crashes
+  in IRGen on its `@isolated(any)` thunk, so write `set: { select($0) }`.
+- `.map(Data.init)` is ambiguous to Swift 6.3; write `.map { Data($0) }`.
+
+## Hard rules
+
+Safety and the live machine:
+
 - The user's live config is `~/.config/puremouse/config.json`; keep `config.example.json` in step
-  with it (its test checks shape, not values). Config changes apply on save (`ConfigWatcher`
-  watches the file and its directory, reloading when the bytes change) or with
-  `launchctl kill HUP gui/$UID/io.github.mblauberg.puremouse`, no rebuild. Never edit the live
-  config to test: run a dev daemon against a copy.
-- Other Macs: `scripts/release.sh --dry-run --version 0.0.0-ci.local` builds the universal dmg (for a
-  test Mac, `PUREMOUSE_SIGN_IDENTITY=PureMouse` first). On a test Mac over SSH,
-  drive the installed app with `puremouse register`/`unregister`. Over SSH nobody can answer a
-  Gatekeeper dialog or grant permissions, so leave those to whoever is at the Mac. Machine-specific
-  notes belong in the uncommitted `CLAUDE.local.md`.
-- Releases: tag `vX.Y.Z` on a clean `main` (the bundle version is the tag without the `v`), run
-  `PUREMOUSE_SIGN_IDENTITY=PureMouse ./scripts/release.sh` on a Mac holding that identity (the
-  identity order is in `docs/development.md`, Signing), and attach `.build/dist/PureMouse-X.Y.Z.dmg`
-  and `SHA256SUMS` to a GitHub release. `release.sh` refuses an untagged or dirty tree and notarises
-  only when all three `NOTARY_*` variables are set (ADR 14). A release signed by any other identity
-  makes every user grant permissions again. CI (`.github/workflows/ci.yml`) builds and tests, runs
-  `release.sh --dry-run` (universal bundle signed ad hoc, signatures verified, both size budgets in
-  `scripts/size-budget.env` checked, dmg and checksum made) and `scripts/tests/run.sh` on each push
-  to `main` and each pull request, and uploads the dmg; its actions are pinned to full SHAs.
-  App builds use SwiftPM's native build system with the active SDK (26 or later) and a macOS 14.0
-  triple, because the default build system records the deployment target as the SDK, and an app
-  linked against SDK 14 gets the pre-macOS 26 appearance (ADR 20). `verify-bundle.sh` checks
-  `minos` and the SDK of every architecture of every binary; CI also builds on the oldest hosted
-  macOS and launches the CLI there.
-- The icon is an Icon Composer document, `assets/AppIcon.icon`: a top-down mouse in three
-  monochrome glass layers (buttons with the centre seam, palm, floating wheel), grey fills with
-  light and dark specializations, on the system's light/dark background, so macOS 26+ renders
-  light, dark, clear and tinted variants. After changing it, run `./scripts/make-icon.sh` (needs
-  Xcode 26+ and `rsvg-convert`) and commit the compiled `Assets.car`, `AppIcon.icns` (macOS 14/15
-  fallback), the README PNGs (also the About pane's icon) and `MenuBarIcon.pdf`. The menu app
-  and the Settings helper keep their own `Assets.car` (with only the icns, macOS 26+ draws the light
-  icon even in dark mode), but `assemble_bundle` makes both hard
-  links to PureMouse.app's: codesign, `ditto` and the dmg keep them, so the 1.8 MB ships once,
-  while `check-size.sh` still counts it per path. A symlink out of a nested bundle fails codesign.
-  `assets/MenuBarIcon.svg` is the same mouse as an 18x18 pt template (alpha only; the wheel is a slot, gaps are 1-1.5 pt on the half-point grid
-  so they stay crisp at 1x and 2x); it is plain clip and even-odd paths because rsvg rasterises
-  SVG masks in the PDF. The menu bar app loads `MenuBarIcon.pdf`. Keep the two in step.
-- When behaviour changes, update `docs/configuration.md`'s field tables and this file in the same
-  change.
+  with it (its test checks shape, not values). Never edit the live config to test: run a dev daemon
+  against a copy.
+- Running `.build/debug/PureMouseMenu` or `PureMouseSettings` without `PUREMOUSE_CONFIG`,
+  `PUREMOUSE_DAEMON` and `PUREMOUSE_COMPANION_DIR` set edits the live config and drives the
+  installed agent. Set all three first.
+- Two daemons fight over the mouse: stop the installed agent
+  (`/Applications/PureMouse.app/Contents/MacOS/puremouse unregister`) before running a dev daemon.
+- Never start or re-enable Logi Options+ (`com.logi.cp-dev-mgr`): it fights PureMouse over the
+  mouse.
+- Nothing may be persisted on the mouse or receiver: they must work normally without PureMouse.
+  Never write a persistent diversion, haptic strength, enable flags or configuration, or onboard
+  profiles (0x8100).
+- The primary clicks 0x0050 and 0x0051 are never bound or diverted
+  ([ADR 8](docs/adr/0008-primary-buttons-reserved.md)).
+- Over SSH nobody can answer a Gatekeeper dialog or grant permissions: leave those to whoever is at
+  the Mac. Clear the quarantine flag before a first launch.
+- Run the footprint rig and `PUREMOUSE_DEV_AX_DUMP` on a spare Mac, never the one whose PureMouse
+  you use.
+- Machine-specific notes go in the uncommitted `CLAUDE.local.md`.
 
-## Invariants
+Signing and release:
 
-- `Sources/HIDPP` is protocol only (framing, transport, typed feature wrappers) and must stay
-  free of policy. Applying config, performing actions and scrolling live in `Sources/puremouse`.
-- `Sources/PureMouseKit` is shared with the menu bar app: the config model and its decoder
-  (`Config`, `Action` and its `named` table, `Keystroke` parsing, `AnyKey`, the range-checked
-  decode helper), the `FileLock` both sides take, and the status/control channel
-  (`Companion.swift`, contract in `docs/companion.md`). Data only: no HID, no event posting, no `Log` (the decoder collects
-  problems such as `unknownButtons` and the daemon logs them). `ConfigCheck.validate` is the real
-  decoder, so the menu never writes a file the daemon would reject. A config change must keep
-  `ConfigGoldenTests` identical, or regenerate it on purpose. Before 1.0 nothing is kept
-  for backward compatibility: the menu and daemon ship together, and config, status and control
-  formats change freely (say so in the release notes). Add no frozen readers, fallbacks for older
-  versions, legacy shims or migrations.
-- All HID and HID++ work runs on the main actor. IOKit and CoreVideo callbacks hop to it
-  (`MainActor.assumeIsolated` / `DispatchQueue.main`); keep it that way. The process serves the
-  main queue with `runMainLoop()` (a `CFRunLoop` on the main thread), never `dispatchMain()`:
-  that drains the main queue off the main thread, and on macOS 26 and earlier `assumeIsolated`
-  then traps (it crashed on SIGTERM, before restoring the mouse).
-- Device settings are volatile: the mouse forgets them on every reconnect. Anything applied to
-  it belongs in `Session.apply()`, which runs on adoption, reconnect, wake and reload. A newer
-  `Session.configure()` supersedes one under way; only an offline mouse's other events
-  (`reconfigureIfOffline`) defer to a running one, and start one at most once per 30 s.
-- Feature absence is cached per endpoint in `HIDPPDevice` (`knownPresence`; only a definite
-  index-zero answer counts), while "missing feature" log flags stay per session.
-- The primary clicks 0x0050/0x0051 (`Config.reservedControls`) are never bound or diverted: the
-  decoder drops them with a warning and `Session.isDivertable` excludes them from binding,
-  capture and the stale-diversion scan.
-- Prefer SmartShift 0x2110 whenever present (the tested 3S path); only its absence selects
-  Enhanced 0x2111. Enhanced writes always include mode, with torque 0 to leave torque unchanged.
-  Haptic 0x19B0 is play-only, gated by its waveform capability mask: never write strength,
-  enable flags or configuration (persistence is unknown). Log haptic absence once per session.
-  It is looked up only by a haptic action, never by apply, so `capabilities.haptics` stays unknown
-  until one runs; an action's lookup that changes the capabilities publishes them
-  (`Session.capabilitiesMayHaveChanged`).
-  Enhanced SmartShift may skip malformed/feature-error replies only; timeouts and transport
-  failures must reach configure's retry handling. Feature summaries use already resolved
-  indices after a successful apply, never extra adoption queries. The MX Master 3S is the
-  development mouse; `docs/supported-mice.md` lists the others by the features they report, and
-  the logs still call Enhanced-only mice untested.
-- On SIGTERM/SIGINT, `Session.restore()` returns the mouse to native behaviour (wheels first). Each
-  of its requests times out after `Session.restoreTimeout` (400 ms), and quitting waits long enough
-  for every one of them to (`Daemon.shutdownDeadline`, 2-5 s), counting the restores of a pause
-  still under way (`Daemon.restoreSteps`), so a missed reply cannot leave the rest diverted. Nothing
-  may be persisted on the device or receiver: they must work normally without PureMouse.
-- A session that is `finished` (closed or restored) must not touch the device again; the daemon
-  stops adopting once `shuttingDown` or `paused` (`Daemon.accepting`). Pausing from the menu
-  (`Control.paused`) restores and drops every session; nothing is adopted until those restores
-  finish, even after a resume (`PauseGate`), and quitting waits for them (`Daemon.pausing`). A
-  different product announced in a slot meanwhile only records the product: nothing replaces an
-  endpoint a restore is using, and the slot's endpoint is replaced and identified afresh once the
-  restores are done (`Daemon.replacementsDue`, `adoptStragglers`). A pause is never persisted.
-- Device actions (`cycleDPI`, `toggleScrollMode`, haptics) and `apply()`'s DPI and SmartShift
-  writes run on one chain (`Session.deviceActions`, a `SerialChain`), one at a time, each reading
-  what is wanted (`liveDPI`, `scrollMode`) as it runs, so a press mid-apply is neither undone nor
-  overwritten. `close()` and `restore()` cancel it (`Session.finish`), so an action waiting for
-  transport ownership cannot send after them.
-- Every change to which controls are diverted, and the wheels' diversion, from `apply()`, capture
-  or a Universal Control handoff, runs through one chain (`Session.enqueueDiversion`), one at a
-  time and in the order asked, reading the wanted state (`Handoff`, including `away`) as it runs
-  (`SerialChain`). Each write checks `finished` right before it goes out, not only when the body
-  starts; `close()` cancels the chain, and a replacement session's chain starts after the old
-  one's end (`Inherited.diversionAfter`), so no retired write lands after a replacement's.
-  `restore()` cancels and drains the chain before releasing. Handing inputs back tries each wheel and control
-  on its own (`Independently.each`); one that fails stays counted (`wheelsMayBeDiverted`,
-  `divertedControls`) for the next apply or `restore()`.
-- The daemon reports to the menu bar app only through `status.json` (`StatusChannel`): call
-  `statusChanged()` (Daemon) or `changed()` (Session) after anything in `Status` changes; writes
-  are coalesced to one per main-queue turn. On shutdown, `running: false` is written last, after
-  the mice are restored (`exitReporting`).
-- Keep it light: no dependencies, and no AppKit or SwiftUI in the daemon or PureMouseKit. Only
-  `PureMouseSettingsUI` and the Settings helper link SwiftUI; the menu bar app links AppKit only
-  (`otool -L .build/release/PureMouseMenu` names no SwiftUI). Idle cost is zero CPU (the optional daily check is run by the system's background-activity scheduler, not a timer of ours), with one bounded exception: while a
-  permission needed now is missing, a `puremouse permissions` child runs after 2, 4, 8, 16 and
-  32 s and then once a minute, until 10 minutes after the latest start, wake, reload, control
-  change or Bluetooth attach (`Daemon.pollPermissions`). The display link runs only while a
-  scroll is gliding, never with `smoothingMs` 0 (`PixelCarry` posts at once).
-- The menu bar app and the Settings helper never open HID devices: they edit the config file and
-  talk to the daemon only through the companion channel and the daemon CLI (`docs/companion.md`).
-  Their shared logic lives in `Sources/PureMouseAppSupport` (`AppModel`, config editing and
-  saving, `Locations`, `ShowRequest` over Kit's `SettingsRequest`, `SettingsLookup`, status words), tested in
-  `Tests/PureMouseAppSupportTests`; keep UI frameworks out of it. Neither may poll: they wake on
-  notifications, file events and the daemon's process exit. Settings is an app of its own
-  (`PureMouse Settings.app`, docs/adr/0009-settings-helper-app.md): the menu writes the pane to
-  `show-settings`, rings the doorbell and opens the helper (`SettingsLauncher`), and the helper
-  quits when its window closes, saving its edits and cancelling a select by pressing as it goes
-  (`applicationWillTerminate`, also on SIGTERM). Every quit from outside (SIGTERM, the quit
-  event, a capture) ends any open sheet first, since AppKit ignores `terminate` while one is
-  attached, and finishes the quit itself (`willTerminate`, then exit) when SwiftUI attaches a sheet
-  again whose state still shows it (`terminateClosingSheets`). So the resident menu process never holds a
-  window or SwiftUI, and never restarts itself. Quit PureMouse quits the helper first. The
-  menu is rebuilt on open. Settings controls carry their own accessibility label where a `RowLabel`
-  (title plus caption) leaves them unnamed. Shortcut specs are parsed and named by Kit's `Keystroke` only; the menu adds
-  glyphs and spoken words.
-- Notifications live in the menu app and the update check in the Settings helper (the daemon
-  stays free of UserNotifications and the network). The low-battery notification (`BatteryAlert`,
-  `Notifier`) is decided on each status the daemon writes, and on each config change, from the band
-  already announced per mouse, kept in `battery-alerts.json` in the companion directory so a restart
-  cannot repeat it. A mouse is keyed by its device key plus its 0x0003 unit ID when the status has
-  both (`Status.Device.unit`), else by its status device id. With a stable key and a recorded band, a
-  reconnect (or this process starting) is judged against that band, so a mouse that drained while
-  away still warns once; otherwise the first reading after it connects only records, since a
-  reconnect cannot be told from a different mouse. `BatteryAlertStore.process` is the pure decision:
-  it returns the alerts to post and the notification ids (`battery.<key>.<band>`) to take down
-  (`Notifier.removeDelivered`) when the mouse recharges (charging, or 25% and up), when a deeper band
-  replaces a shallower one, and once when the switch is turned off. A post still waiting for permission is cancelled by a withdrawal of its id (`NotificationDelivery`). The file is versioned; one in
-  any other format is discarded and alerts start fresh. It does not run while the icon is hidden (a hidden-icon run gets no notification callbacks, so it neither posts nor consumes a band, and never asks for permission; `AppController`). Permission
-  is requested lazily (first notification, or the menu app seeing the switch turned on in the
-  config: macOS asks per app, so the helper cannot ask for it). The menu app records a denial in
-  its own defaults domain as it learns it (`NotificationPermission`, read at launch and as Settings
-  opens), and the helper reads it there for the General pane's hint, watching it (key-value
-  observing) while that pane shows;
-  `UNUserNotificationCenter` needs a bundle, so a bare dev run posts nothing. "Check for Updates" (About pane, `UpdateCheck`) makes
-  one GET of the latest GitHub release per press. The menu app also checks once a day when the
-  person has said yes (ADR 0021, `docs/privacy.md`): `UpdateReminders` (PureMouseAppSupport) keeps
-  the answer, the last request time (recorded before the request, so a failure waits for the next
-  window), the release's ETag and the skipped and notified versions (the last 16 of each) in the menu's defaults
-  domain; `BackgroundActivity` hands the wait to `NSBackgroundActivityScheduler` (one shot, re-armed;
-  its tolerance must stay shorter than its interval, or it raises), so the app owns no timer; the
-  scheduled request refuses constrained and expensive networks and sends `If-None-Match`
-  (`UpdateCheck.fetchScheduled`). The question is asked by `AppController` on the second launch with
-  permissions set up; Settings' About switch writes the same key, which the menu app hears by
-  key-value observing. One notification per version (`update.X.Y.Z`, quiet, opens the release
-  page), and the menu shows `Update to X.Y.Z…` and `Skip This Version` until the running version
-  catches up (`MenuPlan`). Nothing here is in `puremouse` or PureMouseKit, and the rig drives a
-  check with `--env PUREMOUSE_RIG_UPDATES=check`.
-- The DPI the menu and Mouse › Pointer show is the mouse's live value (a `cycleDPI` press
-  changes it without touching the config), then the configured one; a change made in the pane
-  shows until the mouse reports it (`DPIReading`).
-- The menu bar app writes only the keys a control owns (`ConfigTree`) and keeps every other key,
-  including unknown ones. It records edits as the keys they set and `ConfigFile.save` replays
-  them onto the file as it is when saving, so a hand edit made meanwhile survives (a new object is
-  recorded key by key so it merges with one added by hand; an emptied one is removed whole, and
-  removing a key that is not there is a no-op, so it never prunes an ancestor); with no
-  pending edit nothing is written. It refuses to build on a file that does not parse or
-  validate, and writes through `JSON.encode` (shortest decimals, sorted keys, whole and big
-  numbers kept digit for digit), never `JSONSerialization`. Only Reset All Settings and Restore
-  Last Working replace the whole file, and they keep the previous one as `config.json.bak`
-  first (`ConfigFile.replace`; nothing kept for no file or `{}`); Open Config File only creates a
-  missing file (`createIfMissing`). Every one of these writes runs under `flock` on
-  `config.json.lock` beside the resolved config, and `control.json` writes under
-  `control.json.lock`, changing only the fields that request sets; the daemon's startup delete of
-  it takes the same lock (`docs/companion.md`).
-- Settings reads and writes a device through `ConfigScope` (`ConfigScope.swift`): `.device(key)` exists
-  only for a key Kit accepts (`Config.isDeviceKey`), `set(_:at:in:)` refuses a section outside
-  `Config.deviceSections`, writes `name` once when it creates an entry and prunes an entry left with
-  only a `name`. `resolved(_:in:)` mirrors the decoder's merge (a button per control, a gesture per
-  direction, the other sections per key, `dpiPresets` whole) and `DeviceScopeTests` checks it against
-  `Config.forDevice` on seeded generated trees: a change to `Config.decodeSections` must keep that test
-  green. The thumb wheel's `action` resets `step` and replaces `left` and `right`, so it is read by
-  layering (`thumbWheel(in:)`), never from the per-key merge. `binding(_:in:)` is the scope's own
-  binding, not the one that applies.
-- Mouse › Buttons and the Apps tab list a named button when a connected mouse reports it or the config
-  binds it; with no report, those `NamedButton.listedByDefault` (not the MX Master 4's thumb panel)
-  (`ButtonRows.named`). Haptic picker entries come from Kit's `HapticWaveform.allCases`; the menu
-  only words them (`ActionCatalog.hapticLabel`).
-- The Apps pane writes only `apps.<id>` keys (`AppSettings.swift`): each control's own key, removed
-  for "Same as Everywhere" (an emptied app entry is pruned); an added app is not written until a
-  setting is chosen (its row says so until Settings closes). Each app opens in a sheet (`AppSheet`)
-  over the list; a value it leaves unset looks exactly as it does everywhere, and one it sets says "Set for
-  this app." with a "Use Everywhere Setting" link (`InheritedValue`, the one type for any inherited
-  value; the caption is for overrides only), and inside it the
-  shortcut and command editors are popovers (`EditorPresentation`, read by `ThumbWheelRows` and the
-  button rows), since no sheet opens from a sheet. Names are looked up without icons
-  (`AppIdentities`); an icon loads when its frame meets the scroll view's visible bounds (`AppIcon`;
-  a grouped form builds every row, so `onAppear` is not enough, and macOS 14 lacks
-  `onScrollVisibilityChange`), and Applications is never listed (adding goes through an
-  open panel or the running apps).
-- Settings has four tabs, General, Mouse, Apps and About (`SettingsTab.shown`, so a new tab is one
-  entry). Mouse is a fixed header strip (segments, Find by Pressing… on Buttons, a leading slot for
-  the mouse pop-up) over its Buttons, Scrolling and Pointer segments (`MouseTab`); it holds only
-  per-mouse settings. A request for `buttons`, `scrolling` or `pointer` opens Mouse on that segment
-  (`SettingsPane`, `SettingsSelection`); a first run, or a stored tab not understood, opens Mouse
-  (on Buttons the first time). Tabs and segments are built the first time they show (`LazyPane`,
-  `MouseTab`). A pane is no taller than the screen (`LazyPane.fitted`). A pane whose height changes
-  while shown calls `SettingsContext.refit()`: a nested `NSHostingController` updates its
-  `preferredContentSize` without telling the tab controller, so `SettingsTabs.refit()` copies it
-  across (through `MouseTab.fit()`, which adds the strip). Advanced settings sit behind a pane's
-  footer (`PaneFooter`: Restore Defaults, Advanced…) in an `AdvancedSheet`, which never opens
-  another sheet. A control the mouse lacks is hidden per control from the mice's
-  reported capabilities (`ControlAvailability`, over `MouseScope.deciding`: the chosen mouse, or for
-  All Mice every known mouse once all are connected; unknown or no mouse shows it, a value already
-  set keeps it with a caption), and Scrolling's rows from `ScrollingLayout`.
-- The Mouse tab's pop-up (`MousePopUp`, `AppModel.knownMice`, `MouseScope`) chooses the scope the
-  panes edit (`AppModel.scope`, `scopeTarget`, remembered per user in defaults; All Mice is the
-  default and the only scope without the pop-up). Panes read `resolved` and write through
-  `model.update(in: model.scopeTarget)`; a row uses its normal control in every scope. A row the mouse
-  sets itself gets an `InheritedOverride` note from `InheritedValue.note` (`RowLabel`/`DisclosureLabel`
-  `note:`, `.overridable`): the caption "Set for this mouse." with an inline "Use All Mice Setting"
-  link, the same command in its context menu and as a VoiceOver action, and its help in a tooltip.
-  A row that inherits shows no mark, no dimming and no hidden trailing slot (`InheritedReset` is
-  gone: a slider track never moves between scopes). Pop-ups keep "Same as All Mice (x)" as their
-  first entry. The one explanation, "Settings you don't change follow All Mice.", sits in the
-  mouse pop-up's menu (`MousePopUp.followNote`). `ScopeEditing.swift` holds the per-section helpers (`removeOverrides`,
-  `restore…Defaults(in:)`, smooth scrolling, feel, presets). A mouse's or an app's button row chooses
-  Mouse Default as its own value, `"default"` (`Config.Binding.nativeValue`, `ButtonAction.mouseDefault`),
-  beside "Same as …", which removes the key; under All Mice it removes the key. It is offered on a mouse or
-  in an app only for controls in `Config.nativeBehaviour(of:)`, the one table the daemon also performs
-  from; `buttonKey`/`removeButton` (`ConfigKeys.swift`) follow Kit's alias rule. Rows are `RowStanding`
-  (`InheritedValue.swift`): the note, the link and the spoken ", same as All Mice" come from one answer. Reset All and the status menu stay
-  global (`setDPI` without a target writes the top level); Settings' Pointer pane passes the mouse,
-  and Find by Pressing and "use configured DPI" carry its key (`Control.device`,
-  `Control.capture.device`), a press selecting that mouse's scope. Do not read `primaryDevice` in a
-  pane: `devices(in:)`, `liveDevice(in:)` and `primaryDevice(in:)` take the scope.
-- Settings notices (config error, unsaved change, status too new, PureMouse off, paused, Logi
-  Options+, Accessibility on the panes that need it) come from `BannerPlan.items`, in that order.
-  A pane shows only the first as its banner, with "N more notices" opening General, whose Status
-  section lists them all as rows (off is its PureMouse row). Use Last Working Config… asks before
-  it replaces the file.
-- User-facing text (menu, Settings, alerts, notifications, accessibility labels, CLI output)
-  follows `docs/ui-language.md`: its casing rules and glossary. Layout, controls and what shows by
-  default versus behind Advanced… follow `docs/ui-design.md`. Change either page in the same PR as
-  the UI it governs.
-- Settings text and controls are the system's: semantic text styles, no fixed font size, control
-  size, background or colour literal in `Sources/PureMouseSettingsUI`. `UIChromeScanTests` fails on
-  them outside its allow-list (five entries at most, each with a reason, a stale one fails);
-  docs/ui-design.md, "Forms and controls", lists the patterns. A shortcut binding's accessibility
-  value is `Shortcut.spoken`, a tooltip is under 75 characters, and each control has its own label.
-- Settings shows no focus ring until the keyboard is used: windows, panes, the action picker and
-  the shortcut sheet open with nothing focused (the picker's search takes the first keystroke).
-  Check with keyboard navigation (`AppleKeyboardUIMode`) both on and off.
+- Builds are signed by `scripts/sign-bundle.sh`, inside out, no `--deep`, always the hardened
+  runtime ([ADR 14](docs/adr/0014-signing-identity-is-configuration.md)).
+- Release with `PUREMOUSE_SIGN_IDENTITY=PureMouse ./scripts/release.sh` on a Mac holding that
+  identity. A release signed by any other identity makes every user grant permissions again.
+- Every GitHub Action is pinned to a full commit SHA.
 
-## Easy to break
+Design:
 
-- Scroll events carry whole pixels only. Setting the fractional point-delta fields replaces the
-  integer delta with its truncation and silently loses distance.
-- Scroll events have no gesture phases. Phased horizontal scrolls make browsers swipe back and
-  forward.
-- Synthetic scrolls skip the system's natural-scrolling flip, so `ScrollEngine` applies it,
-  re-reading the setting at the start of each burst.
-- The wheels are only diverted when PureMouse can post events (Accessibility). Diverting without it
-  silences them. Both are diverted when any scope (global or an app) scrolls smoothly; the thumb
-  wheel alone when any scope gives it actions (`Session.applyWheels`). Where the scope in effect
-  does not scroll smoothly, the diverted wheel still scrolls, with zero smoothing. Only wheels the
-  mouse has are taken over, each through its `Session.Wheel.feature`. Smooth scrolling needs a
-  main wheel: 0x2121, else the notched 0x2130 (`Wheel.mainWheels`; `capabilities.smoothScroll`
-  follows them); a mouse with neither scrolls natively, with one info line per session
-  (`Session.smoothScrollUnsupported`). 0x2130 is diverted with its temporary reporting bit only,
-  has no persistent form, and is handed back like the rest (`restoreSteps` counts it). It is read
-  back after diverting: a wheel that does not report diverted stays native and is not offered smooth
-  scrolling (`Session.notchedRefused`). One found diverted at apply is owed a hand-back
-  (`wheelsMayBeDiverted`) until the mouse reads back native. A new wheel
-  feature is a `Wheel` case, not a second list.
-- Per-device settings (`devices.<key>`, `Config+Devices.swift`) are resolved by the Kit decoder:
-  each entry is decoded on top of the top level, then `apps` on top of that, so precedence is top
-  level, device, app. The key is `m` plus the 0x0003 model ID, else `p` plus the product ID
-  (`Config.deviceKey`, read at adoption by `Identification`; a 0x0003 timeout leaves it nil and the
-  top level applies, and the identity `unresolved`: after each configure that succeeds it is read
-  again, once, by `Daemon.resolveIdentity`, which replaces the session with one on the key's
-  settings; a reload or reconnect configures again, so it is retried then, and never in a loop or
-  on a timer. An answer, an error included, is final, so a known identity is never read again). A receiver mouse keyed by its product but adopted before its slot was
-  announced gets its key, and a session on that key's settings, when it next links up
-  (`Daemon.sessionSlotAnnounced`); while quitting or paused that only records the product. The
-  daemon hands each session `config.forDevice(deviceKey)` at adoption and on reload; permission
-  decisions cover every scope (`Config.everyScope`, `Daemon.postsEvents`). The adoption gate (`Daemon.gates`) is decided by the device's
-  type (0x0005): a mouse or trackball is adopted whatever the config binds, any device with
-  adjustable DPI (0x2201 or 0x2202) is, and one without a type needs 0x1B04. Keyboards, numpads,
-  presenters, remotes, touchpads and receivers are left alone. Nothing
-  is special-cased by model or product ID: a session uses what its mouse reports, and a bound
-  control it lacks is a debug line once per session.
-- Per-app settings (`apps`) are merged onto the global ones by the Kit decoder (`Config+Apps.swift`,
-  `Config.AppSettings`); only `buttons`, `thumbWheel` (including `reversed`, not `inverted`) and
-  `smoothScroll` are per-app. The app is looked up only when some app sets that section (`Session.appButtons`,
-  `appThumbWheel`, `appProfiles`): the frontmost app at each press of a control some app names
-  (`AppSettings.buttons`; an app's `"default"` (`Config.Binding.nativeValue`) is in it with no entry in
-  `bindings`, so that press gets `nil`, which performs the mouse's own behaviour (`Config.nativeBehaviour(of:)`:
-  a native click, the wheel-mode switch or DPI cycling), and frees the pointer for that press if the control
-  is a gesture elsewhere (`Session.pointerFree`)), the app under the pointer when a
-  scroll burst (`ScrollEngine.profileForBurst`) or thumb-wheel movement starts. `ForegroundApp`
-  does the lookups, AppKit-free and on demand; the Universal Control work reuses it. Every control
-  bound in any scope is diverted; pressed where nothing binds it, the wheel press, back and
-  forward post their ordinary click (`NativeButton`), released in kind. Held buttons
-  (`HeldButtons`) are dropped, native clicks released, whenever the mouse's own release may not
-  come: link down, reconnect, reload, pause and quit (`Session.dropHeld`). A per-app `thumbWheel`
-  keeps the global `reversed` and step it leaves out. The thumb wheel's `inverted` (global) flips
-  its scrolling only; actions follow `reversed` of the scope settled at movement start
-  (`Session.thumbSettings`), never `inverted` or natural scrolling.
-- `restore()` decides whether to hand the wheels back from `Session.wheelsMayBeDiverted`, not
-  from the current config: after a reload that drops (or disables) `smoothScroll`, the
-  replacement session inherits the flag and keeps it until its own apply has set the wheels
-  native.
-- Select by pressing (`Control.capture`) diverts every pressable, unbound control
-  (`Session.beginCapture`) of every mouse, or only those whose key matches `capture.device`
-  (`Daemon.targets`), for at most `Daemon.captureDuration`; the first press goes to
-  `onCapture` and performs nothing; a gesture held as capture starts is dropped, so letting it go
-  does not click. Every way out (press, timeout, cancel, reload, pause) goes
-  through `Daemon.endCapture`, which hands the extra controls back, each independently (one that
-  fails waits for the next apply). They count in
-  `divertedControls` until released, so `restore()` and a replacement session release them too.
-- Universal Control: while the pointer is on another Mac, `Session.away` leaves the wheels and
-  every diverted control native (DPI, SmartShift and the rest stay applied), so macOS forwards them;
-  apply, capture and new or replacement sessions all honour it (`Daemon.handingOff`, passed in
-  `Session.Inherited.away`). The signal is undocumented: the Darwin notification
-  `user.uid.<uid>.com.apple.universalcontrol.inputstate` (found in Logi Options+'s agent), whose
-  state was observed on macOS 27 as 0x2 pointer away, 0x3 keyboard followed, 0x1 pointer back with
-  the keyboard still remote, 0x0 home (`UniversalControlState`). Verify after OS upgrades: register
-  with `notify_register_dispatch` and print `notify_get_state` on each post while crossing (a
-  ten-line Swift script, `import notify`), and check the log's "pointer moved to another Mac" lines.
-  Going away also stops any glide and drops held gesture state, and ends a capture.
-- Permission checks are cached per process. The launchd-run daemon polls a child
-  (`puremouse permissions`) and restarts itself when a grant arrives (`Daemon.pollPermissions`),
-  only for permissions needed now (`Permissions.needed`: Accessibility when anything is bound or
-  the wheels may be taken over; Input Monitoring with a Bluetooth mouse or when opening HID
-  devices failed), and until `Daemon.permissionPollLength` (10 min) after the latest start, wake,
-  reload, control change or Bluetooth attach; each of those starts or extends it. Without Input
-  Monitoring a Bluetooth mouse is not retried after its first try.
-- HID++ software IDs rotate per request so a late reply cannot complete a newer request. A
-  cancelled request fails at once instead of holding the endpoint until its timeout, and so does
-  one still queued behind another (`HIDPPDevice.acquire` removes its entry). Only events
-  reach `onEvent` (`Report.isEvent`): software ID 0, or a short HID++ 1.0 notification (sub-ID
-  0x40-0x7F); a long report at those indices with another software ID is another program's reply.
-  A connection notification is only a short report with sub-ID 0x41 heard on a receiver endpoint
-  (`Receiver.isConnectionNotification`, used by `Session.handle` and `Daemon.watch`): a long event
-  at feature index 0x41, on a receiver slot or a Bluetooth mouse, routes to its feature.
-- A slot whose ping gets a HID++ 1.0 answer (invalid sub-ID) is ignored, like a keyboard, and
-  not retried (`Daemon.adoption(for:)`).
-- A freshly adopted mouse (`Inherited.fresh`) is scanned once for temporary diversions a previous
-  process left (`Session.scanStaleDiversions`) and releases those not bound; a persistent diversion
-  (Logi Options+) is never written. A timeout keeps the scan pending, across reloads too; a device
-  error skips that control.
-- An endpoint that does not answer is retried after 1, 2, 4 and 8 s (`Daemon.adoptRetrying`,
-  `Backoff.adoption`), one retry per endpoint whether attach, a connection notification, resume,
-  wake or reload started it; pause, detach and shutdown cancel it. After that a receiver slot is
-  left to its connection notification, so idle cost stays zero. A Bluetooth mouse has no
-  notifications, so it is then tried once a minute (`Backoff.bluetooth`) until it answers. Turning
-  on a receiver's connection notifications is retried the same way (`Daemon.retryNotifications`),
-  then again on wake and resume; pause, detach and shutdown cancel it. When a notification carries a
-  different wireless product ID from the one known for the slot (a new device paired into it), the
-  slot's session is closed as on a disconnect and the newcomer adopted on a fresh `HIDPPDevice`, so
-  no feature index, DPI list or state carries over (`Daemon.replaceEndpoint`); an ignored slot is
-  identified again, and an identification of the old endpoint that finishes afterwards is discarded.
-  The first announcement after attach only records the product.
-- `puremouse register` (and opening the app from the Finder, i.e. no arguments inside a bundle)
-  writes `~/Library/LaunchAgents/<bundle id>.plist` pointing at its own binary and bootstraps it,
-  booting out any running instance first (`LoginItem.swift`). Not `SMAppService`: without a
-  Developer ID team, launchd pins its agents to the registering build ("needs LWCR update"), so a
-  replaced app's agent fails to spawn with EX_CONFIG, and re-registering did not reliably clear it.
-- The same commands manage the menu bar app's agent (`io.github.mblauberg.puremouse.menu`) when
-  the bundle has `Contents/Library/LoginItems/PureMouse Menu.app`; dev builds without it handle
-  the daemon only. `menu off` is remembered by a `menu-hidden` file in the companion directory, so
-  `register` keeps the icon hidden. The menu app runs these commands as its child, and booting
-  out its agent kills its process group: `main` calls `setsid()` first, every command boots the
-  menu agent out last (after removing its plist), and `register`/`menu on` leave an already
-  loaded menu agent running when the menu app itself is the caller.
-- `LoginItem` is the policy (order above, `menu-hidden`, the caller's own agent) and talks to a
-  `LoginService` (`LoginService.swift`; `LaunchdAgentService` is the launch agents, which owns the
-  plist definitions and `launchctl`, and its `stop` holds the wait for the old instance to finish
-  restoring the mouse). The seam names jobs by what to run, never by plist. `LoginItemTests` drives
-  the policy against a fake and `LaunchdAgentServiceTests` the mechanism against a scripted
-  `launchctl`. Every mutating command holds `lifecycle.lock` in the companion directory. "Starts at login" and "running now" are separate axes:
-  `login on|off` register or unregister without loading or booting out, `start` starts what has no
-  process (bootstrap if not loaded, kickstart if loaded idle with this copy's executable, otherwise bootout and bootstrap) and refreshes a registered job's
-  plist first, without registering anything (an unregistered job runs from a plist under the
-  companion directory that launchd does not load at login), `stop` boots out and keeps the registration
-  (table in `docs/companion.md`). `puremouse login-status` prints `LoginStatus` (Kit) as JSON, and
-  Settings reads "starts at login" from it, not from a plist file. General's Open at login switch
-  runs `login on|off` and never stops anything; its Status row's Start / Stop, the "PureMouse is
-  off" banner and the menu's Start PureMouse run `start` / `stop`, never `register` (the
-  control-to-command mapping is `LoginAction`, tested in `LoginActionTests`, `BannerPlanTests`
-  and `MenuPlanTests`). Opening the
-  app from the Finder runs `register`, then `LoginItem.openSettings` opens the Settings helper
-  directly (the alert is kept for a build without one).
-- Builds are signed by `scripts/sign-bundle.sh`: inside out from `scripts/lib.zsh`'s `components`
-  (a new nested bundle is one more entry), no `--deep`, always the hardened runtime, with the
-  identity `signing_identity` picks (the order is in `docs/development.md`, Signing). The
-  permission grants are keyed to identifier plus certificate, which also holds on Macs that do not
-  trust the certificate; an ad-hoc signature makes macOS drop them on every install.
-  `scripts/verify-bundle.sh` checks every component and every architecture of it. install.sh
-  and uninstall.sh stop every component's agent and nested process (the names are in
-  `components`, as `id:path:executable`) before touching the app, signalling only this user's.
-- Gatekeeper: launching a quarantined copy parks it at `_dyld_start` behind an on-screen dialog.
-  On a test Mac, later launches at that path stayed parked even after clearing the flag and putting
-  a fresh copy there (presumably until the dialog is answered). Clear the flag before the first
-  launch.
-- Some actions use undocumented interfaces: `CoreDockSendNotification` (it returns 0 even for
-  unknown names, so failure is silent), the navigation-swipe CGEvent fields,
-  `CGSGetSymbolicHotKeyValue` (the user's Spaces shortcuts, read only; Ctrl+arrow when off) and
-  `IOHIDPostEvent` for media keys (deprecated, so looked up with `dlsym`; `AuxKey`).
-  `ForegroundApp.frontmost` uses SkyLight's `_SLPSGetFrontProcess` with `GetProcessPID`, falling
-  back to the frontmost window's owner; the Accessibility focused-application attribute was 8-40 ms
-  or failed outright, so it is not used. macOS 27 already
-  stopped honouring the dock-swipe fields, which PureMouse does not use. After an OS upgrade, check
-  them with `puremouse action <name>`; `docs/troubleshooting.md` ("After a macOS upgrade") lists
-  the keystroke fallbacks.
-- Logi Options+ fights PureMouse over the mouse (its agent is `com.logi.cp-dev-mgr`). The daemon
-  logs an error at start if it sees any of its processes (`LogiOptions`); only this user's process
-  names are readable, so a root-run updater goes unseen.
-- Config numbers are range-checked when decoded (`decodeIfPresent(_:forKey:in:)` in
-  `Sources/PureMouseKit/Config.swift`); give any new numeric field a range too. An unchecked
-  value can overflow an `Int` or `Duration` conversion mid-session, and during a reload that crash
-  comes after the old session has closed, so the mouse is never restored and launchd relaunches
-  into the same crash.
-- Events only route for features whose index is already resolved (`HIDPPDevice.feature(at:)`), so
-  `Session.apply()` resolves the event-bearing ones (0x1B04, 0x1D4B, 0x1004 battery) first. Battery
-  is read on each apply and then follows broadcast events; 0x1000 is read only as a fallback when
-  0x1004 is absent; resolve/select it before configuration writes and inherit that selection across
-  reloads. Only the selected source's broadcasts are used (0x1004 events, or legacy 0x1000 broadcast
-  events when it was selected). It is informational and never fails an apply. Level bits are masked
-  by getCapabilities (cleared when the mouse reports a percentage) and the highest wins, as in
-  Linux.
-- DPI is snapped to the sensor's own list (0x2201 getSensorDpiList), read once per mouse and
-  inherited across reloads; if the mouse answers the list request with an error, the configured
-  value is sent unchanged, while a timeout fails the apply so configure retries.
-  `cycleDPI` sets `Session.liveDPI`, which overrides `config.dpi` in `apply()`; `Daemon.reload`
-  clears it only when that mouse's resolved `dpi` or `dpiPresets` changed (`Daemon.keepsLiveDPI`),
-  and `Control.useConfiguredDPI` clears it on request, for every mouse or those whose key is
-  `Control.device` (`AppModel.setDPI` sends it, since choosing the saved value changes nothing on
-  disk). A snapped DPI is logged once per mouse (`DeviceState.snapLogged`), not per reload.
-  The DPI written is read back on every axis written (0x2202's Y too); a mouse that shows another
-  value, or whose X and Y lists share none, is refused (`DeviceState.dpiRefused`): nothing more is
-  written, once logged, until a reload changes `dpi` or `dpiPresets`.
+- Before 1.0 nothing is kept for backward compatibility: the menu and daemon ship together, and
+  config, status and control formats change freely (say so in the release notes). Add no frozen
+  readers, fallbacks for older versions, legacy shims or migrations.
+- No dependencies. No AppKit or SwiftUI in the daemon or `PureMouseKit`; the menu bar app links
+  AppKit only, and only `PureMouseSettingsUI` and the Settings helper link SwiftUI.
+- Zero idle CPU: no polling and no timers, beyond the bounded exceptions in
+  [how-it-works](docs/how-it-works.md#threads-and-idle-cost). The menu bar app and Settings never
+  open HID devices.
+- `Sources/HIDPP` is protocol only; policy lives in `Sources/puremouse`. `PureMouseKit` is data
+  only: no HID, no event posting, no `Log`.
+- All HID and HID++ work runs on the main actor, served by `runMainLoop()`, never `dispatchMain()`.
+- Anything applied to the mouse belongs in `Session.apply()`: the mouse forgets it on reconnect.
+- `LoginService.stop` waits for the old daemon to finish restoring the mouse; nothing starts a
+  replacement before it returns ([companion](docs/companion.md#login-and-lifecycle)).
+- Give any new numeric config field a range, and keep `ConfigGoldenTests` identical unless
+  regenerating it on purpose.
+- User-facing text follows [ui-language](docs/ui-language.md); layout and controls follow
+  [ui-design](docs/ui-design.md). Change either page in the same pull request as the UI it governs.
 
-## Extending
+## Where things are
 
-- New named button: keep `Config.Button` and the menu's `NamedButton` in step (names and CIDs).
-  Add the control's display name to `ControlNames` (Kit) too.
-- New action: a case in `Action` and a name in `Action.named` (both in PureMouseKit), handling in
-  `SystemActions.perform` (or `Session.perform` for device actions).
-- New device feature: a wrapper in `Sources/HIDPP/Features.swift`, applied in `Session.apply()`,
-  with event parsing routed in `Session.handle()`, a parse test in `Tests/HIDPPTests`, its
-  behaviour in `FakeDevice` and its readback in a probe fixture.
-- Per-app settings: a new per-app section needs a case in `Config.appSections`, decoding on top of
-  the global value in `Config.decodeApps`, a `sets…` flag, and its lookup at the moment it applies.
-  Every config section decodes on a `base` (its `init(_:base:)`); a new section takes one, keeps
-  its range checks and adds cases to the golden decode test (`ConfigGoldenTests`).
-- Per-device settings: a new per-device section needs a case in `Config.deviceSections` and
-  decoding in `Config.decodeSections`, the one layering point: the top level decodes its sections
-  there, and each device entry decodes its own there on top of the top level's. Add it to
-  `ConfigTree.resolved` and the generator in `DeviceScopeTests` too.
-- Thumb-wheel actions: `Config.ThumbWheel.presets` (Kit) names action pairs; `ThumbStepper` counts
-  rotation into steps (remainder kept, reset at each movement's start), paced per action
-  (`ThumbStepper.pacing`: media keys free, shortcuts 50 ms, zoom 40 ms, animated actions 300 ms
-  with the turns between discarded).
-- Thumb wheel presets in Settings: `ThumbWheelChoice` (`PureMouseAppSupport/ThumbWheel.swift`) lists Kit's
-  presets in `presetOrder`, with a label each; `ThumbWheelState` mirrors Kit's
-  `Config.ThumbWheel.init(_:base:)` and a test checks it against the decoder. App suggestions are
-  `AppSuggestion.table`.
-- Scroll feel: `ScrollAcceleration` (curve) and `ScrollAnimator` (two-part easing) in
-  `ScrollModel.swift`, covered by `ScrollModelTests`.
-- Protocol references: Solaar (`hidpp20.py`), logiops, Mac Mouse Fix. `puremouse probe` dumps the
-  raw feature state for comparison.
+Read the doc before changing its area. ADRs are in [docs/adr/](docs/adr/README.md).
+
+Daemon and protocol:
+
+- Sessions, diversion, scrolling, adoption, capture, Universal Control, battery, DPI, permissions:
+  [how-it-works.md, Invariants](docs/how-it-works.md#invariants); ADRs 1, 2, 3, 6.
+- Adding a button, action, device feature or config section:
+  [development.md, Extending](docs/development.md#extending).
+- Mice and the features they report: [supported-mice.md](docs/supported-mice.md).
+- Undocumented macOS interfaces and what breaks after an OS upgrade:
+  [troubleshooting.md](docs/troubleshooting.md#after-a-macos-upgrade).
+- Logging: ADRs [7](docs/adr/0007-log-rotation.md) and [16](docs/adr/0016-daemon-owns-its-log.md).
+
+Config and the channel:
+
+- Config format, per-app and per-device settings: [configuration.md](docs/configuration.md);
+  ADRs [5](docs/adr/0005-config-v2-device-overrides.md) and
+  [12](docs/adr/0012-multi-device-settings-scopes.md).
+- Status and control files, config writes and locks, login and lifecycle, low-battery
+  notifications: [companion.md](docs/companion.md); ADRs 4, 9, 18.
+- Files written, the network request, what the log holds: [privacy.md](docs/privacy.md).
+- Update check: [ADR 21](docs/adr/0021-scheduled-update-check.md).
+
+Settings and menu UI:
+
+- Layout, controls, disclosure, accessibility: [ui-design.md](docs/ui-design.md).
+- Code-level UI rules (tabs, sizing, scopes, Apps, notices):
+  [ui-design.md, Implementation](docs/ui-design.md#implementation).
+- Words, casing and the glossary: [ui-language.md](docs/ui-language.md).
+
+Build, release and memory:
+
+- Build, test, dev runs, dev hooks, screenshots, other Macs, signing, releases, CI, icon:
+  [development.md](docs/development.md); ADRs 14, 15, 17, 19, 20.
+- Menu bar app memory: [companion.md, Footprint](docs/companion.md#footprint),
+  [development.md, Footprint rig](docs/development.md#footprint-rig), ADR 10.
