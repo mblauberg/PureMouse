@@ -24,9 +24,9 @@
   <a href="LICENSE"><img alt="MIT licence" src="https://img.shields.io/github/license/mblauberg/PureMouse?color=2EA44F"></a>
 </p>
 
-<!-- Hero: the menu and Mouse › Buttons. The Buttons shot is replaced with the redesigned Mouse tab
-     (#125, device card #56) before 0.6.0; see "Screenshots" below. The current Settings captures
-     have no window shadow, so the light ones fade into a white page: take the 0.6.0 set with it. -->
+<!-- Hero: the menu and the Mouse tab. The Settings captures still show the earlier layout; refresh
+     them in a separate PR after #164. The current captures have no window shadow, so the light ones
+     fade into a white page: include it in that refreshed set. -->
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/menu-dark.png">
@@ -34,12 +34,12 @@
   </picture>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-buttons-dark.png">
-    <img src="docs/images/settings-buttons-light.png" width="460" align="middle" alt="Settings, Mouse › Buttons: a gesture button with Mission Control on click, and an action for back, forward, the top button and the wheel click">
+    <img src="docs/images/settings-buttons-light.png" width="460" align="middle" alt="Settings, Mouse › Buttons: a gesture button with Mission Control on click, and actions for the side buttons, top button and wheel click">
   </picture>
 </p>
 
 PureMouse talks to the mouse directly over Logitech's HID++ protocol, in Swift with no third-party
-dependencies.
+dependencies. Its plain JSON config file is `~/.config/puremouse/config.json`.
 
 ## Features
 
@@ -48,7 +48,7 @@ dependencies.
 Put every button to work.
 
 - Map the extra buttons (not left or right click) to Mission Control, Spaces, volume, tabs, a
-  shortcut or a shell command.
+  shortcut or a shell command. Side and thumb buttons work over HID++ with no Logitech software.
 - Hold the gesture button and move the mouse for four more actions.
 - **Find by Pressing…** finds a button by pressing it.
 
@@ -59,7 +59,7 @@ Smooth where you want it, native where you don't.
 - Smooth, accelerated scrolling on both wheels: Precise, Balanced, Gliding or your own feel.
 - The thumb wheel scrolls sideways, or switches tabs, changes the volume, zooms or moves between
   Spaces.
-- Wheel direction, ratchet or free spin, and SmartShift.
+- Wheel direction (separate from the trackpad's), ratchet or free spin, and SmartShift.
 
 ### Per app
 
@@ -88,17 +88,17 @@ Set it up once, then forget it's there.
 
 ## Screenshots
 
-Settings has four tabs, General, Mouse, Apps and About, and each change applies as you make it.
+Settings has four tabs, General, Mouse, Apps and About. The Mouse tab has Buttons, Scrolling and
+Pointer segments. Each change applies as you make it.
 
-<!-- Mouse tab: the Scrolling and Pointer cells (and the hero's Buttons shot) are replaced with
-     captures of the redesigned Mouse tab and its device card (#125, #56) before 0.6.0. Captures
-     follow docs/ui-design.md ("Captures"); keep the -light/-dark pairs in docs/images. -->
+<!-- The Mouse tab captures still show the earlier layout. Refresh them in a separate PR after #164,
+     following docs/ui-design.md ("Captures"); keep the -light/-dark pairs in docs/images. -->
 <table>
   <tr>
     <td width="50%" valign="top">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-scrolling-dark.png">
-        <img src="docs/images/settings-scrolling-light.png" width="400" alt="Mouse › Scrolling: smooth scrolling with its feel and speed, the main wheel's direction, mode and SmartShift, and the thumb wheel's action">
+        <img src="docs/images/settings-scrolling-light.png" width="400" alt="Mouse › Scrolling: smooth scrolling with its feel and speed, the main wheel direction and mode, SmartShift, and the thumb wheel action">
       </picture>
       <br><sub><b>Mouse › Scrolling.</b> Feel and speed, wheel mode, SmartShift and the thumb wheel.</sub>
     </td>
@@ -188,7 +188,7 @@ its features.
 | Privacy | No account, no telemetry, no settings saved permanently on the mouse | By design |
 
 The sizes are the published 0.5.1 release: the dmg as downloaded, and the app inside it counted
-file by file (`scripts/check-size.sh`). The memory figures are from macOS 27.0.1 on Apple silicon,
+file by file (`scripts/check-size.sh`). The memory figures are measured at idle, from macOS 27.0.1 on Apple silicon,
 the menu bar app and Settings from the [footprint rig](docs/development.md#footprint-rig), built
 from source. Figures move with each release and each macOS, so they are taken again for every
 minor release.
@@ -252,9 +252,9 @@ Run the command below, then move the app to the Bin. Your config stays in `~/.co
 
 ## Privacy and security
 
-No account and no telemetry. PureMouse writes only to your home folder and goes online only to
-check for updates (once a day if you allow it, or when you press **Check for Updates**) and to
-download one you choose to install.
+No account and no telemetry. PureMouse keeps its settings and support files in your home folder;
+updating also uses temporary files and replaces the installed app. It goes online only to check for updates (once a day if you
+allow it, or when you press **Check for Updates**) and to download one you choose to install.
 [Privacy](docs/privacy.md) lists every permission, file and request; [Security](SECURITY.md) says
 how to report a vulnerability.
 
