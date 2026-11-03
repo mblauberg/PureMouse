@@ -156,6 +156,11 @@ Each level has one mechanism, and each label says what it reveals.
   Settings › Mouse › Advanced… does the same; the HIG pairs Done with Cancel for sheets that hold
   edits). A sheet that holds edits until confirmed, such as the shortcut recorder, has Cancel and a
   verb. Each sheet has a fixed width and fits its content.
+- **Shortcut sheet** leads with the recorder (Record Shortcut, then Recording…) and teaches no
+  syntax. "Enter as Text…" shows the text field and its caption ("macOS keeps some shortcuts, such
+  as ⌃←. Enter those instead."). A recording that ends on modifiers alone, released with no key,
+  shows the same field: a shortcut macOS keeps often never reaches the app's key monitor.
+  `PUREMOUSE_DEV_SHORTCUT_TEXT=1` opens it with the field shown.
 - **Disclosure triangle** only for a control's own children (gesture directions, Exact value);
   at most one per row. `DisclosureLabel` exposes a native `DisclosureGroup` accessibility
   representation (AXDisclosureTriangle); both pointer and accessibility activation respect Reduce
@@ -586,7 +591,8 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
 - **Notices.** `BannerPlan.items` gives them in order: config error, unsaved change, status too
   new, PureMouse off, paused, Input Monitoring (a Bluetooth mouse is waiting), Logi Options+,
   Accessibility on the panes that need it, no mouse (General only; the Mouse panes say it in
-  place). The Logi Options+ notice offers Quit Logi Options+ as its only bordered button
+  place). General's list (`BannerPlan.generalItems`) leaves out off and paused: its PureMouse row
+  is those, with Start or the switch. The Logi Options+ notice offers Quit Logi Options+ as its only bordered button
   (`LogiOptionsAction.quit`: asks the app to quit through `NSRunningApplication.terminate()`,
   never a signal, and never starts it) and Open Login Items Settings… as a link-style button
   under its caption, in the banner, General's row and the menu. It appears and clears in
@@ -600,7 +606,7 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
 
 | Place | Shown by default | Advanced |
 |---|---|---|
-| General | Status (PureMouse running/paused/off, Start or Stop; one row per mouse the daemon knows, with its connection, battery and computer, or that its settings are being applied or were not, and an (i) that opens About This Mouse; active notices), Open at login, Show in menu bar, Low battery notifications (while macOS has them off, a disabled switch that keeps the choice, with Open Notification Settings… in the same row before it), Permissions (status only) | Advanced… sheet: Work with Universal Control, Config file, Log, Reset All Settings… |
+| General | Status (the PureMouse row: a Pause switch with Active or Paused beside it, or Off with a Start button; one row per mouse the daemon knows, with its connection, battery and computer, or that its settings are being applied or were not, and an (i) that opens About This Mouse; active notices), Open at login, Show in menu bar, Low battery notifications (while macOS has them off, Open Notification Settings… in place of the switch, whose choice is kept), Permissions (status only) | Advanced… sheet: Work with Universal Control, Config file, Log, Reset All Settings… |
 | Mouse header | Buttons, Scrolling, Pointer segments; mouse pop-up with two or more mice; Find by Pressing… and the device card on Buttons | — |
 | Mouse › Buttons | One row per button with its action | Gesture directions (disclosure, collapsed, caption summarises them; choosing Hold and Move expands it); Other controls (disclosure: named controls and bound ones, see Device card); Advanced… sheet, only while some button anywhere is Hold and Move: gesture Distance and Repeat |
 | Mouse › Scrolling | Smooth scrolling, Feel, Speed; Main Wheel: Reverse direction, Wheel mode, SmartShift; Thumb Wheel: Action (Turn left/right when Custom); each when the mouse has it | Advanced… sheet, each row only when it applies: Acceleration, Glide, Hold Shift to scroll sideways (dimmed while smooth scrolling is off); Switches at (while SmartShift is on); thumb wheel Reverse direction (when it scrolls here or in some app), Swap directions and Turn distance (when it has actions), Speed (when it scrolls) |

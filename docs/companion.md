@@ -292,7 +292,8 @@ General's Startup section keeps the two axes apart, each control running one com
 | Control | Reads | Runs |
 |---|---|---|
 | **Open at login** switch | `login-status` (`OpenAtLogin`: on when the daemon is `enabled` or `requiresApproval`) | `login on` / `login off`, with no confirmation; it never stops anything |
-| **PureMouse is running** Start / Stop | the status file's liveness (`AppModel.daemonRunning`) | `start` / `stop`; neither changes the login setting |
+| **PureMouse** switch (Active or Paused) | the status file's `paused`, or the request still pending (`AppModel.paused`) | the daemon's `paused` control, as the menu's Pause and Resume do; it never starts or stops PureMouse |
+| **Start** (shown only while PureMouse is off) | the status file's liveness (`AppModel.daemonRunning`) | `start`; it doesn't change the login setting. Settings has no Stop |
 | **Show in menu bar** | the `menu-hidden` marker | `menu on` / `menu off` |
 
 The switch reads `login-status` again after each command, so it shows what is so even if the
@@ -303,7 +304,7 @@ PureMouse under System Settings › General › Login Items, with a button that 
 The helper runs `menu on` and `menu off` itself. It is not in the menu agent's process group, so
 hiding the icon from Settings leaves Settings open. Turning on Open at login there runs `login on`,
 which restarts nothing. Quit PureMouse quits the helper first, which saves its edits and cancels a select by pressing
-still listening, then runs `stop`. Quit in the helper's own menu (⌘Q) quits only Settings.
+still listening, then runs `stop`. Quit Settings in the helper's own menu (⌘Q) quits only Settings and leaves PureMouse running.
 
 ## Low-battery notifications
 

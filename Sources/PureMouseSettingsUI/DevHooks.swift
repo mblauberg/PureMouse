@@ -9,7 +9,8 @@ import PureMouseAppSupport
 /// and `PUREMOUSE_DEV_SHORTCUT=<button>` its shortcut sheet. On the Apps pane,
 /// `PUREMOUSE_DEV_APP=<bundle id>` opens (or adds) that app's page, `PUREMOUSE_DEV_APP_SEGMENT=
 /// buttons|scrolling` shows one of its segments, and `PUREMOUSE_DEV_SHORTCUT=<button>` opens that
-/// button's shortcut editor sheet over it.
+/// button's shortcut editor sheet over it. `PUREMOUSE_DEV_SHORTCUT_TEXT=1` shows that sheet's
+/// "Enter as Text…" text field, for a capture (`ShortcutSheet`).
 /// `PUREMOUSE_DEV_SHEET=<name>` opens a sheet: `presets` (Mouse › Pointer) through a `ShowRequest`,
 /// `presets-editing` the same with its first row focused (nothing is written), or a sheet on the
 /// pane shown (`DevSheet`).
@@ -29,6 +30,11 @@ import PureMouseAppSupport
 /// tab and segment, or for what the hooks above open, and quits (`DevAXDump`).
 @MainActor
 public enum DevHooks {
+    /// Whether the shortcut sheet opens with its text field shown (`PUREMOUSE_DEV_SHORTCUT_TEXT=1`).
+    static var shortcutTextRequested: Bool {
+        ProcessInfo.processInfo.environment["PUREMOUSE_DEV_SHORTCUT_TEXT"] == "1"
+    }
+
     /// The sheet to open on `pane`, only when `PUREMOUSE_DEV_PANE` names it: Mouse builds more
     /// than the segment shown, so a check without the pane opened Scrolling's sheet over Buttons.
     static func sheet(on pane: String) -> DevSheet? {

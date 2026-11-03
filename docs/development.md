@@ -144,6 +144,7 @@ the full list. The ones used most:
 | `PUREMOUSE_DEV_PANE=<pane>` | Opens a tab (`general`, `mouse`, `apps`, `about`) or a Mouse segment (`buttons`, `scrolling`, `pointer`) |
 | `PUREMOUSE_DEV_PICKER=<button>` | A button's action picker on Mouse › Buttons only |
 | `PUREMOUSE_DEV_SHORTCUT=<button>` | A button's shortcut sheet on Mouse › Buttons; with `PUREMOUSE_DEV_APP`, that button's shortcut editor sheet over the app's page (`AppPage.body`) |
+| `PUREMOUSE_DEV_SHORTCUT_TEXT=1` | With `PUREMOUSE_DEV_SHORTCUT`, opens the shortcut sheet with its "Enter as Text…" text field already shown (`ShortcutSheet`) |
 | `PUREMOUSE_DEV_MOUSE=<device key>\|all` | Chooses that mouse on Mouse, or All Mice; `PUREMOUSE_DEV_OTHERS=1` opens Buttons' Other controls; `PUREMOUSE_DEV_MORE=1` opens an app page's More thumb wheel options |
 | `PUREMOUSE_DEV_APP=<bundle id>` | Opens Apps on that app's page, adding it without writing; `PUREMOUSE_DEV_APP_SEGMENT=buttons\|scrolling` picks the segment |
 | `PUREMOUSE_DEV_THEN_APP=<bundle id>` | After `PUREMOUSE_DEV_THEN_DELAY` seconds (default 1), asks for that app's page, as the menu's "Settings for <app>…" does with another page open |
