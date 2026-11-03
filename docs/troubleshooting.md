@@ -32,8 +32,9 @@ the examples below call it `puremouse`.
 ## Logi Options+
 
 Logi Options+ and PureMouse both take over the mouse's buttons and wheels, and only one can hold
-them at a time. When PureMouse sees Options+ running, the menu and the log say so. Quit Options+,
-or remove it with Logitech's uninstaller.
+them at a time. When PureMouse sees Options+ running (its agent is `com.logi.cp-dev-mgr`), the
+menu and the log say so. Quit Options+, or remove it with Logitech's uninstaller. PureMouse can read
+only your own processes' names, so an Options+ updater running as root goes unseen.
 
 ## Permissions
 
@@ -108,6 +109,11 @@ The menu bar app also relies on an undocumented allocator setting, `MallocSpaceE
 about 6 MB off its footprint. If a macOS release ignores it the app still works but uses more
 memory; run `./scripts/measure-menu.sh` on a spare Mac after the upgrade (`docs/development.md`,
 "Footprint rig") and compare with `scripts/measure-menu.budgets`.
+
+The Dock notifications fail silently: `CoreDockSendNotification` returns 0 even for a name the Dock
+does not know, so pressing the button is the only check. The symbolic hot key lookup
+(`CGSGetSymbolicHotKeyValue`) only reads your Spaces shortcuts, and media keys post through
+`IOHIDPostEvent`, looked up with `dlsym` because it is deprecated (`AuxKey`).
 
 macOS 27 stopped honouring the event fields for three-finger Dock swipes. PureMouse does not use
 them, and navigation swipes still work on macOS 27.

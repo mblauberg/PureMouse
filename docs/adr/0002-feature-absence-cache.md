@@ -29,4 +29,5 @@ successful apply.
 - Clearing either cache needs a new endpoint (a receiver slot change or Bluetooth reattach), as
   indices already do. A firmware update while the daemon runs is picked up after a replug or
   restart.
-- AGENTS.md's per-session haptic absence rule is reworded to the endpoint cache when this lands.
+- Haptic absence is cached with the rest; only its log line stays per session
+  ([How it works](../how-it-works.md#sessions)).
