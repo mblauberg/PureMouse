@@ -95,6 +95,19 @@ private func entry(_ id: String, _ entries: [PickerEntry]) -> PickerEntry? { ent
     }
 }
 
+@Test func mediaAndMiddleClickLeadTheirPickerGroups() {
+    let media = ActionCatalog.groups.first { $0.title == "Media" }
+    let mouse = ActionCatalog.groups.first { $0.title == "Mouse" }
+    #expect(Array(media?.names.prefix(3) ?? []) == ["playPause", "nextTrack", "previousTrack"])
+    #expect(Array(mouse?.names.prefix(1) ?? []) == ["middleClick"])
+    #expect(["playPause", "nextTrack", "previousTrack", "middleClick"].map(ActionCatalog.label(for:))
+        == ["Play/Pause", "Next Track", "Previous Track", "Middle Click"])
+    #expect(ActionCatalog.symbol(for: "playPause") == "playpause")
+    #expect(ActionCatalog.symbol(for: "nextTrack") == "forward")
+    #expect(ActionCatalog.symbol(for: "previousTrack") == "backward")
+    #expect(ActionCatalog.symbol(for: "middleClick") == "cursorarrow.click")
+}
+
 @Test func thePickerListsEveryHapticWaveformInWords() {
     let entries = PickerEntry.all(allowsDefault: true, allowsGesture: true)
         .filter { $0.group == ActionCatalog.hapticGroup }

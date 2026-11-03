@@ -78,8 +78,8 @@ public enum ActionCatalog {
     public static let groups: [Group] = [
         Group(title: "Desktop", names: ["missionControl", "appExpose", "showDesktop", "launchpad"]),
         Group(title: "Spaces and Navigation", names: ["spaceLeft", "spaceRight", "navigateBack", "navigateForward"]),
-        Group(title: "Mouse", names: ["toggleScrollMode", "cycleDPI"]),
-        Group(title: "Media", names: ["volumeUp", "volumeDown", "mute"]),
+        Group(title: "Mouse", names: ["middleClick", "toggleScrollMode", "cycleDPI"]),
+        Group(title: "Media", names: ["playPause", "nextTrack", "previousTrack", "volumeUp", "volumeDown", "mute"]),
         Group(title: "Display", names: ["brightnessUp", "brightnessDown"]),
         Group(title: "Tabs and Zoom", names: ["nextTab", "previousTab", "zoomIn", "zoomOut"]),
     ]
@@ -100,6 +100,10 @@ public enum ActionCatalog {
         case "volumeUp": "Volume Up"
         case "volumeDown": "Volume Down"
         case "mute": "Mute"
+        case "playPause": "Play/Pause"
+        case "nextTrack": "Next Track"
+        case "previousTrack": "Previous Track"
+        case "middleClick": "Middle Click"
         case "brightnessUp": "Brightness Up"
         case "brightnessDown": "Brightness Down"
         case "nextTab": "Next Tab"
@@ -127,6 +131,10 @@ public enum ActionCatalog {
         case "volumeUp": "speaker.wave.3"
         case "volumeDown": "speaker.wave.1"
         case "mute": "speaker.slash"
+        case "playPause": "playpause"
+        case "nextTrack": "forward"
+        case "previousTrack": "backward"
+        case "middleClick": "cursorarrow.click"
         case "brightnessUp": "sun.max"
         case "brightnessDown": "sun.min"
         case "nextTab": "arrow.right.to.line"

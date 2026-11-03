@@ -158,6 +158,8 @@ extension Session {
         // the pointer still. Where this press is not a gesture, the pointer must move.
         if case .gesture? = binding {} else if bound[cid] == true { setPointerFree(cid, true) }
         switch binding {
+        case .action(.middleClick):
+            held.pressMiddle(cid)  // held until release, so it can drag
         case .action(let action):
             perform(action)
         case .gesture(let gesture):
