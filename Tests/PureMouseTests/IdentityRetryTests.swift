@@ -92,4 +92,35 @@ struct IdentityRetryTests {
         _ = try await h.settled(mx)
         #expect(identityReads(mx) == 1)
     }
+
+    /// The retry's device-error answer lands just before the slot's first announcement names the
+    /// product: the answer was read with no product to key by, so the announcement must still
+    /// complete the key, not be lost between the two.
+    @Test func anAnswerBeforeTheFirstSlotAnnouncementStillGetsTheProductKey() async throws {
+        let h = try DaemonHarness(#"{"dpi": 1600, "devices": {"pb02c": {"dpi": 800}}}"#)
+        defer { h.close() }
+        let m750 = FakeDevice.m750
+        m750.onReceiver(slot: 2)
+        m750.failures[.init(0x0003, 0)] = .timeout
+        let session = try await h.adopt(m750)
+        #expect(session.deviceKey == nil && m750.dpi == 1600)
+        session.device.timeout = .seconds(30)
+        let reads = identityReads(m750)
+        session.configure()
+        try await eventually { identityReads(m750) > reads }
+        // Within one turn, so the retry's continuation runs after the announcement.
+        let request = try #require(m750.requests(feature: 0x0003, function: 0).last)
+        m750.failures.removeAll()
+        m750.transport.deliver(FakeTransport.error(to: request, code: 2))
+        m750.announce(product: 0xB02C)
+        try? await eventually {
+            h.daemon.sessions.values.first { $0.device.interface === m750.transport }
+                .map { $0.deviceKey == "pb02c" && !$0.isConfiguring } ?? false
+        }
+        #expect(h.daemon.sessions.values.map(\.deviceKey) == ["pb02c"])
+        #expect(m750.dpi == 800)
+        try h.reload()
+        _ = try await h.settled(m750)
+        #expect(m750.dpi == 800)
+    }
 }

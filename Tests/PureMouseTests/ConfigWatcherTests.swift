@@ -36,6 +36,37 @@ private final class WatchFixture {
         try text.write(to: config, atomically: true, encoding: .utf8)
     }
 
+    /// Overwrites the config through its existing inode, as an editor that saves in place does:
+    /// the directory sees nothing.
+    func rewriteInPlace(_ text: String) throws {
+        let handle = try FileHandle(forWritingTo: config)
+        defer { try? handle.close() }
+        try handle.truncate(atOffset: 0)
+        try handle.write(contentsOf: Data(text.utf8))
+    }
+
+    /// A folder of its own under the root holding a config, for a symlink to point at.
+    func target(_ name: String, config text: String = "{}") throws -> URL {
+        let folder = root.appending(path: name)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try text.write(to: folder.appending(path: "config.json"), atomically: true, encoding: .utf8)
+        return folder
+    }
+
+    /// Makes the config folder a symlink to `folder`; with `replacing`, swaps it in over the
+    /// existing link in one step, as `ln -sfh` or a dotfiles tool does.
+    func link(to folder: URL, replacing: Bool = false) throws {
+        let parent = directory.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+        if !replacing {
+            try FileManager.default.createSymbolicLink(at: directory, withDestinationURL: folder)
+            return
+        }
+        let temporary = parent.appending(path: "swap-\(UUID().uuidString)")
+        try FileManager.default.createSymbolicLink(at: temporary, withDestinationURL: folder)
+        #expect(rename(temporary.path, directory.path) == 0)
+    }
+
     /// A pause long enough for several debounce periods to have passed, for asserting that
     /// nothing more happens.
     func quiet() async throws {
@@ -123,6 +154,75 @@ private final class WatchFixture {
         try fixture.writeConfig()
         fixture.start()
         try FileManager.default.removeItem(at: fixture.directory)
+        try await fixture.quiet()
+        #expect(fixture.reloads == 0)
+    }
+
+    @Test func aWriteThatKeepsTheInodeReloadsOnce() async throws {
+        let fixture = try WatchFixture()
+        try fixture.writeConfig()
+        fixture.start()
+        try fixture.rewriteInPlace("{\"dpi\": 800}")
+        try await eventually { fixture.reloads >= 1 }
+        try await fixture.quiet()
+        #expect(fixture.reloads == 1)
+    }
+
+    @Test func aWriteThatKeepsTheInodeStillReloadsAfterTheDirectoryIsRecreated() async throws {
+        let fixture = try WatchFixture()
+        try fixture.writeConfig()
+        fixture.start()
+        try FileManager.default.removeItem(at: fixture.directory)
+        try await fixture.quiet()
+        try fixture.writeConfig()
+        try await eventually { fixture.reloadsWithAFile >= 1 }
+        try await fixture.quiet()
+        try fixture.rewriteInPlace("{\"dpi\": 1600}")
+        try await eventually { fixture.reloadsWithAFile >= 2 }
+    }
+
+    @Test func swappingASymlinkedFolderForAnotherReloadsAndFollowsTheNewOne() async throws {
+        let fixture = try WatchFixture()
+        let first = try fixture.target("dotfiles-a")
+        let second = try fixture.target("dotfiles-b")
+        try fixture.link(to: first)
+        fixture.start()
+        try fixture.link(to: second, replacing: true)
+        try await eventually { fixture.reloads >= 1 }
+        try await fixture.quiet()
+        #expect(fixture.reloads == 1)
+        // Edits in the new target apply; the old one no longer matters.
+        try fixture.rewriteInPlace("{\"dpi\": 800}")
+        try await eventually { fixture.reloads >= 2 }
+        try "{}".write(to: first.appending(path: "config.json"), atomically: true, encoding: .utf8)
+        try await fixture.quiet()
+        #expect(fixture.reloads == 2)
+    }
+
+    @Test func replacingTheTargetOfASymlinkedFolderIsFollowed() async throws {
+        let fixture = try WatchFixture()
+        let target = try fixture.target("dotfiles")
+        try fixture.link(to: target)
+        fixture.start()
+        try FileManager.default.removeItem(at: target)
+        try await fixture.quiet()
+        #expect(fixture.reloads == 0)
+        _ = try fixture.target("dotfiles", config: "{\"dpi\": 800}")
+        try await eventually { fixture.reloadsWithAFile >= 1 }
+        try await fixture.quiet()
+        let reloads = fixture.reloads
+        try fixture.rewriteInPlace("{\"dpi\": 1600}")
+        try await eventually { fixture.reloads > reloads }
+    }
+
+    @Test func unrelatedChangesBesideASymlinkedFolderDoNotReload() async throws {
+        let fixture = try WatchFixture()
+        try fixture.link(to: try fixture.target("dotfiles"))
+        fixture.start()
+        let beside = fixture.directory.deletingLastPathComponent()
+        try "x".write(to: beside.appending(path: "other.txt"), atomically: true, encoding: .utf8)
+        try FileManager.default.createDirectory(
+            at: beside.appending(path: "another"), withIntermediateDirectories: true)
         try await fixture.quiet()
         #expect(fixture.reloads == 0)
     }

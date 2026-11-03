@@ -564,11 +564,19 @@ final class Daemon {
     /// announcement does; no answer leaves it for the next configure or reload. No timer, no loop.
     private func resolveIdentity(of session: Session) async {
         let key = Key(session.device)
-        let identity = await Identification.read(session.device, kind: session.kind, productID: productID(of: session.device))
+        var identity = await Identification.read(session.device, kind: session.kind, productID: productID(of: session.device))
         guard !identity.unresolved, !session.finished, accepting, sessions[key] === session else { return }
+        // The slot may have announced its product while we were asking.
+        identity = current(identity, on: session.device)
         Log.info("\(session.name): model=\(identity.deviceKey ?? "unknown") read after the first attempt failed")
         replace(session, at: key, identity: identity, keepingLiveDPI: Self.keepsLiveDPI(
             config.forDevice(session.deviceKey), config.forDevice(identity.deviceKey)))
+    }
+
+    /// `identity` completed with the product its slot has announced since it was read, so an
+    /// answer that arrived before the announcement is not left without its key.
+    private func current(_ identity: Identification, on device: HIDPPDevice) -> Identification {
+        productID(of: device).map { identity.keyed(byProduct: $0) } ?? identity
     }
 
     /// The product ID `Identification` keys by when the mouse has no model ID: the slot's for a
@@ -674,11 +682,12 @@ final class Daemon {
         }
         let pid = productID(of: device)
         let name = (try? await DeviceName.get(device)).flatMap { $0.isEmpty ? nil : $0 } ?? "device \(device.index)"
-        let identity = await Identification.read(device, kind: kind, productID: pid)
+        var identity = await Identification.read(device, kind: kind, productID: pid)
         let pidLabel = pid.map { String(format: "0x%04x", $0) } ?? "unknown"
         // The device may have gone, or the daemon paused or begun quitting, while we were asking.
         guard accepting else { return .stopped }
         guard endpoints[key] === device, sessions[key] == nil else { return .noAnswer }
+        identity = current(identity, on: device)
         Log.info("adopting \(name) pid=\(pidLabel) model=\(identity.deviceKey ?? "unknown") on \(device.interface.product) index \(device.index)")
         let session = Session(device: device, name: name, identity: identity, id: deviceID(key), controls: controls,
                               config: config.forDevice(identity.deviceKey),

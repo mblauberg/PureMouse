@@ -320,7 +320,7 @@ touches.
   identity `unresolved`: after each configure that succeeds it is read again, once
   (`Daemon.resolveIdentity`), and a mouse that now has a key is replaced by a session on that key's
   settings. A reload or reconnect configures again, so it is retried then, never in a loop or on a
-  timer. An answer, an error included, is final, so a known identity is never read again. A model or
+  timer. An answer that arrives before the slot's first announcement is completed with the product it names (`Daemon.current`). An answer, an error included, is final, so a known identity is never read again. A model or
   unit ID of all zeros or all 0xFF counts as absent. The key is in the adoption log line
   (`model=`). Two mice of one model share a key, so they share `devices.<key>` and are both reached
   by a `device` request.
@@ -407,12 +407,17 @@ how the daemon fills them:
   take over, 0x2121 or 0x2130; false when the notched wheel refused), `battery` (0x1004, 0x1000,
   0x1001). They are kept across reloads.
 - The config file is watched as well as its directory, since editors that write in place leave the
-  directory unchanged. While the directory is absent (deleted, renamed away or never created) the
-  nearest existing ancestor is watched instead, and every event re-arms both watches
-  (`ConfigWatcher.arm`); the config in effect stays until the directory returns, and then it
-  reloads once. Only file-system sources are used, so idle costs nothing. A reload that fails leaves the previous config in effect and reports
-  `config.error` (`ConfigCheck.message`, which names the field); the next successful load clears
-  it.
+  directory unchanged. The directory's parent is watched too, and a symlinked directory (a
+  dotfiles setup) is watched at the folder it points to; every event re-resolves the path and
+  re-arms the watches (`ConfigWatcher.arm`), so a link swapped for another, or a link or its
+  target replaced, is followed. A change to the parent alone reloads only if the directory it
+  leads to changed. While the directory is absent (deleted, renamed away, a dangling link or never
+  created) the nearest existing ancestor of where it leads is watched instead. The config in
+  effect stays until the directory returns, and then it reloads once; an absent directory is
+  logged but does not set `config.error`. Renaming an ancestor above the directory's parent is not
+  noticed: SIGHUP reloads. Only file-system sources are used, so idle costs nothing.
+- A reload that fails leaves the previous config in effect and reports `config.error`
+  (`ConfigCheck.message`, which names the field); the next successful load clears it.
 
 ## Protocol references
 
