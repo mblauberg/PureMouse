@@ -328,8 +328,9 @@ and right. Existing directions are kept.
 
 **Actions:** `missionControl`, `appExpose`, `showDesktop`, `launchpad`, `spaceLeft`, `spaceRight`,
 `navigateBack`, `navigateForward`, `toggleScrollMode`, `cycleDPI`, `playPause`, `nextTrack`,
-`previousTrack`, `volumeUp`, `volumeDown`, `mute`, `middleClick`, `brightnessUp`, `brightnessDown`, `nextTab`, `previousTab`, `zoomIn`, `zoomOut`, `none`,
-`{"keys": "cmd+shift+4"}`, `{"run": "open -a Safari"}`, `{"haptic": "sharpStateChange"}`.
+`previousTrack`, `volumeUp`, `volumeDown`, `mute`, `middleClick`, `brightnessUp`, `brightnessDown`,
+`nextTab`, `previousTab`, `zoomIn`, `zoomOut`, `none`, `{"keys": "cmd+shift+4"}`,
+`{"run": "open -a Safari"}`, `{"haptic": "sharpStateChange"}`.
 
 `run` starts the command with `/bin/sh -c`, as you, and does not wait for it. Its output is
 discarded; a command that exits non-zero is logged once with its first 80 characters and its exit
@@ -340,6 +341,9 @@ status. To see what a command prints, redirect it to a file:
 Settings › Keyboard › Keyboard Shortcuts › Mission Control, or Ctrl+Left/Right if those are off.
 `nextTab`/`previousTab` send Ctrl+Tab and Ctrl+Shift+Tab, and `zoomIn`/`zoomOut` Cmd+= and Cmd+-,
 which most apps share; use `{"keys": ...}` for an app that differs.
+
+`middleClick` holds the middle button down while its control is held, so a press can drag
+(middle-drag, autoscroll). As a gesture's click or direction, it is one full click.
 
 `cycleDPI` switches to the next of `dpiPresets` above the current resolution, wrapping to the
 lowest. The choice survives reconnects until a config change alters `dpi` or `dpiPresets`.
