@@ -93,7 +93,7 @@ One term per concept. "Retire" lists words that must not appear in UI text for t
 | The menu bar presence | menu bar icon; "menu bar app" only for its version and updates | status item |
 | The background process | PureMouse: Running, Paused, Off | daemon, agent, "the running PureMouse" |
 | The JSON file | config file; button "Open Config File" | "Config" alone, "Settings" for the file |
-| Mouse resolution | Pointer Speed (row, menu, action); "DPI" beside a number; caption says it's this mouse's own speed, separate from System Settings › Mouse | Resolution, Tracking (except as System Settings' own name) |
+| Mouse resolution | Pointer speed (row), Pointer Speed (menu, action); Slow / Fast slider ends; "DPI" beside a number in Exact value; help "Faster moves the pointer further for the same movement."; footer "Tracking speed in System Settings applies on top." and "Open Mouse Settings" | Resolution, Tracking (except as System Settings' own name) |
 | Saved pointer speeds | presets; "Edit Presets…" (Pointer row, menu; "Add Presets…" in the menu when none), "Add Preset" (sheet "+") | chips, steps, Add Current |
 | A value left unset | "Using the mouse's own setting." (caption, only where no concrete value is shown, as on Switches at; the main wheel's rows show the default value instead); "Mouse Default" (picker entry) | "Mouse default." fragment, "Works as Normal", bare "Default" |
 | A per-tab reset | Restore Defaults (pane footer; resets everything on that tab, advanced rows included); "Restore Defaults…" when it asks first | Reset |
@@ -132,6 +132,7 @@ One term per concept. "Retire" lists words that must not appear in UI text for t
 | Support | Support PureMouse (About link); GitHub Sponsors (the destination) | Donate, Buy Me a Coffee, Pro, Free version |
 | Facts a mouse reports | About This Mouse (the sheet, opened by the (i) on the mouse's row in General › Status; titled with the mouse's name); rows Battery, Connection, Easy-Switch, Firmware, Model ID (the key the config uses, lowercase); Copy Details (plain text, no serial or unit number); a row the mouse does not report is hidden | Diagnostics, Device info, Properties |
 | Easy-Switch status | Easy-Switch; "Computer 1 · This Mac" (checkmark), "Computer 2 · MacBook Air", "Computer 3 · Not paired"; "Computer 1" on the mouse's row in General | host, channel, slot |
+| Media and click actions | Play/Pause, Next Track, Previous Track, Volume Up, Volume Down, Mute (picker › Media); Middle Click (picker › Mouse: the action; "Wheel click" is the button's row) | Play-Pause, Skip, Mouse 3, Button 3 |
 | Whether settings are on the mouse | Applying settings… and Settings not applied (the device line in the menu and General, only while true); Apply Settings Again (the menu's attention row); "Settings applied at 09:14" (the ⌥ line only). Never "Settings applied" on the menu header | synced, reapply, restore, Applied (as a status line) |
 
 ## Planned (#155)
