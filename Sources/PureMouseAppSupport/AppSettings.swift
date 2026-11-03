@@ -57,19 +57,24 @@ extension ConfigTree {
 
     // MARK: Buttons
 
-    /// Binds a button in one app. `.standard` removes the app's key, so the global binding applies;
-    /// `.mouseDefault` writes `"default"`, so the button is native in the app whatever is global.
-    /// `.gesture` keeps the app's gesture, or starts one whose click does what the button did
-    /// there, so its object is never empty.
-    public mutating func bindInApp(_ app: String, button: String, to binding: ButtonAction) {
+    /// Binds a button in one app. `.standard` removes the app's key, so the wider binding applies;
+    /// `.mouseDefault` writes `"default"`, so the button is native in the app whatever is bound wider.
+    /// `.gesture` keeps the app's gesture, or starts one whose click does what the button did there:
+    /// what applies to the first of the `inheriting` scopes (`AppModel.appInheritedScopes`), which is
+    /// the value the app's page shows, so its object is never empty.
+    public mutating func bindInApp(_ app: String, button: String, to binding: ButtonAction,
+                                   inheriting: [ConfigScope] = [.global]) {
         let scope = Self.appScope(app)
         guard binding == .gesture else {
             bind(button, to: binding, in: scope)
             return
         }
         if case .gesture = self.binding(button, in: scope) { return }
-        // Mouse Default hides the global gesture; choosing Hold and Move gives it back whole.
-        if self.binding(button, in: scope) == .mouseDefault, self.binding(button) == .gesture {
+        // What applies where the app leaves the button alone.
+        let wider = inheriting.first ?? .global
+        let inherited: Any? = wider.deviceKey != nil ? resolved(["buttons", button], in: wider) : self[["buttons", buttonKey(button)]]
+        // Mouse Default hides the wider gesture; choosing Hold and Move gives it back whole.
+        if self.binding(button, in: scope) == .mouseDefault, ButtonAction(json: inherited) == .gesture {
             bind(button, to: .standard, in: scope)
             return
         }
@@ -80,11 +85,10 @@ extension ConfigTree {
         } else if let own = self[path], own is String || own is [String: Any] {
             click = own
         } else {
-            let global = ["buttons", buttonKey(button)]
-            switch self.binding(button) {
+            switch ButtonAction(json: inherited) {
             case .standard, .mouseDefault: click = "none"
-            case .gesture: click = self[global + ["click"]] ?? "none"
-            default: click = self[global] ?? "none"
+            case .gesture: click = (inherited as? [String: Any])?["click"] ?? "none"
+            default: click = inherited ?? "none"
             }
         }
         set(["click": click], at: path)
@@ -138,12 +142,12 @@ extension ConfigTree {
     /// Mouse Settings; on, it says whether the glide applies, since an app's `smoothScroll` turns smooth
     /// scrolling on where there is none globally (`scrollsSmoothly`).
     public func customScrollingCaption(_ app: String, inheriting: [ConfigScope] = [.global]) -> String {
-        if !overridesScrolling(app) { return "Uses Mouse Settings' speed and glide." }
+        if !overridesScrolling(app) { return "Uses the speed and glide from Mouse Settings." }
         if !scrollsSmoothly(app, inheriting: inheriting) {
-            return "Smooth scrolling is off, so this app scrolls at this speed without the glide."
+            return "Smooth scrolling is off, so this app scrolls at its own speed without a glide."
         }
         if !inheriting.contains(where: { smoothScrollEnabled(in: $0) }) { return "Smooth scrolling is on in this app only." }
-        return "Smooth scrolling is on, as set in Mouse Settings."
+        return "Uses its own speed and glide in this app."
     }
 
     // MARK: Page
