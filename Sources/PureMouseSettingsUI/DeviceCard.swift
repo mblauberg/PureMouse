@@ -311,7 +311,9 @@ struct DeviceCard: View {
     private func control(_ target: DeviceCardPlan.Target) -> some View {
         if let cell = geometry[target.part]?.hit {
             let frame = cell.bounds.applying(fit)
-            let area = Color.clear
+            // Barely there rather than clear: a menu sizes its control to what its label draws, and
+            // a clear label leaves it a few points wide (the accessibility dump reads that size).
+            let area = Color.primary.opacity(0.001)
                 .frame(width: frame.width, height: frame.height)
                 .contentShape(PolygonShape(polygon: cell))
             Group {
@@ -321,7 +323,8 @@ struct DeviceCard: View {
                             Button(destination.menuTitle) { activate(destination) }
                         }
                     } label: { area }
-                    .menuStyle(.borderlessButton)
+                    .menuStyle(.button)
+                    .buttonStyle(.plain)
                     .menuIndicator(.hidden)
                     .fixedSize()
                 } else if let destination = target.destinations.first {
