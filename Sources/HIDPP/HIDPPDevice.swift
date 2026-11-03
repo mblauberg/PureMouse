@@ -229,7 +229,7 @@ public final class HIDPPDevice {
     public func stopObserving(_ token: Int) { replyObservers[token] = nil }
 
     private func replyArrived() {
-        let due = replyObservers.sorted { $0.key < $1.key }.map(\.value)
+        let due = Array(replyObservers.values)  // each owner's own; no order between them
         replyObservers.removeAll()
         due.forEach { $0() }
     }
