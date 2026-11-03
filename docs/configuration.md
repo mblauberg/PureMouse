@@ -40,7 +40,7 @@ own keys. A file is laid over it, so a key left out means the default set's valu
 | Setting | Default |
 |---|---|
 | Smooth scrolling | On, Balanced (`speed` 1, `acceleration` 1, `smoothingMs` 125) |
-| Wheel direction, wheel mode, SmartShift, DPI | Not set: the mouse keeps its own |
+| Wheel direction, wheel mode, SmartShift, DPI | Not set: the mouse keeps its own. Settings' wheel rows show it as a value (not reversed, the mouse's reported mode, SmartShift on) and always write the choice, SmartShift on as 12: the daemon leaves the mouse as it last set it, so a removed key would not undo anything. Only a mouse's choice equal to an explicit All Mice value removes its key |
 | Wheel press (`middle`), top button | Mouse Default |
 | `back`, `forward` | `navigateBack`, `navigateForward` |
 | `gesture` | Click Mission Control, up Mission Control, down App Exposé, left and right Spaces |
@@ -79,6 +79,13 @@ saves the file as `config.json.bak`).
 | `apps` | Buttons, thumb wheel and smooth scrolling for particular apps ([below](#per-app-settings)) |
 | `devices` | Settings for one model of mouse, over the ones above ([below](#per-device-settings)) |
 | `universalControl.handOff` | While the pointer is on another Mac (Universal Control), hand the wheels and buttons back to macOS so they scroll and click there natively; take them again when the pointer returns. Default true; false keeps PureMouse's behaviour, which does nothing on the other Mac |
+
+Settings › Mouse › Pointer › Edit Presets… edits the list in the selected mouse scope. Return or
+leaving a field snaps it to a supported sensor step within 50–25600 (to a multiple of 50 when the
+mouse reports no steps), merges duplicate speeds and sorts the list. The plus button adds the
+current speed, or the next unsaved step above it (below it, from the top step), up to eight
+entries, then focuses the new field. The minus button removes the focused row, otherwise the row
+last edited, otherwise the checked speed. The checkmark button uses a saved speed.
 
 A number outside its range is an error: the config is not loaded (on reload, the previous one stays
 in effect) and the log names the field.

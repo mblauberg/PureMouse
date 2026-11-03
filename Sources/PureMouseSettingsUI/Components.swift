@@ -131,6 +131,7 @@ struct ValueSlider: View {
     let low: String
     let high: String
     let format: (Double) -> String
+    var showsReadout = true
     var availability = ControlAvailability.available
     /// The key is absent and the mouse keeps its own setting (`RowLabel.mouseDefault`).
     var mouseDefault = false
@@ -152,15 +153,17 @@ struct ValueSlider: View {
                 // The readout takes the room of the widest value it can show, hidden, so the
                 // slider does not shift as the digits change, and at least one shared width, so
                 // the tracks of rows with short and long readouts ("2.2", "300 ms") line up.
-                ZStack(alignment: .trailing) {
-                    Text(format(range.lowerBound)).hidden()
-                    Text(format(range.upperBound)).hidden()
-                    Text(variesText == nil ? format(value) : Applied<Double>.variesReadout)
+                if showsReadout {
+                    ZStack(alignment: .trailing) {
+                        Text(format(range.lowerBound)).hidden()
+                        Text(format(range.upperBound)).hidden()
+                        Text(variesText == nil ? format(value) : Applied<Double>.variesReadout)
+                    }
+                    .frame(minWidth: 56, alignment: .trailing)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
                 }
-                .frame(minWidth: 56, alignment: .trailing)
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
             }
         } label: {
             RowLabel(title, help: help, mouseDefault: mouseDefault, availability: availability, note: note,
@@ -337,6 +340,7 @@ extension AdvancedSheet where Leading == EmptyView {
 /// A disclosure triangle and title for a form row whose children follow as rows of their own,
 /// so each child keeps the grouped form's height and separators (a `DisclosureGroup` packs them).
 struct DisclosureLabel: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let title: String
     var help: String?
     /// The scope has its own value: its caption line follows the help (`RowLabel.note`).
@@ -345,12 +349,14 @@ struct DisclosureLabel: View {
     /// (a gesture button's action pop-up).
     var spokenTitle: String?
     @Binding var isExpanded: Bool
+    /// The smallest hit target a control may have (docs/ui-design.md, Accessibility).
+    private static let target: CGFloat = 20
 
     var body: some View {
         // The note's button sits beside the disclosure button, not inside it: a button can't hold one.
         VStack(alignment: .leading, spacing: 0) {
             Button {
-                withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() }
+                withAnimation(DisclosureMotion.animates(reduceMotion: reduceMotion) ? .easeInOut(duration: 0.2) : nil) { isExpanded.toggle() }
             } label: {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Image(systemName: "chevron.right")
@@ -363,13 +369,18 @@ struct DisclosureLabel: View {
                         if let help, note == nil { Text(help).font(.subheadline).foregroundStyle(.secondary) }
                     }
                 }
-                // A line of text is 16 pt tall; the padding takes the hit target to the 20 pt minimum.
-                .padding(.vertical, 2)
+                // A line of text is 16 pt tall: the hit target is held to the 20 pt minimum.
+                .frame(minHeight: Self.target)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(spokenTitle ?? title)
-            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+            // Preserve the separate form rows visually while exposing a native disclosure to AX.
+            // The representation lays out on its own, so it carries the 20 pt minimum too: without it
+            // VoiceOver's disclosure triangle was a 16 pt line of text.
+            .accessibilityRepresentation {
+                DisclosureGroup(isExpanded: $isExpanded) {} label: { Text(spokenTitle ?? title) }
+                    .frame(minWidth: Self.target, minHeight: Self.target)
+            }
             if let note { OverrideLine(note: note, subject: spokenTitle ?? title).disclosedRow() }
         }
     }
