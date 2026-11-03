@@ -126,7 +126,7 @@ struct MouseHeader: View {
         // instead of overlapping. The stack's own spacing keeps them apart.
         // With no mouse at all there is nothing to choose between: the pane says so, bare.
         if model.hasNoMouse {
-            Color.clear.frame(height: 0).accessibilityHidden(true)
+            EmptyView()
                 .onChange(of: model.hasNoMouse) { settings?.refit() }
         } else {
             strip
@@ -234,7 +234,6 @@ struct MouseSegmentPane<Content: View>: View {
                     } actions: {
                         Button("Open Bluetooth Settings…") { NSWorkspace.shared.open(Links.bluetoothSettings) }
                     }
-                    .frame(maxWidth: .infinity, minHeight: 260)
                 }
             } else {
                 content

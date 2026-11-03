@@ -158,11 +158,10 @@ struct NoticeLink: View {
 
     var body: some View {
         if let action = notice.logiOptionsLink, let url = action.url {
-            Button { NSWorkspace.shared.open(url) } label: {
-                Text(action.title).foregroundStyle(.link).frame(minHeight: 20).contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .font(.callout)
+            // The padding is inside the label so the button's own frame, its hit target, reaches 20 pt.
+            Button { NSWorkspace.shared.open(url) } label: { Text(action.title).padding(.vertical, 3) }
+                .buttonStyle(.link)
+                .font(.callout)
         }
     }
 }

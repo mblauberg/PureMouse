@@ -44,7 +44,7 @@ struct GeneralPane: View {
                     RowLabel("Show in menu bar", help: "Battery alerts and update checks keep running when it's hidden.")
                 }
                 .accessibilityLabel("Show in menu bar")
-                .help("Open PureMouse from Applications to get back to Settings when the icon is hidden.")
+                .help("Open PureMouse from Applications to get back here.")
                 .disabled(model.locations.daemon == nil)
                 lowBatteryRow
             }
