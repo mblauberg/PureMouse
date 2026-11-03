@@ -18,6 +18,29 @@ public final class HIDPPDevice {
     public static let defaultTimeout: Duration = .milliseconds(1500)
     public var timeout: Duration = HIDPPDevice.defaultTimeout
 
+    /// A shorter or longer wait lent for a while, which wins over `timeout` until it is returned
+    /// or another is lent. Each lend has its own number, so work that was superseded returns
+    /// nothing of its successor's.
+    private var lent: (lease: Int, timeout: Duration)?
+    private var nextLease = 0
+
+    /// How long a request sent now waits: a lent timeout if there is one, else `timeout`.
+    public var effectiveTimeout: Duration { lent?.timeout ?? timeout }
+
+    /// Requests wait `timeout` for their reply, `duration` instead from now until the lease is
+    /// returned (`returnTimeout`) or a later lend replaces it.
+    public func lendTimeout(_ duration: Duration) -> Int {
+        nextLease += 1
+        lent = (nextLease, duration)
+        return nextLease
+    }
+
+    /// Ends a lend, unless a later one has replaced it: a retired task returning late must not
+    /// end what its replacement or a restore lent.
+    public func returnTimeout(_ lease: Int) {
+        if lent?.lease == lease { lent = nil }
+    }
+
     private var featureIndices: [UInt16: UInt8] = [0x0000: 0]
     private var absentFeatures: Set<UInt16> = []
     private var pending: Pending?
@@ -106,7 +129,7 @@ public final class HIDPPDevice {
                     return
                 }
                 guard pending?.token == token else { return }  // answered or failed during send
-                pending?.deadline = Task { [weak self, timeout] in
+                pending?.deadline = Task { [weak self, timeout = effectiveTimeout] in
                     do { try await Task.sleep(for: timeout) } catch { return }  // cancelled: ended already
                     guard let self, self.pending?.token == token else { return }
                     self.failPending(HIDPPError.timeout)
@@ -185,15 +208,21 @@ public final class HIDPPDevice {
 
     // MARK: Plumbing
 
+    /// Replies received to requests, answers and error answers alike; events are not replies. A
+    /// caller compares it before and after to tell a device that answered from one that did not.
+    public private(set) var repliesReceived = 0
+
     private func handle(_ report: Report) {
         if let p = pending {
             if p.request.isAnswered(by: report) {
+                repliesReceived += 1
                 pending = nil
                 p.deadline?.cancel()
                 p.continuation.resume(returning: report.params)
                 return
             }
             if let error = report.error(for: p.request) {
+                repliesReceived += 1
                 failPending(error)
                 return
             }

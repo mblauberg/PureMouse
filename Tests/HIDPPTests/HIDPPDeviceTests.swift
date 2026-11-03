@@ -54,6 +54,33 @@ struct HIDPPDeviceTests {
         #expect(fake.transport.sent.count == 3)
     }
 
+    @Test func aLentTimeoutEndsOnlyWithItsOwnReturn() {
+        let device = FakeDevice().endpoint()
+        defer { device.close() }
+        device.timeout = .seconds(3)
+        let first = device.lendTimeout(.milliseconds(600))
+        let second = device.lendTimeout(.milliseconds(400))
+        #expect(device.effectiveTimeout == .milliseconds(400))
+        device.returnTimeout(first)  // retired work returning late: the later lend stands
+        #expect(device.effectiveTimeout == .milliseconds(400))
+        device.returnTimeout(second)
+        #expect(device.effectiveTimeout == .seconds(3))  // the timeout it was set to, not a default
+        device.returnTimeout(second)
+        #expect(device.effectiveTimeout == .seconds(3))
+    }
+
+    @Test func aLentTimeoutIsWhatARequestWaits() async throws {
+        let fake = FakeDevice()
+        fake.transport.timing = .never
+        let device = fake.endpoint()
+        defer { device.close() }
+        device.timeout = Self.neverTimesOut
+        let lease = device.lendTimeout(.milliseconds(20))
+        await #expect(throws: HIDPPError.timeout) { try await device.request(featureIndex: 3, function: 0) }
+        device.returnTimeout(lease)
+        #expect(device.effectiveTimeout == Self.neverTimesOut)
+    }
+
     private func waitForSends(_ count: Int, on transport: FakeTransport) async throws {
         try await eventually { transport.sent.count >= count }
     }

@@ -23,6 +23,11 @@ struct AppliedStateTests {
         try await SessionHarness(fake, config: SessionHarness.config(Self.config), environment: environment)
     }
 
+    /// A time a test moves by hand.
+    private final class Hand: @unchecked Sendable {
+        var now = ContinuousClock.now
+    }
+
     /// The applied states a session publishes, consecutive repeats dropped.
     @MainActor private final class Transitions {
         private(set) var states: [State] = []
@@ -136,58 +141,177 @@ struct AppliedStateTests {
         #expect(!session.isConfiguring && session.status.applied?.state == .applied)
     }
 
-    // MARK: The 2 s bound
+    // MARK: Asleep is not failed
 
-    /// How long after the mouse starts answering its settings are applied, whatever ends the wait.
-    private func timeToApplied(_ h: SessionHarness, answeringAfter wait: Duration,
-                               start: () -> Void) async throws -> Duration {
-        h.fake.failures[.init(0x1B04, 3)] = .timeout
-        start()
-        try await Task.sleep(for: wait)
-        h.fake.failures.removeAll()
-        let answered = ContinuousClock.now
-        try await eventually(within: .seconds(4)) { h.session.status.applied?.state == .applied }
-        return ContinuousClock.now - answered
+    private static func linkReport(_ h: SessionHarness, up: Bool) -> Report {
+        Report(reportID: .short, deviceIndex: h.device.index, featureIndex: 0x41, function: 0, softwareID: 0,
+               params: [up ? 0x00 : 0x40])
     }
 
-    @Test(arguments: [100, 650, 1300]) func aWakeIsAppliedWithinTwoSecondsOfTheMouseAnswering(answeringAfterMs: Int) async throws {
+    /// A short schedule: three attempts, nothing slow, whatever the live one is.
+    private static let quick = SessionEnvironment(canPostEvents: true, configureRetryDelay: .milliseconds(1),
+                                                  attemptTimeout: .milliseconds(30))
+
+    @Test func aMouseThatAnswersNothingIsAsleepNotNotApplied() async throws {
+        let h = try await harness(environment: Self.quick)
+        defer { h.close() }
+        h.fake.transport.timing = .never  // every request, not one write
+        let seen = Transitions(h.session)
+        h.session.configure()
+        try await eventually(within: .seconds(5)) { !h.session.isConfiguring }
+        #expect(h.session.attemptsMade == 3)  // all three were made
+        #expect(h.session.status.applied == nil && !h.session.status.online)
+        #expect(!seen.states.contains(.notApplied))
+    }
+
+    @Test func aMouseThatAnsweredAndStillFailedIsNotApplied() async throws {
+        let h = try await harness(environment: Self.quick)
+        defer { h.close() }
+        h.fake.failures[.init(0x1B04, 3)] = .timeout  // everything else answers
+        h.session.configure()
+        try await eventually(within: .seconds(5)) { !h.session.isConfiguring }
+        #expect(h.session.status.applied == .init(state: .notApplied))
+    }
+
+    @Test func anAsleepMouseThatAnswersAgainIsConfiguredByItsNextEvent() async throws {
+        let hand = Hand()
+        var environment = Self.quick
+        environment.now = { hand.now }
+        let h = try await harness(environment: environment)
+        defer { h.close() }
+        h.fake.transport.timing = .never
+        h.session.configure()
+        try await eventually(within: .seconds(5)) { !h.session.isConfiguring }
+        #expect(h.session.status.applied == nil)
+        h.fake.transport.timing = .nextTurn
+        hand.now += Session.offlineReconfigureGap  // events drive the retry, at most once a gap
+        h.fake.emit(0x1D4B, params: [1, 0, 0])
+        try await eventually(within: .seconds(5)) { h.session.status.applied?.state == .applied && !h.session.isConfiguring }
+        #expect(h.session.status.online)
+    }
+
+    @Test func aLinkGoingDownEndsTheConfigureAndSaysNothingOfTheSettings() async throws {
+        let fake = FakeDevice.mxMaster3S
+        fake.onReceiver(slot: 1)
+        let h = try await harness(fake, environment: Self.quick)
+        defer { h.close() }
+        fake.transport.timing = .never
+        h.session.configure()
+        try await eventually { h.session.attemptsMade == 1 }
+        h.session.handle(Self.linkReport(h, up: false))
+        #expect(!h.session.isConfiguring)
+        #expect(h.session.status.applied == nil && !h.session.status.online)
+        try await Task.sleep(for: .milliseconds(200))  // longer than the attempts would have taken
+        #expect(h.session.attemptsMade == 1 && h.session.status.applied == nil)
+        fake.transport.timing = .nextTurn
+        h.session.handle(Self.linkReport(h, up: true))
+        try await eventually(within: .seconds(5)) { h.session.status.applied?.state == .applied && !h.session.isConfiguring }
+    }
+
+    // MARK: Timeout ownership
+
+    @Test func aRetiredConfigureLeavesItsReplacementsTimeoutAlone() async throws {
         let h = try await harness(environment: Self.live())
         defer { h.close() }
-        let took = try await timeToApplied(h, answeringAfter: .milliseconds(answeringAfterMs)) { h.session.configureAfterWake() }
-        #expect(took < .seconds(2), "took \(took)")
+        h.fake.transport.timing = .never
+        h.session.configure()
+        try await eventually { h.session.attemptsMade == 1 }
+        let next = h.replacement(config: try SessionHarness.config(Self.config), environment: Self.live())
+        defer { next.close() }
+        next.configure()
+        try await eventually { next.attemptsMade == 1 }
+        h.session.close()  // the retired session's configure ends now
+        try await eventually { !h.session.isConfiguring }
+        for _ in 0..<5 { await Task.yield() }
+        #expect(h.device.effectiveTimeout == SessionEnvironment.reapplyAttemptTimeout)
+    }
+
+    @Test func aCancelledConfigureLeavesRestoresTimeoutAlone() async throws {
+        let h = try await harness(environment: Self.live())
+        defer { h.close() }
+        h.session.configure()
+        try await eventually { h.session.status.applied?.state == .applied && !h.session.isConfiguring }
+        h.fake.transport.timing = .never
+        h.session.configure()
+        try await eventually { h.session.attemptsMade > 1 }
+        // The mouse answers nothing, so restore holds its timeout for as long as its writes wait.
+        let restoring = Task { await h.session.restore() }
+        try await eventually { h.device.effectiveTimeout == Session.restoreTimeout }
+        try await eventually { !h.session.isConfiguring }  // the cancelled configure has ended
+        for _ in 0..<5 { await Task.yield() }
+        #expect(h.device.effectiveTimeout == Session.restoreTimeout)
+        await restoring.value
+        #expect(h.device.effectiveTimeout == h.device.timeout)
+    }
+
+    // MARK: The 2 s bound
+
+    /// The live schedule's shape at a twentieth of its durations (30 ms a request, 10 ms between
+    /// attempts), so a silent mouse costs a fraction of a second. The tests count attempts
+    /// instead of timing them: a mouse that starts answering as attempt `k` begins is applied by
+    /// attempt `k + 1`, whatever else is running on the machine. The live durations, and
+    /// wall-clock figures, are the constants' test below and the rig's
+    /// (`scripts/measure-reconnect.sh`).
+    private static let scaled = SessionEnvironment(canPostEvents: true, configureRetryDelay: .milliseconds(10),
+                                                   attemptTimeout: .milliseconds(30))
+
+    private func attemptsUntilApplied(_ h: SessionHarness, silentAttempts k: Int,
+                                      start: () -> Void) async throws -> Int {
+        h.fake.transport.timing = .never  // every request unanswered, not one write
+        let first = h.session.attemptsMade
+        start()
+        try await eventually(within: .seconds(5)) { h.session.attemptsMade - first == k }  // attempt k has begun
+        h.fake.transport.timing = .nextTurn  // the mouse answers from here on
+        try await eventually(within: .seconds(5)) { h.session.status.applied?.state == .applied && !h.session.isConfiguring }
+        return h.session.attemptsMade - first
+    }
+
+    @Test(arguments: [1, 2, 3]) func aWakeIsAppliedByTheAttemptAfterTheMouseAnswers(silentAttempts: Int) async throws {
+        let h = try await harness(environment: Self.scaled)
+        defer { h.close() }
+        let attempts = try await attemptsUntilApplied(h, silentAttempts: silentAttempts) { h.session.configureAfterWake() }
+        #expect(attempts <= silentAttempts + 1)
         #expect(h.fake.control(0x53)?.diverted == true)
     }
 
-    @Test func aReconnectIsAppliedWithinTwoSecondsOfTheMouseAnswering() async throws {
-        let h = try await harness(environment: Self.live())
+    @Test(arguments: [1, 2, 3]) func aReconnectIsAppliedByTheAttemptAfterTheMouseAnswers(silentAttempts: Int) async throws {
+        let h = try await harness(environment: Self.scaled)
         defer { h.close() }
         h.session.configure()
         try await eventually { h.session.status.applied?.state == .applied && !h.session.isConfiguring }
         // The mouse announces itself (0x1D4B) while it still answers nothing, then answers.
-        let took = try await timeToApplied(h, answeringAfter: .milliseconds(300)) {
+        let attempts = try await attemptsUntilApplied(h, silentAttempts: silentAttempts) {
             h.fake.emit(0x1D4B, params: [1, 0, 0])
         }
-        #expect(took < .seconds(2), "took \(took)")
+        #expect(attempts <= silentAttempts + 1)
     }
 
-    @Test func aHostSwitchBackIsAppliedWithinTwoSecondsOfTheLinkComingUp() async throws {
+    @Test(arguments: [1, 2, 3]) func aHostSwitchBackIsAppliedByTheAttemptAfterTheLinkComesUp(silentAttempts: Int) async throws {
         let fake = FakeDevice.mxMaster3S
         fake.onReceiver(slot: 1)
-        let h = try await harness(fake, environment: Self.live())
+        let h = try await harness(fake, environment: Self.scaled)
         defer { h.close() }
         h.session.configure()
         try await eventually { h.session.status.applied?.state == .applied && !h.session.isConfiguring }
         // The mouse goes to another computer, forgetting what was set, and returns.
-        h.session.handle(Report(reportID: .short, deviceIndex: h.device.index, featureIndex: 0x41,
-                                function: 0, softwareID: 0, params: [0x40]))
+        h.session.handle(Self.linkReport(h, up: false))
         h.fake.resetReporting()
         #expect(!h.session.status.online)
-        let answered = ContinuousClock.now
-        h.session.handle(Report(reportID: .short, deviceIndex: h.device.index, featureIndex: 0x41,
-                                function: 0, softwareID: 0, params: [0x00]))
-        try await eventually(within: .seconds(4)) { h.session.status.applied?.state == .applied && !h.session.isConfiguring }
-        #expect(ContinuousClock.now - answered < .seconds(2))
+        let attempts = try await attemptsUntilApplied(h, silentAttempts: silentAttempts) {
+            h.session.handle(Self.linkReport(h, up: true))
+        }
+        #expect(attempts <= silentAttempts + 1)
         #expect(h.fake.control(0x53)?.diverted == true && h.session.status.online)
+    }
+
+    @Test func theLiveScheduleKeepsEachRetryWithinAboutASecond() {
+        // What follows the mouse answering: the request in flight (at most one timeout), the
+        // retry delay and one apply (about a second on a real mouse): the figures behind
+        // "within two seconds" in docs/how-it-works.md.
+        let wait = SessionEnvironment.reapplyAttemptTimeout + SessionEnvironment.reapplyRetryDelay
+        #expect(wait <= .milliseconds(800))
+        #expect(SessionEnvironment.live.attemptTimeout == SessionEnvironment.reapplyAttemptTimeout)
+        #expect(SessionEnvironment.live.configureRetryDelay == SessionEnvironment.reapplyRetryDelay)
     }
 
     @Test func aWakeLeavesAMouseTheReceiverSaidIsAwayAlone() async throws {

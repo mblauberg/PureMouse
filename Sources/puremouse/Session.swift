@@ -97,6 +97,9 @@ final class Session {
     /// The receiver said this mouse's link is down and has not said it is up since: the mouse is
     /// off or on another computer, so waking the Mac has nothing to apply to.
     var linkDown = false
+    /// Attempts begun by every configure of this session, so a test can count them rather than
+    /// time them.
+    private(set) var attemptsMade = 0
     static let offlineReconfigureGap: Duration = .seconds(30)
     /// Device actions (toggle scroll mode, cycle DPI, haptics) and `apply`'s DPI and scroll mode
     /// writes, one at a time in the order asked, each reading what is wanted (`liveDPI`,
@@ -394,19 +397,24 @@ final class Session {
         configureGeneration &+= 1
         let generation = configureGeneration
         setApplied(.init(state: .applying))
+        let repliesAtStart = device.repliesReceived
         configuring = Task {
+            // The short wait lent to this task's requests. Returning it ends only this lend: a
+            // replacement's, or a restore's, stands (`HIDPPDevice.returnTimeout`).
+            var lease: Int?
             defer {
+                if let lease { device.returnTimeout(lease) }
                 // A superseded task ends after its replacement started; leave the replacement's handle.
                 if configureGeneration == generation {
                     configuring = nil
                     lastConfigureEnded = environment.now()
-                    if environment.attemptTimeout != nil { device.timeout = HIDPPDevice.defaultTimeout }
                 }
             }
             try? await Task.sleep(for: delay)
             for attempt in 1...3 {
                 guard !Task.isCancelled else { return }
-                if let timeout = environment.attemptTimeout { device.timeout = timeout }
+                attemptsMade += 1
+                if let timeout = environment.attemptTimeout { lease = device.lendTimeout(timeout) }
                 do {
                     try await apply()
                     // Cached indices only: diagnostics must never add adoption traffic or timeouts.
@@ -427,12 +435,26 @@ final class Session {
                 try? await Task.sleep(for: environment.configureRetryDelay)
             }
             guard !Task.isCancelled, !finished else { return }
-            // Out of attempts: the settings are not on the mouse. Apply Settings Again (`reapply`)
-            // or the mouse's own reconnect starts the next apply.
-            state.appliedStatus = .init(state: .notApplied)
+            // Out of attempts. A mouse that answered something and still could not be configured
+            // has settings not applied; Apply Settings Again (`reapply`) or its own reconnect
+            // starts the next apply. One that never answered, or whose link went down, is asleep
+            // or away, not failed: it is offline with nothing said about the settings, and its
+            // next link-up or answer starts a configure.
+            let answered = device.repliesReceived > repliesAtStart
+            state.appliedStatus = answered && !linkDown ? .init(state: .notApplied) : nil
             state.online = false
             changed()
         }
+    }
+
+    /// The receiver said the link is down: the mouse is off or on another computer. A configure
+    /// under way is over (it would only run out of attempts), and nothing is known of the settings.
+    func linkWentDown() {
+        linkDown = true
+        configuring?.cancel()
+        configureGeneration &+= 1
+        configuring = nil
+        setApplied(nil)
     }
 
     /// Wake: starts a configure at once, except for a mouse the receiver last said is away, whose
@@ -450,7 +472,7 @@ final class Session {
     }
 
     /// Records `applied` and publishes it when it differs, so the status moves on transitions only.
-    private func setApplied(_ applied: Status.Device.Applied) {
+    private func setApplied(_ applied: Status.Device.Applied?) {
         guard state.appliedStatus != applied else { return }
         state.appliedStatus = applied
         changed()
@@ -630,9 +652,8 @@ final class Session {
         // Cancelled work stops at its next write, and its request in flight fails at once.
         await diversion.drain()
         await deviceActions.drain()
-        let timeout = device.timeout
-        device.timeout = Self.restoreTimeout
-        defer { device.timeout = timeout }
+        let lease = device.lendTimeout(Self.restoreTimeout)
+        defer { device.returnTimeout(lease) }
         // Wheels first: a silent wheel is worse than a diverted button. Each step stands alone,
         // so one failure does not skip the rest. A replaced session may have diverted them even
         // if this one would not, e.g. after a reload that turned smooth scrolling off.

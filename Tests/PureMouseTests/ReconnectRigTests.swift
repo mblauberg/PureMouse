@@ -9,7 +9,8 @@ import Testing
 /// N cycles each of a wake, a reconnect and a host switch-back, on the live retry schedule, timing
 /// the apply from the moment the fake starts answering. It prints one `rig <kind> <cycle> <ms>` line
 /// per cycle and fails above two seconds. Off unless `PUREMOUSE_RIG_CYCLES` is set, so the ordinary
-/// run does not repeat what `AppliedStateTests` checks once.
+/// run does not repeat what `AppliedStateTests` checks, which counts attempts rather than timing them:
+/// wall-clock figures are this suite's and need a machine doing nothing else.
 @Suite(.serialized, .quietLog, .enabled(if: ReconnectRig.cycles > 0)) @MainActor
 struct ReconnectRigTests {
     private static let config = #"{"buttons":{"back":"none"}}"#
@@ -21,13 +22,13 @@ struct ReconnectRigTests {
         return try await SessionHarness(fake, config: SessionHarness.config(Self.config), environment: environment)
     }
 
-    /// The fake answers nothing for `silence`, then answers; the clock starts at the first answer.
+    /// The fake answers no request at all for `silence`, then answers; the clock starts at the first answer.
     private func cycle(_ kind: String, _ index: Int, silence: Duration, h: SessionHarness,
                        trigger: () -> Void) async throws {
-        h.fake.failures[.init(0x1B04, 3)] = .timeout
+        h.fake.transport.timing = .never  // every request unanswered, as a sleeping mouse leaves them
         trigger()
         try await Task.sleep(for: silence)
-        h.fake.failures.removeAll()
+        h.fake.transport.timing = .nextTurn
         let answered = ContinuousClock.now
         try await eventually(within: .seconds(5)) { h.session.status.applied?.state == .applied && !h.session.isConfiguring }
         let took = ContinuousClock.now - answered
