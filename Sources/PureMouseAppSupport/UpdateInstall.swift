@@ -7,6 +7,9 @@ public enum UpdateInstallFailure: Error, Equatable, Sendable {
     /// release page is opened instead of downloading anything.
     public enum Place: Equatable, Sendable {
         case notInstalled, developmentBuild, readOnlyVolume, notWritable, notSigned
+        /// An earlier install left a copy it could not account for, and this one does not verify, so
+        /// the copy is kept and nothing is downloaded.
+        case damaged
     }
 
     case cannotInstallHere(Place)
@@ -33,6 +36,7 @@ public enum UpdateInstallFailure: Error, Equatable, Sendable {
         case .cannotInstallHere(.readOnlyVolume): "Can't update: this copy is on a read-only disk"
         case .cannotInstallHere(.notWritable): "Can't update: this copy needs an administrator"
         case .cannotInstallHere(.notSigned): "Can't update: this copy has no certificate to check with"
+        case .cannotInstallHere(.damaged): "Can't update: this copy doesn't verify, so a saved copy from an earlier update is kept"
         case .downloadFailed: "Couldn't download the update"
         case .checksumMissing: "The release has no checksum for the download"
         case .checksumMismatch: "The download doesn't match its checksum"
@@ -200,7 +204,9 @@ public struct UpdateInstaller: Sendable {
         }
         guard let requirement = signature.requirement() else { return .failed(.cannotInstallHere(.notSigned)) }
         guard let assets = UpdateAssets(release) else { return .failed(.downloadFailed) }
-        await sweep(besides: installedApp)
+        guard await sweep(besides: installedApp, requirement: requirement) else {
+            return .failed(.cannotInstallHere(.damaged))
+        }
         let work: URL
         do { work = try files.makeWorkDirectory() } catch {
             log("update: no download location: \(error)")
@@ -323,27 +329,43 @@ public struct UpdateInstaller: Sendable {
 
     enum Settled { case new, old, unknown }
 
-    /// Which app is at the install path after a replace that threw. `.new` only for the announced
-    /// version with a signature that satisfies the requirement; `.old` for the version that was
-    /// running (the staged copy is then the new one, which a download brings back).
+    /// Which app is at the install path after a replace that threw. Either answer needs the bundle
+    /// there to verify against the requirement: `.new` for the announced version, `.old` for the
+    /// version that was running (the staged copy is then the new one, which a download brings back).
+    /// A bundle that does not verify, or is neither, is `.unknown` whatever its Info.plist says, and
+    /// the staged copy, which may be the only good one, is kept.
     func settle(_ installedApp: URL, running: UpdateCheck.Version, found: UpdateCheck.Version, requirement: String) -> Settled {
-        guard let version = files.bundleVersion(installedApp).flatMap(UpdateCheck.Version.init) else { return .unknown }
-        if version == found, signature.check(installedApp, against: requirement) == nil { return .new }
+        guard let version = files.bundleVersion(installedApp).flatMap(UpdateCheck.Version.init),
+              signature.check(installedApp, against: requirement) == nil else { return .unknown }
+        if version == found { return .new }
         if version == running { return .old }
         return .unknown
     }
 
-    /// What a killed install left: staged copies beside the app, and work folders (with an image
-    /// possibly still mounted in one). Only the installed app exists to be lost, and it is known to be
-    /// there, so none of this is the only good copy.
-    func sweep(besides installedApp: URL) async {
-        for stale in files.leftovers(besides: installedApp) {
-            if stale.lastPathComponent.hasPrefix("PureMouse-update-") {
-                await mounter.detach(stale.appending(path: "image"))
-            }
+    /// What a killed install left: work folders (with an image possibly still mounted in one), which
+    /// are always removed, and staged copies beside the app. A staged copy is removed only when the
+    /// installed app verifies against the requirement and has a version, since until then it may be
+    /// the only good copy (`settle` keeps it for that reason); otherwise they are all kept and this
+    /// returns false, and the install does not begin.
+    func sweep(besides installedApp: URL, requirement: String) async -> Bool {
+        let leftovers = files.leftovers(besides: installedApp)
+        for stale in leftovers where stale.lastPathComponent.hasPrefix("PureMouse-update-") {
+            await mounter.detach(stale.appending(path: "image"))
             log("update: removing what an earlier install left: \(stale.lastPathComponent)")
             files.remove(stale)
         }
+        let copies = leftovers.filter { !$0.lastPathComponent.hasPrefix("PureMouse-update-") }
+        guard !copies.isEmpty else { return true }
+        guard files.bundleVersion(installedApp).flatMap(UpdateCheck.Version.init) != nil,
+              signature.check(installedApp, against: requirement) == nil else {
+            log("update: the installed app does not verify; keeping \(copies.map(\.lastPathComponent).joined(separator: ", "))")
+            return false
+        }
+        for stale in copies {
+            log("update: removing what an earlier install left: \(stale.lastPathComponent)")
+            files.remove(stale)
+        }
+        return true
     }
 
     static func failure(_ fault: UpdateSignatureFault) -> UpdateInstallFailure {

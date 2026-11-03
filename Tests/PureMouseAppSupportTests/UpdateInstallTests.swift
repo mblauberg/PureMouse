@@ -153,7 +153,7 @@ final class World: @unchecked Sendable {
         }
         func leftovers(besides app: URL) -> [URL] { world.stale }
         func remove(_ url: URL) {
-            world.events.append("remove \(url.lastPathComponent.hasPrefix(".PureMouse-update") ? "staged" : url.lastPathComponent.hasPrefix("stale") ? "stale" : "work")")
+            world.events.append("remove \(url.lastPathComponent.hasPrefix(".PureMouse-update") ? "staged" : url.lastPathComponent == "PureMouse-update-stale" ? "stale" : "work")")
             world.disk = world.disk.filter { !$0.key.path.hasPrefix(url.path) }
         }
     }
@@ -250,15 +250,47 @@ final class World: @unchecked Sendable {
     @Test func leftoversOfAnEarlierInstallAreSweptBeforeDownloading() async {
         let world = World()
         world.stale = [URL(fileURLWithPath: "/Applications/.PureMouse-update-abc12345"),
-                       URL(fileURLWithPath: "/tmp/stale-work")]
+                       URL(fileURLWithPath: "/tmp/PureMouse-update-stale")]
         _ = await world.install()
         let first = world.events.firstIndex(of: "download SHA256SUMS")!
         #expect(world.events[..<first].filter { $0 == "remove staged" || $0 == "remove stale" }.count == 2)
     }
 
+    @Test func aPreservedCopyIsKeptAndNothingDownloadsWhenTheInstalledAppDoesNotVerify() async {
+        let world = World()
+        let kept = URL(fileURLWithPath: "/Applications/.PureMouse-update-abc12345")
+        world.stale = [kept, URL(fileURLWithPath: "/tmp/PureMouse-update-stale")]
+        world.disk[kept] = Data()
+        world.faults["installed"] = .modified
+        let outcome = await world.install()
+        #expect(outcome == .failed(.cannotInstallHere(.damaged)))
+        #expect(outcome == .failed(.cannotInstallHere(.damaged)) && UpdateInstallFailure.cannotInstallHere(.damaged).opensReleasePage)
+        #expect(world.disk[kept] != nil && !world.events.contains("remove staged"))
+        #expect(!world.events.contains { $0.hasPrefix("download") })
+    }
+
+    @Test func aPreservedCopyIsKeptWhenTheInstalledAppHasNoReadableVersion() async {
+        let world = World()
+        let kept = URL(fileURLWithPath: "/Applications/.PureMouse-update-abc12345")
+        world.stale = [kept]
+        world.disk[kept] = Data()
+        world.installedVersion = nil
+        #expect(await world.install() == .failed(.cannotInstallHere(.damaged)))
+        #expect(world.disk[kept] != nil && !world.events.contains { $0.hasPrefix("download") })
+    }
+
+    @Test func aPreservedCopyIsSweptOnlyAfterTheInstalledAppVerifies() async {
+        let world = World()
+        world.stale = [URL(fileURLWithPath: "/Applications/.PureMouse-update-abc12345")]
+        _ = await world.install()
+        let checked = world.events.firstIndex(of: "check installed")!
+        #expect(checked < world.events.firstIndex(of: "remove staged")!)
+        #expect(checked < world.events.firstIndex(of: "download SHA256SUMS")!)
+    }
+
     @Test func aRunThatCannotInstallSweepsNothing() async {
         let world = World()
-        world.stale = [URL(fileURLWithPath: "/tmp/stale-work")]
+        world.stale = [URL(fileURLWithPath: "/tmp/PureMouse-update-stale")]
         world.replaceability = .notWritable
         _ = await world.install()
         #expect(world.events.isEmpty)
@@ -370,6 +402,22 @@ final class World: @unchecked Sendable {
         #expect(await world.install() == .failed(.installFailed))
         #expect(!world.events.contains("remove staged"))
         #expect(world.disk.keys.contains { $0.lastPathComponent.hasPrefix(".PureMouse-update") })
+    }
+
+    @Test func aSwapThatThrowsBeforeCommittingButLeavesADamagedOldAppKeepsTheStagedCopy() async {
+        let world = World()
+        world.replace = .throwsBefore
+        world.faults["installed"] = .modified   // the old bundle kept its Info.plist but fails its signature
+        #expect(await world.install() == .failed(.installFailed))
+        #expect(world.events.contains("check installed") && !world.events.contains("remove staged"))
+        #expect(world.disk.keys.contains { $0.lastPathComponent.hasPrefix(".PureMouse-update") })
+    }
+
+    @Test func aSwapThatThrowsBeforeCommittingWithTheOldAppVerifyingRemovesTheStagedCopy() async {
+        let world = World()
+        world.replace = .throwsBefore
+        #expect(await world.install() == .failed(.installFailed))
+        #expect(world.events.contains("check installed") && world.events.contains("remove staged"))
     }
 
     @Test func aSwapThatLeavesNoAppAtTheInstallPathKeepsTheOnlyCopyThereIs() async {
