@@ -115,6 +115,11 @@ final class AppController: NSObject, NSApplicationDelegate {
     /// Quit, Hide or a termination has been asked for: an install that finishes now is not followed
     /// by a relaunch.
     private var leaving = false
+    /// Hide is under way: its install cleanup and the command run first. Unlike `leaving` this
+    /// ends, since the process stays, and installs are accepted again afterwards.
+    private var hiding = false
+    /// Runs `menu off` and reports whether it worked (replaced in tests).
+    private let menuOff: (@escaping @MainActor (Bool) -> Void) -> Void
     private var requestWatch: UpdatePreferences.Watch?
 
     /// The defaults are the live app; a test passes a sandbox and spies for what reaches the
@@ -125,10 +130,15 @@ final class AppController: NSObject, NSApplicationDelegate {
          announce: @escaping AppModel.Announce = Notifier.post,
          withdraw: @escaping AppModel.Withdraw = Notifier.removeDelivered,
          requestPermission: @escaping @MainActor () -> Void = { Task { await Notifier.requestIfNeeded() } },
-         updates setup: UpdateSetup = .live) {
+         updates setup: UpdateSetup = .live,
+         menuOff: ((@escaping @MainActor (Bool) -> Void) -> Void)? = nil) {
         let resident = resident ?? (iconShown || Locations.launchedByLaunchd)
-        model = AppModel(locations: locations, alert: Alerts.show,
-                         notifications: resident ? (announce, withdraw) : nil)
+        let appModel = AppModel(locations: locations, alert: Alerts.show,
+                                notifications: resident ? (announce, withdraw) : nil)
+        model = appModel
+        self.menuOff = menuOff ?? { done in
+            appModel.perform(.menuOff, then: { done(true) }, otherwise: { done(false) })
+        }
         self.iconShown = iconShown
         self.resident = resident
         self.requestPermission = requestPermission
@@ -265,12 +275,12 @@ final class AppController: NSObject, NSApplicationDelegate {
     /// replaced without a password opens the release page. One install at a time, the installer
     /// being reserved from the confirmation on; none once quitting has begun.
     func startInstall(_ offer: UpdateOffer, from source: InstallSource) {
-        guard installTask == nil, !confirming, !leaving else { return }
+        guard installTask == nil, !confirming, !leaving, !hiding else { return }
         confirming = true
         let confirmed = confirmUpdate(offer)
         confirming = false
         // Quit or Hide may have been chosen while the alert was up; nothing starts after that.
-        guard confirmed, !leaving, installTask == nil else { return }
+        guard confirmed, !leaving, !hiding, installTask == nil else { return }
         installingTitle = offer.installingTitle
         installState = .installing
         let release = UpdateCheck.Release(version: offer.version, page: offer.page)
@@ -292,7 +302,7 @@ final class AppController: NSObject, NSApplicationDelegate {
             // The app on disk is the new one, and the menu stops offering it.
             installState = .installed
             model.flush()
-            guard !leaving else { return }
+            guard !leaving, !hiding else { return }
             var result = Relaunch.failed
             if let installedApp { result = await relaunch(installedApp, source) }
             switch result {
@@ -313,8 +323,8 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     /// Runs `work` once no install is under way: one that is gets cancelled, and `work` follows its
     /// cleanup (the image detached, the download deleted), since what comes next ends this process.
-    func afterInstallEnds(_ work: @escaping @MainActor () -> Void) {
-        leaving = true
+    func afterInstallEnds(leaving ends: Bool = true, _ work: @escaping @MainActor () -> Void) {
+        if ends { leaving = true }
         guard let task = installTask else { return work() }
         task.cancel()
         Task {
@@ -354,11 +364,17 @@ final class AppController: NSObject, NSApplicationDelegate {
     /// its status item away and goes on without one (low-battery notifications and the update
     /// check keep working). It is not restarted: that would end the caller.
     func hideMenuBarIcon() {
-        afterInstallEnds { [self] in
+        // The process stays, so Hide only holds installs back while it cleans up and runs.
+        guard !hiding else { return }
+        hiding = true
+        afterInstallEnds(leaving: false) { [self] in
             model.flush()
-            model.perform(.menuOff) { [self] in
-                statusMenu?.remove()
-                statusMenu = nil
+            menuOff { [self] worked in
+                if worked {
+                    statusMenu?.remove()
+                    statusMenu = nil
+                }
+                hiding = false
             }
         }
     }
