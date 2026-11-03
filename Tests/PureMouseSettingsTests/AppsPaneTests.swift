@@ -96,6 +96,27 @@ import Testing
         #expect(!apps.contains(".sheet("))
     }
 
+    // Choosing another app starts a page: no editor, picker, disclosure or icon is left from the last.
+    // (A view's identity is not observable from a test, so the source is checked.)
+    @Test func eachAppsPageHasItsOwnIdentity() throws {
+        let apps = try Self.source("PureMouseSettingsUI/AppsPane.swift")
+        let call = try #require(apps.range(of: "AppPage(key:"))
+        #expect(apps[call.lowerBound...].prefix(400).contains(".id(key)"))
+    }
+
+    // The hidden Esc button is not a stop for Tab, and the page reads as the Mouse tab's rows do.
+    @Test func theEscapeButtonIsNotFocusableAndTheRowsFollowTheMouseTabs() throws {
+        let page = try Self.source("PureMouseSettingsUI/AppPage.swift")
+        let esc = try #require(page.range(of: ".keyboardShortcut(.cancelAction)"))
+        #expect(page[esc.upperBound...].prefix(200).contains(".focusable(false)"))
+        // One order of named rows for both pages, and each mouse's own bound buttons are listed.
+        #expect(page.contains("ButtonRows.named(deviceCIDs:"))
+        #expect(page.contains("mice.map { config.prefix(of: $0) }"))
+        #expect(page.contains(".actionEditorSheet($editor) { action, target in apply(action, to: target) }"))
+        #expect(page.contains("inheriting: mice)"))
+        #expect(ButtonRows.named(deviceCIDs: nil, configKeys: []).prefix(2).map(\.rawValue) == ["back", "forward"])
+    }
+
     // Criterion 2: Buttons and Scrolling, no Pointer; Thumb Wheel under Scrolling.
     @Test func thePageHasTwoSegmentsAndNoPointer() throws {
         let page = try Self.source("PureMouseSettingsUI/AppPage.swift")

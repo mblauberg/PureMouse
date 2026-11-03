@@ -71,10 +71,13 @@ struct AppPage: View {
         // then and took the window past the screen.
         .frame(maxHeight: Self.maxFormHeight)
         .fixedSize(horizontal: false, vertical: true)
+        .softTopEdge()
         .safeAreaInset(edge: .top, spacing: 0) {
             AppPageHeader(key: key, identity: identity, segment: segment, select: select, back: back)
         }
-        .actionEditorSheet($editor, save: apply)
+        // At the top, as the Mouse tab's panes are, whatever height the window has.
+        .frame(maxHeight: .infinity, alignment: .top)
+        .actionEditorSheet($editor) { action, target in apply(action, to: target) }
         .removeAppAlert(name: identity.name, isPresented: $confirmingRemove, remove: remove)
         // Gesture directions, other controls and more thumb wheel options change the page's height.
         .onChange(of: expanded) { settings?.refit() }
@@ -122,8 +125,11 @@ struct AppPage: View {
         ButtonRows.others(deviceCIDs: model.devices.flatMap(\.controls).map(\.cid), configKeys: configKeys(config))
     }
 
+    /// The keys under `buttons` that make a control listed: Mouse Settings', each mouse's own, and
+    /// the app's (the Mouse tab lists the top level's and the mouse's: `AppModel.boundButtonKeys`).
     private func configKeys(_ config: ConfigTree) -> [String] {
-        [["buttons"], scope + ["buttons"]].flatMap { (config[$0] as? [String: Any]).map { Array($0.keys) } ?? [] }
+        let prefixes = [[]] + mice.map { config.prefix(of: $0) } + [scope]
+        return prefixes.flatMap { (config[$0 + ["buttons"]] as? [String: Any]).map { Array($0.keys) } ?? [] }
     }
 
     private func title(_ button: String) -> String { NamedButton.title(forKey: button) }
@@ -212,7 +218,7 @@ struct AppPage: View {
             if let direction = target.direction {
                 $0.bindInApp(key, button: target.button, direction: direction, to: action)
             } else {
-                $0.bindInApp(key, button: target.button, to: action)
+                $0.bindInApp(key, button: target.button, to: action, inheriting: mice)
             }
         }
     }
@@ -237,9 +243,12 @@ struct AppPage: View {
                                                 configured: config.contains(scope + ["thumbWheel"]))
         if thumbWheel.isShown {
             let choice = config.thumbWheelChoice(inheriting: mice)
+            // Mice that both choose Custom may still set different actions.
+            let variesDirections = Set(["left", "right"].filter { config.thumbWheelAction($0, inheriting: mice).varies })
             Section("Thumb Wheel") {
                 ThumbWheelRows(path: scope + ["thumbWheel"], base: config.thumbWheelState(inheriting: mice).first,
-                               inherited: choice.first, inheritedVaries: choice.varies, appName: identity.name,
+                               inherited: choice.first, inheritedVaries: config.thumbWheelVaries(inheriting: mice),
+                               inheritedVariesDirections: variesDirections, appName: identity.name,
                                availability: thumbWheel)
             }
         }
@@ -280,7 +289,12 @@ struct AppPage: View {
         let custom = config.overridesScrolling(key)
         let speedPath = scope + ["smoothScroll", "speed"]
         let glidePath = scope + ["smoothScroll", "smoothingMs"]
-        let wider = mice.first ?? .global
+        // Left to the mice, a value is theirs: the first one's on the slider, and "Varies by Mouse"
+        // for the number while they differ.
+        let speed = config.appliedNumber(["smoothScroll", "speed"], inheriting: mice, default: 1)
+        let glide = config.appliedNumber(["smoothScroll", "smoothingMs"], inheriting: mice, default: 125)
+        let speedVaries = speed.varies && !config.contains(speedPath)
+        let glideVaries = glide.varies && !config.contains(glidePath)
         return Section {
             Toggle(isOn: Binding(get: { custom }, set: { on in model.update { $0.setOverridesScrolling(key, on, inheriting: mice) } })) {
                 RowLabel("Custom scrolling", help: config.customScrollingCaption(key, inheriting: mice))
@@ -289,14 +303,16 @@ struct AppPage: View {
             // The rows appear only while on, so nothing is written until the app has its own values.
             if custom {
                 ValueSlider(title: "Speed", spokenTitle: "Scrolling speed\(spoken)",
-                            value: model.number(speedPath, default: config.number(["smoothScroll", "speed"], in: wider, default: 1), step: 0.05),
+                            value: model.number(speedPath, default: speed.first, step: 0.05),
                             range: 0.25...3, low: "Slow", high: "Fast", format: Format.multiplier,
-                            standing: appStanding(speedPath, config))
+                            standing: appStanding(speedPath, config),
+                            variesText: speedVaries ? Applied<Double>.variesLabel : nil)
                     .disclosedRow()
-                ValueSlider(title: "Glide", spokenTitle: "Glide\(spoken)", help: "0 scrolls instantly.",
-                            value: model.number(glidePath, default: config.number(["smoothScroll", "smoothingMs"], in: wider, default: 125), step: 25),
+                ValueSlider(title: "Glide", spokenTitle: "Glide\(spoken)", help: "Short glides stop sooner.",
+                            value: model.number(glidePath, default: glide.first, step: 25),
                             range: 0...500, low: "Short", high: "Long", format: Format.milliseconds,
-                            standing: appStanding(glidePath, config))
+                            standing: appStanding(glidePath, config),
+                            variesText: glideVaries ? Applied<Double>.variesLabel : nil)
                     .disabled(!config.scrollsSmoothly(key, inheriting: mice))
                     .disclosedRow()
             }
@@ -354,6 +370,8 @@ struct AppPageHeader: View {
             Button(action: back) { Color.clear }
                 .buttonStyle(.plain)
                 .keyboardShortcut(.cancelAction)
+                // Not a stop for Tab: it only holds Esc.
+                .focusable(false)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
         }
@@ -361,6 +379,12 @@ struct AppPageHeader: View {
 }
 
 extension View {
+    /// A soft fade where the form scrolls under the header strip, not the hard line macOS 26 draws
+    /// under an inset: the Mouse tab's strip has no line under it.
+    @ViewBuilder func softTopEdge() -> some View {
+        if #available(macOS 26, *) { scrollEdgeEffectStyle(.soft, for: .top) } else { self }
+    }
+
     /// Asks before removing an app's settings: a system alert whose Remove is a plain verb button
     /// (chosen on purpose, so not the destructive style) and whose Cancel is not the default.
     func removeAppAlert(name: String, isPresented: Binding<Bool>, remove: @escaping () -> Void) -> some View {
