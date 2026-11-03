@@ -179,3 +179,11 @@ import Testing
         }
     }
 }
+
+#if DEBUG
+@MainActor @Test func theDevAppHookNeedsANonEmptyBundleID() {
+    #expect(AppsPane.devApp(["PUREMOUSE_DEV_APP": "com.apple.Safari"]) == "com.apple.Safari")
+    #expect(AppsPane.devApp(["PUREMOUSE_DEV_APP": ""]) == nil, "an empty value shows the list, not a blank page")
+    #expect(AppsPane.devApp([:]) == nil)
+}
+#endif

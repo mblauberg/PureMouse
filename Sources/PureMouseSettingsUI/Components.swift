@@ -84,8 +84,11 @@ struct PopUpLabel: View {
 /// in a grouped form can draw as a borderless pull-down with a circled chevron instead.
 struct PopUpMenu<Content: View>: View {
     let text: String
-    /// Takes the width it is given and cuts its text with an ellipsis, rather than its own width.
-    var flexible = false
+    /// Nil: the width its text needs. A width: the width its text needs up to that, as a macOS
+    /// pop-up draws, then it takes what room it is given and cuts the text with an ellipsis. A
+    /// `Menu` in a stack otherwise takes all the width it is offered, with its text at the leading
+    /// edge and dead space after it.
+    var maxWidth: CGFloat?
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -96,7 +99,17 @@ struct PopUpMenu<Content: View>: View {
         }
         .menuStyle(.button)
         .menuIndicator(.hidden)
-        if flexible { menu } else { menu.fixedSize() }
+        if let maxWidth {
+            // The first that fits the width on offer (the cap, or the room if that is less); the
+            // second, which fills it, is for text too long for it.
+            ViewThatFits(in: .horizontal) {
+                menu.fixedSize()
+                menu
+            }
+            .frame(maxWidth: maxWidth)
+        } else {
+            menu.fixedSize()
+        }
     }
 }
 

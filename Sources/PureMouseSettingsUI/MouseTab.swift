@@ -193,6 +193,9 @@ struct MouseHeader: View {
 struct MousePopUp: View {
     @Environment(AppModel.self) private var model
 
+    /// The widest the closed pop-up draws; a longer name is cut with an ellipsis (in the middle, so the chevron stays).
+    static let maxWidth: CGFloat = 240
+
     static let appsNote = "Apps are the same for every mouse."
     /// Said once, here: rows that match All Mice carry no mark of it.
     static let followNote = "Settings you don't change follow All Mice."
@@ -202,7 +205,7 @@ struct MousePopUp: View {
     }
 
     var body: some View {
-        PopUpMenu(text: closedText, flexible: true) {
+        PopUpMenu(text: closedText, maxWidth: Self.maxWidth) {
             Picker("Mouse", selection: Binding<String?>(get: { model.selectedMouse?.key }, set: { model.selectMouse($0) })) {
                 Text(InheritedScope.allMice).tag(nil as String?)
                 Divider()

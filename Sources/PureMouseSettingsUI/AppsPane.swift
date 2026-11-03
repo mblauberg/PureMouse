@@ -41,7 +41,8 @@ struct AppsPane: View {
         #if DEBUG
         .onAppear {
             let environment = ProcessInfo.processInfo.environment
-            if let id = environment["PUREMOUSE_DEV_APP"] {
+            // An empty value is no app (a capture of the list overrides the variable with it).
+            if let id = Self.devApp(environment) {
                 list.add(id, in: model.config)
                 if let name = environment["PUREMOUSE_DEV_APP_SEGMENT"], let segment = AppSegment(rawValue: name) {
                     list.select(segment)
@@ -50,6 +51,13 @@ struct AppsPane: View {
         }
         #endif
     }
+
+    #if DEBUG
+    /// `PUREMOUSE_DEV_APP`: the bundle ID of the page to open, nil when unset or empty.
+    static func devApp(_ environment: [String: String]) -> String? {
+        environment["PUREMOUSE_DEV_APP"].flatMap { $0.isEmpty ? nil : $0 }
+    }
+    #endif
 
     private var appList: some View {
         let apps = listed

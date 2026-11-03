@@ -346,3 +346,13 @@ private let swappedVolume = #"{"thumbWheel":{"action":"volume","reversed":true},
     #expect(RowLabel.caption(["Reverses this wheel.", nil, nil]) == "Reverses this wheel.")
     #expect(RowLabel.caption([nil, nil, nil]) == nil)
 }
+
+@Test func theMousePopUpFitsItsNameUpToACapAndOnlyThenFillsTheRoom() throws {
+    #expect(MousePopUp.maxWidth > 0 && MousePopUp.maxWidth < .infinity)
+    let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    let tab = try String(contentsOf: root.appending(path: "Sources/PureMouseSettingsUI/MouseTab.swift"), encoding: .utf8)
+    #expect(tab.contains("PopUpMenu(text: closedText, maxWidth: Self.maxWidth)") && !tab.contains("flexible"))
+    let components = try String(contentsOf: root.appending(path: "Sources/PureMouseSettingsUI/Components.swift"), encoding: .utf8)
+    // The fitting one first; the one that fills the room (and truncates) only when that does not fit.
+    #expect(components.contains("ViewThatFits(in: .horizontal) {\n                menu.fixedSize()\n                menu\n            }"))
+}
