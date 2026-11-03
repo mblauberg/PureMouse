@@ -102,8 +102,12 @@ your IP address and a standard user agent naming the app and the system version.
   - **What it does with the answer.** If the release is newer than the running version it posts one
     notification for that version, which opens the release page when clicked, and shows **Update to
     X.Y.Z…** and **Skip This Version** in the menu bar menu until PureMouse is updated or the version
-    is skipped. It downloads and installs nothing. The reminders and the schedule are in
-    [`Sources/PureMouseMenu/AppController.swift`](../Sources/PureMouseMenu/AppController.swift).
+    is skipped. A newer release replaces the earlier reminder, and turning the check off takes it
+    down. Only a page under `https://github.com/mblauberg/PureMouse/releases` is ever opened. It
+    downloads and installs nothing. The reminders are in
+    [`Sources/PureMouseAppSupport/UpdateReminders.swift`](../Sources/PureMouseAppSupport/UpdateReminders.swift),
+    the schedule in [`Sources/PureMouseAppSupport/BackgroundActivity.swift`](../Sources/PureMouseAppSupport/BackgroundActivity.swift),
+    and the question in [`Sources/PureMouseMenu/AppController.swift`](../Sources/PureMouseMenu/AppController.swift).
 
 The background process (`puremouse`) has no network code at all: the check runs in the menu bar
 app, and `nm` and `strings` on `puremouse` show no URLSession, CFNetwork or endpoint symbol. To turn the

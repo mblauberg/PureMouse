@@ -2,6 +2,7 @@ import Foundation
 import Testing
 import UserNotifications
 @testable import PureMouseMenu
+import PureMouseAppSupport
 
 /// A notification centre whose answers a test holds open, to withdraw a warning while the post is
 /// waiting for permission or for the centre to add it.
@@ -16,6 +17,8 @@ private final class FakeCentre: NotificationCentre {
     private(set) var added: [String] = []
     private(set) var delivered: [String] = []
     private(set) var removals: [[String]] = []
+    private(set) var sounds: [Bool] = []
+    private(set) var pages: [URL?] = []
 
     init(status: UNAuthorizationStatus) { self.status = status }
 
@@ -30,6 +33,8 @@ private final class FakeCentre: NotificationCentre {
     func add(id: String, title: String, body: String, opening: URL?, sound: Bool) async {
         if holdAdd { await withCheckedContinuation { addGates.append($0) } }
         added.append(id)
+        sounds.append(sound)
+        pages.append(opening)
         delivered.append(id)
     }
 
@@ -58,6 +63,16 @@ struct NotificationDeliveryTests {
         let centre = FakeCentre(status: .authorized)
         await NotificationDelivery(centre: centre).post(id: "a", title: "t", body: "b").value
         #expect(centre.delivered == ["a"])
+    }
+
+    @Test func anUpdateReminderIsSilentAndOpensTheReleasePage() async {
+        let centre = FakeCentre(status: .authorized)
+        let page = URL(string: "https://github.com/mblauberg/PureMouse/releases/tag/v0.6.0")!
+        let offer = UpdateOffer(version: UpdateCheck.Version("0.6.0")!, page: page)
+        await NotificationDelivery(centre: centre).post(offer).value
+        #expect(centre.delivered == [offer.notificationID])
+        #expect(centre.sounds == [false])
+        #expect(centre.pages == [page])
     }
 
     @Test func aWarningWithdrawnWhileWaitingForPermissionNeverAppears() async {

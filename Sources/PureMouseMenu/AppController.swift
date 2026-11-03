@@ -58,6 +58,12 @@ final class AppController: NSObject, NSApplicationDelegate {
         super.init()
     }
 
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // The notification centre's delegate must be set before launching ends, or the click that
+        // launched the app (a reminder, with the app not running) is lost.
+        Notifier.activate()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         Task { await Notifier.refresh() }
         model.statusChanged = { [weak self] in self?.statusChanged() }
@@ -117,14 +123,14 @@ final class AppController: NSObject, NSApplicationDelegate {
     }
 
     /// The question is asked once: on the second launch or a later one, when permissions are set up
-    /// (the daemon is running and nothing it needs is missing). It waits for the daemon's first
-    /// status, which a login may write after this app starts. An alert, not a notification, since
-    /// it needs an answer; the reminders that follow take no focus.
+    /// (the daemon is running and nothing it needs is missing). It waits for a status from a running
+    /// daemon, which a login may write after this app starts (the file may still be the last run's,
+    /// saying it stopped), and judges the permissions on that one. An alert, not a notification,
+    /// since it needs an answer; the reminders that follow take no focus.
     private func askAboutUpdatesIfDue() {
-        guard iconShown, !questionSettled, updates.questionDue, model.status != nil else { return }
+        guard iconShown, !questionSettled, updates.questionDue, model.status != nil, model.daemonRunning else { return }
         questionSettled = true
-        let permissionsSetUp = model.daemonRunning && !model.accessibilityMissing
-            && !(model.inputMonitoringMissing && model.hasBluetoothDevice)
+        let permissionsSetUp = !model.accessibilityMissing && !(model.inputMonitoringMissing && model.hasBluetoothDevice)
         guard permissionsSetUp else { return }
         // Not inside the callback that noticed it: a modal alert there would run the rest of it nested.
         Task { updates.setAutomatic(askAboutUpdates()) }

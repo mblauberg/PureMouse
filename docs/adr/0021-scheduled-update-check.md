@@ -26,22 +26,26 @@ pressed. The daemon has none, and must not.
   again. Settings › About has the same switch, so the answer can change; using the switch before
   the question answers it.
 - **Schedule.** While the answer is yes: at most one request in 24 hours, counted from the last
-  request whether it worked or not, kept across launches and wakes. The system schedules it
+  request whether it worked or not, kept across launches and wakes. A last request dated in the future (the clock was set back) is
+  rewritten to now, so a full 24 hours is waited from there. The system schedules it
   (`NSBackgroundActivityScheduler`, one-shot, re-armed after each run; deferred while the Mac sleeps or
   is busy; its tolerance must be shorter than its interval or it raises, so a check already due
-  waits 60 s with a 30 s tolerance). There is no timer of ours. A failure waits for the next window.
+  waits 60 s with a 30 s tolerance, and the interval is the wait plus the tolerance because the
+  system may run it up to the tolerance early). There is no timer of ours. A failure waits for the next window.
 - **The request.** The same GET as the on-demand check, with `allowsConstrainedNetworkAccess` and
   `allowsExpensiveNetworkAccess` off, and `If-None-Match` with the ETag of the release on record.
   A 304 keeps that release.
 - **Reminders.** A release newer than the running version posts one quiet notification per version
   (clicking it opens the release page), and the menu shows **Update to X.Y.Z…** and **Skip This
-  Version** until the running version is at least X.Y.Z. Skipping hides both for that version only.
+  Version** until the running version is at least X.Y.Z. Skipping hides both for that version only. A newer release's reminder replaces the earlier one, turning the
+  check off takes it down, and only a release page under `github.com/mblauberg/PureMouse/releases` is accepted from the response.
   Nothing is downloaded or installed, and no window takes focus (the question is the one alert).
 - **Stored** in the menu app's preferences, listed in [Privacy](../privacy.md): the answer, launch
   count, last request, ETag, latest release, skipped version and notified version. Settings writes
   the answer there and the menu app hears it (key-value observing), as it hears the notification answer.
-- **Once per run.** The question is considered once per run of the menu app: if the daemon is not
-  running or a permission is missing then, the next launch asks, not a later moment of the same run.
+- **Once per run.** The question waits for a status from a running daemon (a stale file from the
+  last run may say it stopped), and then judges the permissions on that status once per run of the
+  menu app: if one is missing then, the next launch asks, not a later moment of the same run.
 
 ## Alternatives rejected
 

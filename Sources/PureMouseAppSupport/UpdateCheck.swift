@@ -69,8 +69,14 @@ public enum UpdateCheck {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let tag = object["tag_name"] as? String, let version = Version(tag),
               let page = (object["html_url"] as? String).flatMap(URL.init(string:)),
-              page.scheme == "https" else { return nil }
+              isReleasePage(page) else { return nil }
         return Release(version: version, page: page)
+    }
+
+    /// Only this project's own release pages are trusted to be opened, whatever the response says.
+    static func isReleasePage(_ url: URL) -> Bool {
+        url.scheme == "https" && url.host?.lowercased() == "github.com" && url.port == nil
+            && url.user == nil && url.password == nil && url.path.hasPrefix("/mblauberg/PureMouse/releases")
     }
 
     static func outcome(current: String, data: Data) -> Outcome {

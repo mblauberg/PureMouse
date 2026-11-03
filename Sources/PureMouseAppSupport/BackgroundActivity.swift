@@ -13,11 +13,14 @@ public final class BackgroundActivity: UpdateScheduling {
     /// The shortest nominal delay; a check that is already due still waits this long after launch.
     static let minimumDelay: TimeInterval = 60
 
-    /// The scheduler's interval and tolerance for a wanted delay. The scheduler raises an
+    /// The scheduler's interval and tolerance for a wanted delay. The system may run the activity
+    /// up to the tolerance before its interval is up as well as after, so the interval is the delay
+    /// plus the tolerance and the earliest run is the delay itself. The scheduler raises an
     /// exception unless the tolerance is less than the interval, so a short wait gets a short tolerance.
     static func timing(after delay: TimeInterval) -> (interval: TimeInterval, tolerance: TimeInterval) {
-        let interval = max(delay, minimumDelay)
-        return (interval, min(maximumTolerance, interval / 2))
+        let wait = max(delay, minimumDelay)
+        let tolerance = min(maximumTolerance, wait / 2)
+        return (wait + tolerance, tolerance)
     }
 
     public init(identifier: String) { self.identifier = identifier }

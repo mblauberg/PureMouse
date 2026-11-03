@@ -211,12 +211,55 @@ final class UpdateHarness {
         #expect(h.network.requests.count == 1)
     }
 
-    @Test func aClockSetBackDoesNotBlockTheNextCheck() async {
+    @Test func aClockSetBackWaitsAFullIntervalFromNowRatherThanChecking() async {
         h.preferences.automatic = true
         h.preferences.lastCheck = h.date.addingTimeInterval(10 * 86_400)
         h.answer()
-        await h.reminders().check()
+        let reminders = h.reminders()
+        await reminders.check()
+        #expect(h.network.requests.isEmpty)
+        #expect(h.preferences.lastCheck == h.date)  // rewritten to now
+        reminders.start()
+        #expect(h.scheduler.delays == [UpdateReminders.interval])
+        h.date = h.date.addingTimeInterval(24 * 3600)
+        await reminders.check()
         #expect(h.network.requests.count == 1)
+    }
+
+    @Test func theSwitchAnotherProcessWritesArmsAndCancelsTheSchedule() async {
+        let reminders = h.reminders()
+        reminders.start()
+        #expect(h.scheduler.delays.isEmpty)
+        h.preferences.automatic = true  // KVO delivers on the main actor, a turn later
+        for _ in 0..<1000 where h.scheduler.delays.isEmpty { await Task.yield() }
+        #expect(h.scheduler.delays == [0])
+        let cancelled = h.scheduler.cancelled
+        h.preferences.automatic = false
+        for _ in 0..<1000 where h.scheduler.cancelled == cancelled { await Task.yield() }
+        #expect(h.scheduler.cancelled > cancelled)
+        withExtendedLifetime(reminders) {}
+    }
+
+    @Test func aNewerReleaseReplacesTheEarlierReminder() async {
+        h.preferences.automatic = true
+        h.answer(version: "0.6.0")
+        await h.reminders().check()
+        h.date = h.date.addingTimeInterval(25 * 3600)
+        h.answer(version: "0.7.0", etag: "\"def\"")
+        await h.reminders().check()
+        #expect(h.announced.map(\.version.text) == ["0.6.0", "0.7.0"])
+        #expect(h.withdrawn == ["update.0.6.0"])
+    }
+
+    @Test func turningTheChecksOffTakesTheReminderDown() async {
+        h.answer(version: "0.6.0")
+        let reminders = h.reminders()
+        reminders.setAutomatic(true)
+        await reminders.check()
+        #expect(h.announced.count == 1)
+        reminders.setAutomatic(false)
+        #expect(h.withdrawn.last == "update.0.6.0")
+        #expect(reminders.offer == nil)
     }
 
     @Test func theScheduleIsRearmedForTheNextWindowAfterACheck() async {
@@ -432,6 +475,26 @@ final class UpdateHarness {
         }
         #expect(await UpdateCheck.fetch(current: "0.5.0", fetcher: respond(304, "")) == .failed)
         #expect(await UpdateCheck.fetch(current: "0.6.0", fetcher: respond(200, body)) == .upToDate)
+    }
+}
+
+@Suite struct UpdateCheckParseTests {
+    private func body(page: String) -> Data {
+        Data(#"{"tag_name": "v0.6.0", "html_url": "\#(page)"}"#.utf8)
+    }
+
+    @Test func onlyThisProjectsReleasePagesAreAccepted() {
+        #expect(UpdateCheck.parse(body(page: "https://github.com/mblauberg/PureMouse/releases/tag/v0.6.0")) != nil)
+        for hostile in ["https://evil.example/mblauberg/PureMouse/releases/tag/v0.6.0",
+                        "https://github.com.evil.example/mblauberg/PureMouse/releases/tag/v0.6.0",
+                        "https://evil@github.com/mblauberg/PureMouse/releases/tag/v0.6.0",
+                        "https://github.com:8443/mblauberg/PureMouse/releases/tag/v0.6.0",
+                        "https://github.com/someone/else/releases/tag/v0.6.0",
+                        "https://github.com/mblauberg/PureMouse",
+                        "http://github.com/mblauberg/PureMouse/releases/tag/v0.6.0",
+                        "file:///etc/passwd"] {
+            #expect(UpdateCheck.parse(body(page: hostile)) == nil, "\(hostile)")
+        }
     }
 }
 

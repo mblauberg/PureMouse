@@ -3,6 +3,7 @@ import Foundation
 import PureMouseAppSupport
 import PureMouseKit
 import Testing
+import UserNotifications
 @testable import PureMouseMenu
 
 /// A scheduler that records what it was asked and runs nothing.
@@ -122,6 +123,19 @@ struct AppControllerUpdateTests {
         #expect(questions.asked == 0)
     }
 
+    @Test func aStaleStatusFromBeforeLoginDoesNotSettleTheQuestion() async throws {
+        try writeStatus(running: false)  // the last run's file, still on disk at login
+        _ = launch()
+        let second = launch()
+        await settle { false }
+        #expect(questions.asked == 0)
+        try writeStatus(running: true)   // the daemon starts and writes its own
+        second.model.reloadStatus()
+        second.statusChanged()
+        await settle { questions.asked > 0 }
+        #expect(questions.asked == 1)
+    }
+
     @Test func aStatusWrittenAfterLaunchStillGetsTheQuestionThisRun() async throws {
         _ = launch()
         let second = launch()  // no status yet, as at login before the daemon writes one
@@ -139,6 +153,16 @@ struct AppControllerUpdateTests {
         for _ in 0..<4 { _ = launch(iconShown: false) }
         await settle { false }
         #expect(preferences.launches == 0 && questions.asked == 0 && scheduler.delays.isEmpty)
+    }
+
+    @Test func turningTheChecksOffTakesTheDeliveredReminderDown() {
+        preferences.automatic = true
+        preferences.latest = UpdateCheck.Release(version: UpdateCheck.Version("0.6.0")!, page: URL(string: "https://github.com/mblauberg/PureMouse/releases/tag/v0.6.0")!)
+        preferences.notified = UpdateCheck.Version("0.6.0")  // the reminder was delivered
+        let controller = launch()
+        controller.updates.setAutomatic(false)
+        #expect(controller.updates.offer == nil)
+        #expect(withdrawn.ids.last == ["update.0.6.0"])
     }
 
     @Test func skippingAVersionTakesItsNotificationDown() async throws {
@@ -164,5 +188,18 @@ struct AppControllerUpdateTests {
         #expect(Notifier.page(in: [Notifier.pageKey: "file:///etc/passwd"]) == nil)
         #expect(Notifier.page(in: [Notifier.pageKey: "http://example.com"]) == nil)
         #expect(Notifier.page(in: [:]) == nil)
+    }
+
+    @Test func clickingTheReminderOpensItsPageAndAnythingElseDoesNot() {
+        let info: [AnyHashable: Any] = [Notifier.pageKey: "https://github.com/mblauberg/PureMouse/releases/tag/v0.6.0"]
+        var opened: [URL] = []
+        let page = Notifier.page(in: info)
+        Notifier.handleClick(action: UNNotificationDefaultActionIdentifier, page: page) { opened.append($0) }
+        #expect(opened.map(\.absoluteString) == ["https://github.com/mblauberg/PureMouse/releases/tag/v0.6.0"])
+        Notifier.handleClick(action: UNNotificationDismissActionIdentifier, page: page) { opened.append($0) }
+        Notifier.handleClick(action: UNNotificationDefaultActionIdentifier, page: Notifier.page(in: [:])) { opened.append($0) }
+        Notifier.handleClick(action: UNNotificationDefaultActionIdentifier,
+                             page: Notifier.page(in: [Notifier.pageKey: "file:///etc/passwd"])) { opened.append($0) }
+        #expect(opened.count == 1)
     }
 }

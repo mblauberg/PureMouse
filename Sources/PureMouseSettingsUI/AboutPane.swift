@@ -111,7 +111,8 @@ private struct UpdateRow: View {
                 .disabled(checking)
                 .accessibilityLabel("Check for Updates")
             Toggle("Check for updates automatically", isOn: Binding(get: { automatic }, set: { setAutomatic($0) }))
-                .toggleStyle(.checkbox)
+                .toggleStyle(.switch)
+                .accessibilityLabel("Check for updates automatically")
             switch outcome {
             case .upToDate?:
                 Text("PureMouse is up to date").font(.callout).foregroundStyle(.secondary)

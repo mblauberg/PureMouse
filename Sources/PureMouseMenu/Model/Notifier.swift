@@ -63,6 +63,12 @@ final class NotificationDelivery {
         }
     }
 
+    /// A quiet reminder that a release is out: no sound, and clicking it opens the release page.
+    @discardableResult
+    func post(_ offer: UpdateOffer) -> Task<Void, Never> {
+        post(id: offer.notificationID, title: offer.title, body: offer.body, opening: offer.page, sound: false)
+    }
+
     /// Takes delivered notifications down, and cancels any still waiting to be delivered.
     func removeDelivered(ids: [String]) {
         for id in ids { tickets[id] = nil }
@@ -79,9 +85,9 @@ enum Notifier {
 
         /// Clicking an update reminder opens its release page, in the browser, without bringing PureMouse forward.
         func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-            guard response.actionIdentifier == UNNotificationDefaultActionIdentifier,
-                  let page = Notifier.page(in: response.notification.request.content.userInfo) else { return }
-            await MainActor.run { _ = NSWorkspace.shared.open(page) }
+            let action = response.actionIdentifier
+            let page = Notifier.page(in: response.notification.request.content.userInfo)
+            await MainActor.run { Notifier.handleClick(action: action, page: page) { _ = NSWorkspace.shared.open($0) } }
         }
     }
 
@@ -122,6 +128,15 @@ enum Notifier {
         (userInfo[pageKey] as? String).flatMap(URL.init(string:)).flatMap { $0.scheme == "https" ? $0 : nil }
     }
 
+    /// What a click on a delivered notification does: a plain click on an update reminder opens its page.
+    static func handleClick(action: String, page: URL?, open: (URL) -> Void) {
+        guard action == UNNotificationDefaultActionIdentifier, let page else { return }
+        open(page)
+    }
+
+    /// Sets up the centre and its delegate now (the first use would otherwise do it).
+    static func activate() { _ = delivery }
+
     private static let delivery = NotificationDelivery(
         centre: Bundle.main.bundleIdentifier == nil ? nil : SystemCentre())
 
@@ -130,8 +145,6 @@ enum Notifier {
     static func refresh() async { await delivery.refresh() }
     static func post(id: String, title: String, body: String) { delivery.post(id: id, title: title, body: body) }
     /// A quiet reminder that opens `page` when clicked.
-    static func post(_ offer: UpdateOffer) {
-        delivery.post(id: offer.notificationID, title: offer.title, body: offer.body, opening: offer.page, sound: false)
-    }
+    static func post(_ offer: UpdateOffer) { delivery.post(offer) }
     static func removeDelivered(ids: [String]) { delivery.removeDelivered(ids: ids) }
 }

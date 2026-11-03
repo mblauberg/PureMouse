@@ -15,7 +15,8 @@ public struct UpdateOffer: Equatable, Sendable {
     public var title: String { "PureMouse \(version.text) is available" }
     public var body: String { "Click to read what's new." }
     /// One notification per version: posting it again replaces it, and skipping takes it down.
-    public var notificationID: String { "update.\(version.text)" }
+    public var notificationID: String { Self.notificationID(for: version) }
+    static func notificationID(for version: UpdateCheck.Version) -> String { "update.\(version.text)" }
     /// The menu row.
     public var menuTitle: String { "Update to \(version.text)…" }
     public static let skipTitle = "Skip This Version"
@@ -209,20 +210,31 @@ public final class UpdateReminders {
         arm()
     }
 
-    /// Whether 24 hours have passed since the last request. A last request in the future (the
-    /// clock was set back) counts as long ago.
+    /// A last request in the future (the clock was set back) is rewritten to now, so a full
+    /// interval is waited from here, as Sparkle does: the 24 hours between requests hold whatever the clock does.
+    private func normaliseLastCheck(_ date: Date) {
+        if let last = preferences.lastCheck, last > date { preferences.lastCheck = date }
+    }
+
+    /// Whether 24 hours have passed since the last request.
     func isDue(_ date: Date) -> Bool {
-        guard let last = preferences.lastCheck, last <= date else { return true }
+        normaliseLastCheck(date)
+        guard let last = preferences.lastCheck else { return true }
         return date.timeIntervalSince(last) >= Self.interval
     }
 
     private func delay(_ date: Date) -> TimeInterval {
-        guard let last = preferences.lastCheck, last <= date else { return 0 }
+        normaliseLastCheck(date)
+        guard let last = preferences.lastCheck else { return 0 }
         return max(0, Self.interval - date.timeIntervalSince(last))
     }
 
     private func arm() {
-        guard automatic else { scheduler.cancel(); return }
+        guard automatic else {
+            scheduler.cancel()
+            withdrawReminder()
+            return
+        }
         scheduler.schedule(after: delay(now())) { [weak self] done in
             guard let self else { done(); return }
             Task { @MainActor in
@@ -267,9 +279,16 @@ public final class UpdateReminders {
 
     private func remind() {
         guard let offer, preferences.notified != offer.version else { return }
+        // A newer release replaces the reminder for the one before it.
+        if let previous = preferences.notified { withdraw(UpdateOffer.notificationID(for: previous)) }
         preferences.notified = offer.version
         announce(offer)
         changed()
+    }
+
+    /// With checks off, no reminder stays on screen.
+    private func withdrawReminder() {
+        if let notified = preferences.notified { withdraw(UpdateOffer.notificationID(for: notified)) }
     }
 
     /// Skip This Version: the row and the reminders for this version go, and a newer version

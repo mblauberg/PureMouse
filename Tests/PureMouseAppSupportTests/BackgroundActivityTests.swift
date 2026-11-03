@@ -15,9 +15,15 @@ import Testing
         }
     }
 
-    @Test func aDayAheadGetsTheFullHourOfTolerance() {
-        #expect(BackgroundActivity.timing(after: 24 * 60 * 60).tolerance == 60 * 60)
-        #expect(BackgroundActivity.timing(after: 0).interval == 60)
+    @Test func theEarliestRunIsTheWantedDelayNotBefore() {
+        // The system may run the activity up to the tolerance before the interval is up.
+        for delay in [0, 30, 60, 600, 3_600, 86_400].map(TimeInterval.init) {
+            let timing = BackgroundActivity.timing(after: delay)
+            #expect(timing.interval - timing.tolerance >= delay)
+        }
+        let day = BackgroundActivity.timing(after: 24 * 60 * 60)
+        #expect(day.tolerance == 60 * 60 && day.interval == 25 * 60 * 60)
+        #expect(BackgroundActivity.timing(after: 0) == (interval: 90, tolerance: 30))
     }
 
     /// The live scheduler accepts both a due check and one a day away, and cancels (a real
