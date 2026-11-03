@@ -212,10 +212,15 @@ public final class HIDPPDevice {
     /// caller compares it before and after to tell a device that answered from one that did not.
     public private(set) var repliesReceived = 0
 
+    /// Called as each reply arrives (see `repliesReceived`), for a caller that acts on the first
+    /// answer of a silent device. One observer; setting it replaces the last.
+    public var onReply: (() -> Void)?
+
     private func handle(_ report: Report) {
         if let p = pending {
             if p.request.isAnswered(by: report) {
                 repliesReceived += 1
+                onReply?()
                 pending = nil
                 p.deadline?.cancel()
                 p.continuation.resume(returning: report.params)
@@ -223,6 +228,7 @@ public final class HIDPPDevice {
             }
             if let error = report.error(for: p.request) {
                 repliesReceived += 1
+                onReply?()
                 failPending(error)
                 return
             }

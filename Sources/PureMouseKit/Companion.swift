@@ -251,7 +251,7 @@ public struct Status: Codable, Equatable, Sendable {
 
         /// The applied state of one mouse. Written on a change of state only, never on a clock.
         public struct Applied: Codable, Equatable, Sendable {
-            /// `applying`: an apply is under way. `applied`: it finished for the current config.
+            /// `applying`: an apply is under way and the mouse has answered it. `applied`: it finished for the current config.
             /// `notApplied`: the retries are spent; Apply Settings Again starts a fresh one.
             public var state: State
             /// When the apply finished, for `applied`; nil otherwise.

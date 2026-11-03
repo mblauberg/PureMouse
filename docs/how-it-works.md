@@ -221,9 +221,10 @@ touches.
   request the mouse needs to answer, but some lookups it can do without (battery source, event
   features) do not stop it, so one attempt against a mouse that answers nothing can wait on
   several requests: measured, a fully silent mouse is given up on after about 10 s with its
-  feature indices known and about 15 s without them, not in two. That is only how long
-  "Applying settings…" shows for a sleeping mouse; a mouse that starts answering at any moment
-  is applied within about a second of it (below). There is no heartbeat, and nothing re-checks a
+  feature indices known and about 15 s without them, not in two. Nothing is shown for that time:
+  "Applying settings…" starts only when the mouse first answers (below), so a sleeping mouse
+  keeps reading "Asleep" until it answers or the attempts are spent; a mouse that starts answering
+  at any moment is applied within about a second of it. There is no heartbeat, and nothing re-checks a
   mouse that is applied.
 
 ### Sessions
@@ -232,7 +233,9 @@ touches.
   belongs in `Session.apply()`, which runs on adoption, reconnect, wake and reload. A newer
   `Session.configure()` supersedes one under way; only an offline mouse's other events
   (`Session.reconfigureIfOffline`) defer to a running one, and start one at most once per 30 s.
-- **Applied state.** A session is `applying` from the start of `configure()`, `applied` (with the
+- **Applied state.** A session is `applying` from the first reply to a request in the current `configure()`
+  (`HIDPPDevice.onReply`), and until then keeps what it showed before (its last applied state, or
+  nothing for an asleep or fresh mouse), so a silent mouse never flashes it; `applied` (with the
   time, `Environment.date`) once `apply()` has run to its end for the current config, and
   `notApplied` after the third attempt fails **for a mouse that answered**: at least one reply
   (`HIDPPDevice.repliesReceived`) arrived during the configure and `apply()` still did not finish.

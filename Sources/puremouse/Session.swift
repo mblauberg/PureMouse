@@ -396,8 +396,14 @@ final class Session {
         dropHeld()
         configureGeneration &+= 1
         let generation = configureGeneration
-        setApplied(.init(state: .applying))
         let repliesAtStart = device.repliesReceived
+        // "Applying settings…" is for a mouse that is answering: until the first reply it keeps what
+        // it showed (Asleep, or its last state), so a silent mouse never flashes it.
+        device.onReply = { [weak self] in
+            guard let self, configureGeneration == generation else { return }
+            device.onReply = nil
+            setApplied(.init(state: .applying))
+        }
         configuring = Task {
             // The short wait lent to this task's requests. Returning it ends only this lend: a
             // replacement's, or a restore's, stands (`HIDPPDevice.returnTimeout`).
@@ -406,6 +412,7 @@ final class Session {
                 if let lease { device.returnTimeout(lease) }
                 // A superseded task ends after its replacement started; leave the replacement's handle.
                 if configureGeneration == generation {
+                    device.onReply = nil
                     configuring = nil
                     lastConfigureEnded = environment.now()
                 }

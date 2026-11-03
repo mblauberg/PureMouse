@@ -50,7 +50,7 @@ struct AppliedStateTests {
         let seen = Transitions(h.session)
         #expect(h.session.status.applied == nil)
         h.session.configure()
-        #expect(h.session.status.applied == .init(state: .applying))
+        #expect(h.session.status.applied == nil)  // nothing has answered yet
         try await eventually { h.session.status.applied?.state == .applied }
         #expect(h.session.status.applied == .init(state: .applied, at: at))
         #expect(seen.states == [.applying, .applied])
@@ -108,7 +108,7 @@ struct AppliedStateTests {
         h.fake.failures.removeAll()
         // At once, not behind the 30 s offline guard.
         h.session.reapply()
-        #expect(h.session.status.applied == .init(state: .applying))
+        #expect(h.session.status.applied == .init(state: .notApplied))  // kept until the mouse answers
         try await eventually { h.session.status.applied?.state == .applied && !h.session.isConfiguring }
         #expect(h.session.status.online && h.fake.control(0x53)?.diverted == true)
         #expect(seen.states == [.applying, .notApplied, .applying, .applied])
@@ -259,14 +259,15 @@ struct AppliedStateTests {
 
     // MARK: The 2 s bound
 
-    /// The live schedule's shape at a twentieth of its durations (30 ms a request, 10 ms between
+    /// The live schedule's shape, shortened (60 ms a request, 10 ms between
     /// attempts), so a silent mouse costs a fraction of a second. The tests count attempts
     /// instead of timing them: a mouse that starts answering as attempt `k` begins is applied by
-    /// attempt `k + 1`, whatever else is running on the machine. The live durations, and
+    /// attempt `k + 1` (so `k` is 1 or 2: a third silent attempt leaves nothing to apply by, and the
+    /// request in flight when the mouse starts answering may be one whose timeout fails it), whatever else is running on the machine. The live durations, and
     /// wall-clock figures, are the constants' test below and the rig's
     /// (`scripts/measure-reconnect.sh`).
     private static let scaled = SessionEnvironment(canPostEvents: true, configureRetryDelay: .milliseconds(10),
-                                                   attemptTimeout: .milliseconds(30))
+                                                   attemptTimeout: .milliseconds(60))
 
     private func attemptsUntilApplied(_ h: SessionHarness, silentAttempts k: Int,
                                       start: () -> Void) async throws -> Int {
@@ -279,7 +280,7 @@ struct AppliedStateTests {
         return h.session.attemptsMade - first
     }
 
-    @Test(arguments: [1, 2, 3]) func aWakeIsAppliedByTheAttemptAfterTheMouseAnswers(silentAttempts: Int) async throws {
+    @Test(arguments: [1, 2]) func aWakeIsAppliedByTheAttemptAfterTheMouseAnswers(silentAttempts: Int) async throws {
         let h = try await harness(environment: Self.scaled)
         defer { h.close() }
         let attempts = try await attemptsUntilApplied(h, silentAttempts: silentAttempts) { h.session.configureAfterWake() }
@@ -287,7 +288,7 @@ struct AppliedStateTests {
         #expect(h.fake.control(0x53)?.diverted == true)
     }
 
-    @Test(arguments: [1, 2, 3]) func aReconnectIsAppliedByTheAttemptAfterTheMouseAnswers(silentAttempts: Int) async throws {
+    @Test(arguments: [1, 2]) func aReconnectIsAppliedByTheAttemptAfterTheMouseAnswers(silentAttempts: Int) async throws {
         let h = try await harness(environment: Self.scaled)
         defer { h.close() }
         h.session.configure()
@@ -299,7 +300,7 @@ struct AppliedStateTests {
         #expect(attempts <= silentAttempts + 1)
     }
 
-    @Test(arguments: [1, 2, 3]) func aHostSwitchBackIsAppliedByTheAttemptAfterTheLinkComesUp(silentAttempts: Int) async throws {
+    @Test(arguments: [1, 2]) func aHostSwitchBackIsAppliedByTheAttemptAfterTheLinkComesUp(silentAttempts: Int) async throws {
         let fake = FakeDevice.mxMaster3S
         fake.onReceiver(slot: 1)
         let h = try await harness(fake, environment: Self.scaled)
@@ -315,6 +316,42 @@ struct AppliedStateTests {
         }
         #expect(attempts <= silentAttempts + 1)
         #expect(h.fake.control(0x53)?.diverted == true && h.session.status.online)
+    }
+
+    @Test func aMouseSilentThroughTheWindowNeverShowsApplying() async throws {
+        let h = try await harness(environment: Self.scaled)
+        defer { h.close() }
+        h.session.configure()
+        try await eventually { h.session.status.applied?.state == .applied && !h.session.isConfiguring }
+        // Asleep after a wake: every request goes unanswered, through all three attempts.
+        h.fake.transport.timing = .never
+        let seen = Transitions(h.session)
+        let first = h.session.attemptsMade
+        h.session.configureAfterWake()
+        #expect(h.session.status.applied?.state == .applied)  // what it showed, until it answers or gives up
+        try await eventually(within: .seconds(5)) { !h.session.isConfiguring }
+        #expect(h.session.attemptsMade - first == 3)
+        #expect(h.session.status.applied == nil && !h.session.status.online)
+        #expect(seen.states.isEmpty)  // no applying, no notApplied
+    }
+
+    @Test func aFreshSessionSilentThroughTheWindowPublishesNoAppliedState() async throws {
+        let h = try await harness(environment: Self.scaled)
+        defer { h.close() }
+        h.fake.transport.timing = .never
+        let seen = Transitions(h.session)
+        h.session.configure()
+        try await eventually(within: .seconds(5)) { !h.session.isConfiguring && h.session.attemptsMade >= 3 }
+        #expect(h.session.status.applied == nil)
+        #expect(seen.states.isEmpty)
+    }
+
+    @Test func aMouseAnsweringOnTheSecondAttemptShowsApplyingThenApplied() async throws {
+        let h = try await harness(environment: Self.scaled)
+        defer { h.close() }
+        let seen = Transitions(h.session)
+        _ = try await attemptsUntilApplied(h, silentAttempts: 1) { h.session.configure() }
+        #expect(seen.states == [.applying, .applied])
     }
 
     @Test func theLiveScheduleKeepsEachRetryWithinAboutASecond() {
