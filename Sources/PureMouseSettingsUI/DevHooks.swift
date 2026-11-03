@@ -5,8 +5,8 @@ import PureMouseAppSupport
 /// Development only, so screenshots can be taken without clicking: `PUREMOUSE_DEV_PANE=<pane>`
 /// opens Settings on a tab (`general`, `mouse`, `apps`, `about`) or a Mouse segment (`buttons`,
 /// `scrolling`, `pointer`), and `PUREMOUSE_DEV_APPEARANCE=light|dark` overrides the system
-/// appearance. On Mouse › Buttons, `PUREMOUSE_DEV_PICKER=<button>` opens a button's action picker
-/// and `PUREMOUSE_DEV_SHORTCUT=<button>` its shortcut sheet. On the Apps pane,
+/// appearance. On Mouse › Buttons or an app's Buttons page, `PUREMOUSE_DEV_PICKER=<button>` opens
+/// a button's action picker and `PUREMOUSE_DEV_SHORTCUT=<button>` its shortcut sheet. On the Apps pane,
 /// `PUREMOUSE_DEV_APP=<bundle id>` opens (or adds) that app's page, `PUREMOUSE_DEV_APP_SEGMENT=
 /// buttons|scrolling` shows one of its segments, and `PUREMOUSE_DEV_SHORTCUT=<button>` opens that
 /// button's shortcut editor sheet over it. `PUREMOUSE_DEV_SHORTCUT_TEXT=1` shows that sheet's

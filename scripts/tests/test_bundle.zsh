@@ -10,7 +10,11 @@ build_version_app() {
         case $executable in
             puremouse) role=daemon ;;
             PureMouseMenu) role=menu ;;
-            PureMouseSettings) role=settings ;;
+            PureMouseSettings)
+                role=settings
+                mkdir -p $bundle/Contents/Resources
+                touch $bundle/Contents/Resources/ActionPacks.json
+                ;;
         esac
         mkdir -p $bundle/Contents/MacOS
         xcrun vtool -set-build-version macos $minimum $minimum_sdk.0 -replace \
@@ -310,4 +314,30 @@ test_verify_takes_one_app() {
     local app=$(stand_in_app $tmp 1.2.3) output
     if output=$(scripts/verify-bundle.sh $app $app 2>&1); then return 1; fi
     [[ $output == *'one app at a time'* ]]
+}
+
+test_verify_checks_action_packs_in_settings_helper() {
+    local app output
+    app=$(build_version_app)
+    local settings_res="$(component_path $app "$(settings_component)")/Contents/Resources"
+    rm -f $settings_res/ActionPacks.json
+    scripts/sign-bundle.sh $app --identity - 2>/dev/null
+    if output=$(scripts/verify-bundle.sh $app 2>&1); then
+        print -u2 -- "verifier accepted bundle missing ActionPacks.json"
+        return 1
+    fi
+    [[ $output == *"missing action packs catalogue in Settings helper"* ]]
+}
+
+test_verify_rejects_action_packs_in_menu_or_daemon() {
+    local app output
+    app=$(build_version_app)
+    mkdir -p $app/Contents/Resources
+    touch $app/Contents/Resources/ActionPacks.json
+    scripts/sign-bundle.sh $app --identity - 2>/dev/null
+    if output=$(scripts/verify-bundle.sh $app 2>&1); then
+        print -u2 -- "verifier accepted stray ActionPacks.json in daemon resources"
+        return 1
+    fi
+    [[ $output == *"action packs catalogue belongs to the Settings helper alone"* ]]
 }

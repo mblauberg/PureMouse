@@ -143,6 +143,7 @@ One term per concept. "Retire" lists words that must not appear in UI text for t
 | Easy-Switch status | Easy-Switch; "Computer 1 · This Mac" (checkmark), "Computer 2 · MacBook Air", "Computer 3 · Not paired"; "Computer 1" on the mouse's row in General | host, channel, slot |
 | Media and click actions | Play/Pause, Next Track, Previous Track, Volume Up, Volume Down, Mute (picker › Media); Middle Click (picker › Mouse: the action; "Wheel click" is the button's row) | Play-Pause, Skip, Mouse 3, Button 3 |
 | Whether settings are on the mouse | Applying settings… and Settings not applied (the device line in the menu and General, only while true); Apply Settings Again (the menu's attention row); "Settings applied at 09:14" (the ⌥ line only). Never "Settings applied" on the menu header | synced, reapply, restore, Applied (as a status line) |
+| Per-app catalogue | the app's name as the picker section ("Zoom", "Adobe Photoshop"); "Zoom's actions" in prose; "Depends on your keymap" under an action whose shortcut the person can change in the app | pack, plugin, profile, Smart Actions |
 
 ## Planned (#155)
 
@@ -165,7 +166,6 @@ code says, so "Run Command" stays until Run Script… replaces it.
 | Precision hold | Precise Pointer ("Slows the pointer while you hold the button.") | Precision While Held, sniper, DPI shift |
 | Per-app off | Use PureMouse in this app (switch); Off (Apps row); Off in <App> (menu) | disable, exclude, bypass |
 | Host switching | Switch to Computer 2 (the command; the status words are in the Glossary) | host, channel, slot |
-| Per-app catalogue | the app's name as the section; "Zoom's actions" in prose | pack, plugin, profile, Smart Actions |
 | New actions | Open…, Run Shortcut…, Menu Item…, Insert Text…, Run Script… (AppleScript \| Shell), Sequence… (Add Step, Wait), Action Ring… | Run Command, Type Text, Launch, Macro, Workflow |
 | Config transfer | Export Settings…, Import Settings… (the row "Copy settings" with buttons Export… and Import…, spoken as the full names; the alert "Replace all settings?", with "This file runs commands: N" when the file has them) | Backup, Sync, Restore |
 | Receiver | Logi Bolt receiver, Unifying receiver; Pair a Mouse…, Unpair… | dongle, link |

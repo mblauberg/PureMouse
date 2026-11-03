@@ -27,6 +27,8 @@ let package = Package(
         .target(
             name: "PureMouseSettingsUI",
             dependencies: ["PureMouseKit", "PureMouseAppSupport"],
+            // ActionPacks.json is copied into the Settings helper by scripts/build-app.sh, not a SwiftPM resource.
+            exclude: ["Resources"],
             swiftSettings: [.unsafeFlags(["-Osize"], .when(configuration: .release))]
         ),
         // The menu bar app: status item and menu; opens the Settings helper. Edits the config; never

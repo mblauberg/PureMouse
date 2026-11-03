@@ -13,11 +13,12 @@ struct ThumbWheelPresentation {
     let inherited: ThumbWheelChoice?
     let source: String
     let scope: ConfigScope
+    var pairs: [(id: String, label: String, left: ButtonAction, right: ButtonAction)] = []
 
     /// The state in effect.
     var state: ThumbWheelState { config.thumbWheel(at: path, base: base) }
     /// The scope's own choice, `.inherit` while it sets none of the action's keys.
-    var choice: ThumbWheelChoice { config.thumbWheelChoice(at: path) }
+    var choice: ThumbWheelChoice { config.thumbWheelChoice(at: path, pairs: pairs) }
     /// What the wheel does in effect: the own choice, else the wider scope's.
     var effective: ThumbWheelChoice { choice == .inherit ? (inherited ?? .scroll) : choice }
     /// The Action row's value; nil at the top level, which has nothing wider.
@@ -100,8 +101,26 @@ struct ThumbWheelRows: View {
 
     private var isMouse: Bool { scope.deviceKey != nil }
 
+    private var appBundleID: String? {
+        path.first == "apps" && path.count > 1 ? path[1] : nil
+    }
+
+    private var appPackPairs: [ActionPackPair] {
+        guard let app = appBundleID else { return [] }
+        return ActionPackCatalog.shared.pairs(for: app)
+    }
+
+    private var resolvedPairs: [(id: String, label: String, left: ButtonAction, right: ButtonAction)] {
+        guard let app = appBundleID else { return [] }
+        return ActionPackCatalog.shared.resolvedThumbWheelPairs(for: app)
+    }
+
+    private var menuOptions: [ThumbWheelChoice] {
+        ThumbWheelChoice.menu(for: appPackPairs.map { (id: $0.id, label: $0.label) })
+    }
+
     private var presentation: ThumbWheelPresentation {
-        ThumbWheelPresentation(config: model.config, path: path, base: base, inherited: inherited, source: source, scope: scope)
+        ThumbWheelPresentation(config: model.config, path: path, base: base, inherited: inherited, source: source, scope: scope, pairs: resolvedPairs)
     }
 
     /// An edit in the scope the rows are for: a mouse's entry gets its name and loses it with its
@@ -136,9 +155,9 @@ struct ThumbWheelRows: View {
 
     @ViewBuilder private var standardRows: some View {
         let config = model.config
-        let choice = config.thumbWheelChoice(at: path)
+        let choice = config.thumbWheelChoice(at: path, pairs: resolvedPairs)
         let state = config.thumbWheel(at: path, base: base)
-        let set: (ThumbWheelChoice) -> Void = { new in edit { $0.chooseThumbWheel(new, at: path, base: base) } }
+        let set: (ThumbWheelChoice) -> Void = { new in edit { $0.chooseThumbWheel(new, at: path, base: base, pairs: resolvedPairs) } }
         let value = inherited.map { InheritedValue(own: choice == .inherit ? nil : choice, inherited: $0, source: source) }
         let note = value?.note { set(.inherit) }
         // What the wheel does in effect, which an inheriting row captions as the wider scope does;
@@ -148,12 +167,12 @@ struct ThumbWheelRows: View {
         LabeledContent {
             if let value {
                 InheritedPicker(title: "Thumb wheel action\(spokenSuffix)", value: value,
-                                options: ThumbWheelChoice.menu, label: \.label,
+                                options: menuOptions, label: \.label,
                                 inheritedText: inheritedVaries ? Applied<ThumbWheelChoice>.variesLabel : nil) { set($0 ?? .inherit) }
             } else {
                 PopUpMenu(text: choice.label) {
                     Picker("Thumb wheel action\(spokenSuffix)", selection: Binding(get: { choice }, set: { set($0) })) {
-                        ForEach(ThumbWheelChoice.menu) { Text($0.label).tag($0) }
+                        ForEach(menuOptions) { Text($0.label).tag($0) }
                     }
                     .pickerStyle(.inline)
                     .labelsHidden()
@@ -295,15 +314,22 @@ struct ThumbWheelRows: View {
     private func help(_ choice: ThumbWheelChoice, reversed: Bool) -> String {
         switch choice {
         // Only reached for a wheel with nothing in effect to describe.
-        case .inherit: ""
-        case .scroll: ""  // the value says it
-        case .preset("zoom"): reversed ? "Turn left to zoom in, right to zoom out." : "Turn left to zoom out, right to zoom in."
-        case .preset("volume"): reversed ? "Turn left for louder, right for quieter." : "Turn left for quieter, right for louder."
+        case .inherit: return ""
+        case .scroll: return ""  // the value says it
+        case .preset("zoom"): return reversed ? "Turn left to zoom in, right to zoom out." : "Turn left to zoom out, right to zoom in."
+        case .preset("volume"): return reversed ? "Turn left for louder, right for quieter." : "Turn left for quieter, right for louder."
         case .preset("tabs"):
-            reversed ? "Turn left for the next tab, right for the previous." : "Turn left for the previous tab, right for the next."
-        case .preset("spaces"): "Turn left or right to move between Spaces."
-        case .preset: ""
-        case .custom: "Choose what each direction does."
+            return reversed ? "Turn left for the next tab, right for the previous." : "Turn left for the previous tab, right for the next."
+        case .preset("spaces"): return "Turn left or right to move between Spaces."
+        case .packPair(let id, _):
+            if let pair = appPackPairs.first(where: { $0.id == id }) {
+                let leftLabel = pair.left.label.lowercased()
+                let rightLabel = pair.right.label.lowercased()
+                return reversed ? "Turn left to \(rightLabel), right to \(leftLabel)." : "Turn left to \(leftLabel), right to \(rightLabel)."
+            }
+            return ""
+        case .preset: return ""
+        case .custom: return "Choose what each direction does."
         }
     }
 
