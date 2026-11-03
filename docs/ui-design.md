@@ -140,7 +140,9 @@ Reverse direction is off, Wheel mode is the mode the mouse reports (Ratchet if i
 and SmartShift is on, with no "Using the mouse's own setting." caption (Switches at, in Advanced…,
 keeps it). A key is written only when the choice differs from what the scope would have without
 it: the value an explicit All Mice setting gives a mouse, else that default. A choice equal to it
-removes the key; SmartShift on over an inherited off writes 12.
+removes the key; SmartShift on over an inherited off writes 12. Wheel mode is the exception: it is
+always written, because the daemon does not restore the mouse's own mode when the key goes, and
+only a mouse's choice equal to an explicit All Mice mode removes it.
 
 ## Disclosure
 

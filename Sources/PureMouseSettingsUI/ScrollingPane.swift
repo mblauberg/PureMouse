@@ -221,7 +221,7 @@ struct ScrollingPane: View {
         let note = standing.note
         return LabeledContent {
             Picker("Wheel mode", selection: Binding(get: { mode },
-                                                    set: { new in model.update(in: target) { WheelDefaults.chooseMode(new, live: live, in: &$0, scope: scope) } })) {
+                                                    set: { new in model.update(in: target) { WheelDefaults.chooseMode(new, in: &$0, scope: scope) } })) {
                 Text("Ratchet").tag(WheelDefaults.Mode.ratchet)
                 Text("Free Spin").tag(WheelDefaults.Mode.freespin)
             }

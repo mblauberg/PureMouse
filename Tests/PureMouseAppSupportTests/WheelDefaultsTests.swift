@@ -43,12 +43,11 @@ private func tree(_ json: String) throws -> ConfigTree { try ConfigTree(data: Da
     var config = ConfigTree()
     WheelDefaults.chooseReversed(false, in: &config, scope: .global)
     WheelDefaults.chooseSmartShift(true, in: &config, scope: .global)
-    WheelDefaults.chooseMode(.freespin, live: .freespin, in: &config, scope: .global)
     #expect(config[["scrollWheel"]] == nil)
 
     WheelDefaults.chooseReversed(true, in: &config, scope: .global)
     WheelDefaults.chooseSmartShift(false, in: &config, scope: .global)
-    WheelDefaults.chooseMode(.ratchet, live: .freespin, in: &config, scope: .global)
+    WheelDefaults.chooseMode(.ratchet, in: &config, scope: .global)
     #expect(config.bool(["scrollWheel", "inverted"]) == true)
     #expect(config.int(["scrollWheel", "smartShiftThreshold"]) == 255)
     #expect(config.string(["scrollWheel", "mode"]) == "ratchet")
@@ -60,16 +59,37 @@ private func tree(_ json: String) throws -> ConfigTree { try ConfigTree(data: Da
     #expect(config.int(["scrollWheel", "smartShiftThreshold"]) == nil)
 }
 
+@Test func theTopLevelAlwaysWritesTheChosenModeWhateverTheMouseReports() throws {
+    // The daemon does not restore the mouse's own mode when the key goes: removing it would leave
+    // free spin on the mouse while Settings showed Ratchet.
+    for live in [nil, WheelDefaults.Mode.ratchet, .freespin] {
+        var config = try tree(#"{"scrollWheel": {"mode": "freespin"}}"#)
+        WheelDefaults.chooseMode(.ratchet, in: &config, scope: .global)
+        #expect(config.string(["scrollWheel", "mode"]) == "ratchet", "live \(String(describing: live))")
+        WheelDefaults.chooseMode(.freespin, in: &config, scope: .global)
+        #expect(config.string(["scrollWheel", "mode"]) == "freespin")
+        #expect(WheelDefaults.mode(config, in: .global, live: live) == .freespin)
+    }
+    // Even the mode the mouse reports is written on a fresh config.
+    var fresh = ConfigTree()
+    WheelDefaults.chooseMode(.ratchet, in: &fresh, scope: .global)
+    #expect(fresh.string(["scrollWheel", "mode"]) == "ratchet")
+    // A mouse with nothing explicit above it writes too.
+    var other = ConfigTree()
+    WheelDefaults.chooseMode(.ratchet, in: &other, scope: mouse)
+    #expect(other.string(other.prefix(of: mouse) + ["scrollWheel", "mode"]) == "ratchet")
+}
+
 @Test func aMouseWritesOnlyWhatDiffersFromWhatItInherits() throws {
     var config = try tree(#"{"scrollWheel": {"inverted": true, "mode": "freespin", "smartShiftThreshold": 255}}"#)
     // Equal to All Mice's value: no key under the mouse.
     WheelDefaults.chooseReversed(true, in: &config, scope: mouse)
-    WheelDefaults.chooseMode(.freespin, live: .ratchet, in: &config, scope: mouse)
+    WheelDefaults.chooseMode(.freespin, in: &config, scope: mouse)
     WheelDefaults.chooseSmartShift(false, in: &config, scope: mouse)
     #expect(config[["devices"]] == nil)
     // Different: written under the mouse, and All Mice's is untouched.
     WheelDefaults.chooseReversed(false, in: &config, scope: mouse)
-    WheelDefaults.chooseMode(.ratchet, live: .ratchet, in: &config, scope: mouse)
+    WheelDefaults.chooseMode(.ratchet, in: &config, scope: mouse)
     WheelDefaults.chooseSmartShift(true, in: &config, scope: mouse)
     let path = config.prefix(of: mouse) + ["scrollWheel"]
     #expect(config.bool(path + ["inverted"]) == false)
@@ -79,7 +99,7 @@ private func tree(_ json: String) throws -> ConfigTree { try ConfigTree(data: Da
     #expect(config.bool(["scrollWheel", "inverted"]) == true && config.int(["scrollWheel", "smartShiftThreshold"]) == 255)
     // Choosing what All Mice has removes the mouse's keys again, and its emptied entry goes.
     WheelDefaults.chooseReversed(true, in: &config, scope: mouse)
-    WheelDefaults.chooseMode(.freespin, live: .ratchet, in: &config, scope: mouse)
+    WheelDefaults.chooseMode(.freespin, in: &config, scope: mouse)
     WheelDefaults.chooseSmartShift(false, in: &config, scope: mouse)
     config.settleEntry(for: mouse, name: nil)
     #expect(config[["devices"]] == nil)

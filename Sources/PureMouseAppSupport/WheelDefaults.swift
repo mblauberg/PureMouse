@@ -5,7 +5,8 @@ import PureMouseKit
 /// concrete value: a key that is not set reads as the mouse's default (not reversed, the wheel
 /// mode the mouse reports, SmartShift on). A key is written only when the choice differs from
 /// what the scope would have without it, which is the value an explicit wider scope sets, else
-/// that default; otherwise the key is removed, so the mouse keeps following.
+/// that default; otherwise the key is removed, so the mouse keeps following. Wheel mode is the
+/// exception: it is written unless a mouse's choice equals an explicit All Mice value (`chooseMode`).
 public enum WheelDefaults {
     public static let reversedPath = ["scrollWheel", "inverted"]
     public static let modePath = ["scrollWheel", "mode"]
@@ -44,10 +45,13 @@ public enum WheelDefaults {
         write(reversed, default: false, inherited: inherited, at: reversedPath, stored: reversed, in: &config, scope: scope)
     }
 
-    /// The user chose `mode`; `live` is the mouse's own mode as it reports it.
-    public static func chooseMode(_ mode: Mode, live: Mode?, in config: inout ConfigTree, scope: ConfigScope) {
+    /// The user chose `mode`. Unlike the other two rows, the mode is always written: the daemon
+    /// does not restore the mouse's own wheel mode when the key goes, so removing it would leave the
+    /// mouse in the old mode while Settings shows the new one. Only a mouse's scope drops its key,
+    /// and only when the choice equals an explicit All Mice value, which the daemon applies anyway.
+    public static func chooseMode(_ mode: Mode, in config: inout ConfigTree, scope: ConfigScope) {
         let inherited = parent(config, scope) { ($0.resolved(modePath, in: .global) as? String).flatMap(Mode.init(rawValue:)) }
-        write(mode, default: live ?? .ratchet, inherited: inherited, at: modePath, stored: mode.rawValue, in: &config, scope: scope)
+        config.set(mode == inherited ? nil : mode.rawValue, at: modePath, in: scope)
     }
 
     /// The user chose SmartShift `on`: on writes 12 over an inherited off, off writes 255.
