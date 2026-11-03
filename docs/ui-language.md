@@ -127,6 +127,9 @@ One term per concept. "Retire" lists words that must not appear in UI text for t
 | Checking for a new release | Check for Updates (button, on demand); "Check for updates automatically" (switch, About; sentence case); the question "Check for updates automatically?" with Check Automatically / Don't Check | Auto-update, Updater, "Look for updates", Check Now |
 | A newer release is known | "Update to 1.2.3…" (menu row; installs after an alert); "Update and Relaunch" (About button, same alert); "Skip This Version" (menu row under it); "View Release" (the page, About and the menu after a refusal); notification "PureMouse 1.2.3 is available" | Upgrade, Install Update, Download, "New version" |
 | Support | Support PureMouse (About link); GitHub Sponsors (the destination) | Donate, Buy Me a Coffee, Pro, Free version |
+| Facts a mouse reports | About This Mouse (the sheet, opened by the (i) on the mouse's row in General › Status; titled with the mouse's name); rows Battery, Connection, Easy-Switch, Firmware, Model; Copy Details (plain text, no serial or unit number); a row the mouse does not report is hidden | Diagnostics, Device info, Properties |
+| Easy-Switch status | Easy-Switch; "Computer 1 · This Mac" (checkmark), "Computer 2 · MacBook Air", "Computer 3 · Not paired"; "Computer 1" on the mouse's row in General | host, channel, slot |
+| Whether settings are on the mouse | Applying settings… and Settings not applied (the device line in the menu and General, only while true); Apply Settings Again (the menu's attention row); "Settings applied at 09:14" (the ⌥ line only). Never "Settings applied" on the menu header | synced, reapply, restore, Applied (as a status line) |
 
 ## Planned (#155)
 
@@ -148,9 +151,7 @@ code says, so "Run Command" stays until Run Script… replaces it.
 | Click lock | Drag Lock ("Click to start dragging, click again to let go.") | Click Lock, Hold to drag |
 | Precision hold | Precise Pointer ("Slows the pointer while you hold the button.") | Precision While Held, sniper, DPI shift |
 | Per-app off | Use PureMouse in this app (switch); Off (Apps row); Off in <App> (menu) | disable, exclude, bypass |
-| Host switching | Easy-Switch; Computer 1-3; This Mac; Switch to Computer 2 | host, channel, slot |
-| Device facts | About This Mouse (sheet); Copy Details | Diagnostics, Device info |
-| Applied state | Applying settings…, Settings not applied, Apply Settings Again; "Settings applied at 09:14" (⌥ only) | synced, reapply, restore |
+| Host switching | Switch to Computer 2 (the command; the status words are in the Glossary) | host, channel, slot |
 | Per-app catalogue | the app's name as the section; "Zoom's actions" in prose | pack, plugin, profile, Smart Actions |
 | New actions | Open…, Run Shortcut…, Menu Item…, Insert Text…, Run Script… (AppleScript \| Shell), Sequence… (Add Step, Wait), Action Ring… | Run Command, Type Text, Launch, Macro, Workflow |
 | Config transfer | Export Settings…, Import Settings… | Backup, Sync |

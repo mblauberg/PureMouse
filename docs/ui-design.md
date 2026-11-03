@@ -149,10 +149,12 @@ Each level has one mechanism, and each label says what it reveals.
   shown only for a mouse that reports host switching: one row holds both the status (a checkmark
   on this Mac) and the command, where flat "Switch to Computer N" items would add rows for an
   occasional task. With two or more mice it stays one submenu, with a section header per mouse.
-- **Quiet when applied** (planned, #155). The menu reports a problem, not that all is well. The
-  header's second line reads "Applying settings…" or "Settings not applied" only while that is
-  true, with an Apply Settings Again attention row only while not applied. The time of the last
-  apply ("Settings applied at 09:14") is on the ⌥ detail line.
+- **Quiet when applied.** The menu reports a problem, not that all is well. The header's second
+  line reads "Applying settings…" or "Settings not applied" only while that is true (before
+  "Asleep": a mouse that did not take its settings is not simply asleep), with an Apply Settings
+  Again attention row only while not applied. The time of the last apply ("Settings applied at
+  09:14") is on the ⌥ detail line. Nothing in the menu expires a state on a timer: each one comes
+  from a status change.
 - Unavailable **commands** are disabled, not hidden; **status** rows that do not apply are hidden.
 - **Symbols.** None by default. macOS 27 shows menu icons only for key items: the device header is
   the one key item, set with `preferredImageVisibility = .visible` on macOS 27. Within a group, all
@@ -302,14 +304,12 @@ Settings
 
 | Feature | Home |
 |---|---|
-| Recovery you can see | Menu header line, attention row, General notice; only while not applied |
 | Click, Double-click, Hold | The button row and its child rows; More Ways to Press at the foot of the row's picker |
 | Button plus scroll | Hold → Hold and Scroll, using the thumb wheel's pairs |
 | Modifier plus scroll | Scrolling › Advanced…; collapsed on an app's Scrolling |
 | Ignore repeated clicks | Buttons › Advanced…, per mouse; milliseconds stay in config |
 | Off in this app | The app page's first row |
-| Easy-Switch | Status in About This Mouse and the menu; Switch to Computer N in the picker |
-| About This Mouse | General › Status, the mouse row's (i) |
+| Easy-Switch | Status in About This Mouse (built) and the menu; Switch to Computer N in the picker |
 | Drag Lock, Precise Pointer | Picker › Mouse: commands, not settings |
 | Per-app actions (#154) | The app page's picker, the app's own section first |
 | Sequence, Action Ring and new action types (#153) | Picker › Custom, one sheet each |
@@ -411,7 +411,7 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
 
 | Place | Shown by default | Advanced |
 |---|---|---|
-| General | Status (PureMouse running/paused/off, Start or Stop, active notices), Open at login, Show in menu bar, Low battery notifications (a disabled switch that keeps the choice, with Open Notification Settings…, while macOS has them off), Permissions (status only) | Advanced… sheet: Work with Universal Control, Config file, Log, Reset All Settings… |
+| General | Status (PureMouse running/paused/off, Start or Stop; one row per mouse the daemon knows, with its connection, battery and computer, or that its settings are being applied or were not, and an (i) that opens About This Mouse; active notices), Open at login, Show in menu bar, Low battery notifications (a disabled switch that keeps the choice, with Open Notification Settings…, while macOS has them off), Permissions (status only) | Advanced… sheet: Work with Universal Control, Config file, Log, Reset All Settings… |
 | Mouse header | Buttons, Scrolling, Pointer segments; mouse pop-up with two or more mice; Find by Pressing… and the device card on Buttons | — |
 | Mouse › Buttons | One row per button with its action | Gesture directions (disclosure, collapsed, caption summarises them; choosing Hold and Move expands it); Other controls (disclosure); Advanced… sheet, only while some button anywhere is Hold and Move: gesture Distance and Repeat |
 | Mouse › Scrolling | Smooth scrolling, Feel, Speed; Main Wheel: Reverse direction, Wheel mode, SmartShift; Thumb Wheel: Action (Turn left/right when Custom); each when the mouse has it | Advanced… sheet, each row only when it applies: Acceleration, Glide, Hold Shift to scroll sideways (dimmed while smooth scrolling is off); Switches at (while SmartShift is on); thumb wheel Reverse direction (when it scrolls here or in some app), Swap directions and Turn distance (when it has actions), Speed (when it scrolls) |
@@ -419,6 +419,14 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
 | Apps | App list with summaries, Add App (bordered pull-down) in the footer, routing note; empty state with an Add App… button that opens the Applications panel | Each app opens in a sheet; inside it, gesture directions, other controls and more thumb wheel options are disclosures |
 | About | Icon, name, version, Check for Updates, Check for updates automatically (switch), links, Support PureMouse | — |
 | Status menu | Device header, attention rows when active, Update to X.Y.Z… with Skip This Version under it (while a newer release is known), Smooth Scrolling, Pointer Speed, Start/Pause/Resume, Settings…, Settings for <app>… (the frontmost app, if any), Quit PureMouse | ⌥: detail line, Show Log in Finder, Hide Menu Bar Icon |
+
+**Device rows and About This Mouse.** General › Status lists each known mouse, from status and
+whatever Mouse scope is chosen, only while PureMouse runs. Its (i) is a plain button with a 20 pt
+hit target, named for the mouse. The sheet is an `AdvancedSheet` titled with the mouse's name:
+Done is the default button, Copy Details sits at the bottom-leading edge, and nothing opens from
+it. Its rows are read from status alone (the app never opens HID devices); a fact the mouse does
+not report has no row, and the current Easy-Switch computer is marked with a checkmark. There is no
+Switch button (#163). Copy Details copies plain text and leaves out the unit and serial numbers.
 
 ## Sources
 

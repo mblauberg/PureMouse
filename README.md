@@ -82,7 +82,7 @@ Change speed on the fly, and hear about the battery before it runs out.
 
 Set it up once, then forget it's there.
 
-- Settings return after every reconnect and wake; quitting hands the mouse back to macOS.
+- Settings return within two seconds of every reconnect and wake, and the menu says when they could not; quitting hands the mouse back to macOS.
 - No settings are saved permanently on the mouse, so it works normally on any other computer.
 - **Universal Control:** the wheels and buttons keep working when the pointer moves to another Mac.
 

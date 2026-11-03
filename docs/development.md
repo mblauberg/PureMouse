@@ -248,6 +248,36 @@ version, date and macOS it was measured on. Measure them again for every minor r
 before tagging it, and update the figures and their labels together; a label still naming an older
 version says the figure was not re-taken.
 
+## Reconnect rig
+
+`scripts/measure-reconnect.sh` times how long settings take to come back after a wake, a reconnect
+or a host switch-back, and fails above 2 seconds (the bound in
+[how-it-works](how-it-works.md#sessions)). It has two legs.
+
+```sh
+./scripts/measure-reconnect.sh fake [--cycles N]       # default 10 of each kind; no mouse, daemon or file touched
+./scripts/measure-reconnect.sh hardware [--cycles N]   # default 5; on the owner's Mac, with the daemon running
+./scripts/measure-reconnect.sh summarise FILE          # a saved run's `rig <kind> <cycle> <ms>` lines
+```
+
+- **Fake leg** (automated, any Mac). Runs `ReconnectRigTests` (`PUREMOUSE_RIG_CYCLES=N swift test
+  --filter ReconnectRigTests`; off without the variable) against a `FakeDevice` on the daemon's
+  live retry schedule: N cycles each of a wake (`configureAfterWake`), a reconnect (a 0x1D4B
+  announcement) and a host switch-back (link down, then up). The fake stays silent for 0 to 1.3 s
+  after the trigger, so the cycles land on the first, second and third attempt, then starts
+  answering; the time is from that moment to the session's applied state. It prints a table of
+  the median and worst per kind. `PUREMOUSE_RIG_TSV=FILE` also saves the raw lines.
+- **Hardware leg** (owner assisted). A spare Mac with no mouse can only run the fake leg. With the
+  daemon running, the script reads the installed daemon's `status.json` (`PUREMOUSE_COMPANION_DIR`
+  picks another) and, for each cycle, waits for you to wake the Mac, switch the mouse off and on, or
+  switch it to another computer and back, then reports the time from a device going `applying` to
+  `applied`. That includes the mouse waking, so it is a ceiling on the bound: a cycle over 2 s needs
+  the log (`configure attempt` lines) to say whether the mouse or PureMouse was slow. It starts nothing
+  and writes nothing.
+
+It exits 0 when every cycle is within 2 s, 1 when one is over (the table says which kind) and 2
+when the rig itself fails. `scripts/tests/test_measure_reconnect.zsh` tests the summary.
+
 ## Signing
 
 `scripts/sign-bundle.sh` signs every build inside out, in the order of `scripts/lib.zsh`'s
