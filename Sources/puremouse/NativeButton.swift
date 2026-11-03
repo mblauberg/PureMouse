@@ -10,11 +10,23 @@ enum NativeButton {
         if case .click(let button)? = Config.nativeBehaviour(of: cid) { Int64(button) } else { nil }
     }
 
+    /// Posts a complete middle click at the pointer, using the same CGEvent path as native buttons.
+    static func postMiddleClick() {
+        _ = post(number: 2, down: true)
+        _ = post(number: 2, down: false)
+    }
+
     /// Posts the button's press or release at the pointer. Returns false for a control without
     /// a click.
     @discardableResult
     static func post(_ cid: UInt16, down: Bool) -> Bool {
-        guard let number = number(for: cid), let button = CGMouseButton(rawValue: UInt32(number)) else { return false }
+        guard let number = number(for: cid) else { return false }
+        return post(number: number, down: down)
+    }
+
+    @discardableResult
+    private static func post(number: Int64, down: Bool) -> Bool {
+        guard let button = CGMouseButton(rawValue: UInt32(number)) else { return false }
         let location = CGEvent(source: nil)?.location ?? .zero
         guard let event = CGEvent(mouseEventSource: CGEventSource(stateID: .hidSystemState),
                                   mouseType: down ? .otherMouseDown : .otherMouseUp,

@@ -60,6 +60,14 @@ enum SystemActions {
             AuxKey.press(AuxKey.soundDown)
         case .mute:
             AuxKey.press(AuxKey.mute)
+        case .playPause:
+            AuxKey.press(AuxKey.play)
+        case .nextTrack:
+            AuxKey.press(AuxKey.nextTrack)
+        case .previousTrack:
+            AuxKey.press(AuxKey.previousTrack)
+        case .middleClick:
+            NativeButton.postMiddleClick()
         case .brightnessUp:
             AuxKey.press(AuxKey.brightnessUp)
         case .brightnessDown:

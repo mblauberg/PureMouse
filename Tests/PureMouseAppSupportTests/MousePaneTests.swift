@@ -25,9 +25,25 @@ private func tree(_ json: String) throws -> ConfigTree { try ConfigTree(data: Da
     #expect(GestureSummary.text(click: .standard, directionsSet: 1) == "Click: Do Nothing, 1 direction set.")
     var config = ConfigTree()
     config.bind("gesture", to: .gesture)
-    #expect(config.gestureSummary("gesture") == "Click: Do Nothing, no directions set.")
+    #expect(config.gestureSummary("gesture") == "Click: Do Nothing, 4 directions set.")
     let set = try tree(#"{"buttons": {"gesture": {"click": "missionControl", "up": "spaceLeft", "down": "none", "left": {"keys": "cmd+w"}}}}"#)
     #expect(set.gestureSummary("gesture") == "Click: Mission Control, 2 directions set.")
+}
+
+@Test func choosingHoldAndMoveSeedsOnlyMissingDirections() throws {
+    var fresh = ConfigTree()
+    fresh.bind("gesture", to: .gesture)
+    #expect(fresh.string(["buttons", "gesture", "up"]) == "missionControl")
+    #expect(fresh.string(["buttons", "gesture", "down"]) == "appExpose")
+    #expect(fresh.string(["buttons", "gesture", "left"]) == "spaceLeft")
+    #expect(fresh.string(["buttons", "gesture", "right"]) == "spaceRight")
+
+    var partial = try tree(#"{"buttons": {"gesture": {"up": "launchpad", "left": "none"}}}"#)
+    partial.bind("gesture", to: .gesture)
+    #expect(partial.string(["buttons", "gesture", "up"]) == "launchpad")
+    #expect(partial.string(["buttons", "gesture", "left"]) == "none")
+    #expect(partial.string(["buttons", "gesture", "down"]) == nil)
+    #expect(partial.string(["buttons", "gesture", "right"]) == nil)
 }
 
 @Test func advancedOnButtonsNeedsSomeHoldAndMoveButton() throws {

@@ -13,6 +13,7 @@ enum AuxKey {
     /// `NX_KEYTYPE_*` from `ev_keymap.h`.
     static let soundUp = NX_KEYTYPE_SOUND_UP, soundDown = NX_KEYTYPE_SOUND_DOWN, mute = NX_KEYTYPE_MUTE
     static let brightnessUp = NX_KEYTYPE_BRIGHTNESS_UP, brightnessDown = NX_KEYTYPE_BRIGHTNESS_DOWN
+    static let play = NX_KEYTYPE_PLAY, nextTrack = NX_KEYTYPE_FAST, previousTrack = NX_KEYTYPE_REWIND
 
     private typealias PostEvent = @convention(c) (io_connect_t, UInt32, IOGPoint, UnsafePointer<NXEventData>?,
                                                   UInt32, IOOptionBits, IOOptionBits) -> kern_return_t
