@@ -65,6 +65,9 @@ struct ThumbWheelRows: View {
     var rows = Rows.all
     /// The state the keys at `path` apply on top of: none globally, the global one in an app.
     var base: ThumbWheelState = .initial
+    /// In an app: the state on each of the mice it may run with, `base` being the first. Whether a
+    /// row applies is decided across all of them: it shows while it applies on any one.
+    var bases: [ThumbWheelState] = []
     /// In an app or on a mouse: the choice it falls back to, which the Action pop-up's "Same as …" entry keeps (`InheritedValue`).
     var inherited: ThumbWheelChoice?
     /// In an app: the mice it may run with have different choices (`inherited` is the first one's),
@@ -119,7 +122,7 @@ struct ThumbWheelRows: View {
             standardRows
             if inherited == nil {
                 advancedRows
-            } else if !Self.advancedRows(model.config, path: path, base: base).isEmpty {
+            } else if !Self.advancedRows(model.config, path: path, base: base, bases: bases).isEmpty {
                 // On an app's page, the rest is a disclosure (docs/ui-design.md, Disclosure).
                 DisclosureLabel(title: "More thumb wheel options", isExpanded: $showMore)
                     #if DEBUG
@@ -179,17 +182,23 @@ struct ThumbWheelRows: View {
         scope.deviceKey == nil ? .initial : config.thumbWheel(at: ["thumbWheel"])
     }
 
-    /// The rows that apply to what the wheel does at `path`.
-    static func advancedRows(_ config: ConfigTree, path: [String], base: ThumbWheelState) -> [ThumbWheelAdvancedRow] {
+    /// The rows that apply to what the wheel does at `path`. With `bases` (an app's, one per mouse it
+    /// may run with), a row applies when it does on any of them: mice that scroll and mice that
+    /// zoom both show the rows of the one that has them. Without, `base` alone decides.
+    static func advancedRows(_ config: ConfigTree, path: [String], base: ThumbWheelState,
+                             bases: [ThumbWheelState] = []) -> [ThumbWheelAdvancedRow] {
         let inApp = path.first == "apps"
-        return ThumbWheelAdvancedRow.rows(scrolls: config.thumbWheel(at: path, base: base).scrolls,
-                                          someAppScrolls: config.someAppScrollsThumbWheel, inApp: inApp)
+        let shown = Set((bases.isEmpty ? [base] : bases).flatMap { base in
+            ThumbWheelAdvancedRow.rows(scrolls: config.thumbWheel(at: path, base: base).scrolls,
+                                       someAppScrolls: config.someAppScrollsThumbWheel, inApp: inApp)
+        })
+        return ThumbWheelAdvancedRow.allCases.filter { shown.contains($0) }
     }
 
     @ViewBuilder private var advancedRows: some View {
         let config = model.config
         let state = config.thumbWheel(at: path, base: base)
-        ForEach(Self.advancedRows(config, path: path, base: base), id: \.self) { row in
+        ForEach(Self.advancedRows(config, path: path, base: base, bases: bases), id: \.self) { row in
             switch row {
             case .reverseScrolling: reverseScrolling(scrollsHere: state.scrolls)
             case .swapDirections: swapDirections(state)
@@ -229,11 +238,12 @@ struct ThumbWheelRows: View {
         let standing = presentation.standing(of: "step") { edit { $0.setThumbWheelKey(nil, "step", at: path) } }
         let note = standing.note
         let help = "How far to turn before the action repeats."
-        let value = inheritedVariesKeys.contains("step") && !presentation.owns("step")
-            ? Applied<Int>.variesLabel : "\(state.step)"
+        let varies = inheritedVariesKeys.contains("step") && !presentation.owns("step")
+        let value = varies ? Applied<Int>.variesLabel : "\(state.step)"
         return LabeledContent {
             HStack(spacing: 8) {
-                Text(value)
+                // Always something to read: the number, or "Varies" while the mice differ.
+                Text(varies ? Applied<Int>.variesReadout : value)
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
                     .accessibilityHidden(true)

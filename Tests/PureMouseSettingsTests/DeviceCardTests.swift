@@ -462,6 +462,25 @@ private let allButtons = Set(NamedButton.allCases)
         #expect(told == 0)
     }
 
+    @Test func choosingThePartAgainIsANewRequestToScroll() {
+        let tab = mouseTab()
+        _ = tab.view
+        let (context, _) = context(tab)
+        #expect(context.rowRequest == nil)
+        context.activate(.row(.forward))
+        let first = context.rowRequest
+        #expect(first?.button == .forward)
+        // The highlight stays as it was, but the request is a new one, which a pane scrolls for.
+        context.activate(.row(.forward))
+        #expect(context.card.button == .forward)
+        #expect(context.rowRequest?.button == .forward)
+        #expect(context.rowRequest != first)
+        // A scroll to Scrolling is no row request.
+        let before = context.rowRequest
+        context.activate(.scrolling(.mainWheel))
+        #expect(context.rowRequest == before)
+    }
+
     @Test func leavingButtonsFromTheStripClearsTheSelection() {
         let tab = mouseTab()
         _ = tab.view

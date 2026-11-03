@@ -67,10 +67,11 @@ struct ButtonsPane: View {
             }
             .disabled(model.readOnly)
         }
-        // Choosing a part of the drawing brings its row into view.
-        .onChange(of: card?.button) { _, button in
-            guard let button else { return }
-            proxy.scrollTo(button.rawValue)
+        // Choosing a part of the drawing brings its row into view, by request rather than by the
+        // highlight: choosing the same part again scrolls to it again.
+        .onChange(of: settings?.rowRequest) { _, request in
+            guard let request else { return }
+            proxy.scrollTo(request.button.rawValue)
         }
         }
         .sheet(isPresented: $showingAdvanced) {
@@ -129,6 +130,7 @@ struct ButtonsPane: View {
     private func found(_ key: String) {
         highlighted = key
         card?.found(key)
+        if let button = NamedButton(rawValue: key) { settings?.requestRow(button) }
         DispatchQueue.main.asyncAfter(deadline: .now() + 4) { if highlighted == key { highlighted = nil } }
     }
 
