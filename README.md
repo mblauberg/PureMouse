@@ -155,7 +155,7 @@ controls your mouse has. Fine tuning sits behind each pane's **Advanced…** but
         <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-about-dark.png">
         <img src="docs/images/settings-about-light.png" width="400" alt="About: version 0.5.0, Check for Updates, and links to GitHub, releases, the licence and Support PureMouse">
       </picture>
-      <br><sub><b>About.</b> Version, Check for Updates and the daily check, and links.</sub>
+      <br><sub><b>About.</b> Version, Check for Updates and links.</sub>
     </td>
   </tr>
 </table>
