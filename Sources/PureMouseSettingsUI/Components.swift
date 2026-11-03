@@ -266,8 +266,14 @@ struct PaneFooter: View {
             Spacer()
             if let advanced { Button("Advanced…", action: advanced) }
         }
+        // A section's footer is set in by the form's row padding on both sides, so its buttons sat
+        // 10 pt inside the grouped boxes, where the header strip's Find by Pressing… ends flush.
+        .padding(.horizontal, -Self.formInset)
         .padding(.top, 4)
     }
+
+    /// How far the grouped form sets a section footer in from the edge of its boxes.
+    private static let formInset: CGFloat = 10
 }
 
 /// What an `AdvancedSheet` spends on its title, its buttons row and their padding, so the form
