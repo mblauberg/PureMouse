@@ -184,7 +184,7 @@ struct ButtonsPane: View {
     }
 
     /// A button on a mouse: the binding that applies, shown as in All Mice; with its own, the row
-    /// says "Set for this mouse." (`InheritedValue`, as in an app's sheet).
+    /// says "Set for this mouse." (`InheritedValue`, as on an app's page).
     @ViewBuilder
     private func mouseRow(_ key: String, indented: Bool) -> some View {
         let state = model.config.scopedButton(key, in: scope)

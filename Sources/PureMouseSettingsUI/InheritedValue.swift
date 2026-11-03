@@ -4,23 +4,26 @@ import SwiftUI
 /// The names of the scopes a setting may be left to, and how a row says it has its own value
 /// (docs/ui-language.md, "A value left to a wider scope"): the one place the words live.
 enum InheritedScope {
-    static let everywhere = "Everywhere"
+    /// What an app leaves a setting to: the Mouse tab's settings, whichever mouse is in use.
+    static let mouseSettings = "Mouse Settings"
     static let allMice = "All Mice"
 
-    /// "Same as Everywhere": a pop-up's first entry, which removes the own value.
+    /// "Same as Mouse Settings": a pop-up's first entry, which removes the own value.
     static func sameAs(_ source: String) -> String { "Same as \(source)" }
 
-    /// "Use All Mice Setting": the action that removes a row's own value.
-    static func use(_ source: String) -> String { "Use \(source) Setting" }
+    /// "Use All Mice Setting", "Use Mouse Setting": the action that removes a row's own value.
+    static func use(_ source: String) -> String {
+        source == mouseSettings ? "Use Mouse Setting" : "Use \(source) Setting"
+    }
 
-    /// Who the value belongs to: "this mouse" under All Mice, "this app" under Everywhere.
+    /// Who the value belongs to: "this mouse" under All Mice, "this app" under Mouse Settings.
     static func owner(of source: String) -> String { source == allMice ? "this mouse" : "this app" }
 
     /// "Set for this mouse.": a changed row's caption.
     static func setFor(_ source: String) -> String { "Set for \(owner(of: source))." }
 }
 
-/// A setting one scope may leave to a wider one: an app to everywhere, a mouse to all mice. One
+/// A setting one scope may leave to a wider one: an app to the mice' settings, a mouse to all mice. One
 /// type for every such row (docs/ui-language.md, "A value left to a wider scope"); it marks
 /// changes, not inheritance:
 /// - left unset, the row looks as it does in the wider scope: the same control, full contrast,
@@ -34,7 +37,7 @@ struct InheritedValue<Value> {
     var own: Value?
     /// What applies when `own` is nil.
     var inherited: Value
-    /// The wider scope, as the words name it: "Everywhere", "All Mice".
+    /// The wider scope, as the words name it: "Mouse Settings", "All Mice".
     var source: String
 
     var isInherited: Bool { own == nil }
@@ -57,7 +60,7 @@ extension InheritedValue: Equatable where Value: Equatable {}
 extension InheritedValue: Sendable where Value: Sendable {}
 
 extension InheritedValue where Value == String {
-    /// What VoiceOver reads as the control's value: "Mission Control, same as Everywhere".
+    /// What VoiceOver reads as the control's value: "Mission Control, same as Mouse Settings".
     var spoken: String { isInherited ? "\(effective), same as \(source)" : effective }
 }
 
@@ -90,7 +93,7 @@ struct InheritedOverride {
     }
 }
 
-/// Where a row stands against the wider scope: nothing wider (All Mice, Everywhere), left to it, or
+/// Where a row stands against the wider scope: nothing wider (All Mice), left to it, or
 /// the scope's own value. One answer for every control of a row: its caption and "Use … Setting"
 /// link while own (`note`), and its spoken value while left to the wider scope (`spoken`), which
 /// a native switch, segmented control or slider has no other way to say.
@@ -102,7 +105,7 @@ struct RowStanding {
     /// Removes the own value.
     var reset: () -> Void = {}
 
-    /// All Mice and Everywhere: nothing to inherit.
+    /// All Mice: nothing to inherit.
     static var none: RowStanding { RowStanding(source: nil) }
 
     /// A mouse's row for the config `paths`: own while the mouse holds any of them. Any other scope
@@ -174,7 +177,7 @@ extension View {
 
 /// A pop-up for an `InheritedValue`: closed, it shows the value in effect; open, its first entry
 /// is "Same as <source> (<value>)", which removes the own value. A `Picker` can't do this alone:
-/// its closed pop-up shows the chosen entry's own text, so it would read "Same as Everywhere (…)"
+/// its closed pop-up shows the chosen entry's own text, so it would read "Same as Mouse Settings (…)"
 /// instead of the value. So a `Menu` shows the value and holds an inline `Picker`, which keeps
 /// the checkmarks.
 struct InheritedPicker<Value: Hashable>: View {
@@ -183,13 +186,17 @@ struct InheritedPicker<Value: Hashable>: View {
     let value: InheritedValue<Value>
     let options: [Value]
     let label: (Value) -> String
+    /// What the inherited value reads as when it is not one value of `options` ("Varies by Mouse").
+    var inheritedText: String?
     /// nil removes the own value.
     let choose: (Value?) -> Void
 
+    private var inheritedLabel: String { inheritedText ?? label(value.inherited) }
+
     var body: some View {
-        PopUpMenu(text: label(value.effective)) {
+        PopUpMenu(text: value.own.map(label) ?? inheritedLabel) {
             Picker(title, selection: Binding(get: { value.own }, set: { choose($0) })) {
-                Text("\(value.entry) (\(label(value.inherited)))").tag(nil as Value?)
+                Text("\(value.entry) (\(inheritedLabel))").tag(nil as Value?)
                 Divider()
                 ForEach(options, id: \.self) { Text(label($0)).tag($0 as Value?) }
             }
@@ -197,7 +204,7 @@ struct InheritedPicker<Value: Hashable>: View {
             .labelsHidden()
         }
         .accessibilityLabel(title)
-        .accessibilityValue(InheritedValue(own: value.own.map(label), inherited: label(value.inherited),
+        .accessibilityValue(InheritedValue(own: value.own.map(label), inherited: inheritedLabel,
                                            source: value.source).spoken)
     }
 }

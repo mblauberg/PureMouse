@@ -8,7 +8,7 @@ import Testing
 
 @Test func anAppPickerOffersSameAsEverywhereInsteadOfDefault() {
     let entries = PickerEntry.all(allowsDefault: false, allowsGesture: true, inherited: ActionButton.inherited(.standard, everywhere: "Mission Control"))
-    #expect(entries.first?.label == "Same as Everywhere")
+    #expect(entries.first?.label == "Same as Mouse Settings")
     #expect(entries.first?.detail == "(Mission Control)")
     #expect(entries.first?.matches(.standard) == true)
     #expect(!entries.contains { $0.id == "default" })
@@ -66,8 +66,8 @@ private func entry(_ id: String, _ entries: [PickerEntry]) -> PickerEntry? { ent
     #expect(!tree.contains(["buttons", "back"]))
 }
 
-@MainActor @Test func theAppSheetWritesTheChoiceItOffers() throws {
-    // AppSheet applies a picked entry with `bindInApp(_:button:to:)`.
+@MainActor @Test func theAppPageWritesTheChoiceItOffers() throws {
+    // AppPage applies a picked entry with `bindInApp(_:button:to:)`.
     var tree = ConfigTree(["buttons": ["back": "mute"]])
     let entries = PickerEntry.all(allowsDefault: true, allowsGesture: true,
                                   inherited: ActionButton.inherited(.standard, everywhere: "Mute"))
@@ -83,7 +83,7 @@ private func entry(_ id: String, _ entries: [PickerEntry]) -> PickerEntry? { ent
 @Test func bothPanesOfferMouseDefaultOnAButtonRowAndNotOnADirection() throws {
     let ui = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         .appending(path: "Sources/PureMouseSettingsUI")
-    for file in ["ButtonsPane.swift", "AppSheet.swift"] {
+    for file in ["ButtonsPane.swift", "AppPage.swift"] {
         let text = try String(contentsOf: ui.appending(path: file), encoding: .utf8)
         // The button rows ask the one rule (`PickerEntry.offersMouseDefault`, tested by control in OverrideRowTests).
         #expect(text.contains("allowsDefault: !isDirection && PickerEntry.offersMouseDefault("), "\(file)")
@@ -133,7 +133,7 @@ private func mouse(haptics: Bool?) -> Status.Device {
     #expect(ActionButton.spokenValue(for: .keys("ctrl+left"), everywhere: "⇧⌘4", spokenEverywhere: "Shift Command 4")
         == "Control Left")
     #expect(ActionButton.spokenValue(for: .standard, everywhere: "⇧⌘4", spokenEverywhere: "Shift Command 4")
-        == "Shift Command 4, same as Everywhere")
+        == "Shift Command 4, same as Mouse Settings")
     #expect(ButtonAction.keys("shift+cmd+4").spokenLabel != ButtonAction.keys("shift+cmd+4").label)
 }
 

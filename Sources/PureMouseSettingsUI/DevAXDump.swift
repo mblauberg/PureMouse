@@ -7,7 +7,7 @@ import PureMouseAppSupport
 ///
 /// - Without `PUREMOUSE_DEV_PANE` it visits every tab and Mouse segment in turn.
 /// - With it, it dumps what the other hooks open: `PUREMOUSE_DEV_SHEET` (Advanced…, Presets),
-///   `PUREMOUSE_DEV_APP` (the app sheet), `PUREMOUSE_DEV_PICKER` and `PUREMOUSE_DEV_SHORTCUT`.
+///   `PUREMOUSE_DEV_APP` (the app's page), `PUREMOUSE_DEV_PICKER` and `PUREMOUSE_DEV_SHORTCUT`.
 ///   Every window on screen is listed on its own (the window, then its sheet or popover).
 ///
 /// It reports a control with no label, a button with no name (an image button), two controls with

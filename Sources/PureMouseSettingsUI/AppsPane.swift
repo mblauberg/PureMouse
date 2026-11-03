@@ -4,10 +4,10 @@ import PureMouseKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Per-app settings (`apps.<bundle id>`): a list of apps, each opening its own buttons, thumb
-/// wheel and scrolling in a sheet (`AppSheet`). Writes only the keys it shows under `apps`; a
-/// setting put back to "Same as Everywhere" removes its key, and an app with nothing left is
-/// removed (`ConfigTree.set`).
+/// Per-app settings (`apps.<bundle id>`): a list of apps, each row naming the areas it changes and
+/// opening the app's page (`AppPage`) in place of the list: its buttons, and its scrolling with the
+/// thumb wheel. Writes only the keys it shows under `apps`; a setting put back to "Same as Mouse
+/// Settings" removes its key, and an app with nothing left is removed (`ConfigTree.set`).
 struct AppsPane: View {
     @Environment(AppModel.self) private var model
     @Environment(\.settings) private var settings
@@ -17,8 +17,40 @@ struct AppsPane: View {
     @State private var removing: String?
 
     var body: some View {
+        Group {
+            if let key = list.open {
+                AppPage(key: key, identity: identities.identity(key), segment: list.segment,
+                        select: { list.select($0) }, back: { list.close() }, remove: { remove(key) })
+            } else {
+                appList
+            }
+        }
+        // The list and a page differ in height, and so do a page's segments.
+        .onChange(of: list.open) { settings?.refit() }
+        .onChange(of: list.segment) { settings?.refit() }
+        // "Settings for <app>…" in the status menu: the request may arrive before the pane is built.
+        .onChange(of: settings?.app) { openRequested() }
+        .onAppear { openRequested() }
+        .removeAppAlert(name: removing.map { identities.identity($0).name } ?? "this app",
+                        isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })) {
+            if let id = removing { remove(id) }
+        }
+        #if DEBUG
+        .onAppear {
+            let environment = ProcessInfo.processInfo.environment
+            if let id = environment["PUREMOUSE_DEV_APP"] {
+                list.add(id, in: model.config)
+                if let name = environment["PUREMOUSE_DEV_APP_SEGMENT"], let segment = AppSegment(rawValue: name) {
+                    list.select(segment)
+                }
+            }
+        }
+        #endif
+    }
+
+    private var appList: some View {
         let apps = listed
-        PaneForm {
+        return PaneForm {
             PaneBanners(needsAccessibility: true)
             Section {
                 if apps.isEmpty {
@@ -37,7 +69,7 @@ struct AppsPane: View {
                 } else {
                     ForEach(apps, id: \.self) { id in
                         AppRow(identity: identities.identity(id), summary: list.summary(id, in: model.config)) {
-                            list.open = id
+                            list.show(id)
                         }
                         .contextMenu {
                             Button("Remove…") { removing = id }
@@ -57,30 +89,11 @@ struct AppsPane: View {
             }
             .disabled(model.readOnly)
         }
-        // A row added or removed changes the pane's height; opening an app does not.
+        // A row added or removed changes the pane's height.
         .onChange(of: apps.count) { settings?.refit() }
-        // "Settings for <app>…" in the status menu: the request may arrive before the pane is built.
-        .onChange(of: settings?.app) { openRequested() }
-        .onAppear { openRequested() }
-        .sheet(isPresented: Binding(get: { list.open != nil }, set: { if !$0 { list.open = nil } })) {
-            if let key = list.open {
-                AppSheet(key: key, identity: identities.identity(key)) { remove(key) }
-                    .environment(model)
-                    .environment(\.settings, settings)
-            }
-        }
-        .removeAppAlert(name: removing.map { identities.identity($0).name } ?? "this app",
-                        isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })) {
-            if let id = removing { remove(id) }
-        }
-        #if DEBUG
-        .onAppear {
-            if let id = ProcessInfo.processInfo.environment["PUREMOUSE_DEV_APP"] { list.add(id, in: model.config) }
-        }
-        #endif
     }
 
-    /// Opens the sheet of the app a request named, listing it first when it is not there.
+    /// Opens the page of the app a request named, listing it first when it is not there.
     private func openRequested() {
         guard let id = settings?.app else { return }
         settings?.app = nil

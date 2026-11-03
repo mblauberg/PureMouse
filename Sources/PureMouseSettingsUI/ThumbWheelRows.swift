@@ -48,12 +48,12 @@ struct ThumbWheelPresentation {
 }
 
 /// The thumb wheel's rows, shared by the Scrolling pane (`["thumbWheel"]`, or a mouse's own, which
-/// says "Set for this mouse." where it has its own value) and an app in the Apps pane (`["apps",
-/// key, "thumbWheel"]`, "Set for this app."; `InheritedValue`). `.standard`: the Action
-/// pop-up and, for Custom, an action per direction. `.advanced` (an Advanced… sheet or an app's
-/// disclosure): the rows that apply to what the wheel does (`ThumbWheelAdvancedRow`), such as
-/// swapping the directions and the turn distance. `.all`: both; in an app's sheet the advanced
-/// rows sit under the "More thumb wheel options" disclosure.
+/// says "Set for this mouse." where it has its own value) and an app's page in the Apps pane
+/// (`["apps", key, "thumbWheel"]`, "Set for this app."; `InheritedValue`). `.standard`: the Action
+/// pop-up and, for Custom, an action per direction. `.advanced` (an Advanced… sheet): the rows
+/// that apply to what the wheel does (`ThumbWheelAdvancedRow`), such as swapping the directions
+/// and the turn distance. `.all`: both; on an app's page the advanced rows sit under the "More
+/// thumb wheel options" disclosure, which keeps the page inside 600 pt.
 struct ThumbWheelRows: View {
     enum Rows { case standard, advanced, all }
 
@@ -65,8 +65,11 @@ struct ThumbWheelRows: View {
     var base: ThumbWheelState = .initial
     /// In an app or on a mouse: the choice it falls back to, which the Action pop-up's "Same as …" entry keeps (`InheritedValue`).
     var inherited: ThumbWheelChoice?
-    /// The scope `inherited` is from: Everywhere for an app, All Mice for a mouse.
-    var source = InheritedScope.everywhere
+    /// In an app: the mice it may run with have different choices (`inherited` is the first one's),
+    /// so the Action row says "Varies by Mouse" while the app leaves it alone.
+    var inheritedVaries = false
+    /// The scope `inherited` is from: Mouse Settings for an app, All Mice for a mouse.
+    var source = InheritedScope.mouseSettings
     /// The mouse the rows edit (`path` is its `thumbWheel`), or `.global` for the top level and an app.
     var scope = ConfigScope.global
     /// In an app: its display name, which names the controls where several panes' rows read alike
@@ -111,8 +114,7 @@ struct ThumbWheelRows: View {
             if inherited == nil {
                 advancedRows
             } else if !Self.advancedRows(model.config, path: path, base: base).isEmpty {
-                // In an app (a sheet), the rest is a disclosure: no sheet opens from a sheet
-                // (docs/ui-design.md, Disclosure).
+                // On an app's page, the rest is a disclosure (docs/ui-design.md, Disclosure).
                 DisclosureLabel(title: "More thumb wheel options", isExpanded: $showMore)
                 if showMore { advancedRows.disclosedRow() }
             }
@@ -126,13 +128,15 @@ struct ThumbWheelRows: View {
         let set: (ThumbWheelChoice) -> Void = { new in edit { $0.chooseThumbWheel(new, at: path, base: base) } }
         let value = inherited.map { InheritedValue(own: choice == .inherit ? nil : choice, inherited: $0, source: source) }
         let note = value?.note { set(.inherit) }
-        // What the wheel does in effect, which an inheriting row captions as the wider scope does.
+        // What the wheel does in effect, which an inheriting row captions as the wider scope does;
+        // with mice that differ, there is no one thing to say.
         let effective = value?.effective ?? choice
-        let caption = help(effective, reversed: state.reversed)
+        let caption = inheritedVaries && value?.isInherited == true ? nil : help(effective, reversed: state.reversed)
         LabeledContent {
             if let value {
                 InheritedPicker(title: "Thumb wheel action\(spokenSuffix)", value: value,
-                                options: ThumbWheelChoice.menu, label: \.label) { set($0 ?? .inherit) }
+                                options: ThumbWheelChoice.menu, label: \.label,
+                                inheritedText: inheritedVaries ? Applied<ThumbWheelChoice>.variesLabel : nil) { set($0 ?? .inherit) }
             } else {
                 PopUpMenu(text: choice.label) {
                     Picker("Thumb wheel action\(spokenSuffix)", selection: Binding(get: { choice }, set: { set($0) })) {
@@ -289,7 +293,6 @@ struct ThumbWheelRows: View {
         }
         .overridable(note, help: nil)
         .disclosedRow()
-        .actionEditorPopover($sheet, for: target) { action, target in apply(action, to: target) }
     }
 
     private func choose(_ entry: PickerEntry, for target: BindingTarget, current: ButtonAction) {

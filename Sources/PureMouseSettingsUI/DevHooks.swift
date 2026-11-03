@@ -7,8 +7,9 @@ import PureMouseAppSupport
 /// `scrolling`, `pointer`), and `PUREMOUSE_DEV_APPEARANCE=light|dark` overrides the system
 /// appearance. On Mouse › Buttons, `PUREMOUSE_DEV_PICKER=<button>` opens a button's action picker
 /// and `PUREMOUSE_DEV_SHORTCUT=<button>` its shortcut sheet. On the Apps pane,
-/// `PUREMOUSE_DEV_APP=<bundle id>` opens (or adds) that app's sheet, and with it
-/// `PUREMOUSE_DEV_SHORTCUT=<button>` opens that button's shortcut editor popover.
+/// `PUREMOUSE_DEV_APP=<bundle id>` opens (or adds) that app's page, `PUREMOUSE_DEV_APP_SEGMENT=
+/// buttons|scrolling` shows one of its segments, and `PUREMOUSE_DEV_SHORTCUT=<button>` opens that
+/// button's shortcut editor sheet over it.
 /// `PUREMOUSE_DEV_SHEET=<name>` opens a sheet: `presets` (Mouse › Pointer) through a `ShowRequest`,
 /// or a sheet on the pane shown (`DevSheet`).
 /// `PUREMOUSE_DEV_MOUSE=<device key>` edits that mouse's settings, as the Mouse pop-up would

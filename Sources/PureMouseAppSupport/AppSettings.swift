@@ -108,85 +108,125 @@ extension ConfigTree {
         Self.scrollOverrideKeys.contains { contains(Self.appScope(app).prefix + ["smoothScroll", $0]) }
     }
 
-    /// Turns the app's own speed and glide on, starting from the global values, or off, removing
-    /// them (and `smoothScroll` and the app's entry when nothing else is left in them).
-    public mutating func setOverridesScrolling(_ app: String, _ on: Bool) {
+    /// Turns the app's own speed and glide on, starting from the values that apply to the first of
+    /// the `inheriting` scopes (`AppModel.appInheritedScopes`), or off, removing them (and `smoothScroll`
+    /// and the app's entry when nothing else is left in them).
+    public mutating func setOverridesScrolling(_ app: String, _ on: Bool, inheriting: [ConfigScope] = [.global]) {
         let path = Self.appScope(app).prefix + ["smoothScroll"]
         if on {
             guard !overridesScrolling(app) else { return }
-            set(double(["smoothScroll", "speed"]) ?? 1, at: path + ["speed"])
-            set(double(["smoothScroll", "smoothingMs"]) ?? 125, at: path + ["smoothingMs"])
+            let wider = inheriting.first ?? .global
+            set(number(["smoothScroll", "speed"], in: wider, default: 1), at: path + ["speed"])
+            set(number(["smoothScroll", "smoothingMs"], in: wider, default: 125), at: path + ["smoothingMs"])
         } else {
             for key in Self.scrollOverrideKeys { set(nil, at: path + [key]) }
         }
     }
 
-    /// Whether the app's scrolling glides: its own `smoothScroll.enabled`, else the global one's.
-    /// A `smoothScroll` in the app turns it on where there is none globally (Kit's `decodeApps`).
-    public func scrollsSmoothly(_ app: String) -> Bool {
+    /// Whether the app's scrolling glides: its own `smoothScroll.enabled`, else what the scopes it
+    /// inherits from do (on when any mouse that has a `smoothScroll` leaves it on). A `smoothScroll`
+    /// in the app turns it on where there is none wider (Kit's `decodeApps`).
+    public func scrollsSmoothly(_ app: String, inheriting: [ConfigScope] = [.global]) -> Bool {
         let own = Self.appScope(app).prefix + ["smoothScroll"]
         if let enabled = bool(own + ["enabled"]) { return enabled }
-        if contains(["smoothScroll"]) { return smoothScrollEnabled }
+        let configured = inheriting.filter { resolved(["smoothScroll"], in: $0) != nil }
+        if !configured.isEmpty { return configured.contains { smoothScrollEnabled(in: $0) } }
         return contains(own)
     }
 
     /// The caption under "Custom scrolling": what the app's scrolling does. Off, it follows
-    /// Scrolling; on, it says whether the glide applies, since an app's `smoothScroll` turns smooth
+    /// Mouse Settings; on, it says whether the glide applies, since an app's `smoothScroll` turns smooth
     /// scrolling on where there is none globally (`scrollsSmoothly`).
-    public func customScrollingCaption(_ app: String) -> String {
-        if !overridesScrolling(app) { return "Uses Scrolling's speed and glide." }
-        if !scrollsSmoothly(app) { return "Smooth scrolling is off, so this app scrolls at this speed without the glide." }
-        if !smoothScrollEnabled { return "Smooth scrolling is on in this app only." }
-        return "Smooth scrolling is on, as set in Scrolling."
+    public func customScrollingCaption(_ app: String, inheriting: [ConfigScope] = [.global]) -> String {
+        if !overridesScrolling(app) { return "Uses Mouse Settings' speed and glide." }
+        if !scrollsSmoothly(app, inheriting: inheriting) {
+            return "Smooth scrolling is off, so this app scrolls at this speed without the glide."
+        }
+        if !inheriting.contains(where: { smoothScrollEnabled(in: $0) }) { return "Smooth scrolling is on in this app only." }
+        return "Smooth scrolling is on, as set in Mouse Settings."
     }
 
-    // MARK: Sheet
+    // MARK: Page
 
-    /// A button as an app's sheet shows it. Reading it writes nothing.
-    public func appButton(_ app: String, button: String) -> AppButton {
-        scopedButton(button, in: Self.appScope(app))
+    /// A button as an app's page shows it: the app's own binding over what applies to the mice the
+    /// app inherits from (`inheriting`, `AppModel.appInheritedScopes`). Reading it writes nothing.
+    public func appButton(_ app: String, button: String, inheriting: [ConfigScope] = [.global]) -> AppButton {
+        scopedButton(button, in: Self.appScope(app), inheriting: inheriting)
     }
 
-    /// A button as a row shows it in an app or on a mouse: the scope's own binding over the top
-    /// level's, which applies while the scope leaves the button alone (`own` is `.standard`).
-    public func scopedButton(_ button: String, in scope: ConfigScope) -> AppButton {
+    /// A button as a row shows it in an app or on a mouse: the scope's own binding over what applies
+    /// in the wider scopes, which applies while the scope leaves the button alone (`own` is
+    /// `.standard`). A mouse's wider scope is the top level; an app's is each mouse it may run
+    /// with (`inheriting`), and the value is `Varies by Mouse` when they resolve it differently.
+    public func scopedButton(_ button: String, in scope: ConfigScope, inheriting: [ConfigScope] = [.global]) -> AppButton {
         let own = binding(button, in: scope)
-        let everywhere = binding(button)
+        let wider = inheriting.isEmpty ? [ConfigScope.global] : inheriting
+        let bindings = wider.map { resolvedBinding(button, in: $0) }
+        let everywhere = Applied(bindings)
         // A plain action of the app's own replaces a global gesture, so it has no directions.
-        guard own == .gesture || (own == .standard && everywhere == .gesture) else {
-            return AppButton(own: own, everywhere: everywhere, directions: [])
+        guard own == .gesture || (own == .standard && bindings.contains(.gesture)) else {
+            return AppButton(own: own, everywhere: everywhere.first, directions: [], variesByMouse: everywhere.varies)
         }
         let directions = Gesture.directions.map { direction in
-            AppButton.Direction(name: direction, own: gestureBinding(button, direction, in: scope),
-                                everywhere: everywhere == .gesture ? gestureBinding(button, direction) : nil)
+            let inherited: [ButtonAction?] = zip(wider, bindings).map { scope, binding in
+                binding == .gesture ? resolvedGestureBinding(button, direction, in: scope) : nil
+            }
+            let none = ButtonAction.named("none")
+            let effective = inherited.map { $0 == nil || $0 == .standard ? none : $0! }
+            return AppButton.Direction(name: direction, own: gestureBinding(button, direction, in: scope),
+                                       everywhere: inherited[0], variesByMouse: Applied(effective).varies)
         }
-        return AppButton(own: own, everywhere: everywhere, directions: directions)
+        return AppButton(own: own, everywhere: everywhere.first, directions: directions, variesByMouse: everywhere.varies)
     }
 
     // MARK: Summary
 
-    /// What an app changes, in a few words for its row, joined with commas: "Thumb wheel: Switch
-    /// Tabs, 2 buttons changed, Custom scrolling".
-    public func appSummary(_ app: String) -> String {
+    /// The areas of the page an app changes: Buttons when it binds any, Scrolling when it sets the
+    /// thumb wheel or its own speed or glide.
+    public func appAreas(_ app: String) -> [AppSegment] {
         let scope = Self.appScope(app)
-        var parts: [String] = []
-        let choice = thumbWheelChoice(at: scope.prefix + ["thumbWheel"])
-        let direction = bool(scope.prefix + ["thumbWheel", "reversed"]).map { $0 ? "directions swapped" : "directions not swapped" }
-        switch (choice != .inherit, direction) {
-        case (true, let direction?): parts.append("Thumb wheel: \(choice.label), \(direction)")
-        case (true, nil): parts.append("Thumb wheel: \(choice.label)")
-        case (false, let direction?): parts.append("Thumb wheel: \(direction.prefix(1).uppercased() + direction.dropFirst())")
-        case (false, nil): break
+        var areas: [AppSegment] = []
+        if !((self[scope.prefix + ["buttons"]] as? [String: Any])?.isEmpty ?? true) { areas.append(.buttons) }
+        let thumb = self[scope.prefix + ["thumbWheel"]] as? [String: Any] ?? [:]
+        if overridesScrolling(app) || ThumbWheelChoice.keys.contains(where: { thumb[$0] != nil }) || thumb["reversed"] != nil {
+            areas.append(.scrolling)
         }
-        let buttons = (self[scope.prefix + ["buttons"]] as? [String: Any])?.count ?? 0
-        if buttons > 0 { parts.append(buttons == 1 ? "1 button changed" : "\(buttons) buttons changed") }
-        if overridesScrolling(app) { parts.append("Custom scrolling") }
-        return parts.isEmpty ? AppList.noCustomSettings : parts.joined(separator: ", ")
+        return areas
+    }
+
+    /// What an app changes, for its row in the list: the areas, by name ("Buttons, Scrolling").
+    public func appSummary(_ app: String) -> String {
+        let areas = appAreas(app)
+        return areas.isEmpty ? AppList.noCustomSettings : areas.map(\.title).joined(separator: ", ")
     }
 }
 
-/// A button in an app's sheet: the app's own binding and the one everywhere, which applies while
-/// the app leaves the button alone (`own` is `.standard`).
+/// An app's page has two segments (there is no Pointer: per-app settings are the buttons, the thumb
+/// wheel and scrolling). The thumb wheel sits under Scrolling.
+public enum AppSegment: String, CaseIterable, Sendable {
+    case buttons, scrolling
+
+    public var title: String {
+        switch self {
+        case .buttons: "Buttons"
+        case .scrolling: "Scrolling"
+        }
+    }
+
+    /// A group of rows on the page.
+    public enum Section: Sendable { case buttons, customScrolling, thumbWheel }
+
+    /// The groups of rows the segment holds, in order.
+    public var sections: [Section] {
+        switch self {
+        case .buttons: [.buttons]
+        case .scrolling: [.customScrolling, .thumbWheel]
+        }
+    }
+}
+
+/// A button on an app's page: the app's own binding and the one the mice resolve, which applies
+/// while the app leaves the button alone (`own` is `.standard`).
 public struct AppButton: Equatable, Sendable {
     /// One gesture direction: the app's own (`.standard` when it leaves it out) and, when the
     /// button is a gesture everywhere, the global direction, which applies while the app's is unset.
@@ -194,6 +234,12 @@ public struct AppButton: Equatable, Sendable {
         public let name: String
         public let own: ButtonAction
         public let everywhere: ButtonAction?
+        /// The mice resolve this direction differently.
+        public var variesByMouse = false
+
+        /// What the row shows while the scope leaves the direction out.
+        public var inheritedLabel: String { variesByMouse ? Applied<ButtonAction>.variesLabel : inherited.label }
+        public var inheritedSpokenLabel: String { variesByMouse ? Applied<ButtonAction>.variesLabel : inherited.spokenLabel }
 
         /// The scope sets this direction itself, whether or not a wider gesture has one.
         public var isOwn: Bool { own != .standard }
@@ -210,23 +256,32 @@ public struct AppButton: Equatable, Sendable {
     /// The gesture's directions, when the button is a gesture in this app: its own, or the global
     /// one it inherits (Hold and Move everywhere, nothing set here). Empty otherwise.
     public let directions: [Direction]
+    /// The mice resolve the button differently, so `everywhere` is only the first one's.
+    public var variesByMouse = false
 
-    /// The app leaves the button to a gesture set everywhere: its directions show, collapsed and
+    /// What the row shows while the app leaves the button alone: the value the mice share, else
+    /// "Varies by Mouse".
+    public var inheritedLabel: String { variesByMouse ? Applied<ButtonAction>.variesLabel : everywhere.label }
+    public var inheritedSpokenLabel: String { variesByMouse ? Applied<ButtonAction>.variesLabel : everywhere.spokenLabel }
+
+    /// The app leaves the button to a gesture set in the mice: its directions show, collapsed and
     /// shown as for any inherited row, and editing one writes only that direction under the app
     /// (`ConfigTree.bindInApp(_:button:direction:to:)`).
-    public var inheritsGesture: Bool { own == .standard && everywhere == .gesture }
+    public var inheritsGesture: Bool { own == .standard && !directions.isEmpty }
 }
 
 /// The Apps list: the apps the config names, plus those added in this session, which are saved
-/// only once one has a setting; and the app whose sheet is open.
+/// only once one has a setting; and the app whose page is open, on its segment.
 public struct AppList: Equatable, Sendable {
     /// The row summary of an app with nothing of its own (added, not yet saved).
     public static let noCustomSettings = "No custom settings"
 
     /// Apps added here that have no setting yet: nothing is written until one is set.
     public private(set) var added: [String] = []
-    /// The app whose sheet is open, by its key under `apps`.
-    public var open: String?
+    /// The app whose page is open, by its key under `apps`.
+    public private(set) var open: String?
+    /// The page's segment; Buttons each time a page opens. Choosing one writes nothing.
+    public private(set) var segment = AppSegment.buttons
 
     public init() {}
 
@@ -240,20 +295,32 @@ public struct AppList: Equatable, Sendable {
         config.hasApp(id) ? config.appSummary(id) : Self.noCustomSettings
     }
 
-    /// Adds an app (unless listed) and opens its sheet.
+    /// Adds an app (unless listed) and opens its page.
     public mutating func add(_ bundleID: String, in config: ConfigTree) {
         let key = config.appKey(bundleID)
         if !config.hasApp(key), !added.contains(where: { $0.caseInsensitiveCompare(key) == .orderedSame }) {
             added.append(key)
         }
+        show(key)
+    }
+
+    /// Opens a listed app's page, on Buttons unless it is the page already open.
+    public mutating func show(_ key: String) {
+        if open != key { segment = .buttons }
         open = key
     }
 
-    /// Removes an app's entry and its row, and closes its sheet if open.
+    /// Shows a segment of the open page.
+    public mutating func select(_ segment: AppSegment) { self.segment = segment }
+
+    /// Back to the list (‹ Apps, ⌘[ and Esc).
+    public mutating func close() { open = nil }
+
+    /// Removes an app's entry and its row, and closes its page if open.
     public mutating func remove(_ id: String, from config: inout ConfigTree) {
         config.removeApp(id)
         added.removeAll { $0.caseInsensitiveCompare(id) == .orderedSame }
-        if open?.caseInsensitiveCompare(id) == .orderedSame { open = nil }
+        if open?.caseInsensitiveCompare(id) == .orderedSame { close() }
     }
 
     /// The alert for an app PureMouse can't add: one without a bundle identifier. `url` is the app
