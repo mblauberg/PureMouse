@@ -1,5 +1,6 @@
 import AppKit
 import PureMouseAppSupport
+import PureMouseKit
 import SwiftUI
 
 struct AboutPane: View {
@@ -46,7 +47,7 @@ struct AboutPane: View {
             }
             .padding(.top, 6)
             VStack(spacing: 2) {
-                Text("No account, no telemetry. The network is used only to check for updates.")
+                Text("No account, no telemetry. The network is used only to check for and download updates.")
                 Text("Not affiliated with Logitech.")
             }
             .font(.footnote)
@@ -101,6 +102,31 @@ struct AutomaticUpdates {
     func set(_ on: Bool) { preferences?.automatic = on }
 }
 
+/// Update and Relaunch: Settings is a separate app, and installing is the menu bar app's (one
+/// installer, docs/adr/0022). This writes the request into its preferences; the menu app asks the
+/// person, installs, relaunches, and writes one line of what it is doing back (`installStatus`).
+@MainActor
+struct InstallRequest {
+    let preferences: UpdatePreferences?
+    /// Whether a menu bar app is there to hear it: with its icon hidden, or not running, nothing is.
+    var menuIsRunning: () -> Bool = {
+        !NSRunningApplication.runningApplications(withBundleIdentifier: Companion.menuLabel).isEmpty
+    }
+    /// The question is asked by the menu app, so it is handed the focus.
+    var yieldFocus: () -> Void = { NSApp.yieldActivation(toApplicationWithBundleIdentifier: Companion.menuLabel) }
+
+    var isOffered: Bool { preferences != nil && menuIsRunning() }
+    var status: String? { preferences?.installStatus }
+    var inProgress: Bool { status?.hasPrefix("Updating") == true }
+
+    func ask(for release: UpdateCheck.Release) {
+        guard isOffered, !inProgress else { return }
+        preferences?.installStatus = nil
+        yieldFocus()
+        preferences?.installRequest = release
+    }
+}
+
 /// "Check for Updates": one request when pressed. "Check for updates automatically" is the answer
 /// to the menu bar app's question (`UpdateQuestion`), kept in its preferences, where the menu app
 /// runs the daily check from (`UpdateReminders`); this process makes no request unless the button
@@ -110,9 +136,12 @@ private struct UpdateRow: View {
     @State private var outcome: UpdateCheck.Outcome?
     @State private var automatic = false
     @State private var watch: UpdatePreferences.Watch?
+    @State private var statusWatch: UpdatePreferences.Watch?
+    @State private var installStatus: String?
 
     private let preferences = NotificationPermission.menuDefaults.map { UpdatePreferences($0) }
     private var answer: AutomaticUpdates { AutomaticUpdates(preferences: preferences) }
+    private var install: InstallRequest { InstallRequest(preferences: preferences) }
 
     var body: some View {
         VStack(spacing: 6) {
@@ -130,6 +159,13 @@ private struct UpdateRow: View {
                     Text("PureMouse \(release.version.parts.map(String.init).joined(separator: ".")) is available")
                         .font(.callout)
                     Button("View Release") { NSWorkspace.shared.open(release.page) }
+                    if install.isOffered {
+                        Button("Update and Relaunch") { install.ask(for: release) }
+                            .disabled(install.inProgress)
+                    }
+                }
+                if let installStatus {
+                    Text(installStatus).font(.callout).foregroundStyle(.secondary)
                 }
             case .failed?:
                 Text("Couldn't check for updates. Try again later.").font(.callout).foregroundStyle(.secondary)
@@ -144,8 +180,13 @@ private struct UpdateRow: View {
             watch = preferences.map { preferences in
                 UpdatePreferences.Watch(preferences.defaults) { automatic = answer.isOn }
             }
+            // The menu bar app says what it is doing with a requested update.
+            installStatus = install.status
+            statusWatch = preferences.map { preferences in
+                UpdatePreferences.Watch(preferences.defaults, .installStatus) { installStatus = install.status }
+            }
         }
-        .onDisappear { watch = nil }
+        .onDisappear { watch = nil; statusWatch = nil }
     }
 
     private func setAutomatic(_ on: Bool) {

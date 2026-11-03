@@ -184,7 +184,7 @@ its features.
 | Memory: Settings | About 36 MB in its own process while its window is open, then nothing | 0.4.0, 2026-11-03, median of 5 runs |
 | Idle CPU | Zero in normal use: no polling, no timers, no wake-ups* | By design |
 | Processes | Two: the background process and an optional menu bar app, plus Settings while its window is open | By design |
-| Network | One small update check a day if you allow it, or when you press **Check for Updates** | By design |
+| Network | One small update check a day if you allow it, or when you press **Check for Updates**; an update only when you choose it | By design |
 | Privacy | No account, no telemetry, no settings saved permanently on the mouse | By design |
 
 The sizes are the published 0.5.1 release: the dmg as downloaded, and the app inside it counted
@@ -230,11 +230,15 @@ expect macOS to block it the first time; step 2 clears that before you open it.
 ### Updating
 
 - **From the menu.** After asking once, PureMouse checks for a new release at most once a day. A
-  new release brings one quiet notification, and the menu shows **Update to X.Y.Z…**, which opens
-  the release page, with **Skip This Version** under it to hide that version's row and reminders.
-  Nothing downloads or installs by itself, and the switch in Settings › About turns the check off.
-  Versions after 0.5.1 have the daily check; in any version, **Check for Updates** in Settings ›
-  About checks once.
+  new release brings one quiet notification, and the menu shows **Update to X.Y.Z…** with **Skip
+  This Version** under it. Choosing it asks, then downloads the release, checks it against its
+  `SHA256SUMS` and that it is signed by the same certificate as this copy, replaces the app and
+  opens it again, with no window if Settings was not open. Settings › About has the same as **Update and Relaunch**, and Settings comes back on About. Quitting PureMouse while it
+  runs stops the update. If a check fails, or the app is on a read-only disk or needs an administrator,
+  nothing is replaced: the menu says why and links the release page (or opens it), and you update
+  by hand. Nothing installs unless you choose it, and the switch in Settings › About turns the
+  check, and the row, off. Versions after 0.5.1 have the daily check; in any version, **Check for
+  Updates** in Settings › About checks once. [Privacy](docs/privacy.md) has the details.
 - **By hand.** Download the new dmg, replace the app in Applications, clear the quarantine flag as
   in step 2 and open it; it replaces the running copy. Your settings and permissions carry over.
 
@@ -249,7 +253,8 @@ Run the command below, then move the app to the Bin. Your config stays in `~/.co
 ## Privacy and security
 
 No account and no telemetry. PureMouse writes only to your home folder and goes online only to
-check for updates: once a day if you allow it, or when you press **Check for Updates**.
+check for updates (once a day if you allow it, or when you press **Check for Updates**) and to
+download one you choose to install.
 [Privacy](docs/privacy.md) lists every permission, file and request; [Security](SECURITY.md) says
 how to report a vulnerability.
 

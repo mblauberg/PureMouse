@@ -51,8 +51,21 @@ and a change to this page lands with the text it changes.
   nothing installs by itself, and two buttons that name the result: "Check Automatically" (the
   default) and "Don't Check". The reminder is a quiet notification: title "PureMouse 1.2.3 is
   available", body "Click to read what's new.". The menu row "Update to 1.2.3…" takes an ellipsis
-  although it opens the release page in the browser, because the person is shown a page to read
-  before anything changes; it names the version so it can't read as a command to install.
+  because an alert follows before anything changes ("Update to PureMouse 1.2.3?", body: what is
+  downloaded and checked; buttons "Update and Relaunch" (default) and "Cancel"). Settings › About
+  offers the same as an "Update and Relaunch" button (the alert follows), disabled with the line
+  "Updating to 1.2.3…" under it while it runs. While it runs the menu row is the disabled
+  "Updating to 1.2.3…"; once the app is replaced the row is gone. A refusal is one disabled line in the sentence form
+  below, then "View Release" (the release page, for a manual update), "Update to 1.2.3…" again
+  where trying again could work, and "Skip This Version". Failure lines name what failed, not
+  how: "The download doesn't match its checksum", "The update wasn't signed by the same
+  certificate", "The update isn't signed", "The update's files don't match its signature", "The
+  update isn't newer than this version", "The update isn't the release that was announced", "The
+  update was stopped", "Couldn't download the update"; a copy that can't be
+  replaced says "Can't update: this copy needs an administrator" (or "is on a read-only disk", or
+  "doesn't verify, so a saved copy from an earlier update is kept").
+  After a swap that can't reopen the app: "PureMouse is updated." / "Open it from Applications to
+  finish."
 - **Tooltips** are under 75 characters and never repeat the control's name.
 - **CLI.** Success is a sentence on stdout. A failure is one line on stderr led by `puremouse: `
   ("puremouse: can't register: …") and a non-zero exit status.
@@ -112,5 +125,5 @@ One term per concept. "Retire" lists words that must not appear in UI text for t
 | SmartShift threshold | Switches at (Slower … Faster) | Threshold, Sooner/Later |
 | A control this mouse lacks, kept because it is set | "Not supported by this mouse." (caption) | — |
 | Checking for a new release | Check for Updates (button, on demand); "Check for updates automatically" (switch, About; sentence case); the question "Check for updates automatically?" with Check Automatically / Don't Check | Auto-update, Updater, "Look for updates", Check Now |
-| A newer release is known | "Update to 1.2.3…" (menu row); "Skip This Version" (menu row under it); notification "PureMouse 1.2.3 is available" | Upgrade, Install, Download, "New version" |
+| A newer release is known | "Update to 1.2.3…" (menu row; installs after an alert); "Update and Relaunch" (About button, same alert); "Skip This Version" (menu row under it); "View Release" (the page, About and the menu after a refusal); notification "PureMouse 1.2.3 is available" | Upgrade, Install Update, Download, "New version" |
 | Support | Support PureMouse (About link); GitHub Sponsors (the destination) | Donate, Buy Me a Coffee, Pro, Free version |

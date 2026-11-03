@@ -54,6 +54,19 @@ swift build && swift test
 scripts/tests/run.sh        # the build scripts; uses .build/app/PureMouse.app when built
 ```
 
+`scripts/test-update-install.sh --dir <new folder>` proves the update install with real code
+signatures (ADR 22): two throwaway identities in a temporary keychain, a signed fixture release,
+and each bad release refused with the installed app untouched: a bad checksum, another certificate
+(for the app, and for the disk image alone), unsigned, modified after signing, not newer, not the
+announced release, a swap that fails after committing (immutable flag, deny-delete ACL), a swap that
+fails with a damaged old app in place, a preserved copy kept while the installed app is damaged, a
+killed run's leftovers, hard links, quarantine and the temporary folder. It first checks that `--dir` is a
+new folder whose real parent is not a system path. If it is interrupted and leaves its temporary
+keychain in the search list, restore it with the command in the script's header
+(`security list-keychains -d user -s ~/Library/Keychains/login.keychain-db`). It builds, signs and mounts images, so
+run it on a spare Mac (the workshop), not in CI; it never touches `/Applications` or the real login
+agents.
+
 `scripts/tests/run.sh <name>` runs only the tests whose names contain `<name>`. The Swift tests
 cover pure logic. Device behaviour is tested against `HIDPPTesting` fakes (`FakeDevice`,
 `FakeTransport`) built from `puremouse probe` dumps in `Tests/Fixtures/probe`, so the probe's

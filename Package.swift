@@ -54,7 +54,7 @@ let package = Package(
         .testTarget(
             name: "PureMouseAppSupportTests",
             dependencies: ["PureMouseAppSupport", "ConfigWriterProbe"],
-            exclude: ["Probe"]
+            exclude: ["Probe", "InstallProbe"]
         ),
         // A second config and control writer for the two-process lock test. Test-only: no product
         // and not in the app bundle.
@@ -62,6 +62,13 @@ let package = Package(
             name: "ConfigWriterProbe",
             dependencies: ["PureMouseAppSupport", "PureMouseKit"],
             path: "Tests/PureMouseAppSupportTests/Probe"
+        ),
+        // Runs the update pipeline on a release made on disk, signed by scripts/test-update-install.sh.
+        // Test-only: no product and not in the app bundle.
+        .executableTarget(
+            name: "InstallProbe",
+            dependencies: ["PureMouseAppSupport", "PureMouseKit"],
+            path: "Tests/PureMouseAppSupportTests/InstallProbe"
         ),
     ]
 )

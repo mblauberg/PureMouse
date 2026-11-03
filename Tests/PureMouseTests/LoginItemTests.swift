@@ -70,6 +70,8 @@ private final class Rig: @unchecked Sendable {
     var menuIsCaller = false
     /// Settings requests made, and apps opened with their attempts, in order with the service's calls.
     var requests = 0
+    /// The pane word each request carried.
+    var requestedPanes: [String] = []
     var opened: [(app: URL, attempts: Int)] = []
     /// Whether `open` succeeds.
     var opens = true
@@ -100,7 +102,7 @@ private final class Rig: @unchecked Sendable {
         lockFile: directory.appending(path: "lifecycle.lock"), lockTimeout: lockTimeout,
         calledFromMenu: { [unowned self] _ in menuIsCaller }, seedConfig: { [unowned self] in seeded += 1 },
         settingsApp: settingsApp,
-        requestSettings: { [unowned self] in requests += 1; pending = true; quitStamp = false; service.calls.append("request settings") },
+        requestSettings: { [unowned self] pane in requests += 1; requestedPanes.append(pane); pending = true; quitStamp = false; service.calls.append("request settings") },
         requestPending: { [unowned self] in pending },
         quitStamped: { [unowned self] in quitStamp },
         pause: { [unowned self] in
@@ -270,6 +272,85 @@ private final class Rig: @unchecked Sendable {
         #expect(rig.item.openSettings())
         #expect(rig.opened.count == 1)
         #expect(rig.pauses.isEmpty)
+    }
+
+    // MARK: Started again by an update
+
+    @Test func aRelaunchRegistersThenReopensSettingsOnThePaneItWasGiven() {
+        let rig = Rig()
+        #expect(rig.item.relaunch(reopening: "about") == nil)
+        #expect(rig.service.calls == ["stop daemon", "register daemon", "start daemon",
+                                      "stop menu", "register menu", "start menu",
+                                      "request settings", "open PureMouse Settings.app"])
+        #expect(rig.requestedPanes == ["about"])
+    }
+
+    @Test func aRelaunchThatReopensTheLastPaneAsksWithNoPaneWord() {
+        let rig = Rig()
+        #expect(rig.item.relaunch(reopening: "") == nil)
+        #expect(rig.requestedPanes == [""])
+    }
+
+    /// The old copy quit the helper just before; the open that finds it exiting is retried here, in
+    /// the process that outlives the swap, with the pane asked for again.
+    @Test func aRelaunchRetriesTheReopenWithTheSamePane() {
+        let rig = Rig()
+        rig.helperReads = [1]
+        #expect(rig.item.relaunch(reopening: "about") == nil)
+        #expect(rig.opened.count == 2)
+        #expect(rig.requestedPanes == ["about", "about"])
+    }
+
+    @Test func aRelaunchThatWasNotShowingSettingsOpensNone() {
+        let rig = Rig()
+        #expect(rig.item.relaunch(reopening: nil) == nil)
+        #expect(rig.requests == 0 && rig.opened.isEmpty)
+        #expect(rig.service.registered == [.daemon, .menu])
+    }
+
+    @Test func aRelaunchThatCannotRegisterSaysSoLikeAFinderLaunchDoes() {
+        let rig = Rig(executable: { throw LoginItem.Failure.translocated })
+        let alert = rig.item.relaunch(reopening: "about")
+        #expect(alert?.title == LoginItem.Failure.translocated.alert.title)
+        #expect(alert?.body == LoginItem.Failure.translocated.alert.body)
+        #expect(rig.requests == 0 && rig.opened.isEmpty)
+    }
+
+    @Test func aRelaunchFailureThatIsNotOursGetsTheGenericAlert() {
+        let rig = Rig(executable: { throw CocoaError(.fileNoSuchFile) })
+        let alert = rig.item.relaunch(reopening: nil)
+        #expect(alert?.title == "PureMouse couldn't start.")
+    }
+
+    @Test func registerWithoutTheRelaunchFlagIsNotARelaunch() {
+        let rig = Rig()
+        #expect(rig.item.relaunch(arguments: ["register"]) == nil)
+        #expect(rig.service.calls.isEmpty, "the ordinary register path runs on its own")
+    }
+
+    @Test func aRelaunchThatWorksExitsZeroWithNoAlert() {
+        let rig = Rig()
+        let result = rig.item.relaunch(arguments: ["register", "--relaunch", "--settings=about"])
+        #expect(result?.status == 0 && result?.alert == nil)
+        #expect(rig.requestedPanes == ["about"])
+    }
+
+    @Test func aRelaunchThatCannotRegisterExitsOneWithTheAlert() {
+        let rig = Rig(executable: { throw LoginItem.Failure.translocated })
+        let result = rig.item.relaunch(arguments: ["register", "--relaunch"])
+        #expect(result?.status == 1)
+        #expect(result?.alert?.title == LoginItem.Failure.translocated.alert.title)
+    }
+
+    @Test func theRelaunchOptionsAreReadFromTheArguments() {
+        #expect(LoginItem.RelaunchOptions(["register"]) == nil)
+        #expect(LoginItem.RelaunchOptions(["register", "--relaunch"]) == .init(reopening: nil))
+        #expect(LoginItem.RelaunchOptions(["register", "--relaunch", "--settings=about"]) == .init(reopening: "about"))
+        #expect(LoginItem.RelaunchOptions(["register", "--relaunch", "--settings="]) == .init(reopening: ""))
+        // Only a pane's word is passed on: nothing else reaches the request file.
+        #expect(LoginItem.RelaunchOptions(["register", "--relaunch", "--settings=../x\nabout"]) == .init(reopening: nil))
+        // A reopen with no relaunch is not a relaunch.
+        #expect(LoginItem.RelaunchOptions(["register", "--settings=about"]) == nil)
     }
 
     @Test func nothingOpensWhenRegisteringFails() {

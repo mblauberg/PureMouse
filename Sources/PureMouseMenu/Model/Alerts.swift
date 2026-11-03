@@ -23,6 +23,21 @@ enum Alerts {
         return alert
     }
 
+    /// The alert behind "Update to 1.2.3…": Update and Relaunch is the default button.
+    static func updateConfirmation(_ offer: UpdateOffer) -> NSAlert {
+        let alert = NSAlert()
+        alert.messageText = offer.confirmTitle
+        alert.informativeText = UpdateOffer.confirmMessage
+        alert.addButton(withTitle: UpdateOffer.confirmAccept)
+        alert.addButton(withTitle: UpdateOffer.confirmDecline)
+        return alert
+    }
+
+    static func confirmUpdate(_ offer: UpdateOffer) -> Bool {
+        NSApp.activate()
+        return updateConfirmation(offer).runModal() == .alertFirstButtonReturn
+    }
+
     /// Asks it; true for Check Automatically. Ending the alert any other way cannot happen, and a
     /// no answer is stored like Don't Check.
     static func askAboutUpdates() -> Bool {

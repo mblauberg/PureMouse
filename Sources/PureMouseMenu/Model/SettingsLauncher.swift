@@ -1,4 +1,5 @@
 import AppKit
+import os
 import PureMouseAppSupport
 import PureMouseKit
 
@@ -151,12 +152,53 @@ final class SettingsLauncher {
     }
 
     /// Quits the running helper; later opens still work (the footprint rig's "settings-close").
-    func quitRunning() {
+    /// True if one was running, so a caller that quits it for a moment can open it again.
+    @discardableResult
+    func quitRunning() -> Bool {
+        quitRunningWatching().wasRunning
+    }
+
+    /// How often `quitRunningAndWait` looks for the helper having gone.
+    static let exitPoll: TimeInterval = 0.05
+
+    /// `quitRunning`, then waits for the helper to be gone, up to `timeout` (then goes on anyway).
+    /// Asking it to quit is not it quitting: the quit waits behind what the helper is handling, and
+    /// a request posted meanwhile is read by the helper that is about to exit. It waits on timers
+    /// of the main run loop, so events keep being served.
+    func quitRunningAndWait(timeout: TimeInterval = SettingsLauncher.quitWait) async -> Bool {
+        let (wasRunning, alive) = quitRunningWatching()
+        guard wasRunning else { return false }
+        // A cancelled caller (Quit or Hide during an update) stops waiting at the next look.
+        let cancelled = OSAllocatedUnfairLock(initialState: false)
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                waitForExit({ alive() && !cancelled.withLock { $0 } }, elapsed: 0, timeout: timeout) { continuation.resume() }
+            }
+        } onCancel: {
+            cancelled.withLock { $0 = true }
+        }
+        return true
+    }
+
+    private func waitForExit(_ alive: @escaping () -> Bool, elapsed: TimeInterval, timeout: TimeInterval,
+                             then done: @escaping @MainActor () -> Void) {
+        guard alive(), elapsed < timeout else { return done() }
+        system.after(Self.exitPoll) { [self] in
+            waitForExit(alive, elapsed: elapsed + Self.exitPoll, timeout: timeout, then: done)
+        }
+    }
+
+    private func quitRunningWatching() -> (wasRunning: Bool, alive: () -> Bool) {
         switch system.find() {
         case .success(.app(let app)):
-            system.running(app).forEach { $0.quit() }
+            let running = system.running(app).filter(\.isAlive)
+            running.forEach { $0.quit() }
+            return (!running.isEmpty, { running.contains { $0.isAlive } })
         case .success(.binary), .failure:
-            binary?.terminate() // SIGTERM, which the helper turns into a normal quit
+            let process = binary
+            let running = process?.isRunning == true
+            process?.terminate() // SIGTERM, which the helper turns into a normal quit
+            return (running, { process?.isRunning == true })
         }
     }
 
