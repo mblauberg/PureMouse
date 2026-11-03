@@ -190,60 +190,64 @@ struct ScrollingPane: View {
         .overridable(note, help: selection == nil ? nil : help)
     }
 
+    /// The three main wheel rows below always show a concrete value (`WheelDefaults`): the mouse's
+    /// default while nothing is set, so none carries the "mouse's own setting" caption.
     private func reverseDirection(_ availability: ControlAvailability) -> some View {
-        let path = ["scrollWheel", "inverted"]
+        let path = WheelDefaults.reversedPath
         let scope = model.scope, target = model.scopeTarget
         let help = "Reverses this wheel."
         let standing = model.standing(of: [path], in: target)
         let note = standing.note
-        return Toggle(isOn: Binding(get: { model.config.resolvedBool(path, in: scope) ?? false },
-                                    set: { on in model.update(in: target) { $0.set(on, at: path, in: scope) } })) {
-            RowLabel("Reverse direction", help: help, mouseDefault: model.config.resolved(path, in: scope) == nil,
-                     availability: availability, note: note)
+        let reversed = WheelDefaults.isReversed(model.config, in: scope)
+        return Toggle(isOn: Binding(get: { reversed },
+                                    set: { on in model.update(in: target) { WheelDefaults.chooseReversed(on, in: &$0, scope: scope) } })) {
+            RowLabel("Reverse direction", help: help, availability: availability, note: note)
         }
         .overridable(note, help: help)
         .accessibilityLabel("Reverse main wheel direction")
-        .accessibilityValue(standing.spoken(Self.spoken(model.config.resolvedBool(path, in: scope) ?? false)))
+        .accessibilityValue(standing.spoken(Self.spoken(reversed)))
     }
 
     private func wheelMode(_ availability: ControlAvailability) -> some View {
-        let path = ["scrollWheel", "mode"]
+        let path = WheelDefaults.modePath
         let scope = model.scope, target = model.scopeTarget
-        let mode = model.config.resolved(path, in: scope) as? String
+        let live = model.liveDevice(in: scope)?.wheelMode
+        let mode = WheelDefaults.mode(model.config, in: scope, live: live)
         let help = "Mode when the mouse connects."
         let standing = model.standing(of: [path], in: target)
         let note = standing.note
         return LabeledContent {
-            Picker("Wheel mode", selection: Binding<String?>(get: { mode },
-                                                              set: { new in model.update(in: target) { $0.set(new, at: path, in: scope) } })) {
-                Text("Ratchet").tag("ratchet" as String?)
-                Text("Free Spin").tag("freespin" as String?)
+            Picker("Wheel mode", selection: Binding(get: { mode },
+                                                    set: { new in model.update(in: target) { WheelDefaults.chooseMode(new, in: &$0, scope: scope) } })) {
+                Text("Ratchet").tag(WheelDefaults.Mode.ratchet)
+                Text("Free Spin").tag(WheelDefaults.Mode.freespin)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
             .fixedSize()
-            .accessibilityValue(standing.spoken(mode == "freespin" ? "Free Spin" : mode == "ratchet" ? "Ratchet" : "Not set"))
+            .accessibilityValue(standing.spoken(mode == .freespin ? "Free Spin" : "Ratchet"))
         } label: {
-            RowLabel("Wheel mode", help: help, mouseDefault: mode == nil, availability: availability, note: note)
+            RowLabel("Wheel mode", help: help, availability: availability, note: note)
         }
         .overridable(note, help: help)
     }
 
-    /// SmartShift: a switch (off writes 255); where it switches is in Advanced….
+    /// SmartShift: a switch (off writes 255, on writes 12 unless a wider scope already has it on);
+    /// where it switches is in Advanced….
     private func smartShift(_ availability: ControlAvailability) -> some View {
-        let path = ["scrollWheel", "smartShiftThreshold"]
+        let path = WheelDefaults.smartShiftPath
         let scope = model.scope, target = model.scopeTarget
-        let threshold = model.config.resolvedInt(path, in: scope)
         let help = "Frees the wheel when you scroll fast."
         let standing = model.standing(of: [path], in: target)
         let note = standing.note
-        return Toggle(isOn: Binding(get: { threshold.map { $0 < 255 } ?? true },
-                                    set: { on in model.update(in: target) { $0.set(on ? 12 : 255, at: path, in: scope) } })) {
-            RowLabel("SmartShift", help: help, mouseDefault: threshold == nil, availability: availability, note: note)
+        let on = WheelDefaults.smartShiftIsOn(model.config, in: scope)
+        return Toggle(isOn: Binding(get: { on },
+                                    set: { on in model.update(in: target) { WheelDefaults.chooseSmartShift(on, in: &$0, scope: scope) } })) {
+            RowLabel("SmartShift", help: help, availability: availability, note: note)
         }
         .overridable(note, help: help)
         .accessibilityLabel("SmartShift")
-        .accessibilityValue(standing.spoken(Self.spoken(threshold.map { $0 < 255 } ?? true)))
+        .accessibilityValue(standing.spoken(Self.spoken(on)))
     }
 }
 

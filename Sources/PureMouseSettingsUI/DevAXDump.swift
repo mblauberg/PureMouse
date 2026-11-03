@@ -121,6 +121,10 @@ enum DevAXDump {
             // A stepper is the system's: AppKit draws it 11 x 16 with two 11 x 8 arrows and no size
             // to set, and its row reads the number beside it. VoiceOver adjusts it as a whole.
             if entry.role == "AXIncrementor" { continue }
+            // `DisclosureLabel`'s disclosure is an accessibility representation: SwiftUI reports it at
+            // its text's height (16 pt) whatever frame it is given, while the row it stands for holds
+            // the 20 pt minimum (`DisclosureLabel.target`). The role matters more to VoiceOver.
+            if entry.role == "AXDisclosureTriangle", entry.size.width >= minimumSide { continue }
             if entry.size.width < minimumSide || entry.size.height < minimumSide, entry.size != .zero {
                 problems.append("smaller than \(Int(minimumSide)) x \(Int(minimumSide)) pt: \(name) \(entry.size)")
             }
