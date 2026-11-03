@@ -224,8 +224,8 @@ struct TriggerSessionTests {
     }
 
     @Test func aTableWithNoClickOnAButtonWithNoNativeBehaviourDoesNothingOnAQuickPress() async throws {
-        // The gesture button has no behaviour of its own. A top-level table is laid over the default
-        // set, so its click is named "none" here, which a table with other triggers reads as unset.
+        // The gesture button has no behaviour of its own, but a top-level table is laid over the
+        // default set, which names its click: so the click is named "none", and nothing is the mouse's.
         let gesture: UInt16 = 0x00C3
         for json in [#"{"buttons": {"gesture": {"click": "none", "hold": "missionControl"}}}"#,
                      #"{"buttons": {"gesture": {"click": "none", "hold": "none", "doubleClick": "appExpose"}}}"#] {
@@ -254,6 +254,28 @@ struct TriggerSessionTests {
         await release(h)
         #expect(r.native == [NativePost(cid: Self.back, down: true), NativePost(cid: Self.back, down: false)])
         #expect(r.acted.isEmpty && h.session.presses.isEmpty)
+    }
+
+    @Test func aTableThatNamesNoneAsItsClickDoesNothingOnAQuickPress() async throws {
+        let (h, r) = try await session(#"{"holdMs": 500, "buttons": {"back": {"click": "none", "hold": "missionControl"}}}"#)
+        defer { h.close() }
+        await press(h, Self.back)
+        await release(h)
+        #expect(r.native.isEmpty && r.acted.isEmpty && h.session.presses.isEmpty)
+    }
+
+    @Test func aTableNamesItsClickOrLeavesItToTheMouse() throws {
+        let config = try SessionHarness.config(#"""
+            {"buttons": {"back": {"hold": "missionControl"}, "forward": {"click": "none", "hold": "missionControl"},
+                         "middle": {"click": "navigateForward", "doubleClick": "appExpose"}},
+             "apps": {"com.example.x": {"buttons": {"middle": {"hold": "launchpad"}, "back": {"click": "mute"}}}}}
+            """#)
+        #expect(PressPlan(config.bindings[Self.back]).click == nil)
+        #expect(PressPlan(config.bindings[Self.forward]).click == Action.none)
+        #expect(PressPlan(config.bindings[0x52]).click == .navigateForward)
+        let app = config.settings(forApp: "com.example.x")?.bindings
+        #expect(PressPlan(app?[0x52]).click == .navigateForward)  // from the wider table
+        #expect(PressPlan(app?[Self.back]).click == .mute)
     }
 
     @Test func aTableOfOnlyANoneClickStillDoesNothing() async throws {

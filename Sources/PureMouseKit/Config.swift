@@ -372,6 +372,9 @@ public struct Config: Decodable, Sendable {
         /// over a wider table, that table's (`init(_:base:)`).
         public struct Gesture: Decodable, Sendable, Equatable {
             public var click: Action = .none
+            /// The table names no click, here or in the wider table it is laid over: a quick tap
+            /// is the mouse's own click. `"click": "none"` names one, and does nothing.
+            public var clickIsUnset = false
             public var up: Action = .none
             public var down: Action = .none
             public var left: Action = .none
@@ -420,6 +423,7 @@ public struct Config: Decodable, Sendable {
                     return action
                 }
                 click = try action("click", click, whileHeld: true)
+                if names.contains("click") { clickIsUnset = false } else if base == nil { clickIsUnset = true }
                 doubleClick = try action("doubleClick", doubleClick)
                 if names.contains("hold") {
                     (up, down, left, right) = (.none, .none, .none, .none)

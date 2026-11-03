@@ -4,7 +4,7 @@ import PureMouseKit
 /// so a press only reads it. A bare action, a table that sets only a click, and a while-held
 /// click are `immediate`: the click fires on press and nothing is armed, as before triggers.
 struct PressPlan: Equatable {
-    /// The click; nil for no binding, or a table with other triggers and no click: the mouse's own
+    /// The click; nil for no binding, or a table that names no click: the mouse's own
     /// behaviour (`Session.performNative`, or `Session.click` once the press is over).
     var click: Action?
     /// Watched for only when set: a lone click then waits the double-click interval.
@@ -31,10 +31,9 @@ struct PressPlan: Equatable {
             guard !table.click.isWhileHeld else { return }
             doubleClick = table.doubleClick == .none ? nil : table.doubleClick
             hold = table.moves ? .move(table) : table.hold == .none ? .none : .action(table.hold)
-            // A table that watches for another trigger and names no click leaves the click to the
-            // mouse, which its quick release then makes (`Session.click`). A table of nothing but
-            // `"click": "none"` is the same as a bare "none": the button does nothing.
-            if table.click == .none, !immediate { click = nil }
+            // A table that names no click leaves it to the mouse (`Session.click` once the press
+            // is over). `"click": "none"` names one: the button does nothing.
+            if table.clickIsUnset { click = nil }
         }
     }
 

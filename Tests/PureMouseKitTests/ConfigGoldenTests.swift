@@ -44,6 +44,7 @@ import Testing
             // trigger table's `doubleClick` and `hold`, and `holdMs` and `doubleClickMs` (#158).
             let later = ["doubleClick": "none", "hold": "none", "holdMs": "350", "doubleClickMs": "nil"]
             let children = mirror.children.filter { $0.label != "devices" || !Mirror(reflecting: $0.value).children.isEmpty }
+                .filter { $0.label != "clickIsUnset" }  // likewise, at either value (TriggerSessionTests covers it)
                 .filter { child in child.label.flatMap { later[$0] } != "\(child.value)".replacingOccurrences(of: "Optional(", with: "") }
             return nested(String(name), children.map { ($0.label ?? "_", $0.value) })
         default:
