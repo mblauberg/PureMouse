@@ -346,12 +346,6 @@ use. PureMouse goes further only where the HIG's own principles (feedback, forgi
 manipulation) lead and the system still draws everything: standard controls, no new chrome, no idle
 cost. Planned or built (epic #114):
 
-- **Try it** (built). A collapsed "Try it" disclosure under Feel and Speed on Scrolling reveals a
-  plain-text scroll area (a ScrollView of "Line 1" to "Line 40", `Scrolling sample` to VoiceOver, 120
-  pt tall: a ScrollView has no intrinsic height, so `ScrollingPane.sampleHeight` names it), and the
-  window refits. Smoothing is felt where it is set. Collapsed it adds one row, and Scrolling must stay
-  within 600 pt for a mouse with a thumb wheel (checked by capture); if it did not, Try it is cut. Trackpad shows
-  its gestures; Mouse shows nothing. `PUREMOUSE_DEV_TRY_IT=1` opens it (debug).
 - **Undo.** ⌘Z and ⇧⌘Z undo and redo each settings change, named in the Edit menu ("Undo Pointer
   Speed"). One slider drag is one step.
 - **Settings for the app in use** (built). The status menu offers "Settings for <app>…" below
@@ -365,7 +359,9 @@ cost. Planned or built (epic #114):
 Not adopted: a 3D or photographic mouse map with glowing callouts (the device card stays original
 art, with no markers or callouts, #56); an acceleration curve editor (macOS owns acceleration, so it
 would duplicate System Settings); a floating per-app indicator (it polls and covers content);
-display-density DPI hints and live gesture highlighting (more text and motion than they earn).
+display-density DPI hints and live gesture highlighting (more text and motion than they earn); a
+"Try it" scroll sample on Scrolling (it broke the 600 pt pane, and people can try a setting by
+scrolling any window).
 
 ## Planned structure (#155)
 
@@ -533,7 +529,7 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
 | General | Status (PureMouse running/paused/off, Start or Stop, active notices), Open at login, Show in menu bar, Low battery notifications (a disabled switch that keeps the choice, with Open Notification Settings…, while macOS has them off), Permissions (status only) | Advanced… sheet: Work with Universal Control, Config file, Log, Reset All Settings… |
 | Mouse header | Buttons, Scrolling, Pointer segments; mouse pop-up with two or more mice; Find by Pressing… and the device card on Buttons | — |
 | Mouse › Buttons | One row per button with its action | Gesture directions (disclosure, collapsed, caption summarises them; choosing Hold and Move expands it); Other controls (disclosure: named controls and bound ones, see Device card); Advanced… sheet, only while some button anywhere is Hold and Move: gesture Distance and Repeat |
-| Mouse › Scrolling | Smooth scrolling, Feel, Speed, Try it (collapsed); Main Wheel: Reverse direction, Wheel mode, SmartShift; Thumb Wheel: Action (Turn left/right when Custom); each when the mouse has it | Advanced… sheet, each row only when it applies: Acceleration, Glide, Hold Shift to scroll sideways (dimmed while smooth scrolling is off); Switches at (while SmartShift is on); thumb wheel Reverse direction (when it scrolls here or in some app), Swap directions and Turn distance (when it has actions), Speed (when it scrolls) |
+| Mouse › Scrolling | Smooth scrolling, Feel, Speed; Main Wheel: Reverse direction, Wheel mode, SmartShift; Thumb Wheel: Action (Turn left/right when Custom); each when the mouse has it | Advanced… sheet, each row only when it applies: Acceleration, Glide, Hold Shift to scroll sideways (dimmed while smooth scrolling is off); Switches at (while SmartShift is on); thumb wheel Reverse direction (when it scrolls here or in some app), Swap directions and Turn distance (when it has actions), Speed (when it scrolls) |
 | Mouse › Pointer | Pointer Speed slider with its value; Presets summary row; both only when the mouse can adjust its speed (else one "Not supported by this mouse." row, unless a value is set) | Exact value (disclosure); Edit Presets… sheet (also opened from the menu) |
 | Apps | App list whose rows name the areas each app changes, Add App (bordered pull-down) in the footer, routing note; empty state with an Add App… button that opens the Applications panel | Each app opens as a page (‹ Apps, Buttons \| Scrolling); on it, gesture directions, other controls and more thumb wheel options are disclosures, and the editors are sheets |
 | About | Icon, name, version, Check for Updates, Check for updates automatically (switch), links, Support PureMouse | — |

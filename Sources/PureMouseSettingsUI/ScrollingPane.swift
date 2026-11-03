@@ -8,7 +8,6 @@ struct ScrollingPane: View {
     @Environment(\.settings) private var settings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showingAdvanced = false
-    @State private var showingTryIt = false
     /// The section the device card sent the person to: outlined for a moment (`ArrivalOutline`).
     @State private var outline = ArrivalOutlineState()
     @State private var outlineTask: Task<Void, Never>?
@@ -54,7 +53,6 @@ struct ScrollingPane: View {
                     }
                     // Dimmed, not hidden: the switch above brings them back.
                     .disabled(!smooth)
-                    trySample
                 }
             }
 
@@ -105,11 +103,8 @@ struct ScrollingPane: View {
             ScrollingAdvancedSheet().environment(model)
         }
         .onChange(of: layout.hasAdvanced) { _, has in if !has { showingAdvanced = false } }
-        // Try it adds or removes the sample's rows: the window refits (as Pointer's exact value does).
-        .onChange(of: showingTryIt) { settings?.refit() }
         #if DEBUG
         .onAppear {
-            if ProcessInfo.processInfo.environment["PUREMOUSE_DEV_TRY_IT"] != nil { showingTryIt = true }
             if DevHooks.sheet(on: "scrolling") == .advanced, layout.hasAdvanced { showingAdvanced = true }
             if let section = ProcessInfo.processInfo.environment["PUREMOUSE_DEV_ARRIVAL"].flatMap(ScrollingSection.init(rawValue:)) {
                 settings?.arrival = section
@@ -253,32 +248,6 @@ struct ScrollingPane: View {
         .overridable(note, help: help)
         .accessibilityLabel("SmartShift")
         .accessibilityValue(standing.spoken(Self.spoken(on)))
-    }
-
-    // MARK: Try it
-
-    /// Lines in the sample; enough to scroll at any speed.
-    static let sampleLineCount = 40
-    /// The sample's height. A ScrollView has no intrinsic height, so the row must be given one;
-    /// about six lines of body text.
-    static let sampleHeight: CGFloat = 120
-
-    static func sampleLine(_ number: Int) -> String { "Line \(number)" }
-
-    /// A short scroll area under Feel and Speed, so a change is felt where it is made.
-    @ViewBuilder private var trySample: some View {
-        DisclosureLabel(title: "Try it", isExpanded: $showingTryIt)
-        if showingTryIt {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(1...Self.sampleLineCount, id: \.self) { Text(Self.sampleLine($0)) }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityHidden(true)
-            }
-            .frame(height: Self.sampleHeight)
-            .accessibilityLabel("Scrolling sample")
-        }
     }
 }
 

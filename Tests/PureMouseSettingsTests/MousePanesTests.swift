@@ -141,7 +141,7 @@ import Testing
     @Test func theWheelRowsAlwaysShowAValueAndSwitchesAtKeepsItsCaption() throws {
         let scrolling = try Self.source("ScrollingPane.swift")
         let start = try #require(scrolling.range(of: "private func reverseDirection(")?.lowerBound)
-        let end = try #require(scrolling.range(of: "// MARK: Try it")?.lowerBound)
+        let end = try #require(scrolling.range(of: "/// Scrolling's Advanced… sheet")?.lowerBound)
         let rows = String(scrolling[start..<end])
         // No caption for an unset value, and no segmented control that can hold no selection.
         #expect(!rows.contains("mouseDefault"))
@@ -150,22 +150,6 @@ import Testing
         // Switches at, in Advanced…, still says the mouse keeps its own.
         let switchesAt = try #require(scrolling.range(of: "private func switchesAt(")?.lowerBound)
         #expect(scrolling[switchesAt...].contains("mouseDefault: threshold == nil"))
-    }
-
-    @MainActor @Test func tryItShowsAScrollingSampleOfFortyLinesInANamedHeight() throws {
-        #expect(ScrollingPane.sampleLineCount == 40)
-        #expect(ScrollingPane.sampleLine(1) == "Line 1" && ScrollingPane.sampleLine(40) == "Line 40")
-        #expect(ScrollingPane.sampleHeight == 120)
-        let scrolling = try Self.source("ScrollingPane.swift")
-        #expect(scrolling.contains(#"DisclosureLabel(title: "Try it", isExpanded: $showingTryIt)"#))
-        #expect(scrolling.contains(#".accessibilityLabel("Scrolling sample")"#))
-        // A ScrollView has no intrinsic height: the frame is a named constant, and it shows only when expanded.
-        #expect(scrolling.contains(".frame(height: Self.sampleHeight)"))
-        #expect(scrolling.contains("if showingTryIt {"))
-        // Expanding it refits the window, as Pointer's exact value does.
-        #expect(scrolling.contains(".onChange(of: showingTryIt) { settings?.refit() }"))
-        #expect(scrolling.contains(#"@State private var showingTryIt = false"#))
-        #expect(scrolling.contains("PUREMOUSE_DEV_TRY_IT"))
     }
 
     @MainActor @Test func restoreDefaultsAsksFirstOnBothSegments() throws {
