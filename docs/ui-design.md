@@ -66,8 +66,9 @@ answering a question people have, and a good default means most people never tou
   `ConfigScope.resolved`; the pop-up's first entry then reads "Same as Mouse Settings (Varies by
   Mouse)"). A row the app sets reads "Set for this app." with "Use Mouse Setting", which removes
   only that app's key under `apps.<id>`; Mouse Default is a value of its own, distinct from
-  leaving the row alone, and its caption is the one the Mouse page gives (a gesture's "Click: Mission
-  Control, 1 direction set.", worked out from the app's directions over the mice's). Turning
+  leaving the row alone, and its caption is the one the Mouse page gives (a collapsed row's summary,
+  "Hold and Move: Mission Control, App Exposé, Spaces.", worked out from the app's triggers over the
+  mice's). Turning
   Custom scrolling on starts from the first mouse's values; its caption describes the on state
   ("Gives this app its own scrolling speed and glide.") whatever the smooth-scrolling settings are,
   and Glide is disabled only while smooth scrolling is off on every mouse the app may run with.
@@ -148,8 +149,8 @@ Each level has one mechanism, and each label says what it reveals.
   Settings › Mouse › Advanced… does the same; the HIG pairs Done with Cancel for sheets that hold
   edits). A sheet that holds edits until confirmed, such as the shortcut recorder, has Cancel and a
   verb. Each sheet has a fixed width and fits its content.
-- **Disclosure triangle** only for a control's own children (gesture directions, Exact value);
-  at most one per row.
+- **Disclosure triangle** only for a control's own children (a button's Double-click and Hold rows,
+  with Hold and Move's directions under Hold; Exact value); at most one per row.
 - **⌥ alternates** only in the status menu, and each also has a home in Settings (see Status menu).
 - No sheet opens from a sheet; inside a sheet, use disclosures. The editors (keyboard shortcut,
   shell command) are always sheets, an app's page included: it is a page of the Apps tab, not a sheet.
@@ -387,8 +388,8 @@ Settings
 │            Advanced…: Universal Control, Config file [Open] [Export Settings…] [Import Settings…],
 │            Log, Reset All Settings…
 ├─ Mouse [Buttons | Scrolling | Pointer]
-│   ├─ Buttons: one row per button, its pop-up the click; Double-click and Hold as child rows once
-│   │           added; Other controls; Advanced…: Ignore repeated clicks, Hold and Move
+│   ├─ Buttons: Advanced… gains Ignore repeated clicks (the click, Double-click and Hold rows are
+│   │           built: see Layout)
 │   ├─ Scrolling: Advanced… gains Modifier Keys (Shift, Option, Command, Control) in place of
 │   │             "Hold Shift to scroll sideways"
 │   └─ Pointer: unchanged
@@ -400,13 +401,11 @@ Settings
 
 | Feature | Home |
 |---|---|
-| Click, Double-click, Hold | The button row and its child rows; More Ways to Press at the foot of the row's picker |
 | Button plus scroll | Hold → Hold and Scroll, using the thumb wheel's pairs |
 | Modifier plus scroll | Scrolling › Advanced…; collapsed on an app's Scrolling |
 | Ignore repeated clicks | Buttons › Advanced…, per mouse; milliseconds stay in config |
 | Off in this app | The app page's first row |
 | Easy-Switch | Status in About This Mouse (built) and the menu; Switch to Computer N in the picker |
-| Drag Lock, Precise Pointer | Picker › Mouse: commands, not settings |
 | Per-app actions (#154) | The app page's picker, the app's own section first |
 | Sequence, Action Ring and new action types (#153) | Picker › Custom, one sheet each |
 | Export, Import | General › Advanced…, beside Open Config File, and the File menu |
@@ -486,6 +485,18 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
   or the config binds it; with no report, those in `NamedButton.listedByDefault` (not the MX Master
   4's thumb panel) (`ButtonRows.named`). Haptic picker entries come from Kit's
   `HapticWaveform.allCases`; the menu only words them (`ActionCatalog.hapticLabel`).
+- **Triggers.** A button's rows are one view, `TriggerRows`, on Mouse › Buttons and on an app's page.
+  It reads `AppButton` (`scopedButton`, `appButton`: per trigger, the scope's own value and the one
+  inherited) and writes through `bindClick`, `bindTrigger` and `bindHoldAndMove`
+  (`Triggers.swift`), which keep the file in the forms Kit reads: a table left with only its click
+  is written as the bare action; a trigger the wider table sets is switched off with `"none"`, as is
+  one the default set's table holds at the top level, so layering does not refill it; writing one
+  hold form removes the other. A child row added from More Ways to Press is view state (`wanted`)
+  until an action is chosen. The picker's rows come from `PickerEntry.all(…, row:)`: a Hold row
+  leads with No Action and Hold and Move, trigger rows offer no Mouse Default, and a while-held
+  action (Precise Pointer) is offered only on the click and the Hold row, and dims More Ways to Press
+  while it is the click. The Double-click caption reads the live interval
+  (`ConfigTree.doubleClickMilliseconds`: `doubleClickMs`, else the system's).
 - **Pointer speed.** The DPI the menu and Mouse › Pointer show is the mouse's live value (a
   `cycleDPI` press changes it without touching the config), then the configured one; a change made
   in the pane shows until the mouse reports it (`DPIReading`). Choosing the saved value changes
@@ -524,10 +535,10 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
 |---|---|---|
 | General | Status (PureMouse running/paused/off, Start or Stop; one row per mouse the daemon knows, with its connection, battery and computer, or that its settings are being applied or were not, and an (i) that opens About This Mouse; active notices), Open at login, Show in menu bar, Low battery notifications (while macOS has them off, a disabled switch that keeps the choice, with Open Notification Settings… in the same row before it), Permissions (status only) | Advanced… sheet: Work with Universal Control, Config file, Log, Reset All Settings… |
 | Mouse header | Buttons, Scrolling, Pointer segments; mouse pop-up with two or more mice; Find by Pressing… and the device card on Buttons | — |
-| Mouse › Buttons | One row per button with its action | Gesture directions (disclosure, collapsed, caption summarises them; choosing Hold and Move expands it); Other controls (disclosure: named controls and bound ones, see Device card); Advanced… sheet, only while some button anywhere is Hold and Move: gesture Distance and Repeat |
+| Mouse › Buttons | One row per button, its pop-up the click action (the gesture button reads "Mission Control") | Double-click and Hold child rows (one disclosure per button, only once wanted from More Ways to Press at the foot of the click's picker or once one applies; collapsed, the caption sums them up, "Double-click: Mission Control. Hold: Precise Pointer."; the Double-click row's caption states the wait, "Single clicks wait 0.5 s for a second click."); Hold and Move's directions under its Hold row (choosing it expands the row); Other controls (disclosure: named controls and bound ones, see Device card); Advanced… sheet, only while some button anywhere is Hold and Move: gesture Distance and Repeat |
 | Mouse › Scrolling | Smooth scrolling, Feel, Speed; Main Wheel: Reverse direction, Wheel mode, SmartShift; Thumb Wheel: Action (Turn left/right when Custom); each when the mouse has it | Advanced… sheet, each row only when it applies: Acceleration, Glide, Hold Shift to scroll sideways (dimmed while smooth scrolling is off); Switches at (while SmartShift is on); thumb wheel Reverse direction (when it scrolls here or in some app), Swap directions and Turn distance (when it has actions), Speed (when it scrolls) |
 | Mouse › Pointer | Pointer Speed slider with its value; Presets summary row; both only when the mouse can adjust its speed (else one "Not supported by this mouse." row, unless a value is set) | Exact value (disclosure); Edit Presets… sheet (also opened from the menu) |
-| Apps | App list whose rows name the areas each app changes, Add App (bordered pull-down) in the footer, routing note; empty state with an Add App… button that opens the Applications panel | Each app opens as a page (‹ Apps, Buttons \| Scrolling); on it, gesture directions, other controls and more thumb wheel options are disclosures, and the editors are sheets |
+| Apps | App list whose rows name the areas each app changes, Add App (bordered pull-down) in the footer, routing note; empty state with an Add App… button that opens the Applications panel | Each app opens as a page (‹ Apps, Buttons \| Scrolling); on it, Double-click and Hold rows, other controls and more thumb wheel options are disclosures, and the editors are sheets |
 | About | Icon, name, version, Check for Updates, Check for updates automatically (switch), links, Support PureMouse | — |
 | Status menu | Device header, attention rows when active, Update to X.Y.Z… with Skip This Version under it (while a newer release is known), Smooth Scrolling, Pointer Speed, Start/Pause/Resume, Settings…, Settings for <app>… (the frontmost app, if any), Quit PureMouse | ⌥: detail line, Show Log in Finder, Hide Menu Bar Icon |
 

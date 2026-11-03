@@ -183,14 +183,21 @@ import Testing
         #expect(ActionCatalog.label(for: "dragLock") == "Drag Lock")
     }
 
-    @Test func theCaptureFixtureDecodesWithForwardsTriggers() throws {
-        // scripts/fixtures/buttons-triggers.json, for the chair's captures and AX dump (docs/development.md).
-        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().appending(path: "scripts/fixtures/buttons-triggers.json")
-        let config = try JSONDecoder().decode(Config.self, from: Data(contentsOf: url))
+    @Test func theCaptureFixturesDecode() throws {
+        // scripts/fixtures, for the chair's captures, AX dump and measure-input.sh runs (docs/development.md).
+        func fixture(_ name: String) throws -> Config {
+            let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+                .deletingLastPathComponent().appending(path: "scripts/fixtures/\(name).json")
+            return try JSONDecoder().decode(Config.self, from: Data(contentsOf: url))
+        }
+        let config = try fixture("buttons-triggers")
         let forward = try #require(table(config.bindings[Self.forward]))
         #expect(forward.doubleClick == .missionControl && forward.hold == .precisePointer(dpi: nil))
+        #expect(config.holdMs == 350 && config.doubleClickMs == 500)
         #expect(config.warnings.isEmpty)
+        // The same buttons with only their clicks, to measure against.
+        let clickOnly = try fixture("buttons-click-only")
+        #expect(table(clickOnly.bindings[Self.forward]) == nil && clickOnly.doubleClickMs == nil && clickOnly.warnings.isEmpty)
     }
 
     @Test func theDoubleClickCaptionSaysTheLiveInterval() throws {

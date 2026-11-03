@@ -1,7 +1,10 @@
 {
+  "holdMs": 350,
+  "doubleClickMs": 500,
   "buttons": {
     "forward": { "click": "navigateForward", "doubleClick": "missionControl", "hold": "precisePointer" },
-    "top": "dragLock"
+    "top": "dragLock",
+    "middle": "precisePointer"
   },
   "apps": {
     "com.apple.Safari": { "buttons": { "forward": { "doubleClick": "appExpose", "hold": "none" } } }
