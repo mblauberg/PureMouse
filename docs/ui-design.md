@@ -354,8 +354,23 @@ use. PureMouse goes further only where the HIG's own principles (feedback, forgi
 manipulation) lead and the system still draws everything: standard controls, no new chrome, no idle
 cost. Planned or built (epic #114):
 
-- **Undo.** ⌘Z and ⇧⌘Z undo and redo each settings change, named in the Edit menu ("Undo Pointer
-  Speed"). One slider drag is one step.
+- **Undo and redo** (built). ⌘Z and ⇧⌘Z undo and redo each settings change in Settings, named in
+  the Edit menu ("Undo Pointer Speed"). One slider drag is one step. The step's name is the control's
+  own title, read from the keys it changed after `devices.<key>.` or `apps.<id>.`:
+  `dpi` Pointer Speed; `dpiPresets` Presets; `smoothScroll.speed` Scrolling Speed;
+  `smoothScroll.acceleration` with `smoothingMs` Feel, and each alone Acceleration or Glide;
+  `smoothScroll.enabled` Smooth Scrolling; `scrollWheel.inverted` Reverse Direction;
+  `scrollWheel.mode` Wheel Mode; `scrollWheel.smartShiftThreshold` SmartShift; `thumbWheel.*` and
+  `smoothScroll.horizontalSpeed` Thumb Wheel; `buttons.*` Button Action; `gesture.*` Hold and Move;
+  `notifications.lowBattery` Low Battery Notification; `universalControl.handOff` Universal Control;
+  an app entry added or removed whole, App Settings; anything mixed or not listed, Changes. The
+  history lives only in the Settings helper: the menu bar app keeps none. Two different
+  sliders touched within the debounce are two steps. It clears when Settings sees the file change
+  under it (a hand edit, the file deleted or unreadable), after Reset All Settings or Use Last
+  Working Config, and when a write fails. A save that merges another writer's edit made since the
+  last load keeps it, and undo puts back only its own keys. While the config has an error, ⌘Z is
+  off. Text being edited, in a field or a text view, keeps its own undo. Undoing the first change
+  of a session that began with no config file leaves an empty `{}` file, not no file.
 - **Settings for the app in use** (built). The status menu offers "Settings for <app>…" below
   Settings… for the frontmost app (not Finder, the Dock or any PureMouse bundle, nor one without a
   bundle identifier), opening its page in Apps. `NSWorkspace.shared.frontmostApplication` is read
@@ -488,6 +503,19 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
   one table the daemon also performs from, though a `"default"` already set on another control
   stays in view (`PickerEntry.offersMouseDefault`).
   `buttonKey`/`removeButton` (`ConfigKeys.swift`) follow Kit's alias rule.
+- **Undo.** `ConfigStore.update` registers each non-empty change on an `UndoHistory`
+  (`UndoHistory.swift`, Foundation only) wrapping the window's `UndoManager`, which only the Settings
+  helper gives its `AppModel` (`undoManager`; nil in the menu bar app, so nothing is registered).
+  The inverse is the diff of the file's own keys (without the default set under them, so undoing
+  puts the file back as it was, including a key held at its default value) replayed with
+  `ConfigTree.apply` by `ConfigStore.replay`, which appends to the pending changes, flushes and
+  registers the redo in turn; it does not go through `update`, which diffs the tree laid over the
+  defaults and would see no change. Debounced edits to the same keys that arrive before the flush
+  share one step, which keeps the name its first change gave it; edits to other keys close it. Each step is its own undo group
+  (`groupsByEvent` off). `SettingsWindowController.windowWillReturnUndoManager` returns the model's
+  manager unless any text responder (`NSText`: field editor or text view) is first responder, or
+  the config is read-only, when AppKit falls back to the window's own, so typing undoes first. Restore Defaults on a pane is an ordinary change and can be undone; Reset All
+  Settings and Use Last Working Config replace the file and clear the history.
 - **Global actions.** Reset All and the status menu stay global (`setDPI` without a target writes
   the top level). Settings' Pointer pane passes the mouse, and Find by Pressing and "use configured
   DPI" carry its key (`Control.device`, `Control.capture.device`), a press selecting that mouse's
