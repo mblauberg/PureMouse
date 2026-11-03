@@ -125,6 +125,8 @@ enum MenuAction {
     case start
     case setPaused(Bool)
     case reloadConfig
+    /// Starts a fresh apply where the settings are not applied.
+    case applySettingsAgain
     case showLog
     case quit
     case hideMenuBarIcon
@@ -231,6 +233,9 @@ enum MenuPlan {
             rows.append(attention("Allow Input Monitoring", .openPrivacy(.inputMonitoring)))
         }
         if state.configError { rows.append(attention("Fix Config File…", .openSettings(.tab(.general)))) }
+        if state.devices.contains(where: { $0.applied?.state == .notApplied }) {
+            rows.append(attention("Apply Settings Again", .applySettingsAgain))
+        }
         if state.logiOptionsRunning {
             // Quit carries the warning; the login item is its follow-up, so a plain row under it.
             rows.append(attention(LogiOptionsAction.quit.title, .quitLogiOptions))

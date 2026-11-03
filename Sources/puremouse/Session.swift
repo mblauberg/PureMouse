@@ -94,6 +94,16 @@ final class Session {
     private var configureGeneration = 0
     var isConfiguring: Bool { configuring != nil }
     private var lastConfigureEnded: ContinuousClock.Instant?
+    /// The receiver said this mouse's link is down and has not said it is up since: the mouse is
+    /// off or on another computer, so waking the Mac has nothing to apply to.
+    var linkDown = false
+    /// Attempts begun by every configure of this session, so a test can count them rather than
+    /// time them.
+    private(set) var attemptsMade = 0
+    /// Called as each attempt begins, with the count so far: tests decide what the fake mouse does
+    /// by the attempt, not by watching the clock.
+    var attemptStarting: (@MainActor (Int) -> Void)?
+    private var replyObserver: Int?
     static let offlineReconfigureGap: Duration = .seconds(30)
     /// Device actions (toggle scroll mode, cycle DPI, haptics) and `apply`'s DPI and scroll mode
     /// writes, one at a time in the order asked, each reading what is wanted (`liveDPI`,
@@ -138,6 +148,20 @@ final class Session {
         /// An apply has succeeded, so feature lookups have been made and `capabilities` can be
         /// reported from them.
         var applied = false
+        /// Whether the settings are on the mouse now (`Status.Device.applied`); nil until a
+        /// configure first starts. Moves only on a configure starting, ending or failing.
+        var appliedStatus: Status.Device.Applied? {
+            didSet { if appliedStatus?.state != .applying { settledApplied = appliedStatus } }
+        }
+        /// The last applied state that is not the transient `applying`: what a superseded configure
+        /// goes back to, and what a replacement session inherits in its place.
+        var settledApplied: Status.Device.Applied?
+        /// The main firmware, read once per mouse (`readFacts`).
+        var firmware: String?
+        /// The firmware has been asked for and answered, with a version or without one.
+        var firmwareRead = false
+        /// The Easy-Switch hosts, read after each successful configure.
+        var hosts: Status.Device.Hosts?
         /// Targets already reported as snapped to a supported resolution, so each is logged once
         /// per mouse: kept, like the rest of `DeviceState`, by the sessions replacing this one.
         var snapLogged: Set<Int> = []
@@ -259,7 +283,8 @@ final class Session {
             online: state.online, battery: state.battery.flatMap(Self.status), dpi: state.dpi,
             dpiSteps: state.resolutions?.values ?? [],
             wheelMode: state.wheelMode.map { $0 == .ratchet ? .ratchet : .freespin },
-            controls: pressable, model: deviceKey, unit: unit, kind: kind?.name, capabilities: capabilities)
+            controls: pressable, model: deviceKey, unit: unit, kind: kind?.name, capabilities: capabilities,
+            applied: state.appliedStatus, firmware: state.firmware, hosts: state.hosts)
     }
 
     /// What the mouse has, from the lookups an apply made (`HIDPPDevice.knownPresence`), so
@@ -380,8 +405,27 @@ final class Session {
         dropHeld()
         configureGeneration &+= 1
         let generation = configureGeneration
+        // A superseded configure's "applying" goes with it: until this one is answered the mouse
+        // shows what it showed before that.
+        if state.appliedStatus?.state == .applying { setApplied(state.settledApplied) }
+        let repliesAtStart = device.repliesReceived
+        // "Applying settings…" is for a mouse that is answering: until the first reply it keeps what
+        // it showed (Asleep, or its last state), so a silent mouse never flashes it. The
+        // registration is this configure's own, so a replacement's (or another session's, after a
+        // reload) is never removed by it.
+        replyObserver.map { device.stopObserving($0) }
+        let observer = device.observeNextReply { [weak self] in
+            guard let self, !finished, configureGeneration == generation else { return }
+            setApplied(.init(state: .applying))
+        }
+        replyObserver = observer
         configuring = Task {
+            // The short wait lent to this task's requests. Returning it ends only this lend: a
+            // replacement's, or a restore's, stands (`HIDPPDevice.returnTimeout`).
+            var lease: Int?
             defer {
+                if let lease { device.returnTimeout(lease) }
+                device.stopObserving(observer)
                 // A superseded task ends after its replacement started; leave the replacement's handle.
                 if configureGeneration == generation {
                     configuring = nil
@@ -391,6 +435,9 @@ final class Session {
             try? await Task.sleep(for: delay)
             for attempt in 1...3 {
                 guard !Task.isCancelled else { return }
+                attemptsMade += 1
+                attemptStarting?(attemptsMade)
+                if let timeout = environment.attemptTimeout { lease = device.lendTimeout(timeout) }
                 do {
                     try await apply()
                     // Cached indices only: diagnostics must never add adoption traffic or timeouts.
@@ -398,6 +445,7 @@ final class Session {
                         .map { String(format: "%04x", $0) }
                     Log.info("\(name): configured; features(PureMouse)=\(features.joined(separator: " "))")
                     if identity.unresolved, !finished { await resolveIdentity?(self) }
+                    await readFacts()
                     return
                 } catch is CancellationError {
                     return
@@ -409,10 +457,83 @@ final class Session {
                 // Usually the mouse is asleep; its reconnect event will also trigger a retry.
                 try? await Task.sleep(for: environment.configureRetryDelay)
             }
-            guard !Task.isCancelled, !finished, state.online else { return }
+            guard !Task.isCancelled, !finished else { return }
+            // Out of attempts. A mouse that answered something and still could not be configured
+            // has settings not applied; Apply Settings Again (`reapply`) or its own reconnect
+            // starts the next apply. One that never answered, or whose link went down, is asleep
+            // or away, not failed: it is offline with nothing said about the settings, and its
+            // next link-up or answer starts a configure.
+            let answered = device.repliesReceived > repliesAtStart
+            state.appliedStatus = answered && !linkDown ? .init(state: .notApplied) : nil
             state.online = false
             changed()
         }
+    }
+
+    /// The receiver said the link is down: the mouse is off or on another computer. A configure
+    /// under way is over (it would only run out of attempts), and nothing is known of the settings.
+    func linkWentDown() {
+        linkDown = true
+        configuring?.cancel()
+        configureGeneration &+= 1
+        configuring = nil
+        setApplied(nil)
+    }
+
+    /// Wake: starts a configure at once, except for a mouse the receiver last said is away, whose
+    /// link-up will start one.
+    func configureAfterWake() {
+        guard !linkDown else { return }
+        configure()
+    }
+
+    /// Apply Settings Again: a fresh apply, only for a mouse whose settings are not applied, and
+    /// not held back by the offline guard.
+    func reapply() {
+        guard !finished, state.appliedStatus?.state == .notApplied else { return }
+        configure()
+    }
+
+    /// Records `applied` and publishes it when it differs, so the status moves on transitions only.
+    private func setApplied(_ applied: Status.Device.Applied?) {
+        guard state.appliedStatus != applied else { return }
+        state.appliedStatus = applied
+        changed()
+    }
+
+    /// Facts for About This Mouse, all reads: the main firmware once per mouse, and the Easy-Switch
+    /// hosts after each configure (the mouse may be on another host since). A feature the mouse
+    /// lacks leaves its fact out; a read that fails leaves what was known. Nothing is written
+    /// (docs/how-it-works.md, "Sessions").
+    func readFacts() async {
+        var firmware = state.firmware
+        var hosts = state.hosts
+        do {
+            try ensureOpen()
+            if !state.firmwareRead {
+                if try await device.hasFeature(DeviceIdentity.id) {
+                    firmware = try await DeviceIdentity.mainFirmware(device)?.text
+                }
+                state.firmwareRead = true
+            }
+            try ensureOpen()
+            if try await device.hasFeature(HostsInfo.id) {
+                let info = try await HostsInfo.info(device)
+                let list = try await HostsInfo.hosts(device, info: info)
+                hosts = .init(current: info.current, slots: list.map {
+                    .init(name: $0.name.isEmpty ? nil : $0.name, paired: $0.paired)
+                })
+            } else if try await device.hasFeature(ChangeHost.id) {
+                let info = try await ChangeHost.info(device)
+                hosts = .init(current: info.current, slots: Array(repeating: .init(), count: info.count))
+            }
+        } catch {
+            if !stops(error) { Log.debug("\(name): reading firmware and hosts failed: \(error)") }
+        }
+        guard !finished, firmware != state.firmware || hosts != state.hosts else { return }
+        state.firmware = firmware
+        state.hosts = hosts
+        changed()
     }
 
     /// An offline mouse can return without either reconnect notification. Events drive this
@@ -447,8 +568,12 @@ final class Session {
             try await session.applyScrollMode()
         }
         await readBattery()
+        // A configure that began meanwhile has superseded this apply; it must not report applied.
+        try ensureOpen()
+        try Task.checkCancellation()
         state.online = true
         state.applied = true
+        state.appliedStatus = .init(state: .applied, at: environment.date())
         changed()
     }
 
@@ -550,9 +675,8 @@ final class Session {
         // Cancelled work stops at its next write, and its request in flight fails at once.
         await diversion.drain()
         await deviceActions.drain()
-        let timeout = device.timeout
-        device.timeout = Self.restoreTimeout
-        defer { device.timeout = timeout }
+        let lease = device.lendTimeout(Self.restoreTimeout)
+        defer { device.returnTimeout(lease) }
         // Wheels first: a silent wheel is worse than a diverted button. Each step stands alone,
         // so one failure does not skip the rest. A replaced session may have diverted them even
         // if this one would not, e.g. after a reload that turned smooth scrolling off.

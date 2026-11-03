@@ -137,7 +137,7 @@ the full list. The ones used most:
 |---|---|
 | `PUREMOUSE_DEV_APPEARANCE=light\|dark` | Overrides the appearance (menu and helper) |
 | `PUREMOUSE_DEV_HIDDEN=1` | The menu app runs as if Show in menu bar were off: resident, no status item (`Locations.showsInMenuBar`) |
-| `PUREMOUSE_DEV_MENU=1` | Opens the status menu over a plain backdrop, since its glass shows whatever is behind it |
+| `PUREMOUSE_DEV_MENU=1` | Opens the status menu over a plain backdrop, since its glass shows whatever is behind it, without Settings or the updates question beside it; `PUREMOUSE_DEV_MENU_OPTION=1` builds it as if ⌥ were held, its alternates standing in for the items they replace |
 | `PUREMOUSE_DEV_PANE=<pane>` | Opens a tab (`general`, `mouse`, `apps`, `about`) or a Mouse segment (`buttons`, `scrolling`, `pointer`) |
 | `PUREMOUSE_DEV_PICKER=<button>` | A button's action picker on Mouse › Buttons only |
 | `PUREMOUSE_DEV_SHORTCUT=<button>` | A button's shortcut sheet on Mouse › Buttons; with `PUREMOUSE_DEV_APP`, that button's shortcut editor sheet over the app's page (`AppPage.body`) |
@@ -145,8 +145,8 @@ the full list. The ones used most:
 | `PUREMOUSE_DEV_APP=<bundle id>` | Opens Apps on that app's page, adding it without writing; `PUREMOUSE_DEV_APP_SEGMENT=buttons\|scrolling` picks the segment |
 | `PUREMOUSE_DEV_THEN_APP=<bundle id>` | After `PUREMOUSE_DEV_THEN_DELAY` seconds (default 1), asks for that app's page, as the menu's "Settings for <app>…" does with another page open |
 | `PUREMOUSE_DEV_KEY=esc\|cmd-[` | After `PUREMOUSE_DEV_KEY_DELAY` seconds (default 1.5), sends that key to the window, to test Esc and ⌘[ on an app's page |
-| `PUREMOUSE_DEV_SHEET=<name>` | A sheet: `presets` on Mouse › Pointer (`presets-editing`: the same with its first row focused, nothing written), or `advanced` on the pane shown (`DevSheet`) |
-| `PUREMOUSE_DEV_CAPTURE=<file.png>` | Saves the helper's own windows to that file and quits (`DevCapture`). Needs no Screen Recording permission, so it works over SSH |
+| `PUREMOUSE_DEV_SHEET=<name>` | A sheet: `presets` on Mouse › Pointer (`presets-editing`: the same with its first row focused, nothing written), `advanced` on the pane shown, or `aboutMouse` on General (`DevSheet`) |
+| `PUREMOUSE_DEV_CAPTURE=<file.png>` | Saves the helper's own windows to that file and quits (`DevCapture`); with `PUREMOUSE_DEV_MENU`, the menu app's open menu. Needs no Screen Recording permission, so it works over SSH |
 | `PUREMOUSE_DEV_HOVER=<part>`, `PUREMOUSE_DEV_BUTTON=<button>`, `PUREMOUSE_DEV_FOUND=<button>` | Show the device card's hovered, selected and found-row states on Buttons (`middle`, `top`, `forward`, `back`, `thumbWheel`, `thumbRest`) |
 | `PUREMOUSE_DEV_ARRIVAL=thumbWheel\|mainWheel` | On Scrolling, arrives as the device card's part would; `PUREMOUSE_DEV_ARRIVAL_HOLD=1` keeps the outline |
 | `PUREMOUSE_DEV_AX_DUMP=1` | Prints each control's accessibility role, label and size for every tab and Mouse segment (with `PUREMOUSE_DEV_PANE`, for what the sheet, picker and shortcut hooks open), and exits 1 on an unlabelled or duplicate control or one under 20 × 20 pt (`DevAXDump`). Run it on the spare Mac, not the one in use |
@@ -251,6 +251,38 @@ sizes (`scripts/size-budget.env`) and the background process's footprint, each l
 version, date and macOS it was measured on. Measure them again for every minor release (X.Y.0),
 before tagging it, and update the figures and their labels together; a label still naming an older
 version says the figure was not re-taken.
+
+## Reconnect rig
+
+`scripts/measure-reconnect.sh` times how long settings take to come back after a wake, a reconnect
+or a host switch-back, and fails above 2 seconds (the bound in
+[how-it-works](how-it-works.md#sessions)). It has two legs.
+
+```sh
+./scripts/measure-reconnect.sh fake [--cycles N]       # default 10 of each kind; no mouse, daemon or file touched
+./scripts/measure-reconnect.sh hardware [--cycles N]   # default 5; on the owner's Mac, with the daemon running
+./scripts/measure-reconnect.sh summarise FILE          # a saved run's `rig <kind> <cycle> <ms>` lines
+```
+
+- **Fake leg** (automated, any Mac). Runs `ReconnectRigTests` (`PUREMOUSE_RIG_CYCLES=N swift test
+  --filter ReconnectRigTests`; off without the variable) against a `FakeDevice` on the daemon's
+  live retry schedule: N cycles each of a wake (`configureAfterWake`), a reconnect (a 0x1D4B
+  announcement) and a host switch-back (link down, then up). The fake answers no request at all for 0 to 1.3 s
+  after the trigger, so the cycles land on the first, second and third attempt, then starts
+  answering; the time is from that moment to the session's applied state. It prints a table of
+  the median and worst per kind. `PUREMOUSE_RIG_TSV=FILE` also saves the raw lines. These are the
+  only wall-clock assertions: the ordinary run (`AppliedStateTests`) counts attempts against a
+  scaled schedule instead, so a busy runner cannot fail it, and needs no isolated machine.
+- **Hardware leg** (owner assisted). A spare Mac with no mouse can only run the fake leg. With the
+  daemon running, the script reads the installed daemon's `status.json` (`PUREMOUSE_COMPANION_DIR`
+  picks another) and, for each cycle, waits for you to wake the Mac, switch the mouse off and on, or
+  switch it to another computer and back, then reports the time from a device going `applying` to
+  `applied`. That includes the mouse waking, so it is a ceiling on the bound: a cycle over 2 s needs
+  the log (`configure attempt` lines) to say whether the mouse or PureMouse was slow. It starts nothing
+  and writes nothing.
+
+It exits 0 when every cycle is within 2 s, 1 when one is over (the table says which kind) and 2
+when the rig itself fails. `scripts/tests/test_measure_reconnect.zsh` tests the summary.
 
 ## Signing
 

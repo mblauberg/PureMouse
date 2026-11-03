@@ -315,10 +315,15 @@ struct AdvancedSheet<Content: View, Leading: View>: View {
                 Button("Done") { dismiss() }
                     .keyboardShortcut(.defaultAction)
             }
-            .padding([.horizontal, .bottom])
+            // In line with the grouped form's content box, not the sheet's edge.
+            .padding(.horizontal, Self.contentInset)
+            .padding(.bottom)
         }
         .frame(width: SettingsWindowController.sheetWidth)
     }
+
+    /// How far a grouped form's sections sit in from the sheet's edge.
+    private static var contentInset: CGFloat { 20 }
 
     /// The screen's height less the window's toolbar and the sheet's title and buttons.
     private static var maxFormHeight: CGFloat {

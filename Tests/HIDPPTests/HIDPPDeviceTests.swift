@@ -54,6 +54,49 @@ struct HIDPPDeviceTests {
         #expect(fake.transport.sent.count == 3)
     }
 
+    @Test func aLentTimeoutEndsOnlyWithItsOwnReturn() {
+        let device = FakeDevice().endpoint()
+        defer { device.close() }
+        device.timeout = .seconds(3)
+        let first = device.lendTimeout(.milliseconds(600))
+        let second = device.lendTimeout(.milliseconds(400))
+        #expect(device.effectiveTimeout == .milliseconds(400))
+        device.returnTimeout(first)  // retired work returning late: the later lend stands
+        #expect(device.effectiveTimeout == .milliseconds(400))
+        device.returnTimeout(second)
+        #expect(device.effectiveTimeout == .seconds(3))  // the timeout it was set to, not a default
+        device.returnTimeout(second)
+        #expect(device.effectiveTimeout == .seconds(3))
+    }
+
+    @Test func aReplyObserverFiresOnceAndOnlyItsOwnerRemovesIt() async throws {
+        let fake = FakeDevice()
+        let device = fake.endpoint()
+        defer { device.close() }
+        var fired: [String] = []
+        let first = device.observeNextReply { fired.append("first") }
+        _ = device.observeNextReply { fired.append("second") }
+        device.stopObserving(first)  // its owner leaves; the other registration stands
+        device.stopObserving(first)  // and a second removal is harmless
+        _ = try await device.hasFeature(0x2121)
+        #expect(fired == ["second"])
+        _ = try await device.hasFeature(0x1004)
+        #expect(fired == ["second"])  // once
+        #expect(device.repliesReceived >= 2)
+    }
+
+    @Test func aLentTimeoutIsWhatARequestWaits() async throws {
+        let fake = FakeDevice()
+        fake.transport.timing = .never
+        let device = fake.endpoint()
+        defer { device.close() }
+        device.timeout = Self.neverTimesOut
+        let lease = device.lendTimeout(.milliseconds(20))
+        await #expect(throws: HIDPPError.timeout) { try await device.request(featureIndex: 3, function: 0) }
+        device.returnTimeout(lease)
+        #expect(device.effectiveTimeout == Self.neverTimesOut)
+    }
+
     private func waitForSends(_ count: Int, on transport: FakeTransport) async throws {
         try await eventually { transport.sent.count >= count }
     }

@@ -457,4 +457,66 @@ struct MenuPlanTests {
         guard case .openAppSettings(let id) = action else { Issue.record("not an app request"); return }
         #expect(ShowRequest(app: id).app == "com.apple.Safari")
     }
+
+    // MARK: Applied state
+
+    private static let appliedAt = Date(timeIntervalSince1970: 1_700_000_000)
+
+    static func mouse(applied: Status.Device.Applied?) -> Status.Device {
+        var device = mouse("a")
+        device.applied = applied
+        return device
+    }
+
+    @Test func whileAllIsAppliedTheMenuHasTheRowsOfBefore() {
+        let before = lines(Self.running())
+        let applied = Self.running([Self.mouse(applied: .init(state: .applied, at: Self.appliedAt))])
+        let time = StatusText.time(Self.appliedAt)
+        // The same rows; the header says nothing of it, and only the ⌥ line gains the time.
+        #expect(lines(applied) == before.replacing("800 DPI · Wheel: ratchet · v0.3.0",
+                                                  with: "800 DPI · Wheel: ratchet · Settings applied at \(time) · v0.3.0"))
+        #expect(lines(applied).contains("header MX Master 3S, USB receiver · Battery 80%\n"))
+        #expect(!lines(applied).contains("Apply Settings Again"))
+        #expect(!applied.needsAttention)
+    }
+
+    @Test func theHeaderSaysApplyingWhileSettingsAreBeingApplied() {
+        let state = Self.running([Self.mouse(applied: .init(state: .applying))])
+        #expect(lines(state).hasPrefix("""
+            header MX Master 3S, Applying settings…
+            ⌥header MX Master 3S, Applying settings…, 800 DPI · Wheel: ratchet · v0.3.0
+            ---
+            """))
+        // A state in passing: no row, no badge.
+        #expect(!lines(state).contains("Apply Settings Again") && !state.needsAttention)
+    }
+
+    @Test func aFailedApplyShowsTheHeaderTheAttentionRowAndTheBadge() {
+        let state = Self.running([Self.mouse(applied: .init(state: .notApplied))])
+        #expect(lines(state).hasPrefix("""
+            header MX Master 3S, Settings not applied
+            ⌥header MX Master 3S, Settings not applied, 800 DPI · Wheel: ratchet · v0.3.0
+            Apply Settings Again [attention, -> applySettingsAgain]
+            ---
+            """))
+        #expect(state.needsAttention)
+        #expect(MenuPlan.spokenHeader(title: "MX Master 3S", lines: ["Settings not applied"]) == "MX Master 3S, Settings not applied")
+    }
+
+    @Test func theApplyAgainRowIsOneRowForAnyNumberOfMice() {
+        let state = Self.running([Self.mouse(applied: .init(state: .notApplied)),
+                                  Self.mouse(applied: .init(state: .notApplied))])
+        #expect(lines(state).components(separatedBy: "Apply Settings Again").count == 2)
+    }
+
+    @Test func applyAgainSitsAmongTheWarnings() {
+        var state = Self.running([Self.mouse(applied: .init(state: .notApplied))])
+        state.configError = true
+        state.logiOptionsRunning = true
+        #expect(lines(state).contains("""
+            Fix Config File… [attention, -> openSettings(Optional(PureMouseAppSupport.SettingsPane.tab(PureMouseAppSupport.SettingsTab.general)))]
+            Apply Settings Again [attention, -> applySettingsAgain]
+            Quit Logi Options+ [attention, -> quitLogiOptions]
+            """))
+    }
 }
