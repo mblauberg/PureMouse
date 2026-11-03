@@ -201,6 +201,9 @@ enum ConfigGoldenCorpus {
         ("ok-buttons-hex", #"""
 {"buttons": {"0x00c4": {"keys": "cmd+shift+4"}, "back": {"run": "true"}, "00fd": "mute", "0X01A0": "none"}}
 """#),
+        ("ok-buttons-media-and-middle-click", #"""
+{"buttons": {"back": "playPause", "forward": "nextTrack", "top": "previousTrack", "middle": "middleClick"}}
+"""#),
         ("ok-buttons-named", #"""
 {"buttons": {"middle": "none", "back": "navigateBack", "forward": "navigateForward", "gesture": "launchpad", "top": "showDesktop", "thumbPanel": {"haptic": "sharpStateChange"}}}
 """#),

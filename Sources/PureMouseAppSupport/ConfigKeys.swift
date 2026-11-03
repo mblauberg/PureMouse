@@ -128,15 +128,30 @@ extension ConfigTree {
                 return
             }
             var before = self[entryPrefix(for: scope) + path]
-            if before == nil, scope.deviceKey != nil {
-                let inherited = resolved(path, in: scope)
-                if ButtonAction(json: inherited) == .gesture { return }
-                before = inherited
+            if before == nil {
+                // A mouse inherits the wider binding through `resolved`; an app does not, so the top
+                // level's gesture is read for it. Kit merges a scope's gesture over the global one,
+                // so a seeded direction would hide that gesture's own.
+                if scope.deviceKey != nil {
+                    let inherited = resolved(path, in: scope)
+                    if ButtonAction(json: inherited) == .gesture { return }
+                    before = inherited
+                } else if self.binding(button) == .gesture {
+                    return
+                }
             }
             // A mouse set to Mouse Default clicks natively; the gesture's click then does nothing.
             let click: Any = before.flatMap { ButtonAction(json: $0) == .mouseDefault ? nil : $0 }
                 .flatMap { $0 is String || $0 is [String: Any] ? $0 : nil } ?? "none"
-            set(["click": click], at: path, in: scope)
+            var seeded: [String: Any] = ["click": click]
+            // A new Hold and Move starts with the standard directions where the target scope has
+            // none. Keep any direction already supplied by this scope or inherited from a mouse's
+            // global binding.
+            let defaults = ["up": "missionControl", "down": "appExpose",
+                            "left": "spaceLeft", "right": "spaceRight"]
+            let hasResolvedDirection = defaults.keys.contains { resolved(path + [$0], in: scope) != nil }
+            if !hasResolvedDirection { seeded.merge(defaults) { current, _ in current } }
+            set(seeded, at: path, in: scope)
         }
     }
 

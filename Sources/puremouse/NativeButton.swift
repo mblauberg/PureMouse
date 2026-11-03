@@ -10,11 +10,27 @@ enum NativeButton {
         if case .click(let button)? = Config.nativeBehaviour(of: cid) { Int64(button) } else { nil }
     }
 
+    /// Posts a complete middle click at the pointer, using the same CGEvent path as native buttons.
+    static func postMiddleClick() {
+        _ = postMiddle(down: true)
+        _ = postMiddle(down: false)
+    }
+
+    /// Posts the middle button's press or release at the pointer, so a held middle click can drag.
+    @discardableResult
+    static func postMiddle(down: Bool) -> Bool { post(number: 2, down: down) }
+
     /// Posts the button's press or release at the pointer. Returns false for a control without
     /// a click.
     @discardableResult
     static func post(_ cid: UInt16, down: Bool) -> Bool {
-        guard let number = number(for: cid), let button = CGMouseButton(rawValue: UInt32(number)) else { return false }
+        guard let number = number(for: cid) else { return false }
+        return post(number: number, down: down)
+    }
+
+    @discardableResult
+    private static func post(number: Int64, down: Bool) -> Bool {
+        guard let button = CGMouseButton(rawValue: UInt32(number)) else { return false }
         let location = CGEvent(source: nil)?.location ?? .zero
         guard let event = CGEvent(mouseEventSource: CGEventSource(stateID: .hidSystemState),
                                   mouseType: down ? .otherMouseDown : .otherMouseUp,
@@ -26,17 +42,22 @@ enum NativeButton {
 }
 
 /// The buttons a session holds down: the controls last reported pressed, the gesture button
-/// with the gesture it was bound to when pressed, and native clicks posted for buttons bound
-/// only in other apps. `drop` lets go of all of it, posting the native releases, whenever the
-/// mouse's own releases may never arrive: link down, reconnect, reload, pause, quit.
+/// with the gesture it was bound to when pressed, native clicks posted for buttons bound
+/// only in other apps, and middle clicks held down for buttons bound to Middle Click. `drop` lets
+/// go of all of it, posting the native releases, whenever the mouse's own releases may never
+/// arrive: link down, reconnect, reload, pause, quit.
 struct HeldButtons {
     private(set) var pressed: [UInt16] = []
     private(set) var gesture: (cid: UInt16, gesture: Config.Binding.Gesture)?
     private(set) var native: Set<UInt16> = []
+    private(set) var middle: Set<UInt16> = []
     private let post: (UInt16, Bool) -> Bool
+    private let postMiddle: (Bool) -> Bool
 
-    init(post: @escaping (UInt16, Bool) -> Bool = { NativeButton.post($0, down: $1) }) {
+    init(post: @escaping (UInt16, Bool) -> Bool = { NativeButton.post($0, down: $1) },
+         postMiddle: @escaping (Bool) -> Bool = { NativeButton.postMiddle(down: $0) }) {
         self.post = post
+        self.postMiddle = postMiddle
     }
 
     /// Takes the controls now down; returns those newly pressed and those let go.
@@ -62,10 +83,20 @@ struct HeldButtons {
         if post(cid, true) { native.insert(cid) }
     }
 
-    /// Lets go of `cid`: a native click is released; the gesture it held is returned.
+    /// Presses the middle button for `cid`, held until `cid` is let go.
+    mutating func pressMiddle(_ cid: UInt16) {
+        if postMiddle(true) { middle.insert(cid) }
+    }
+
+    /// Lets go of `cid`: a native click or a held middle click is released; the gesture it held
+    /// is returned.
     mutating func release(_ cid: UInt16) -> Config.Binding.Gesture? {
         if native.remove(cid) != nil {
             _ = post(cid, false)
+            return nil
+        }
+        if middle.remove(cid) != nil {
+            _ = postMiddle(false)
             return nil
         }
         guard let held = gesture, held.cid == cid else { return nil }
@@ -77,6 +108,10 @@ struct HeldButtons {
     mutating func drop() {
         for cid in native { _ = post(cid, false) }
         native = []
+        if !middle.isEmpty {
+            _ = postMiddle(false)
+            middle = []
+        }
         pressed = []
         gesture = nil
     }
