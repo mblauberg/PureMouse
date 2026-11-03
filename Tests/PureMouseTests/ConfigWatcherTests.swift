@@ -226,4 +226,55 @@ private final class WatchFixture {
         try await fixture.quiet()
         #expect(fixture.reloads == 0)
     }
+
+    @Test func swappingALinkInTheMiddleOfAChainIsFollowed() async throws {
+        let fixture = try WatchFixture()
+        let first = try fixture.target("target-a")
+        let second = try fixture.target("target-b")
+        // config folder -> current -> target-a, with `current` beside the targets, not the folder.
+        let current = fixture.root.appending(path: "current")
+        try FileManager.default.createSymbolicLink(at: current, withDestinationURL: first)
+        try fixture.link(to: current)
+        fixture.start()
+        let swap = fixture.root.appending(path: "swap")
+        try FileManager.default.createSymbolicLink(at: swap, withDestinationURL: second)
+        #expect(rename(swap.path, current.path) == 0)
+        try await eventually { fixture.reloads >= 1 }
+        try await fixture.quiet()
+        #expect(fixture.reloads == 1)
+        try fixture.rewriteInPlace("{\"dpi\": 800}")
+        try await eventually { fixture.reloads >= 2 }
+        try "{}".write(to: first.appending(path: "config.json"), atomically: true, encoding: .utf8)
+        try await fixture.quiet()
+        #expect(fixture.reloads == 2)
+    }
+
+    @Test func destroyingAWatcherClosesItsDescriptors() async throws {
+        let fixture = try WatchFixture()
+        let first = try fixture.target("target-a")
+        try fixture.link(to: first)
+        var descriptors: [Int32] = []
+        for _ in 0..<5 {
+            let watcher = ConfigWatcher(url: fixture.config) {}
+            watcher.start()
+            descriptors += watcher.descriptors
+        }
+        #expect(descriptors.count >= 15)
+        try await eventually { descriptors.allSatisfy { fcntl($0, F_GETFD) == -1 } }
+    }
+
+    @Test func stoppingAWatcherClosesItsDescriptorsAndEndsReloads() async throws {
+        let fixture = try WatchFixture()
+        try fixture.writeConfig()
+        var count = 0
+        let watcher = ConfigWatcher(url: fixture.config) { count += 1 }
+        watcher.start()
+        let descriptors = watcher.descriptors
+        #expect(descriptors.count >= 3)
+        try fixture.rewriteInPlace("{\"dpi\": 800}")
+        watcher.stop()
+        try await eventually { descriptors.allSatisfy { fcntl($0, F_GETFD) == -1 } }
+        try await fixture.quiet()
+        #expect(count == 0 && watcher.descriptors.isEmpty)
+    }
 }
