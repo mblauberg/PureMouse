@@ -196,7 +196,7 @@ struct MousePopUp: View {
             Text(Self.appsNote)
         }
         .help(Self.appsNote)
-        .accessibilityLabel("Mouse")
+        .accessibilityLabel("Choose mouse")
         .accessibilityValue(model.selectedMouse?.name ?? InheritedScope.allMice)
         .accessibilityHint("\(Self.followNote) \(Self.appsNote)")
     }

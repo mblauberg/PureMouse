@@ -108,6 +108,9 @@ enum DevAXDump {
             // The mini switch is 36-38 x 16-18 and a slider 16 tall: AppKit sizes both, and the
             // allowed `.controlSize(.mini)` is the switch's. The row around each takes the click.
             if entry.role == "AXSlider" || entry.role == "AXCheckBox", entry.size.width >= minimumSide { continue }
+            // A stepper is the system's: AppKit draws it 11 x 16 with two 11 x 8 arrows and no size
+            // to set, and its row reads the number beside it. VoiceOver adjusts it as a whole.
+            if entry.role == "AXIncrementor" { continue }
             if entry.size.width < minimumSide || entry.size.height < minimumSide, entry.size != .zero {
                 problems.append("smaller than \(Int(minimumSide)) x \(Int(minimumSide)) pt: \(name) \(entry.size)")
             }
@@ -132,6 +135,9 @@ enum DevAXDump {
         // Not descended into: a window's sheet is dumped as a window of its own.
         if role == "AXSheet", !isRoot { return }
         var label = string(node, "accessibilityLabel")
+        // A `Menu` of the button style names itself in its title; its label is the description of
+        // the symbol drawn on its face ("Up and down Chevrons"), the same for every pop-up.
+        if role == "AXMenuButton", !string(node, "accessibilityTitle").isEmpty { label = string(node, "accessibilityTitle") }
         if label.isEmpty { label = string(node, "accessibilityTitle") }
         let value = string(node, "accessibilityValue")
         var size = CGSize.zero
