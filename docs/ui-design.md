@@ -278,8 +278,10 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
   smooth scrolling, feel, presets).
 - **Mouse Default.** A mouse's or an app's button row chooses Mouse Default as its own value,
   `"default"` (`Config.Binding.nativeValue`, `ButtonAction.mouseDefault`), beside "Same as …", which
-  removes the key; under All Mice it removes the key. It is offered only for controls in
-  `Config.nativeBehaviour(of:)`, the one table the daemon also performs from.
+  removes the key; under All Mice it removes the key. Under All Mice it is offered for every
+  top-level button; on a mouse or in an app only for controls in `Config.nativeBehaviour(of:)`, the
+  one table the daemon also performs from, though a `"default"` already set on another control
+  stays in view (`PickerEntry.offersMouseDefault`).
   `buttonKey`/`removeButton` (`ConfigKeys.swift`) follow Kit's alias rule.
 - **Global actions.** Reset All and the status menu stay global (`setDPI` without a target writes
   the top level). Settings' Pointer pane passes the mouse, and Find by Pressing and "use configured

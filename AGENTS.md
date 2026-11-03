@@ -96,6 +96,8 @@ Design:
   only: no HID, no event posting, no `Log`.
 - All HID and HID++ work runs on the main actor, served by `runMainLoop()`, never `dispatchMain()`.
 - Anything applied to the mouse belongs in `Session.apply()`: the mouse forgets it on reconnect.
+- `LoginService.stop` waits for the old daemon to finish restoring the mouse; nothing starts a
+  replacement before it returns ([companion](docs/companion.md#login-and-lifecycle)).
 - Give any new numeric config field a range, and keep `ConfigGoldenTests` identical unless
   regenerating it on purpose.
 - User-facing text follows [ui-language](docs/ui-language.md); layout and controls follow

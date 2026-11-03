@@ -105,7 +105,8 @@ the full list. The ones used most:
 | `PUREMOUSE_DEV_APPEARANCE=light\|dark` | Overrides the appearance (menu and helper) |
 | `PUREMOUSE_DEV_MENU=1` | Opens the status menu over a plain backdrop, since its glass shows whatever is behind it |
 | `PUREMOUSE_DEV_PANE=<pane>` | Opens a tab (`general`, `mouse`, `apps`, `about`) or a Mouse segment (`buttons`, `scrolling`, `pointer`) |
-| `PUREMOUSE_DEV_PICKER=<button>`, `PUREMOUSE_DEV_SHORTCUT=<button>` | A button's action picker or shortcut sheet on Mouse › Buttons; with `PUREMOUSE_DEV_APP`, the app sheet's editor popover |
+| `PUREMOUSE_DEV_PICKER=<button>` | A button's action picker on Mouse › Buttons only |
+| `PUREMOUSE_DEV_SHORTCUT=<button>` | A button's shortcut sheet on Mouse › Buttons; with `PUREMOUSE_DEV_APP`, that button's shortcut editor popover on the app sheet (`AppSheet.body`) |
 | `PUREMOUSE_DEV_MOUSE=<device key>\|all` | Chooses that mouse on Mouse, or All Mice; `PUREMOUSE_DEV_OTHERS=1` opens Buttons' Other controls |
 | `PUREMOUSE_DEV_APP=<bundle id>` | Opens Apps on that app's sheet, adding it without writing |
 | `PUREMOUSE_DEV_SHEET=<name>` | A sheet: `presets` on Mouse › Pointer, or `advanced` on the pane shown (`DevSheet`) |

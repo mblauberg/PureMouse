@@ -274,12 +274,19 @@ touches.
   click. Every way out (press, timeout, cancel, reload, pause) goes through `Daemon.endCapture`,
   which hands the extra controls back, each independently (one that fails waits for the next
   apply). They count in `divertedControls` until released, so `restore()` and a replacement
-  session release them too.
+  session release them too. Bound controls are not diverted for it, since they already reach the
+  daemon. A capture still listening when the config reloads or the daemon pauses reports
+  `cancelled`. A mouse adopted during a capture joins it (with `capture.device`, only if its key
+  matches); one lost during it drops out. The daemon acts on a capture token once, so rewriting
+  `control.json` with the same token does not restart it. A mouse with no key is reached only by a
+  request without `device`.
 - The primary clicks 0x0050 and 0x0051 (`Config.reservedControls`) are never bound or diverted:
   the decoder drops them with a warning, and `Session.isDivertable` excludes them from binding,
   capture and the stale-diversion scan ([ADR 8](adr/0008-primary-buttons-reserved.md)).
-- While the pointer is on another Mac, `Session.away` leaves the wheels and every diverted control
-  native (DPI, SmartShift and the rest stay applied), so macOS forwards them. Apply, capture and
+- While the pointer is on another Mac and `universalControl.handOff` is on, `Session.away`
+  (`Session.setAway`) leaves the wheels and every diverted control native (DPI, SmartShift and the
+  rest stay applied), so macOS forwards them. Status reports it as `away`, and the menu shows "On
+  another Mac" in the device line. Apply, capture and
   new or replacement sessions all honour it (`Daemon.handingOff`, passed in
   `Session.Inherited.away`). Going away also stops any glide, drops held gesture state and ends a
   capture.
@@ -301,12 +308,22 @@ touches.
   (`Daemon.replaceEndpoint`). An ignored slot is identified again, and an identification of the old
   endpoint that finishes afterwards is discarded. The first announcement after attach only records
   the product.
-- A mouse's key is read at adoption by `Identification` (`Config.deviceKey`; a 0x0003 timeout
-  leaves it nil and the top level applies). A receiver mouse keyed by its product but adopted
-  before its slot was announced gets its key, and a session on that key's settings, when it next
-  links up (`Daemon.sessionSlotAnnounced`); while quitting or paused that only records the product.
-  The daemon hands each session `config.forDevice(deviceKey)` at adoption and on reload; permission
-  decisions cover every scope (`Config.everyScope`, `Daemon.postsEvents`).
+- Identity is read once per adoption (`Identification.read`): the name (0x0005), kind (0x0005
+  getDeviceType), and model and unit IDs (0x0003), which give the key (`Config.deviceKey`). A mouse
+  whose 0x0003 answers with an error, or that lacks it, is keyed by its product ID: the
+  interface's for Bluetooth, the slot's wireless product ID on a receiver. A 0x0003 that times out
+  leaves the key absent rather than guess, and that mouse uses the top-level settings. A model or
+  unit ID of all zeros or all 0xFF counts as absent. The key is in the adoption log line
+  (`model=`). Two mice of one model share a key, so they share `devices.<key>` and are both reached
+  by a `device` request.
+- A receiver mouse keyed by its product but adopted before its slot was announced gets its key, and
+  a session on that key's settings, when it next links up (`Daemon.sessionSlotAnnounced`); while
+  quitting or paused that only records the product. The daemon hands each session
+  `config.forDevice(deviceKey)` at adoption and on reload; permission decisions cover every scope
+  (`Config.everyScope`, `Daemon.postsEvents`).
+- A setting the mouse cannot use is skipped quietly: a bound control it lacks is a debug line once
+  per session; `toggleScrollMode` without SmartShift, and smooth scrolling without either 0x2121 or
+  0x2130 (`Session.smoothScrollUnsupported`), an info line once per session.
 - HID++ software IDs rotate per request, so a late reply cannot complete a newer request. A
   cancelled request fails at once instead of holding the endpoint until its timeout. Only events
   reach `onEvent` (`Report.isEvent`): software ID 0, or a short HID++ 1.0 notification (sub-ID
@@ -327,11 +344,15 @@ starts or extends it. Without Input Monitoring a Bluetooth mouse is not retried 
 
 - Events route only for features whose index is already resolved (`HIDPPDevice.feature(at:)`), so
   `Session.apply()` resolves the event-bearing ones (0x1B04, 0x1D4B, 0x1004 battery) first.
-- Battery is read on each apply and then follows broadcast events. 0x1000 is read only as a
-  fallback when 0x1004 is absent; it is resolved and selected before configuration writes, and that
-  selection is inherited across reloads. Only the selected source's broadcasts are used. Battery is
-  informational and never fails an apply. Level bits are masked by getCapabilities (cleared when
-  the mouse reports a percentage) and the highest wins, as in Linux.
+- Battery is read on each apply and then follows broadcast events, from one source
+  (`DeviceState.batterySource`): 0x1004, else legacy 0x1000, else 0x1001's voltage, each only when
+  those before it are absent. The source is resolved and selected before configuration writes, and
+  that selection is inherited across reloads. Only the selected source's broadcasts are used.
+  Battery is informational and never fails an apply. `charging` is true while charging or charging
+  slowly, false once complete. 0x1004's level bits are masked by getCapabilities and the highest
+  wins, as in Linux; a mouse that reports a percentage has its levels ignored, so `level` is
+  derived from the percentage. 0x1000's percentage of 0 means unknown. 0x1001 gives a level only,
+  banded from its millivolts (`BatteryVoltage.parseStatus`).
 - DPI is snapped to the sensor's own list (0x2201 getSensorDpiList), read once per mouse and
   inherited across reloads. If the mouse answers the list request with an error, the configured
   value is sent unchanged; a timeout fails the apply so configure retries. A snapped DPI is logged
@@ -339,17 +360,39 @@ starts or extends it. Without Input Monitoring a Bluetooth mouse is not retried 
 - `cycleDPI` sets `Session.liveDPI`, which overrides `config.dpi` in `apply()`. `Daemon.reload`
   clears it only when that mouse's resolved `dpi` or `dpiPresets` changed (`Daemon.keepsLiveDPI`),
   and `Control.useConfiguredDPI` clears it on request, for every mouse or those whose key is
-  `Control.device`.
-- The DPI written is read back on every axis written (0x2202's Y too). A mouse that shows another
-  value, or whose X and Y lists share none, is refused (`DeviceState.dpiRefused`): nothing more is
-  written, once logged, until a reload changes `dpi` or `dpiPresets`.
+  `Control.device`. It picks the smallest preset above the current DPI, else the smallest, after
+  snapping the presets to the sensor's list; with no `dpiPresets` it does nothing and logs an error.
+- The DPI written is read back on every axis written (0x2202's Y too). When the sensor's list is
+  known (`state.resolutions != nil`), a mouse that shows another value is refused
+  (`Session.confirmDPI`, `DeviceState.dpiRefused`); without the list, a sensor's rounding is not
+  taken as a refusal. A mouse whose X and Y lists share none is refused too. A refused mouse gets
+  nothing more written, once logged, until a reload changes `dpi` or `dpiPresets`.
 
 ### Status
 
 The daemon reports to the menu bar app only through `status.json` (`StatusChannel`): call
 `statusChanged()` (`Daemon`) or `changed()` (`Session`) after anything in `Status` changes. Writes
 are coalesced to one per main-queue turn. On shutdown, `running: false` is written last, after the
-mice are restored (`exitReporting`).
+mice are restored (`exitReporting`). The fields are defined in [companion.md](companion.md#channel);
+how the daemon fills them:
+
+- A write is skipped when nothing in `Status` changed. `Device.id` is
+  `<interface number>-<device index>`, the interface numbered in attach order. `dpiSteps` lists
+  every value (157 on an MX Master 3S). `controls` lists only divertable controls and leaves out
+  virtual ones (flag 0x80, e.g. 0x00d7), which cannot be pressed; `gestures` follows the control's
+  raw-XY flag. While paused, `devices` is empty: the sessions are dropped.
+- Capabilities come only from lookups apply has already made (`HIDPPDevice.knownPresence`,
+  `Session.capabilities`), so building them sends nothing, and are absent until the first apply.
+  Haptics (0x19B0) is looked up only by a haptic action, so it is unknown until one runs; a
+  capability learned that way is published then. A member is true when one of its features is
+  present, false only when all are known absent, and left out when unknown: `dpi` (0x2201, 0x2202;
+  false once refused), `smartShift` (0x2110, 0x2111), `smoothScroll` (a main wheel PureMouse can
+  take over, 0x2121 or 0x2130; false when the notched wheel refused), `battery` (0x1004, 0x1000,
+  0x1001). They are kept across reloads.
+- The config file is watched as well as its directory, since editors that write in place leave the
+  directory unchanged. A reload that fails leaves the previous config in effect and reports
+  `config.error` (`ConfigCheck.message`, which names the field); the next successful load clears
+  it.
 
 ## Protocol references
 
