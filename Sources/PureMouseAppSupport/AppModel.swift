@@ -137,6 +137,12 @@ public final class AppModel {
         statusChanged()
     }
 
+    /// Apply Settings Again: asks the daemon to start a fresh apply where the settings are not applied.
+    public func applySettingsAgain() {
+        guard daemonRunning else { return }
+        link.requestReapply()
+    }
+
     public var captureListening: Bool { capture.listening }
 
     public var capturedButton: String? {

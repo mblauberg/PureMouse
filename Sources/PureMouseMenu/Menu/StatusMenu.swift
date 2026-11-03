@@ -61,7 +61,10 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         model.refreshLiveness()
         model.reloadConfig()
-        let option = NSEvent.modifierFlags.contains(.option)
+        var option = NSEvent.modifierFlags.contains(.option)
+        #if DEBUG
+        option = option || DevHooks.holdsOption
+        #endif
         var state = MenuState(model: model)
         state.update = app.updates.offer
         state.installing = app.installState
@@ -71,6 +74,16 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         state.frontmost = FrontmostApp(bundleID: front?.bundleIdentifier, name: front?.localizedName)
         let rows = MenuPlan.rows(for: state, option: option)
         MenuRenderer { [weak self] in self?.perform($0) }.fill(menu, with: rows)
+        #if DEBUG
+        // AppKit shows an alternate only for a real ⌥ at the click: a screenshot shows them in place of
+        // the items they replace.
+        if DevHooks.holdsOption {
+            for (index, item) in menu.items.enumerated() where item.isAlternate && index > 0 {
+                menu.item(at: index - 1)?.isHidden = true
+                item.isAlternate = false
+            }
+        }
+        #endif
     }
 
     private func perform(_ action: MenuAction) {
@@ -90,6 +103,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         case .start: action.command.map { model.perform($0) }
         case .setPaused(let paused): model.setPaused(paused)
         case .reloadConfig: model.reloadDaemonConfig()
+        case .applySettingsAgain: model.applySettingsAgain()
         case .showLog: NSWorkspace.shared.activateFileViewerSelecting([model.locations.log])
         case .quit: app.quitAll()
         case .hideMenuBarIcon: app.hideMenuBarIcon()
