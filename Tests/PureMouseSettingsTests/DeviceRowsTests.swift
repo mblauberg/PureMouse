@@ -38,6 +38,9 @@ import Testing
         #expect(running.lowerBound < rows.lowerBound && rows.lowerBound < notices.lowerBound)
         #expect(general.contains("settings?.refit()"))
         #expect(general.contains("devices.map(\\.id)"))
+        // Every row that comes and goes after the window was sized refits it: the notification row
+        // pushed Advanced… out of view when it appeared on a Mac with notifications off.
+        #expect(general.contains(".onChange(of: notificationsDenied) { settings?.refit() }"))
     }
 
     @Test func theInfoButtonIsNamedForTheMouseAndMeetsTheTargetSize() throws {

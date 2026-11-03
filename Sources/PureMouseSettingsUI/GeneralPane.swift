@@ -83,6 +83,7 @@ struct GeneralPane: View {
         .onChange(of: openAtLogin.needsApproval) { settings?.refit() }
         .onChange(of: notices) { settings?.refit() }
         .onChange(of: devices.map(\.id)) { settings?.refit() }
+        .onChange(of: notificationsDenied) { settings?.refit() }
         .sheet(isPresented: $showingAdvanced) {
             GeneralAdvancedSheet().environment(model)
         }
