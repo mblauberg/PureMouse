@@ -7,7 +7,7 @@
 //   InstallProbe <release folder> <installed app> <running version> <release version>
 //   InstallProbe requirement
 //
-// Prints one line: "installed X", or "failed <case> | <reason> | opens-release-page=<bool>". It logs
+// INSTALL_PROBE_TMP=<folder> puts the work folder there. Prints one line: "installed X", or "failed <case> | <reason> | opens-release-page=<bool>". It logs
 // "download <name>" to stderr for each file it is asked for, so a test can see that none was.
 import Foundation
 @testable import PureMouseAppSupport
@@ -32,9 +32,16 @@ guard arguments.count == 5, let version = UpdateCheck.Version(arguments[4]) else
 let release = UpdateCheck.Release(
     version: version, page: URL(string: "https://github.com/mblauberg/PureMouse/releases/tag/v\(arguments[4])")!)
 let live = UpdateInstaller.live
+// INSTALL_PROBE_TMP: where the work folder goes, so the script can see that nothing is left in it
+// (Foundation ignores TMPDIR for the temporary directory).
+var files = LiveUpdateFiles()
+if let base = ProcessInfo.processInfo.environment["INSTALL_PROBE_TMP"] {
+    files.base = URL(filePath: base, directoryHint: .isDirectory)
+}
+FileHandle.standardError.write(Data("work-base \(files.base.path)\n".utf8))
 let installer = UpdateInstaller(
     downloader: FolderDownloader(folder: URL(filePath: arguments[1], directoryHint: .isDirectory)),
-    hasher: live.hasher, mounter: live.mounter, signature: live.signature, files: live.files,
+    hasher: live.hasher, mounter: live.mounter, signature: live.signature, files: files,
     log: { FileHandle.standardError.write(Data(("log: " + $0 + "\n").utf8)) })
 
 switch await installer.install(release, current: arguments[3], installedApp: URL(filePath: arguments[2], directoryHint: .isDirectory)) {
