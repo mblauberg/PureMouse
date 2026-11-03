@@ -107,8 +107,6 @@ struct ShortcutSheet: View {
                     Text(Self.caption)
                         .font(.callout).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                        // The sheet's width, not the text's ideal width, so it wraps at the edge.
-                        .frame(maxWidth: .infinity, alignment: .leading)
                     if !typed.isEmpty {
                         if typedValid, let display = Shortcut.display(typed) {
                             Label(display, systemImage: "checkmark.circle.fill").foregroundStyle(.secondary)

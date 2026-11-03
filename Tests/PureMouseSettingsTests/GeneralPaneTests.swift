@@ -37,7 +37,9 @@ import Testing
         #expect(body.contains("model.setPaused("))
         // A value would turn the switch into a plain toggle (the AX dump's "not the form's switch").
         #expect(!body.contains(".accessibilityValue("))
-        #expect(body.contains(".toggleStyle(.switch)"))
+        // The form's own toggle row, so it keeps the switch role.
+        #expect(body.contains("Toggle(isOn: Binding(get: { state.isOn }"))
+        #expect(!body.contains(".toggleStyle(.switch)"))
         #expect(body.contains(#"Button("Start")"#))
         #expect(!body.contains("Stop"))
         #expect(general.contains(#"RowLabel("Open at login")"#))

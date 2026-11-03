@@ -101,33 +101,41 @@ struct GeneralPane: View {
     /// offered only while PureMouse is off, the recovery when it isn't running.
     private var runningRow: some View {
         let state = runState
-        return LabeledContent {
-            HStack {
-                Label(state.word, systemImage: state.symbol)
-                    .symbolRenderingMode(.multicolor)
-                    .foregroundStyle(.secondary)
-                    .labelStyle(StatusLabelStyle())
-                if let start = state.button {
-                    Button("Start") { setRunning(start) }
-                        .disabled(changingRunning || model.locations.daemon == nil)
-                } else {
-                    // The switch names itself; VoiceOver reads the state word beside it first. An
-                    // accessibility value on it would make it a plain toggle, not the form's switch.
-                    Toggle("PureMouse", isOn: Binding(get: { state.isOn },
-                                                      set: { on in state.toggled(on).map { model.setPaused($0 == .paused) } }))
-                        .labelsHidden()
-                        .toggleStyle(.switch)
-                        .accessibilityLabel("PureMouse")
+        let word = Label(state.word, systemImage: state.symbol)
+            .symbolRenderingMode(.multicolor)
+            .foregroundStyle(.secondary)
+            .labelStyle(StatusLabelStyle())
+        return Group {
+            if let start = state.button {
+                LabeledContent {
+                    HStack {
+                        word
+                        Button("Start") { setRunning(start) }
+                            .disabled(changingRunning || model.locations.daemon == nil)
+                    }
+                } label: {
+                    RowLabel("PureMouse")
                 }
+            } else {
+                // The form's own toggle row, as Open at login is, so it keeps the switch role (a
+                // switch styled inside LabeledContent reads as a plain toggle); the state word sits
+                // in its label, beside the switch.
+                Toggle(isOn: Binding(get: { state.isOn },
+                                     set: { on in state.toggled(on).map { model.setPaused($0 == .paused) } })) {
+                    HStack {
+                        RowLabel("PureMouse")
+                        Spacer()
+                        word
+                    }
+                }
+                .accessibilityLabel("PureMouse")
             }
-        } label: {
-            RowLabel("PureMouse")
         }
     }
 
     /// The menu bar app posts the notifications, with or without its icon (it runs windowless when
-    /// the icon is hidden). While macOS has them off the switch is disabled and keeps what was
-    /// chosen, and Open Notification Settings… sits in the same row, before the switch.
+    /// the icon is hidden). While macOS has them off the row offers Open Notification Settings… in
+    /// place of the switch, whose choice is kept: it means nothing until macOS allows them.
     private var lowBatteryRow: some View {
         let help = notificationsDenied ? "Off for PureMouse in System Settings."
             : "Tells you when the battery falls to 20% and 5%."
@@ -135,18 +143,9 @@ struct GeneralPane: View {
         return Group {
             if notificationsDenied {
                 LabeledContent {
-                    HStack(spacing: 12) {
-                        // Beside the switch, not inside its label: a disabled toggle disables its label's button too.
-                        Button("Open Notification Settings…") { NSWorkspace.shared.open(NotificationPermission.settingsURL) }
-                            .buttonStyle(.bordered)
-                            .fixedSize()
-                        Toggle("Low battery notifications", isOn: isOn)
-                            .labelsHidden()
-                            // Outside the form's own toggle row the style is not inherited.
-                            .toggleStyle(.switch)
-                            .accessibilityLabel("Low battery notifications")
-                            .disabled(true)
-                    }
+                    Button("Open Notification Settings…") { NSWorkspace.shared.open(NotificationPermission.settingsURL) }
+                        .buttonStyle(.bordered)
+                        .fixedSize()
                 } label: {
                     RowLabel("Low battery notifications", help: help)
                 }
