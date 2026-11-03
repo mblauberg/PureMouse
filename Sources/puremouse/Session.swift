@@ -146,6 +146,8 @@ final class Session {
         var appliedStatus: Status.Device.Applied?
         /// The main firmware, read once per mouse (`readFacts`).
         var firmware: String?
+        /// The firmware has been asked for and answered, with a version or without one.
+        var firmwareRead = false
         /// The Easy-Switch hosts, read after each successful configure.
         var hosts: Status.Device.Hosts?
         /// Targets already reported as snapped to a supported resolution, so each is logged once
@@ -463,8 +465,11 @@ final class Session {
         var hosts = state.hosts
         do {
             try ensureOpen()
-            if firmware == nil, try await device.hasFeature(DeviceIdentity.id) {
-                firmware = try await DeviceIdentity.mainFirmware(device)?.text
+            if !state.firmwareRead {
+                if try await device.hasFeature(DeviceIdentity.id) {
+                    firmware = try await DeviceIdentity.mainFirmware(device)?.text
+                }
+                state.firmwareRead = true
             }
             try ensureOpen()
             if try await device.hasFeature(HostsInfo.id) {

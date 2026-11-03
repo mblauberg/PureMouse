@@ -752,30 +752,35 @@ extension DeviceIdentity {
         }
     }
 
-    /// Function 0's first byte: how many firmware entities the mouse lists.
-    public static func firmwareCount(_ d: HIDPPDevice) async throws -> Int {
-        guard let count = try await d.call(id, 0).first else { throw HIDPPError.malformedResponse }
-        return Int(count)
-    }
-
     /// Function 1, the entity at `index`; nil for one this table does not name.
     public static func firmware(_ d: HIDPPDevice, at index: Int) async throws -> Firmware? {
         parseFirmware(try await d.call(id, 1, [UInt8(index)]))
     }
 
-    /// The main firmware, read-only: entity kinds other than 0 are left out.
+    /// The main firmware: entity kinds other than 0 are left out. Function 0 is not asked for the
+    /// entity count (the identity read owns that call): entities are read from 0 until the mouse
+    /// answers with an error for an index it does not have.
     public static func mainFirmware(_ d: HIDPPDevice) async throws -> Firmware? {
-        let count = try await firmwareCount(d)
-        for index in 0..<min(count, 8) {
-            if let entity = try await firmware(d, at: index), entity.kind == .firmware { return entity }
+        for index in 0..<maxFirmwareEntities {
+            let entity: Firmware?
+            do {
+                entity = try await firmware(d, at: index)
+            } catch let error as HIDPPError where error.isDeviceAnswer {
+                return nil
+            }
+            guard let entity else { return nil }
+            if entity.kind == .firmware { return entity }
         }
         return nil
     }
+
+    static let maxFirmwareEntities = 4
 
     /// [kind, name x3, major, minor, build x2]; the kind is the low nibble of byte 0.
     public static func parseFirmware(_ params: [UInt8]) -> Firmware? {
         guard params.count >= 8, let kind = Firmware.Kind(rawValue: params[0] & 0x0F) else { return nil }
         let name = String(decoding: params[1...3].filter { $0 >= 0x20 && $0 < 0x7F }, as: UTF8.self)
+        guard !name.isEmpty else { return nil }
         return Firmware(kind: kind, name: name, major: params[4], minor: params[5],
                         build: UInt16(params[6]) << 8 | UInt16(params[7]))
     }
