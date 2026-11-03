@@ -39,17 +39,26 @@ test_dmg_within_budget_passes_whatever_the_installed_budget() {
     DMG_MAX_BYTES=5000 INSTALLED_MAX_BYTES=1 scripts/check-size.sh $dmg >/dev/null
 }
 
-# The budgets are the measurements plus 15%, rounded up to 0.1 MB, plus the extra allowance
-# size-budget.env explains, and the README quotes the measurements rounded to 0.1 MB: none of the
+# The budgets are the measurements plus 15%, rounded up to 0.1 MB, plus the allowance size-budget.env
+# explains: none, or the overshoot of CI's largest figure past the 15% budget rounded up to 0.1 MB
+# (so under 0.1 MB of headroom). The README quotes the measurements rounded to 0.1 MB. None of the
 # three is maintained by hand.
 test_budgets_and_the_readme_follow_the_measured_sizes() {
-    local INSTALLED_MEASURED_BYTES DMG_MEASURED_BYTES INSTALLED_MAX_BYTES DMG_MAX_BYTES INSTALLED_EXTRA_BYTES DMG_EXTRA_BYTES
+    local INSTALLED_MEASURED_BYTES DMG_MEASURED_BYTES INSTALLED_MAX_BYTES DMG_MAX_BYTES
+    local INSTALLED_EXTRA_BYTES DMG_EXTRA_BYTES INSTALLED_CI_BYTES DMG_CI_BYTES
     source $root/scripts/size-budget.env
-    local problems=() name measured tenths
+    local problems=() name measured base extra ci tenths
     for name in INSTALLED DMG; do
-        measured=${(P)${:-${name}_MEASURED_BYTES}}
-        (( (measured * 115 + 9999999) / 10000000 * 100000 + ${(P)${:-${name}_EXTRA_BYTES}} == ${(P)${:-${name}_MAX_BYTES}} )) ||
+        measured=${(P)${:-${name}_MEASURED_BYTES}} extra=${(P)${:-${name}_EXTRA_BYTES}} ci=${(P)${:-${name}_CI_BYTES}}
+        base=$(( (measured * 115 + 9999999) / 10000000 * 100000 ))
+        (( base + extra == ${(P)${:-${name}_MAX_BYTES}} )) ||
             problems+="${name}_MAX_BYTES is not ${name}_MEASURED_BYTES plus 15%, rounded up to 0.1 MB, plus ${name}_EXTRA_BYTES"
+        if (( extra == 0 )); then
+            (( ci <= base )) || problems+="${name}_CI_BYTES is past the budget with no ${name}_EXTRA_BYTES"
+        else
+            (( extra == (ci - base + 99999) / 100000 * 100000 && extra > 0 )) ||
+                problems+="${name}_EXTRA_BYTES is not the overshoot of ${name}_CI_BYTES past the 15% budget, rounded up to 0.1 MB"
+        fi
     done
     local -A mb
     for name in INSTALLED DMG; do

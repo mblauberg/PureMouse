@@ -342,8 +342,14 @@ running checks.
   (`.github/dependabot.yml`) proposes updates weekly. Look up a pin with
   `gh api repos/<owner>/<repo>/git/ref/tags/<tag>`, and dereference an annotated tag to its commit.
 - The size budgets are `INSTALLED_MAX_BYTES` (the app) and `DMG_MAX_BYTES` (the dmg) in
-  `scripts/size-budget.env`, each measured from the universal build plus 15%. Raising one is a
-  reviewed change that says what grew.
+  `scripts/size-budget.env`, each the measured size of the latest release plus 15%, rounded up to
+  0.1 MB, plus an allowance (`INSTALLED_EXTRA_BYTES`, `DMG_EXTRA_BYTES`) while a change in flight
+  needs one. An allowance is the overshoot of CI's largest figure (`INSTALLED_CI_BYTES`,
+  `DMG_CI_BYTES`, taken from the test and compatibility jobs) past the 15% budget, rounded up to
+  0.1 MB, so it leaves under 0.1 MB of headroom. The file says what grew, and the next release's
+  re-measure (`INSTALLED_MEASURED_BYTES`, `DMG_MEASURED_BYTES`) clears the allowance. Raising a
+  budget is a reviewed change that says what grew; `scripts/tests/test_size.zsh` holds the
+  arithmetic.
 - When the app grows past a budget, re-measure and raise the budget by that rule rather than shrink
   the app at the cost of functionality or polish worth keeping (the owner's rule).
 
