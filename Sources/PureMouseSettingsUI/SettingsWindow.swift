@@ -8,21 +8,31 @@ import SwiftUI
 @MainActor
 public final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     static let width: CGFloat = 600
+    /// The most content height a pane may take, strip and form together (and the height the
+    /// default views fit in, docs/ui-design.md). A taller pane scrolls. The one place the number
+    /// lives: `LazyPane.maxHeight` and `PaneForm` read it.
+    nonisolated static let maxContentHeight: CGFloat = 600
     /// An Advanced… sheet sits inside the window's edges, as System Settings' sheets do.
     static let sheetWidth: CGFloat = width - 100
     private static let tabKey = "SettingsTab"
     private static let segmentKey = "SettingsSegment"
+    private static let positionKey = "SettingsWindowTopLeft"
 
     private let context: SettingsContext
+    private let defaults: UserDefaults
     private let tabs = SettingsTabs()
     /// Runs once the window has closed, unless it was shown again meanwhile.
     public var didClose: () -> Void = {}
 
-    public init(model: AppModel) {
+    public convenience init(model: AppModel) {
+        self.init(model: model, defaults: .standard)
+    }
+
+    init(model: AppModel, defaults: UserDefaults) {
         let context = SettingsContext()
         context.tabs = tabs
         self.context = context
-        let defaults = UserDefaults.standard
+        self.defaults = defaults
         let saved = SettingsSelection.remembered(tab: defaults.string(forKey: Self.tabKey),
                                                  segment: defaults.string(forKey: Self.segmentKey))
         tabs.selectSegment(saved.segment)
@@ -42,7 +52,8 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
         window.isReleasedWhenClosed = false
         window.toolbarStyle = .preference
         window.collectionBehavior = [.moveToActiveSpace, .fullScreenNone]
-        window.setFrameAutosaveName("PureMouseSettings")
+        // No frame autosave: it restores the size as well as the position, and a stale size is what
+        // the window would then be fitted from. The position alone is kept (`windowDidMove`).
         super.init(window: window)
         window.delegate = self
         tabs.didSelect = { defaults.set($0.rawValue, forKey: Self.tabKey) }
@@ -100,15 +111,13 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
 
     /// A pane's SwiftUI host at the window's width, sized to its content so the window fits it.
     private static func hosting(_ view: some View, model: AppModel, context: SettingsContext) -> NSViewController {
-        let host = NSHostingController(rootView: view.frame(width: width).environment(model).environment(\.settings, context))
-        host.sizingOptions = .preferredContentSize
-        return host
+        PaneHost(view.environment(model).environment(\.settings, context))
     }
 
     public func show(_ request: ShowRequest?) {
         if let pane = request?.pane { tabs.open(pane) }
         guard let window else { return }
-        if !window.isVisible { window.center() }
+        if !window.isVisible, !restorePosition(of: window) { window.center() }
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
         DispatchQueue.main.async { [context] in
@@ -116,6 +125,25 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
             if let sheet = request?.sheet { context.sheet = sheet }
             if let app = request?.app { context.app = app }
         }
+    }
+
+    /// Puts the window's top-left corner where it was last left, if that is still on a screen. Only
+    /// the position: the size comes from the pane.
+    func restorePosition(of window: NSWindow) -> Bool {
+        guard let saved = defaults.string(forKey: Self.positionKey) else { return false }
+        let point = NSPointFromString(saved)
+        let onScreen = NSScreen.screens.contains { screen in
+            let frame = screen.visibleFrame
+            return point.x >= frame.minX && point.x < frame.maxX && point.y > frame.minY && point.y <= frame.maxY
+        }
+        guard onScreen else { return false }
+        window.setFrameTopLeftPoint(point)
+        return true
+    }
+
+    public func windowDidMove(_ notification: Notification) {
+        guard let window, window.isVisible else { return }
+        defaults.set(NSStringFromPoint(NSPoint(x: window.frame.minX, y: window.frame.maxY)), forKey: Self.positionKey)
     }
 
     public func windowWillClose(_ notification: Notification) {
@@ -190,20 +218,21 @@ final class SettingsTabs: NSTabViewController {
     /// up (the Apps pane calls it when its list grows or shrinks; the Mouse tab when its
     /// segment changes).
     func refit() {
-        guard let pane = selectedItem?.viewController,
-              let host = pane.children.first else { return }
-        (host as? MouseTab)?.fit()
-        pane.preferredContentSize = LazyPane.fitted(host.preferredContentSize)
+        guard let pane = selectedItem?.viewController else { return }
+        (pane.children.first as? MouseTab)?.fit()
+        let size = pane.measuredSize(maxHeight: LazyPane.maxHeight(on: view.window?.screen))
+        if pane.preferredContentSize != size { pane.preferredContentSize = size }
+        fitWindow(animated: view.window?.isVisible == true)
     }
 
     private func fitWindow(animated: Bool) {
         guard let window = view.window,
               let content = selectedItem?.viewController else { return }
-        let size = content.preferredContentSize
-        guard size.height > 0 else { return }
-        let maxHeight = (window.screen ?? NSScreen.main)?.visibleFrame.height ?? 900
-        let contentRect = NSRect(x: 0, y: 0, width: SettingsWindowController.width,
-                                 height: min(size.height, maxHeight - 80))
+        // Measured now, not read from `preferredContentSize`, which is only as fresh as the pane's
+        // last layout (stale or zero before the first), and capped to the screen the window is on.
+        let size = content.measuredSize(maxHeight: LazyPane.maxHeight(on: window.screen))
+        guard size.height.isFinite, size.height > 0 else { return }
+        let contentRect = NSRect(x: 0, y: 0, width: SettingsWindowController.width, height: size.height)
         var frame = window.frameRect(forContentRect: contentRect)
         frame.origin.x = window.frame.minX
         frame.origin.y = window.frame.maxY - frame.height
@@ -215,7 +244,7 @@ final class SettingsTabs: NSTabViewController {
 /// A tab's placeholder: builds the pane's SwiftUI host the first time the tab is shown, so panes
 /// never visited cost nothing, and passes its preferred size up to the tabs.
 @MainActor
-final class LazyPane: NSViewController {
+final class LazyPane: NSViewController, IdealSized {
     private let make: () -> NSViewController
 
     init(_ make: @escaping () -> NSViewController) {
@@ -230,19 +259,30 @@ final class LazyPane: NSViewController {
         let content = make()
         addChild(content)
         view = content.view
-        preferredContentSize = Self.fitted(content.preferredContentSize)
+        preferredContentSize = content.measuredSize(maxHeight: Self.maxHeight(on: nil))
+    }
+
+    func idealSize(maxHeight: CGFloat) -> NSSize {
+        children.first?.measuredSize(maxHeight: min(maxHeight, Self.maxHeight(on: view.window?.screen))) ?? preferredContentSize
     }
 
     override func preferredContentSizeDidChange(for viewController: NSViewController) {
         super.preferredContentSizeDidChange(for: viewController)
-        preferredContentSize = Self.fitted(viewController.preferredContentSize)
+        preferredContentSize = Self.fitted(viewController.preferredContentSize, on: view.window?.screen)
     }
 
-    /// A pane's size, no taller than the screen allows (a long Apps list scrolls instead). The tab
+    /// The most content height a pane gets: `SettingsWindowController.maxContentHeight`, or less
+    /// where the screen (the window's, else the main one) leaves less room for the window's title
+    /// and toolbar.
+    static func maxHeight(on screen: NSScreen?) -> CGFloat {
+        let visible = (screen ?? NSScreen.main)?.visibleFrame.height ?? 900
+        return min(SettingsWindowController.maxContentHeight, visible - 80)
+    }
+
+    /// A pane's size, no taller than `maxHeight` (a long Apps list scrolls instead). The tab
     /// controller sizes the window from this itself, so capping only in `fitWindow` is not enough.
-    static func fitted(_ size: NSSize) -> NSSize {
-        let maxHeight = (NSScreen.main?.visibleFrame.height ?? 900) - 80
-        return NSSize(width: size.width, height: min(size.height, maxHeight))
+    static func fitted(_ size: NSSize, on screen: NSScreen? = nil) -> NSSize {
+        NSSize(width: size.width, height: min(size.height, maxHeight(on: screen)))
     }
 }
 
