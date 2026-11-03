@@ -1,8 +1,8 @@
 # Development
 
 Needs Xcode with macOS SDK 26 or later (including the SwiftUI macro plugin used by Settings).
-Design invariants, pitfalls and how to add actions or
-device features are in [`AGENTS.md`](../AGENTS.md).
+The rules the code keeps are in [How it works](how-it-works.md#invariants);
+[Extending](#extending) lists what a new button, action, feature or config section touches.
 
 ## Build and install
 
@@ -68,7 +68,9 @@ run it on a spare Mac (the workshop), not in CI; it never touches `/Applications
 agents.
 
 `scripts/tests/run.sh <name>` runs only the tests whose names contain `<name>`. The Swift tests
-cover pure logic. Anything that touches the mouse needs a live check:
+cover pure logic. Device behaviour is tested against `HIDPPTesting` fakes (`FakeDevice`,
+`FakeTransport`) built from `puremouse probe` dumps in `Tests/Fixtures/probe`, so the probe's
+output format is a fixture contract. Anything that touches the mouse needs a live check:
 
 ```sh
 .build/debug/puremouse probe                                     # read-only; safe with the agent
@@ -77,8 +79,77 @@ cover pure logic. Anything that touches the mouse needs a live check:
 ./scripts/install.sh                                             # reinstall and restart the agent
 ```
 
-Two daemons fight over the mouse, so stop the installed one before running a dev build. A build run
-from a terminal uses the terminal's permissions, not the app's.
+The probe uses its own HID++ software IDs, so it is safe beside the daemon. Two daemons fight over
+the mouse, so stop the installed one before running a dev build, and run it against a copy of the
+config, never the live one. A build run from a terminal uses the terminal's permissions, not the
+app's, and never restarts itself; `puremouse permissions` likewise answers for whoever launches
+it. `install.sh` rebuilds, re-signs and restarts the agent; check `~/Library/Logs/PureMouse.log`
+afterwards. A dev run whose stderr is piped or redirected writes to that log too, since the daemon
+attaches any non-terminal stderr to it ([ADR 16](adr/0016-daemon-owns-its-log.md)).
+
+## Menu bar app and Settings from a build
+
+Run `.build/debug/PureMouseMenu` or `.build/debug/PureMouseSettings` beside the installed agent, but
+point it away from the real files first. Without these it edits the live config and drives the
+installed agent:
+
+| Variable | Points at |
+|---|---|
+| `PUREMOUSE_CONFIG` | The config file |
+| `PUREMOUSE_DAEMON` | The binary it runs for register, stop and the menu commands; a stub script is fine |
+| `PUREMOUSE_COMPANION_DIR` | The status and control channel; a fixture `status.json` there stands in for the daemon |
+
+The menu opens the helper it finds by `SettingsLookup` (`PUREMOUSE_SETTINGS`, the nested app, then
+the sibling `PureMouseSettings` binary) and passes it the `PUREMOUSE_*` variables.
+`PUREMOUSE_COMPANION_DIR` also gives the doorbells names of their own (`Companion.doorbell`,
+[companion.md](companion.md#channel)), so such a build neither hears nor rings the installed
+daemon's. `PureMouseMenu --login` starts the menu as launchd does, without opening Settings.
+
+### Dev hooks
+
+Debug builds read `PUREMOUSE_DEV_*` variables so that panes, sheets and the menu open without a
+click. The doc comments on `DevHooks` in
+[`Sources/PureMouseMenu/DevHooks.swift`](../Sources/PureMouseMenu/DevHooks.swift) and
+[`Sources/PureMouseSettingsUI/DevHooks.swift`](../Sources/PureMouseSettingsUI/DevHooks.swift) are
+the full list. The ones used most:
+
+| Variable | Effect |
+|---|---|
+| `PUREMOUSE_DEV_APPEARANCE=light\|dark` | Overrides the appearance (menu and helper) |
+| `PUREMOUSE_DEV_MENU=1` | Opens the status menu over a plain backdrop, since its glass shows whatever is behind it |
+| `PUREMOUSE_DEV_PANE=<pane>` | Opens a tab (`general`, `mouse`, `apps`, `about`) or a Mouse segment (`buttons`, `scrolling`, `pointer`) |
+| `PUREMOUSE_DEV_PICKER=<button>` | A button's action picker on Mouse › Buttons only |
+| `PUREMOUSE_DEV_SHORTCUT=<button>` | A button's shortcut sheet on Mouse › Buttons; with `PUREMOUSE_DEV_APP`, that button's shortcut editor popover on the app sheet (`AppSheet.body`) |
+| `PUREMOUSE_DEV_MOUSE=<device key>\|all` | Chooses that mouse on Mouse, or All Mice; `PUREMOUSE_DEV_OTHERS=1` opens Buttons' Other controls |
+| `PUREMOUSE_DEV_APP=<bundle id>` | Opens Apps on that app's sheet, adding it without writing |
+| `PUREMOUSE_DEV_SHEET=<name>` | A sheet: `presets` on Mouse › Pointer, or `advanced` on the pane shown (`DevSheet`) |
+| `PUREMOUSE_DEV_CAPTURE=<file.png>` | Saves the helper's own windows to that file and quits (`DevCapture`). Needs no Screen Recording permission, so it works over SSH |
+| `PUREMOUSE_DEV_AX_DUMP=1` | Prints each control's accessibility role, label and size for every tab and Mouse segment (with `PUREMOUSE_DEV_PANE`, for what the sheet, picker and shortcut hooks open), and exits 1 on an unlabelled or duplicate control or one under 20 × 20 pt (`DevAXDump`). Run it on the spare Mac, not the one in use |
+
+A release build carries none of this; with `-DDEVHOOKS` it carries only the rig's part
+([Footprint rig](#footprint-rig)).
+
+### Screenshots
+
+Take captures and README screenshots on a macOS 27 host from a build linked against the macOS 27
+SDK ([UI design](ui-design.md#motion-sound-and-accessibility)). `PUREMOUSE_DEV_CAPTURE` covers
+Settings. For the menu, `PUREMOUSE_DEV_MENU=1` opens it; a window capture (`screencapture -l`)
+leaves out the menu's blur, so the README's menu shots take the shape and shadow from a window
+capture and the body from a screen capture of the same rect.
+
+## Other Macs
+
+`scripts/release.sh --dry-run --version 0.0.0-ci.local` builds the universal dmg; for a test Mac,
+set `PUREMOUSE_SIGN_IDENTITY=PureMouse` first. On a test Mac over SSH, drive the installed app with
+`puremouse register` and `unregister`. Nobody can answer a Gatekeeper dialog or grant permissions
+over SSH, so leave those to whoever is at the Mac.
+
+Clear the quarantine flag before the first launch. Launching a quarantined copy parks it at
+`_dyld_start` behind an on-screen dialog; on a test Mac, later launches at that path stayed parked
+even after clearing the flag and putting a fresh copy there (presumably until the dialog is
+answered).
+
+Machine-specific notes belong in the uncommitted `CLAUDE.local.md`.
 
 ## Footprint rig
 
@@ -156,9 +227,12 @@ version says the figure was not re-taken.
 
 ## Signing
 
-`scripts/sign-bundle.sh` signs every build inside out, the nested apps (the menu bar app, then the
-Settings helper) first and PureMouse.app last, each with its own identifier, without `--deep`, and
-always with the hardened runtime. The identity is the first of:
+`scripts/sign-bundle.sh` signs every build inside out, in the order of `scripts/lib.zsh`'s
+`components` (the nested apps, the menu bar app then the Settings helper, first and PureMouse.app
+last; a new nested bundle is one more entry), each with its own identifier, without `--deep`, and
+always with the hardened runtime. `install.sh` and `uninstall.sh` stop every component's agent and
+nested process (each entry is `identifier:path:executable`) before touching the app, signalling
+only this user's. The identity is the first of:
 
 1. `PUREMOUSE_SIGN_IDENTITY`;
 2. a valid `Developer ID Application` identity in the keychain;
@@ -167,8 +241,10 @@ always with the hardened runtime. The identity is the first of:
 
 Local builds sign with `--timestamp=none`; `build-app.sh --timestamp` (and `sign-bundle.sh
 --timestamp`) asks for a secure timestamp, which `release.sh` does for a release (it needs the
-network, and notarisation needs it). macOS ties permission grants to the signature, so an ad-hoc build needs them granted again after every install, and every release must
-be signed with the same identity. Keep a backup of it.
+network, and notarisation needs it). macOS keys permission grants to the identifier plus the
+certificate, which also holds on Macs that do not trust the certificate. An ad-hoc build needs them
+granted again after every install, and every release must be signed with the same identity: one
+signed by any other makes every user grant permissions again. Keep a backup of it.
 
 `scripts/verify-bundle.sh <app>` checks each component: Info.plist present and valid, identifier
 and version as expected, `codesign --verify --strict` passing, and every architecture of its
@@ -249,7 +325,56 @@ Only the owner changes these, and none needs a Developer ID. Check them with the
 
 ## Icon
 
-The icon is an Icon Composer document, `assets/AppIcon.icon`. After changing it, run
-`./scripts/make-icon.sh` (needs Xcode 26+ and `rsvg-convert`) and commit the compiled outputs.
-`assets/MenuBarIcon.svg` is the menu bar glyph; keep it in step with the icon. AGENTS.md has the
-details.
+The icon is an Icon Composer document, `assets/AppIcon.icon`: a top-down mouse in three
+monochrome glass layers (buttons with the centre seam, palm, floating wheel), grey fills with light
+and dark specialisations, on the system's light or dark background, so macOS 26+ renders light,
+dark, clear and tinted variants. After changing it, run `./scripts/make-icon.sh` (needs Xcode 26+
+and `rsvg-convert`) and commit the compiled `Assets.car`, `AppIcon.icns` (the macOS 14 and 15
+fallback), the README PNGs (also the About pane's icon) and `MenuBarIcon.pdf`.
+
+The menu bar app and the Settings helper keep their own `Assets.car` (with only the icns, macOS 26+
+draws the light icon even in dark mode), but `assemble_bundle` makes both hard links to
+PureMouse.app's. codesign, `ditto` and the dmg keep the links, so the 1.8 MB ships once, while
+`check-size.sh` still counts it per path. A symlink out of a nested bundle fails codesign.
+
+`assets/MenuBarIcon.svg` is the same mouse as an 18 × 18 pt template: alpha only, the wheel a slot,
+gaps of 1 to 1.5 pt on the half-point grid so they stay crisp at 1x and 2x. It is plain clip and
+even-odd paths, because `rsvg-convert` rasterises SVG masks in the PDF. The menu bar app loads
+`MenuBarIcon.pdf`; keep the SVG and the app icon in step.
+
+## Extending
+
+- **Named button.** Keep `Config.Button` and the menu's `NamedButton` in step (names and CIDs), and
+  add the control's display name to `ControlNames` (Kit).
+- **Action.** A case in `Action` and a name in `Action.named` (both in PureMouseKit), handled in
+  `SystemActions.perform`, or `Session.perform` for device actions.
+- **Device feature.** A wrapper in `Sources/HIDPP/Features.swift`, applied in `Session.apply()`,
+  with event parsing routed in `Session.handle()`, a parse test in `Tests/HIDPPTests`, its behaviour
+  in `FakeDevice` and its readback in a probe fixture.
+- **Numeric config field.** Give it a range: numbers are range-checked as they are decoded
+  (`decodeIfPresent(_:forKey:in:)` in `Sources/PureMouseKit/Config.swift`). An unchecked value can
+  overflow an `Int` or `Duration` conversion mid-session, and during a reload that crash comes after
+  the old session has closed, so the mouse is never restored and launchd relaunches into the same
+  crash.
+- **Config section.** Every section decodes on a `base` (its `init(_:base:)`); a new one takes one,
+  keeps its range checks and adds cases to `ConfigGoldenTests`. A config change must keep
+  `ConfigGoldenTests` identical, or regenerate it on purpose.
+- **Per-app section.** A case in `Config.appSections`, decoding on top of the global value in
+  `Config.decodeApps`, a `sets…` flag, and its lookup at the moment it applies.
+- **Per-device section.** A case in `Config.deviceSections` and decoding in
+  `Config.decodeSections`, the one layering point: the top level decodes its sections there, and
+  each device entry decodes its own there on top of the top level's. Add it to
+  `ConfigTree.resolved` and to the generator in `DeviceScopeTests.swift` too. Settings' reads
+  (`ConfigTree.resolved(_:in:)`, in `ConfigScope.swift`) mirror the decoder's merge (a button per
+  control, a gesture per direction, the other sections per key, `dpiPresets` whole), and that test
+  checks them against `Config.forDevice` on seeded generated trees, so a change to
+  `Config.decodeSections` must keep it green.
+- **Thumb-wheel action pair.** `Config.ThumbWheel.presets` (Kit) names the pairs; `ThumbStepper`
+  counts rotation into steps (remainder kept, reset at each movement's start), paced per action
+  (`ThumbStepper.pacing`: media keys free, shortcuts 50 ms, zoom 40 ms, animated actions 300 ms with
+  the turns between discarded). In Settings, `ThumbWheelChoice`
+  (`Sources/PureMouseAppSupport/ThumbWheel.swift`) lists Kit's presets in `presetOrder` with a
+  label each; `ThumbWheelState` mirrors Kit's `Config.ThumbWheel.init(_:base:)` and a test checks
+  it against the decoder. App suggestions are `AppSuggestion.table`.
+- **Scroll feel.** `ScrollAcceleration` (the curve) and `ScrollAnimator` (two-part easing) in
+  `Sources/puremouse/ScrollModel.swift`, covered by `ScrollModelTests`.
