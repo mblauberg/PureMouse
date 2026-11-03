@@ -284,7 +284,10 @@ one. This file covers how to work on it safely.
   mouse pop-up's menu (`MousePopUp.followNote`). `ScopeEditing.swift` holds the per-section helpers (`removeOverrides`,
   `restore…Defaults(in:)`, smooth scrolling, feel, presets). A mouse's or an app's button row chooses
   Mouse Default as its own value, `"default"` (`Config.Binding.nativeValue`, `ButtonAction.mouseDefault`),
-  beside "Same as …", which removes the key; under All Mice it removes the key. Reset All and the status menu stay
+  beside "Same as …", which removes the key; under All Mice it removes the key. It is offered on a mouse or
+  in an app only for controls in `Config.nativeBehaviour(of:)`, the one table the daemon also performs
+  from; `buttonKey`/`removeButton` (`ConfigKeys.swift`) follow Kit's alias rule. Rows are `RowStanding`
+  (`InheritedValue.swift`): the note, the link and the spoken ", same as All Mice" come from one answer. Reset All and the status menu stay
   global (`setDPI` without a target writes the top level); Settings' Pointer pane passes the mouse,
   and Find by Pressing and "use configured DPI" carry its key (`Control.device`,
   `Control.capture.device`), a press selecting that mouse's scope. Do not read `primaryDevice` in a
@@ -347,7 +350,9 @@ one. This file covers how to work on it safely.
   `smoothScroll` are per-app. The app is looked up only when some app sets that section (`Session.appButtons`,
   `appThumbWheel`, `appProfiles`): the frontmost app at each press of a control some app names
   (`AppSettings.buttons`; an app's `"default"` (`Config.Binding.nativeValue`) is in it with no entry in
-  `bindings`, so that press gets `nil`, a native click, with no daemon special case), the app under the pointer when a
+  `bindings`, so that press gets `nil`, which performs the mouse's own behaviour (`Config.nativeBehaviour(of:)`:
+  a native click, the wheel-mode switch or DPI cycling), and frees the pointer for that press if the control
+  is a gesture elsewhere (`Session.pointerFree`)), the app under the pointer when a
   scroll burst (`ScrollEngine.profileForBurst`) or thumb-wheel movement starts. `ForegroundApp`
   does the lookups, AppKit-free and on demand; the Universal Control work reuses it. Every control
   bound in any scope is diverted; pressed where nothing binds it, the wheel press, back and
