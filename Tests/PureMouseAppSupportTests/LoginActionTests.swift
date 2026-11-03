@@ -10,17 +10,15 @@ import Testing
         #expect(LoginAction.openAtLogin(false).command.arguments == ["login", "off"])
     }
 
-    /// Stop and Start change what runs, never the registration: neither is `register`,
-    /// `unregister` or `login on|off`.
-    @Test func startAndStopRunOnlyTheCommandsThatChangeNoRegistration() {
-        #expect(LoginAction.running(false).command == .stop)
-        #expect(LoginAction.running(true).command == .start)
-        #expect(LoginAction.running(false).command.arguments == ["stop"])
-        #expect(LoginAction.running(true).command.arguments == ["start"])
+    /// Start changes what runs, never the registration: it is not `register`, `unregister` or
+    /// `login on|off`. Settings has no Stop.
+    @Test func startRunsOnlyTheCommandThatChangesNoRegistration() {
+        #expect(LoginAction.start.command == .start)
+        #expect(LoginAction.start.command.arguments == ["start"])
     }
 
     @Test func noControlRunsRegisterOrUnregister() {
-        let all: [LoginAction] = [.openAtLogin(true), .openAtLogin(false), .running(true), .running(false)]
+        let all: [LoginAction] = [.openAtLogin(true), .openAtLogin(false), .start]
         for action in all {
             #expect(!["register", "unregister"].contains(action.command.arguments.first))
         }

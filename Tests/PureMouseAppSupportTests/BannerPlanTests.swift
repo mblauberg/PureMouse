@@ -95,16 +95,44 @@ import Testing
         #expect(Notice.off.loginAction?.command == .start)
         #expect(Notice.off.loginAction?.command.arguments == ["start"])
         for notice in Notice.allCases where notice != .off { #expect(notice.loginAction == nil) }
-        #expect(RunState.off.button.command == .start)
-        #expect(RunState.running.button.command == .stop)
-        #expect(RunState.paused.button.command == .stop)
+        // General's switch pauses and resumes; Start is the only run control Settings offers, and only while off.
+        #expect(RunState.off.button?.command == .start)
+        #expect(RunState.running.button == nil)
+        #expect(RunState.paused.button == nil)
+    }
+
+    /// The switch is on while active, moves to active or paused, and is not offered while off.
+    @Test func theSwitchMapsToTheRunState() {
+        #expect(RunState.running.isOn)
+        #expect(!RunState.paused.isOn)
+        #expect(!RunState.off.isOn)
+        for state in [RunState.running, .paused] {
+            #expect(state.toggled(true) == .running)
+            #expect(state.toggled(false) == .paused)
+        }
+        #expect(RunState.off.toggled(true) == nil)
+        #expect(RunState.off.toggled(false) == nil)
+    }
+
+    /// Off and paused are General's PureMouse row, so its list of notices leaves them out; every other
+    /// notice still shows there, and a pane's banner still offers them.
+    @Test func generalListsNoNoticeThatItsPureMouseRowIs() {
+        let off = BannerPlan.State(daemonRunning: false, paused: false)
+        let paused = BannerPlan.State(daemonRunning: true, paused: true)
+        #expect(BannerPlan.items(for: off) == [.off])
+        #expect(BannerPlan.items(for: paused) == [.paused])
+        #expect(BannerPlan.generalItems(for: off).isEmpty)
+        #expect(BannerPlan.generalItems(for: paused).isEmpty)
+        let more = BannerPlan.State(daemonRunning: true, paused: true, logiOptionsRunning: true,
+                                    accessibilityMissing: true, needsAccessibility: true, noMouse: true)
+        #expect(BannerPlan.generalItems(for: more) == [.logiOptions, .accessibility, .noMouse])
     }
 
     @Test func theStatusRowNamesTheState() {
         #expect(RunState(daemonRunning: true, paused: false) == .running)
         #expect(RunState(daemonRunning: true, paused: true) == .paused)
         #expect(RunState(daemonRunning: false, paused: false) == .off)
-        #expect([RunState.running, .paused, .off].map(\.word) == ["Running", "Paused", "Off"])
+        #expect([RunState.running, .paused, .off].map(\.word) == ["Active", "Paused", "Off"])
     }
 
     @Test func useLastWorkingConfigSaysWhatItReplaces() {

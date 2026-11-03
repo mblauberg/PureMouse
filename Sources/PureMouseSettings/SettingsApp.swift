@@ -9,7 +9,7 @@ import notify
 /// pressing still listening is cancelled, however the app ends.
 @MainActor
 final class SettingsApp: NSObject, NSApplicationDelegate {
-    private let model = AppModel(alert: Alerts.show)
+    private let model = AppModel(alert: Alerts.show, undoManager: UndoManager())
     private var settings: SettingsWindowController?
     private var showToken: Int32 = -1
     private lazy var menuActions = MainMenu.Actions(
