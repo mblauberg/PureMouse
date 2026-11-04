@@ -703,7 +703,9 @@ final class Session {
     /// ordinary HID scrolling, so it works without PureMouse. Used when PureMouse quits or pauses.
     ///
     /// A step that times out is tried once more (`restoreAttempts`); any other error is final.
-    /// With feature indices cached, `restore` takes at most `restoreSteps * restoreAttempts *
+    /// Once a step has gone unanswered on every attempt the mouse is taken as gone, and the steps
+    /// after it get one attempt each, so a silent mouse costs `restoreSteps + 1` timeouts. With
+    /// feature indices cached, `restore` takes at most `restoreSteps * restoreAttempts *
     /// restoreTimeout` (`Daemon.shutdownDeadline` allows for it); a step that has to look up its
     /// feature first sends one more request per attempt.
     func restore() async {
@@ -713,22 +715,23 @@ final class Session {
         await deviceActions.drain()
         let lease = device.lendTimeout(Self.restoreTimeout)
         defer { device.returnTimeout(lease) }
+        var attempts = Self.restoreAttempts
         // Wheels first: a silent wheel is worse than a diverted button. Each step stands alone,
         // so one failure does not skip the rest. A replaced session may have diverted them even
         // if this one would not, e.g. after a reload that turned smooth scrolling off.
         if wheelsMayBeDiverted {
-            await attempt("restore wheel") {
+            await attempt("restore wheel", attempts: &attempts) {
                 if try await self.device.hasFeature(HiResWheel.id) {
                     try await HiResWheel.setMode(self.device, .init(diverted: false, highResolution: false,
                                                                     inverted: self.config.scrollWheel?.inverted ?? false))
                 }
             }
-            await attempt("restore notched wheel") {
+            await attempt("restore notched wheel", attempts: &attempts) {
                 if try await self.hasNotchedMainWheel() {
                     try await LowResWheel.setDiverted(self.device, false)
                 }
             }
-            await attempt("restore thumb wheel") {
+            await attempt("restore thumb wheel", attempts: &attempts) {
                 if try await self.device.hasFeature(ThumbWheel.id) {
                     try await ThumbWheel.setReporting(self.device, .init(diverted: false,
                                                                          inverted: self.config.thumbWheel?.inverted ?? false))
@@ -736,27 +739,29 @@ final class Session {
             }
         }
         for cid in divertedControls {
-            await attempt("release \(ControlNames.describe(cid))") {
+            await attempt("release \(ControlNames.describe(cid))", attempts: &attempts) {
                 try await ReprogControls.setDiverted(self.device, cid: cid, divert: false, rawXY: false)
             }
         }
         // Precise Pointer let go by the finish above: its slower speed is not left on the mouse.
         if state.preciseFrom != nil, let feature = state.dpiFeature {
-            await attempt("restore pointer speed") { try await self.restorePointerSpeed(feature) }
+            await attempt("restore pointer speed", attempts: &attempts) { try await self.restorePointerSpeed(feature) }
         }
         Log.info("\(name): restored native behaviour")
     }
 
-    /// Runs one restore step, again if it timed out, until `restoreAttempts` are spent. Only a
-    /// timeout is retried: any answer from the mouse, or a transport failure, would come again.
-    private func attempt(_ what: String, _ body: () async throws -> Void) async {
-        for made in 1...Self.restoreAttempts {
+    /// Runs one restore step, again if it timed out, until `attempts` are spent. Only a timeout is
+    /// retried: any answer from the mouse, or a transport failure, would come again. A step left
+    /// unanswered by every attempt drops `attempts` to one for the steps after it.
+    private func attempt(_ what: String, attempts: inout Int, _ body: () async throws -> Void) async {
+        for made in 1...attempts {
             do {
                 try await body()
                 return
-            } catch HIDPPError.timeout where made < Self.restoreAttempts {
+            } catch HIDPPError.timeout where made < attempts {
                 continue
             } catch {
+                if case HIDPPError.timeout = error { attempts = 1 }
                 Log.error("\(name): \(what) failed: \(error)")
                 return
             }
