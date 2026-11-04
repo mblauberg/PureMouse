@@ -61,7 +61,8 @@ struct ConcurrentWritersTests {
         try sandbox.write(#"{"dpi": 800}"#)
         let fd = try Self.hold(ConfigFile(url: sandbox.config).lockURL)
         let run = try Self.launch([sandbox.directory.path, "save", "late", "1"])
-        try await Task.sleep(for: .milliseconds(100))
+        // Long enough for the child to start and reach the lock on a loaded CI runner.
+        try await Task.sleep(for: .milliseconds(300))
         #expect(run.process.isRunning)
         #expect(try sandbox.read() == #"{"dpi": 800}"#)
         flock(fd, LOCK_UN)
