@@ -39,7 +39,8 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
                                                  segment: defaults.string(forKey: Self.segmentKey))
         tabs.selectSegment(saved.segment)
         tabs.tabStyle = .toolbar
-        tabs.transitionOptions = [.crossfade, .allowUserInteraction]
+        // No transition of its own: the page change is one transition with the window frame (`PaneTransition`).
+        tabs.transitionOptions = []
         for tab in SettingsTab.shown {
             let lazy = LazyPane { [tabs] in Self.content(for: tab, model: model, context: context, tabs: tabs) }
             lazy.title = tab.title
@@ -98,9 +99,9 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
                 case .pointer: host(MouseSegmentPane { PointerPane() })
                 }
             }
-            mouse.didSelect = { [weak tabs] in
-                tabs?.selectSegment($0)
-                context.refit()
+            mouse.didSelect = { [weak tabs] in tabs?.selectSegment($0) }
+            mouse.transition = { [weak tabs] swap in
+                if let tabs { tabs.transition(swap) } else { swap() }
             }
             mouse.willLeaveButtons = { [weak model] in
                 model?.cancelCapture()
@@ -120,7 +121,7 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
         // Someone is looking: let the daemon check what it only learns by looking (Logi Options+).
         model.askDaemonToRecheck()
         if let request { model.select(for: request) }
-        if let pane = request?.pane { tabs.open(pane) }
+        context.show(request)
         guard let window else { return }
         if !window.isVisible, !restorePosition(of: window) { window.center() }
         NSApp.activate()
@@ -128,7 +129,6 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
         DispatchQueue.main.async { [context] in
             window.makeFirstResponder(nil)
             if let sheet = request?.sheet { context.sheet = sheet }
-            if let app = request?.app { context.app = app }
         }
     }
 
@@ -163,6 +163,7 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
     }
 
     public func windowWillClose(_ notification: Notification) {
+        tabs.pageTransition.cancel()
         // Let AppKit finish closing first. A request to show Settings in that gap (the menu bar app
         // rings the doorbell) keeps the window, so the helper stays.
         DispatchQueue.main.async { [weak self] in
@@ -172,7 +173,8 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
     }
 }
 
-/// Fits the window to each pane's height, keeping its top edge still, and remembers the pane.
+/// Fits the window to each pane's height, keeping its top edge still, and remembers the pane. Its
+/// `PaneTransition` is the one thing that moves the window frame.
 @MainActor
 final class SettingsTabs: NSTabViewController {
     var didSelect: (SettingsTab) -> Void = { _ in }
@@ -180,10 +182,17 @@ final class SettingsTabs: NSTabViewController {
     /// Called when another tab replaces Mouse, whichever way the change came.
     var didLeaveMouse: () -> Void = {}
     private var shownTab: SettingsTab?
+    private var tabChangeStarted = false
     /// The Mouse tab's segment, kept while another tab shows and used when Mouse is first built.
     private(set) var segment: MouseSegment = .buttons
     /// The Mouse tab, once built.
     weak var mouse: MouseTab?
+    /// The window frame's one owner: page changes and in-place height changes go through it.
+    private(set) lazy var pageTransition = PaneTransition(host: view) { [weak self] in
+        self?.fittedFrame()
+    } container: { [weak self] in
+        self?.tabView
+    }
 
     /// The selected tab's item; nil while nothing is selected (the index is -1).
     private var selectedItem: NSTabViewItem? {
@@ -203,11 +212,33 @@ final class SettingsTabs: NSTabViewController {
         mouse?.select(segment)
     }
 
-    /// Shows a tab, or Mouse on a segment.
+    /// Shows a tab, or Mouse on a segment, as one transition.
     func open(_ pane: SettingsPane) {
+        guard changesPage(to: pane) else { return }
         let next = SettingsSelection(tab: selectedTab ?? .mouse, segment: segment).opening(pane)
-        selectSegment(next.segment)
-        if let index = SettingsTab.shown.firstIndex(of: next.tab) { selectedTabViewItemIndex = index }
+        transition {
+            selectSegment(next.segment)
+            if let index = SettingsTab.shown.firstIndex(of: next.tab) { selectedTabViewItemIndex = index }
+        }
+    }
+
+    /// Plain activation and repeated page requests leave an existing flight alone.
+    func changesPage(to pane: SettingsPane) -> Bool {
+        let next = SettingsSelection(tab: selectedTab ?? .mouse, segment: segment).opening(pane)
+        return selectedTab != next.tab || (next.tab == .mouse && segment != next.segment)
+    }
+
+    /// Makes a change to what the window shows (a tab, a segment, an app's page) as one transition:
+    /// the content cross-fades as the frame moves to the new height (`PaneTransition`).
+    func transition(_ change: () -> Void) {
+        pageTransition.change(change)
+    }
+
+    override func tabView(_ tabView: NSTabView, willSelect tabViewItem: NSTabViewItem?) {
+        // A toolbar click arrives here without `open`: the change starts before the old pane goes.
+        tabChangeStarted = (tabViewItem?.identifier as? String) != shownTab?.rawValue
+        if tabChangeStarted { pageTransition.begin() }
+        super.tabView(tabView, willSelect: tabViewItem)
     }
 
     override func tabView(_ tabView: NSTabView, didSelect tabViewItem: NSTabViewItem?) {
@@ -218,42 +249,42 @@ final class SettingsTabs: NSTabViewController {
             shownTab = tab
             didSelect(tab)
         }
-        fitWindow(animated: view.window?.isVisible == true)
+        if tabChangeStarted {
+            tabChangeStarted = false
+            pageTransition.end()
+        }
         // No field or button starts focused: Tab still reaches them.
         DispatchQueue.main.async { [weak self] in self?.view.window?.makeFirstResponder(nil) }
     }
 
     override func preferredContentSizeDidChange(for viewController: NSViewController) {
-        super.preferredContentSizeDidChange(for: viewController)
+        // Not passed to super: the window frame has one owner (`PaneTransition`).
         guard let selected = selectedItem?.viewController, viewController === selected else { return }
-        fitWindow(animated: view.window?.isVisible == true)
+        pageTransition.fit()
     }
 
     /// Fits the window to the current pane after its content changed height. The nested hosting
     /// controller's size follows its content, but it never tells its parent, so this passes it
-    /// up (the Apps pane calls it when its list grows or shrinks; the Mouse tab when its
-    /// segment changes).
+    /// up (`SettingsContext.refit()`: the Apps list growing, a disclosure, a notice).
     func refit() {
-        guard let pane = selectedItem?.viewController else { return }
-        (pane.children.first as? MouseTab)?.fit()
-        let size = pane.measuredSize(maxHeight: LazyPane.maxHeight(on: view.window?.screen))
-        if pane.preferredContentSize != size { pane.preferredContentSize = size }
-        fitWindow(animated: view.window?.isVisible == true)
+        pageTransition.fit()
     }
 
-    private func fitWindow(animated: Bool) {
-        guard let window = view.window,
-              let content = selectedItem?.viewController else { return }
-        // Measured now, not read from `preferredContentSize`, which is only as fresh as the pane's
-        // last layout (stale or zero before the first), and capped to the screen the window is on.
-        let size = content.measuredSize(maxHeight: LazyPane.maxHeight(on: window.screen))
-        guard size.height.isFinite, size.height > 0 else { return }
+    /// The window frame that fits the current pane, its top edge where it is now; nil when there
+    /// is no window or nothing to measure. The pane is measured now, not read from
+    /// `preferredContentSize`, which is only as fresh as its last layout (stale or zero before the
+    /// first), and capped to the screen the window is on.
+    private func fittedFrame() -> NSRect? {
+        guard let window = view.window, let pane = selectedItem?.viewController else { return nil }
+        (pane.children.first as? MouseTab)?.fit()
+        let size = pane.measuredSize(maxHeight: LazyPane.maxHeight(on: window.screen))
+        guard size.height.isFinite, size.height > 0 else { return nil }
+        if pane.preferredContentSize != size { pane.preferredContentSize = size }
         let contentRect = NSRect(x: 0, y: 0, width: SettingsWindowController.width, height: size.height)
         var frame = window.frameRect(forContentRect: contentRect)
         frame.origin.x = window.frame.minX
         frame.origin.y = window.frame.maxY - frame.height
-        guard frame != window.frame else { return }
-        window.setFrame(frame, display: true, animate: animated)
+        return frame
     }
 }
 

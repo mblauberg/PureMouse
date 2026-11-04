@@ -91,7 +91,7 @@ import Testing
         #expect(page.contains(#".accessibilityLabel("Back to Apps")"#))
         // The Apps tab shows the page in place of the list, and the row and the request open the same one.
         let apps = try Self.source("PureMouseSettingsUI/AppsPane.swift")
-        #expect(apps.contains("AppPage(key:") && apps.contains("back: { list.close() }"))
+        #expect(apps.contains("AppPage(key:") && apps.contains("back: { navigate { list.close() } }"))
         #expect(apps.contains("list.show(id)") && apps.contains("list.add(id, in: model.config)"))
         #expect(!apps.contains(".sheet("))
     }

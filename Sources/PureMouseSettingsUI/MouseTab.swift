@@ -21,8 +21,10 @@ final class MouseSelection {
 @MainActor
 final class MouseTab: NSViewController, IdealSized {
     let selection: MouseSelection
-    /// Called when the segment changes, after its pane shows, so the window can refit to it.
+    /// Called when the segment changes, after its pane shows.
     var didSelect: (MouseSegment) -> Void = { _ in }
+    /// Runs a segment change on screen as the window's one page transition (`SettingsTabs.transition`).
+    var transition: (() -> Void) -> Void = { $0() }
     /// Called as the segment changes away from Buttons, whichever way the change came (the strip
     /// or a request), so Find by Pressing, which belongs to Buttons, ends with it.
     var willLeaveButtons: () -> Void = {}
@@ -68,7 +70,11 @@ final class MouseTab: NSViewController, IdealSized {
         guard segment != selection.segment else { return }
         if selection.segment == .buttons { willLeaveButtons() }
         selection.segment = segment
-        if isViewLoaded { show(segment) }
+        if isViewLoaded, view.window != nil {
+            transition { show(segment) }
+        } else if isViewLoaded {
+            show(segment)
+        }
         didSelect(segment)
     }
 

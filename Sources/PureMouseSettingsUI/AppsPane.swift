@@ -22,7 +22,8 @@ struct AppsPane: View {
                 // Tied to the app: switching from one to another (the status menu's "Settings for
                 // <app>…") starts a page, so no editor, picker, disclosure or icon is left over.
                 AppPage(key: key, identity: identities.identity(key), segment: list.segment,
-                        select: { list.select($0) }, back: { list.close() }, remove: { remove(key) })
+                        select: { segment in navigate { list.select(segment) } },
+                        back: { navigate { list.close() } }, remove: { navigate { remove(key) } })
                     .id(key)
             } else {
                 appList
@@ -80,7 +81,7 @@ struct AppsPane: View {
                 } else {
                     ForEach(apps, id: \.self) { id in
                         AppRow(identity: identities.identity(id), summary: list.summary(id, in: model.config)) {
-                            list.show(id)
+                            navigate { list.show(id) }
                         }
                         .contextMenu {
                             Button("Remove…") { removing = id }
@@ -104,11 +105,14 @@ struct AppsPane: View {
         .onChange(of: apps.count) { settings?.refit() }
     }
 
+    /// Changes between the list and a page, or a page's segments, as the window's one transition.
+    private func navigate(_ change: () -> Void) {
+        if let settings { settings.transition(change) } else { change() }
+    }
+
     /// Opens the page of the app a request named, listing it first when it is not there.
     private func openRequested() {
-        guard let id = settings?.app else { return }
-        settings?.app = nil
-        list.add(id, in: model.config)
+        settings?.openRequested(in: &list, config: model.config)
     }
 
     /// The configured apps and those added here, by name.
@@ -125,7 +129,7 @@ struct AppsPane: View {
             if !running.isEmpty {
                 Section("Running") {
                     ForEach(running) { entry in
-                        Button(entry.name) { list.add(entry.id, in: model.config) }
+                        Button(entry.name) { navigate { list.add(entry.id, in: model.config) } }
                     }
                 }
             }
@@ -152,7 +156,7 @@ struct AppsPane: View {
                 Alerts.show(alert.title, alert.message)
                 return
             }
-            list.add(id, in: model.config)
+            navigate { list.add(id, in: model.config) }
         }
         if let window = settings?.window {
             panel.beginSheetModal(for: window, completionHandler: finish)

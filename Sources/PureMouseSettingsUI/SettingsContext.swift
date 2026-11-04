@@ -1,6 +1,7 @@
 import AppKit
 import Observation
 import PureMouseAppSupport
+import PureMouseKit
 
 /// What a pane may ask of the window around it.
 @MainActor @Observable
@@ -23,6 +24,29 @@ final class SettingsContext {
     var arrival: ScrollingSection?
 
     var window: NSWindow? { tabs?.view.window }
+
+    /// Applies the navigation part of `SettingsWindowController.show`, before activation or a
+    /// sheet is presented. Only an actual page change takes a snapshot.
+    func show(_ request: ShowRequest?) {
+        let change = {
+            if let pane = request?.pane { self.tabs?.open(pane) }
+            if let app = request?.app { self.app = app }
+        }
+        if let pane = request?.pane, tabs?.changesPage(to: pane) == true {
+            transition(change)
+        } else {
+            change()
+        }
+    }
+
+    /// Apps consumes a request during layout, joining a tab transition if one is being made.
+    /// Repeating the current app leaves its segment and any animation under way alone.
+    func openRequested(in list: inout AppList, config: ConfigTree) {
+        guard let app else { return }
+        self.app = nil
+        guard list.open != config.appKey(app) else { return }
+        transition { list.add(app, in: config) }
+    }
 
     /// Shows a tab, or Mouse on a segment (the banner's "more notices" opens General).
     func open(_ pane: SettingsPane) {
@@ -50,6 +74,12 @@ final class SettingsContext {
     /// Asks Buttons to bring the row of `button` into view, even if it is the one already chosen.
     func requestRow(_ button: NamedButton) {
         rowRequest = RowRequest(id: (rowRequest?.id ?? 0) + 1, button: button)
+    }
+
+    /// Changes what the pane shows (an app's page, back to the list) as the window's one page
+    /// transition: the content cross-fades as the frame moves (`SettingsTabs.transition`).
+    func transition(_ change: () -> Void) {
+        if let tabs { tabs.transition(change) } else { change() }
     }
 
     /// Fits the window to its pane once a change in the pane's height has laid out
