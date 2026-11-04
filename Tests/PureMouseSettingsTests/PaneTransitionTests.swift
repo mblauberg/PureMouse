@@ -52,6 +52,22 @@ import Testing
         let container = NSView()
         var height: CGFloat = 300
         var measured = 0
+        var time: TimeInterval = 100
+        var visible = true
+        var reduced = false
+        var durations: [TimeInterval] = []
+        var completions: [@MainActor @Sendable () -> Void] = []
+
+        func controlledAnimation() {
+            transition.isVisible = { [unowned self] _ in visible }
+            transition.reduceMotion = { [unowned self] in reduced }
+            transition.now = { [unowned self] in time }
+            transition.animateGroup = { [unowned self] duration, changes, completion in
+                durations.append(duration)
+                changes()
+                completions.append(completion)
+            }
+        }
         lazy var transition = PaneTransition(host: window.contentView!) { [unowned self] in
             measured += 1
             var frame = window.frameRect(forContentRect: NSRect(x: 0, y: 0, width: 600, height: height))
@@ -61,6 +77,7 @@ import Testing
 
         init() {
             window.isReleasedWhenClosed = false
+            container.wantsLayer = true
             container.frame = window.contentView!.bounds
             window.contentView!.addSubview(container)
         }
@@ -109,6 +126,91 @@ import Testing
         transition.change {}
         transition.fit()
         #expect(window.frame == frame)
+    }
+
+    @Test func retargetFinishesWithTheOriginalFade() throws {
+        let rig = Rig()
+        rig.controlledAnimation()
+        rig.transition.change { rig.height = 450 }
+        #expect(rig.transition.isAnimating)
+        #expect(rig.container.alphaValue == 1)
+        let duration = try #require(rig.durations.first)
+        rig.time += duration / 2
+        rig.height = 470
+        rig.transition.fit()
+        #expect(rig.durations.count == 2)
+        #expect(abs(rig.durations[1] - duration / 2) < 0.00001)
+        rig.completions[0]()
+        #expect(!rig.transition.isAnimating)
+        #expect(rig.window.contentView!.subviews.count == 1)
+        rig.completions[1]()
+        #expect(!rig.transition.isAnimating)
+    }
+
+    @Test func staleCompletionCannotLandANewerFlight() {
+        let rig = Rig()
+        rig.controlledAnimation()
+        rig.transition.change { rig.height = 450 }
+        rig.transition.change { rig.height = 400 }
+        #expect(rig.completions.count == 2)
+        rig.completions[0]()
+        #expect(rig.transition.isAnimating)
+        #expect(rig.window.contentView!.subviews.count == 2)
+        rig.completions[1]()
+        #expect(!rig.transition.isAnimating)
+    }
+
+    @Test func closingDuringAFlightCleansUp() {
+        let rig = Rig()
+        rig.controlledAnimation()
+        let bottom = rig.container.bottomAnchor.constraint(equalTo: rig.window.contentView!.bottomAnchor)
+        bottom.isActive = true
+        rig.transition.change { rig.height = 450 }
+        #expect(!bottom.isActive)
+        rig.transition.cancel()
+        #expect(!rig.transition.isAnimating)
+        #expect(bottom.isActive)
+        #expect(rig.window.contentView!.subviews.count == 1)
+        #expect(rig.container.alphaValue == 1)
+        rig.completions[0]()
+        #expect(!rig.transition.isAnimating)
+    }
+
+    @Test(arguments: [true, false]) func policyChangeDuringFlightLandsImmediately(hidden: Bool) {
+        let rig = Rig()
+        rig.controlledAnimation()
+        rig.transition.change { rig.height = 450 }
+        rig.visible = !hidden
+        rig.reduced = !hidden
+        rig.height = 470
+        rig.transition.fit()
+        #expect(!rig.transition.isAnimating)
+        #expect(rig.window.contentLayoutRect.height == 470)
+        #expect(rig.window.contentView!.subviews.count == 1)
+        #expect(rig.durations.count == 1)
+    }
+
+    @Test func unchangedTargetStillRechecksMotionPolicy() {
+        let rig = Rig()
+        rig.controlledAnimation()
+        rig.transition.change { rig.height = 450 }
+        rig.reduced = true
+        rig.transition.fit()
+        #expect(!rig.transition.isAnimating)
+        #expect(rig.window.contentView!.subviews.count == 1)
+        #expect(rig.durations.count == 1)
+    }
+
+    @Test func snapshotIgnoresInputAndAccessibility() throws {
+        let rig = Rig()
+        rig.controlledAnimation()
+        rig.transition.begin()
+        let snapshot = try #require(rig.window.contentView!.subviews.last as? SnapshotView)
+        #expect(snapshot.hitTest(NSPoint(x: 10, y: 10)) == nil)
+        #expect(snapshot.accessibilityIsIgnored())
+        #expect(!snapshot.isAccessibilityElement())
+        rig.transition.end()
+        rig.transition.cancel()
     }
 
     /// Settings' tabs in a hidden window: each tab's plain pane asks for its own height.

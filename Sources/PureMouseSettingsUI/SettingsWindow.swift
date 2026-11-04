@@ -167,6 +167,7 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
     }
 
     public func windowWillClose(_ notification: Notification) {
+        tabs.pageTransition.cancel()
         // Let AppKit finish closing first. A request to show Settings in that gap (the menu bar app
         // rings the doorbell) keeps the window, so the helper stays.
         DispatchQueue.main.async { [weak self] in

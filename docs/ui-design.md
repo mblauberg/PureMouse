@@ -501,7 +501,9 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
   duration from `animationResizeTime` held to 0.2–0.35 s, ease in and out. While it runs the tab
   view is pinned to the top at the new height (its bottom constraints let go), so the page does not
   slide. `refit()` and `preferredContentSizeDidChange` call `fit()`, the same frame animation with
-  no fade, retargeting one under way; a change started mid-flight first lands the old one. The
+  no fade, retargeting one under way to its original end time; a hidden window or Reduce Motion
+  lands it immediately. The incoming page stays interactive and the snapshot ignores input and
+  accessibility. Closing the window cleans up a flight; a change started mid-flight first lands the old one. The
   tab controller has no transition of its own (`transitionOptions = []`) and its
   `preferredContentSizeDidChange` does not reach super, which would size the window too. Grouped
   forms hide their scroll background (`PaneForm`), which looks the same but lets the snapshot match
