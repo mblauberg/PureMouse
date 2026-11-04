@@ -88,6 +88,9 @@ struct PaneForm<Content: View>: View {
     var body: some View {
         Form { content }
             .formStyle(.grouped)
+            // Looks the same, but leaves the window's own background (tinted by the desktop)
+            // showing, so a page change's snapshot matches the page (`PaneTransition`).
+            .scrollContentBackground(.hidden)
             .scrollBounceBehavior(.basedOnSize)
             .frame(maxHeight: maxHeight)
             .fixedSize(horizontal: false, vertical: true)
