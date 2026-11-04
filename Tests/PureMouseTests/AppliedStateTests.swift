@@ -236,12 +236,16 @@ struct AppliedStateTests {
         h.fake.transport.timing = .never
         h.session.configure()
         try await eventually { h.session.attemptsMade > 1 }
-        // The mouse answers nothing, so restore holds its timeout for as long as its writes wait.
+        // The mouse answers nothing, and no request of restore's times out until the latch opens, so
+        // restore holds its timeout for exactly as long as the assertions below take.
+        let gate = Latch()
+        defer { gate.release() }
+        h.device.sleep = { _ in await gate.wait() }
         let restoring = Task { await h.session.restore() }
         try await eventually { h.device.effectiveTimeout == environment.restoreTimeout }
         try await eventually { !h.session.isConfiguring }  // the cancelled configure has ended
-        for _ in 0..<5 { await Task.yield() }
         #expect(h.device.effectiveTimeout == environment.restoreTimeout)
+        gate.release()
         await restoring.value
         #expect(h.device.effectiveTimeout == h.device.timeout)
     }

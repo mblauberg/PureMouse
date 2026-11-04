@@ -114,16 +114,22 @@ import Testing
 
     // MARK: A press held across a pending apply
 
-    /// Presses `cid` while a delayed configure is still waiting, and lets it apply while held.
+    /// Presses `cid` while a delayed configure is still waiting, and lets it apply while held. The
+    /// configure's delay is held at a latch until the press has settled, so the apply always comes
+    /// after the control became pointer-free.
     private func holdAcrossPendingApply(_ json: String, cid: UInt16) async throws -> SessionHarness {
-        let h = try await SessionHarness(config: try SessionHarness.config(json))
+        let gate = Latch()
+        var environment = SessionEnvironment(canPostEvents: true, configureRetryDelay: .milliseconds(1))
+        environment.configureWait = { _ in await gate.wait() }
+        let h = try await SessionHarness(config: try SessionHarness.config(json), environment: environment)
         try await h.session.apply()
         #expect(h.fake.control(cid)?.rawXY == true)
-        h.session.configure(after: .milliseconds(50))
+        h.session.configure(after: .seconds(1))  // the latch, not this, decides when it applies
         await h.press(cid)
+        #expect(h.session.isConfiguring)
         #expect(h.session.pointerFree == [cid])
         #expect(h.fake.control(cid)?.rawXY == false)
-        // Wait for the apply itself, not a guess at how long it takes: CI runners are slow.
+        gate.release()
         try await eventually(within: .seconds(10)) { !h.session.isConfiguring }
         await h.session.diversion.drain()
         return h

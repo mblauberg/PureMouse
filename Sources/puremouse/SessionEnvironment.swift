@@ -8,6 +8,9 @@ struct SessionEnvironment {
     var canPostEvents: Bool
     /// The wait between the three attempts of one `Session.configure`.
     var configureRetryDelay: Duration = .seconds(5)
+    /// How `Session.configure(after:)` waits out its delay; a test holds it open until released
+    /// instead of guessing how long a press takes.
+    var configureWait: (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
     var now: () -> ContinuousClock.Instant = { .now }
     /// How the daemon waits between attempts to adopt an endpoint that did not answer (`Backoff`).
     var adoptionSleep: (Duration) async throws -> Void = { try await Task.sleep(for: $0) }

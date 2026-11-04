@@ -106,6 +106,26 @@ struct SessionHarness {
     }
 }
 
+/// A latch: a point a test holds a wait at until it lets go: a `wait()` suspends until `release()`, and returns
+/// at once after it. For ordering work with a handshake instead of a duration.
+@MainActor
+final class Latch {
+    private var isOpen = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func wait() async {
+        if isOpen { return }
+        await withCheckedContinuation { waiters.append($0) }
+    }
+
+    func release() {
+        isOpen = true
+        let released = waiters
+        waiters = []
+        for waiter in released { waiter.resume() }
+    }
+}
+
 /// A time a test moves by hand (`SessionEnvironment.now`), to step over the offline gap and the like.
 final class HandClock: @unchecked Sendable {
     var now = ContinuousClock.now

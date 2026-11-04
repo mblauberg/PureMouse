@@ -459,7 +459,7 @@ final class Session {
                     lastConfigureEnded = environment.now()
                 }
             }
-            try? await Task.sleep(for: delay)
+            try? await environment.configureWait(delay)
             for attempt in 1...3 {
                 guard !Task.isCancelled else { return }
                 attemptsMade += 1
