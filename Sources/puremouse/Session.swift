@@ -679,6 +679,10 @@ final class Session {
     /// time for every other before the daemon's deadline (`Daemon.shutdownDeadline`).
     static let restoreTimeout: Duration = .milliseconds(400)
 
+    /// How many times `restore` tries a step that times out: a dozing mouse can miss the first
+    /// request that wakes it and answer the next.
+    static let restoreAttempts = 2
+
     /// The hand-backs `restore` makes, each one request when feature indices are cached.
     var restoreSteps: Int {
         wheelsToRestore.count + divertedControls.count + (state.preciseFrom != nil ? 1 : 0)
@@ -697,6 +701,11 @@ final class Session {
 
     /// Hands the mouse back in its native state: buttons undiverted and wheels reporting as
     /// ordinary HID scrolling, so it works without PureMouse. Used when PureMouse quits or pauses.
+    ///
+    /// A step that times out is tried once more (`restoreAttempts`); any other error is final.
+    /// With feature indices cached, `restore` takes at most `restoreSteps * restoreAttempts *
+    /// restoreTimeout` (`Daemon.shutdownDeadline` allows for it); a step that has to look up its
+    /// feature first sends one more request per attempt.
     func restore() async {
         finish()
         // Cancelled work stops at its next write, and its request in flight fails at once.
@@ -738,11 +747,19 @@ final class Session {
         Log.info("\(name): restored native behaviour")
     }
 
+    /// Runs one restore step, again if it timed out, until `restoreAttempts` are spent. Only a
+    /// timeout is retried: any answer from the mouse, or a transport failure, would come again.
     private func attempt(_ what: String, _ body: () async throws -> Void) async {
-        do {
-            try await body()
-        } catch {
-            Log.error("\(name): \(what) failed: \(error)")
+        for made in 1...Self.restoreAttempts {
+            do {
+                try await body()
+                return
+            } catch HIDPPError.timeout where made < Self.restoreAttempts {
+                continue
+            } catch {
+                Log.error("\(name): \(what) failed: \(error)")
+                return
+            }
         }
     }
 }

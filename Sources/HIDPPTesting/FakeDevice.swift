@@ -61,6 +61,9 @@ public final class FakeDevice {
     /// Features whose next root lookup goes unanswered (`dropFirstLookup`), and those dropped.
     private var lookupsToDrop: Set<UInt16> = []
     public private(set) var droppedLookups: Set<UInt16> = []
+    /// Calls whose next request goes unanswered (`dropNextRequest`), and those dropped.
+    private var requestsToDrop: Set<Call> = []
+    public private(set) var droppedRequests: [Call] = []
 
     public init(name: String = "Fake mouse", features: [UInt8: UInt16] = [:]) {
         self.name = name
@@ -151,8 +154,18 @@ public final class FakeDevice {
         lookupsToDrop.insert(feature)
     }
 
+    /// The next request to `call` goes unanswered and has no effect, as one lost to a dozing mouse
+    /// does; the ones after it are handled as usual. Recorded in `droppedRequests` once dropped.
+    public func dropNextRequest(to call: Call) {
+        requestsToDrop.insert(call)
+    }
+
     private func answer(_ r: Report) throws -> Report? {
         let feature = feature(of: r) ?? 0xFFFF
+        if requestsToDrop.remove(Call(feature, r.function)) != nil {
+            droppedRequests.append(Call(feature, r.function))
+            return nil
+        }
         if let failure = failures[Call(feature, r.function)] {
             switch failure {
             case .error(let code): return FakeTransport.error(to: r, code: code)

@@ -930,10 +930,10 @@ final class Daemon {
         max(quitting.max() ?? 0, pausing.reduce(0, +))
     }
 
-    /// How long quitting waits for the mice to be handed back: time for every step of the
-    /// longest restore to time out (mice restore side by side), within 2 to 5 seconds.
+    /// How long quitting waits for the mice to be handed back: time for every attempt of every step
+    /// of the longest restore to time out (mice restore side by side), within 2 to 5 seconds.
     static func shutdownDeadline(restoreSteps: Int) -> Duration {
-        min(max(Session.restoreTimeout * restoreSteps + .seconds(1), .seconds(2)), .seconds(5))
+        min(max(Session.restoreTimeout * (restoreSteps * Session.restoreAttempts) + .seconds(1), .seconds(2)), .seconds(5))
     }
 
     /// The final status, `running: false`, is the last thing written.

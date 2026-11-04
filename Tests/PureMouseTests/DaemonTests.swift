@@ -36,7 +36,7 @@ struct DaemonTests {
     /// Every hand-back gets its turn before quitting gives up, within bounds.
     @Test func shutdownDeadlineCoversEveryRestoreStep() {
         #expect(Daemon.shutdownDeadline(restoreSteps: 0) == .seconds(2))
-        #expect(Daemon.shutdownDeadline(restoreSteps: 6) == Session.restoreTimeout * 6 + .seconds(1))
+        #expect(Daemon.shutdownDeadline(restoreSteps: 3) == Session.restoreTimeout * (3 * Session.restoreAttempts) + .seconds(1))
         #expect(Daemon.shutdownDeadline(restoreSteps: 100) == .seconds(5))
     }
 
@@ -48,7 +48,7 @@ struct DaemonTests {
         #expect(Daemon.restoreSteps(quitting: [2, 5], pausing: []) == 5)
         #expect(Daemon.restoreSteps(quitting: [3], pausing: [4, 2]) == 6)
         #expect(Daemon.shutdownDeadline(restoreSteps: Daemon.restoreSteps(quitting: [], pausing: [7]))
-                    == Session.restoreTimeout * 7 + .seconds(1))
+                    == .seconds(5))  // 7 steps, twice each, past the cap
     }
 
     /// A slot's session is retired only for a device known to differ: the first announcement
