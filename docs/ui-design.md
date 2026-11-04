@@ -433,28 +433,17 @@ tab and no new Mouse segment. What does something is an action in the one picker
 
 ```
 Menu bar icon (NSMenu)
-├─ Device header: second line "Bolt · 80%" | "Applying settings…" | "Settings not applied" | "Off in <App>"
-├─ Attention rows, only while true: Apply Settings Again · Allow… · Update to X.Y.Z…
-├─ Smooth Scrolling · Pointer Speed ▸ (a section per mouse from two) · Easy-Switch ▸ (only if the mouse reports it) · Pause PureMouse
-├─ Settings…  ·  Settings for <frontmost app>…  ·  Quit PureMouse
-└─ ⌥: detail line (adds "Settings applied at 09:14") · Reload Config · Show Log in Finder · Hide Menu Bar Icon
+└─ Easy-Switch ▸ (only if the mouse reports host switching)
 
 Settings
-├─ General: Status (PureMouse; one row per device with (i) → About This Mouse sheet; a receiver row
-│            with (i) → Receiver sheet: Pair a Mouse…, Unpair…, last slice) · Open at login ·
-│            Show in menu bar · Low battery notifications · Permissions ·
-│            Advanced…: Universal Control, Config file [Open] [Show in Finder],
-│            Copy settings [Export…] [Import…],
-│            Log, Reset All Settings…
+├─ General: Status gains a receiver row with (i) → Receiver sheet: Pair a Mouse…, Unpair…
 ├─ Mouse [Buttons | Scrolling | Pointer]
 │   ├─ Buttons: Advanced… gains Ignore repeated clicks (the click, Double-click and Hold rows are
 │   │           built: see Layout)
 │   ├─ Scrolling: Advanced… gains Modifier Keys (Shift, Option, Command, Control) in place of
 │   │             "Hold Shift to scroll sideways"
 │   └─ Pointer: unchanged
-├─ Apps: list ("Buttons, Scrolling" or "Off") → app page: Use PureMouse in this app (switch; dims the
-│        rest) · Suggested banner · Buttons, the app's actions first · Scrolling, with Modifier Keys
-│        collapsed · Remove App…
+├─ Apps: app page gains Modifier Keys on Scrolling, collapsed
 └─ About: unchanged
 ```
 
@@ -463,42 +452,11 @@ Settings
 | Button plus scroll | Hold → Hold and Scroll, using the thumb wheel's pairs |
 | Modifier plus scroll | Scrolling › Advanced…; collapsed on an app's Scrolling |
 | Ignore repeated clicks | Buttons › Advanced…, per mouse; milliseconds stay in config |
-| Off in this app | The app page's first row |
-| Easy-Switch | Status in About This Mouse (built) and the menu; Switch to Computer N in the picker |
-| Per-app actions (#154) | The app page's picker, the app's own section first |
+| Easy-Switch | Menu; Switch to Computer N in the picker |
 | Sequence, Action Ring and new action types (#153) | Picker › Custom, one sheet each |
-| Export, Import | General › Advanced…, beside Open Config File, and the File menu |
 | Receiver pairing | The receiver row's (i), and No Mouse Found when a receiver is present |
 | App Intents | Shortcuts and Spotlight; no Settings UI |
 
-**Action model.** When I click, double-click or hold a control (in an app), do an action, each
-trigger inheriting on its own from All Mice to the mouse to the app. A binding is a bare action,
-which is its click, or a table of triggers ([ADR 24](adr/0024-one-action-model.md)).
-
-- **A button's pop-up always shows its click action.** The gesture button reads "Mission Control",
-  with Hold and Move as its Hold row. There is no "Several Actions" value.
-- A trigger exists in the UI only once it is added (More Ways to Press), so a fresh install looks as
-  it does today plus one device row in General › Status.
-- The picker stays one popover:
-  - One surface, as a menu is: the search field, a hairline, then a plain list on the popover's own
-    material with no background of its own and no separators. A label stays on one line (its full
-    name as a tooltip), and the shortcut sits at the trailing edge.
-  - On an app page for an app with a pack, the app's actions follow the top entries (Same as…,
-    Mouse Default, Do Nothing) in a section named for the app ("Zoom"), before the generic groups.
-    Every other page, and an app without a pack, lists what it did before.
-  - The app's section over six rows folds to five and "Show All (N)"; the click expands it inline.
-    It starts open when the current binding is one of its folded actions.
-  - Search matches everything, keeping the sections and the haptic group as they are. An app's
-    actions also match their category (shown beside the label while searching), whole-word
-    keywords, and their shortcut as glyphs ("⇧⌘A"), a spec ("shift+cmd+a") or words in any order
-    ("command shift a"). Search ignores folding.
-  - In Mouse scope, a search that finds nothing but matches some apps' actions says so in one line:
-    "Also in Zoom and Adobe Photoshop. Choose them on the app's page."
-  - A pack action's row shows its shortcut at the trailing edge. One whose shortcut depends on the
-    person's keyboard layout or keymap (Final Cut Pro, VS Code) says "Depends on your keymap" in
-    secondary text under its label; the button's tooltip on the app page keeps the shortcut
-    ("Presses ⌘B. Depends on your keymap.").
-  - No trigger strip, category strip, recents or favourites.
 - An editor inside the Sequence or Action Ring sheet swaps that sheet's content; it never opens a
   second sheet.
 
@@ -643,13 +601,41 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
 | Place | Shown by default | Advanced |
 |---|---|---|
 | General | Status (the PureMouse row: a Pause switch with Active or Paused beside it, or Off with a Start button; one row per mouse the daemon knows, with its connection, battery and computer, or that its settings are being applied or were not, and an (i) that opens About This Mouse; active notices), Open at login, Show in menu bar, Low battery notifications (while macOS has them off, Open Notification Settings… in place of the switch, whose choice is kept), Permissions (status only) | Advanced… sheet: Work with Universal Control, Config file (Open, Show in Finder), Copy settings (Export…, Import…; the File menu has Export Settings… and Import Settings…), Log, Reset All Settings…. The Settings app's File menu has Export Settings… and Import Settings… |
-| Mouse header | Buttons, Scrolling, Pointer segments; mouse pop-up with two or more mice; Find by Pressing… and the device card on Buttons | — |
+| Mouse header | Buttons, Scrolling, Pointer segments; mouse pop-up with two or more mice or any `devices` entry; Find by Pressing… and the device card on Buttons | — |
 | Mouse › Buttons | One row per button, its pop-up the click action (the gesture button reads "Mission Control") | Double-click and Hold child rows (one disclosure per button, only once wanted from More Ways to Press at the foot of the click's picker or once one applies; collapsed, the caption sums them up, "Double-click: Mission Control. Hold: Precise Pointer."; the Double-click row's caption states the wait, "Single clicks wait 0.5 s for a second click."); Hold and Move's directions under its Hold row (choosing it expands the row); Other controls (disclosure: named controls and bound ones, see Device card); Advanced… sheet, only while some button anywhere is Hold and Move: gesture Distance and Repeat |
 | Mouse › Scrolling | Smooth scrolling, Feel, Speed; Main Wheel: Reverse direction, Wheel mode, SmartShift; Thumb Wheel: Action (Turn left/right when Custom); each when the mouse has it | Advanced… sheet, each row only when it applies: Acceleration, Glide, Hold Shift to scroll sideways (dimmed while smooth scrolling is off); Switches at (while SmartShift is on); thumb wheel Reverse direction (when it scrolls here or in some app), Swap directions and Turn distance (when it has actions), Speed (when it scrolls) |
 | Mouse › Pointer | Pointer speed slider (Slow/Fast, no readout); collapsed Exact value with secondary DPI; Presets summary row; all only when the mouse can adjust its speed (else one "Not supported by this mouse." row, unless a value is set) | Exact value (disclosure); Edit Presets… sheet (also opened from the menu) |
 | Apps | App list whose rows name the areas each app changes, Add App (bordered pull-down) in the footer, routing note; empty state with an Add App… button that opens the Applications panel | Each app opens as a page (‹ Apps, Buttons \| Scrolling) whose first row is **Use PureMouse in this app** (off dims every row below in either segment, which stay open to look at, and the list row reads "Off"); on it, Double-click and Hold rows, other controls and more thumb wheel options are disclosures, and the editors are sheets |
 | About | Icon, name, version, Check for Updates, Check for updates automatically (switch), links, Support PureMouse | — |
 | Status menu | Device header, attention rows when active, Update to X.Y.Z… with Skip This Version under it (while a newer release is known), Smooth Scrolling, Pointer Speed, Start/Pause/Resume, Settings…, Settings for <app>… (the frontmost app, if any), Quit PureMouse; the header's second line adds "Off in <App>" | ⌥: detail line, Show Log in Finder, Hide Menu Bar Icon |
+
+**Action model.** When I click, double-click or hold a control (in an app), do an action, each
+trigger inheriting on its own from All Mice to the mouse to the app. A binding is a bare action,
+which is its click, or a table of triggers ([ADR 24](adr/0024-one-action-model.md)).
+
+- **A button's pop-up always shows its click action.** The gesture button reads "Mission Control",
+  with Hold and Move as its Hold row. There is no "Several Actions" value.
+- A trigger exists in the UI only once it is added (More Ways to Press) or already applies.
+- The picker stays one popover:
+  - One surface, as a menu is: the search field, a hairline, then a plain list on the popover's own
+    material with no background of its own and no separators. A label stays on one line (its full
+    name as a tooltip), and the shortcut sits at the trailing edge.
+  - On an app page for an app with a pack, the app's actions follow the top entries (Same as…,
+    Mouse Default, Do Nothing) in a section named for the app ("Zoom"), before the generic groups.
+    Every other page, and an app without a pack, lists what it did before.
+  - The app's section over six rows folds to five and "Show All (N)"; the click expands it inline.
+    It starts open when the current binding is one of its folded actions.
+  - Search matches everything, keeping the sections and the haptic group as they are. An app's
+    actions also match their category (shown beside the label while searching), whole-word
+    keywords, and their shortcut as glyphs ("⇧⌘A"), a spec ("shift+cmd+a") or words in any order
+    ("command shift a"). Search ignores folding.
+  - In Mouse scope, a search that finds nothing but matches some apps' actions says so in one line:
+    "Also in Zoom and Adobe Photoshop. Choose them on the app's page."
+  - A pack action's row shows its shortcut at the trailing edge. One whose shortcut depends on the
+    person's keyboard layout or keymap (Final Cut Pro, VS Code) says "Depends on your keymap" in
+    secondary text under its label; the button's tooltip on the app page keeps the shortcut
+    ("Presses ⌘B. Depends on your keymap.").
+  - No trigger strip, category strip, recents or favourites.
 
 **Device rows and About This Mouse.** General › Status lists each known mouse, from status and
 whatever Mouse scope is chosen, only while PureMouse runs. Its (i) is a plain button with a 20 pt

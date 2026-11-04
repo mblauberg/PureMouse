@@ -34,4 +34,4 @@ Consequences. Keep each to about 40 lines.
 | [21](0021-scheduled-update-check.md) | Accepted | A daily update check in the menu bar app, after asking once; the daemon stays network-free |
 | [22](0022-update-trust-is-the-signing-requirement.md) | Accepted | Updates install from the menu, trusted by the running app's own code-signing requirement; no Sparkle |
 | [23](0023-receiver-pairing-is-the-one-persistent-write.md) | Accepted, not built | Receiver pairing is the one persistent write; a protocol spike gates it |
-| [24](0024-one-action-model.md) | Accepted, not built | One action model: triggers per control, actions as values |
+| [24](0024-one-action-model.md) | Accepted, partially built | One action model: triggers per control, actions as values |

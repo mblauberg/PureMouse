@@ -152,6 +152,8 @@ One term per concept. "Retire" lists words that must not appear in UI text for t
 | Click lock | Drag Lock (picker › Mouse; "Click to start dragging, click again to let go.") | Click Lock, Hold to drag |
 | Precision hold | Precise Pointer (picker › Mouse; "Slows the pointer while you hold the button."); on a Click row it owns the button, so Double-Click and Hold are dimmed with "Remove Hold first.", and Precise Pointer is dimmed with "Remove Double-click and Hold first." while they apply | Precision While Held, sniper, DPI shift |
 | Per-app catalogue | the app's name as the picker section ("Zoom", "Adobe Photoshop"); "Zoom's actions" in prose; "Depends on your keymap" under an action whose shortcut the person can change in the app | pack, plugin, profile, Smart Actions |
+| Per-app off | Use PureMouse in this app (switch); Off (Apps row); Off in <App> (menu) | disable, exclude, bypass |
+| Config transfer | Export Settings…, Import Settings… (the row "Copy settings" with buttons Export… and Import…, spoken as the full names; the alert "Replace all settings?", with "This file runs commands: N" when the file has them) | Backup, Sync, Restore |
 
 ## Planned (#155)
 
@@ -165,10 +167,8 @@ code says, so "Run Command" stays until Run Script… replaces it.
 | Radial menu | Action Ring; positions Top, Top right … | Actions Ring, slice, pie menu |
 | Modifier plus wheel | Modifier Keys (section); rows Shift, Option, Command, Control; values Normal Scrolling, Scroll Sideways, Scroll Slowly, Zoom, Volume … | modifier scroll |
 | Debounce | Ignore repeated clicks ("For a worn button that clicks twice.") | debounce, chatter |
-| Per-app off | Use PureMouse in this app (switch); Off (Apps row); Off in <App> (menu) | disable, exclude, bypass |
 | Host switching | Switch to Computer 2 (the command; the status words are in the Glossary) | host, channel, slot |
 | New actions | Open…, Run Shortcut…, Menu Item…, Insert Text…, Run Script… (AppleScript \| Shell), Sequence… (Add Step, Wait), Action Ring… | Run Command, Type Text, Launch, Macro, Workflow |
-| Config transfer | Export Settings…, Import Settings… (the row "Copy settings" with buttons Export… and Import…, spoken as the full names; the alert "Replace all settings?", with "This file runs commands: N" when the file has them) | Backup, Sync, Restore |
 | Receiver | Logi Bolt receiver, Unifying receiver; Pair a Mouse…, Unpair… | dongle, link |
 
 Picker actions use verbs and never "toggle" ("Mute or Unmute Microphone"). Captions state the cost
