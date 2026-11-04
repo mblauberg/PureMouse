@@ -320,6 +320,8 @@ struct ActionPicker: View {
             SearchField(text: $query, placeholder: "Search actions", focusOnAppear: focusSearch,
                         onMove: move, onSubmit: submit)
                 .accessibilityLabel("Search actions")
+            // The rule that keeps rows scrolling under the field from reading as part of it.
+            Divider()
             ScrollViewReader { proxy in
                 List(selection: Binding(get: { highlighted }, set: { select($0) })) {
                     ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
@@ -331,6 +333,7 @@ struct ActionPicker: View {
                                     .selectionDisabled(item.isDisabled)
                                     .disabled(item.isDisabled)
                                     .accessibilityAction { activate(item) }
+                                    .listRowSeparator(.hidden)
                             }
                         } header: {
                             if let title = section.title { Text(title) }
@@ -341,6 +344,10 @@ struct ActionPicker: View {
                             .selectionDisabled()
                     }
                 }
+                // The rows sit on the popover's own material, as a menu's do: no second, inset
+                // surface inside the popover and no separators between actions.
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
                 .onKeyPress(.return) {
                     submit()
                     return .handled
@@ -353,7 +360,7 @@ struct ActionPicker: View {
         .padding(8)
         // A List has no size of its own, so the popover keeps one width and height (allow-listed in
         // UIChromeScanTests); the search field and the list take theirs from the system.
-        .frame(width: 260, height: 464)
+        .frame(width: 320, height: 464)
         .onAppear { highlighted = entries.first { $0.matches(current) }?.id }
         .onChange(of: query) { _, _ in highlighted = visible.first?.id }
     }
@@ -449,7 +456,7 @@ private struct PickerRow: View {
             Label {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 4) {
-                        Text(entry.label)
+                        Text(entry.label).lineLimit(1).help(entry.label)
                         if let detail = entry.detail { Text(detail).foregroundStyle(.secondary) }
                     }
                     if let caption = entry.caption { Text(caption).font(.caption).foregroundStyle(.secondary) }
@@ -459,6 +466,7 @@ private struct PickerRow: View {
                 Image(systemName: entry.symbol ?? "circle")
                     .opacity(entry.symbol == nil ? 0 : 1)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             if let shortcut = entry.shortcutText {
                 Spacer(minLength: 8)
                 Text(shortcut)

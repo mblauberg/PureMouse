@@ -254,7 +254,7 @@ enum ChromeScan {
             file: "AboutPane.swift", fragment: ".frame(width: 112",
             reason: "The app icon is artwork: a bitmap drawn at the Finder's size, its squircle at 824 of 1024 points."),
         ChromeAllowance(
-            file: "ActionPicker.swift", fragment: ".frame(width: 260, height: 464)",
+            file: "ActionPicker.swift", fragment: ".frame(width: 320, height: 464)",
             reason: "A List has no size of its own, so the popover needs one width and height; the search field and rows are the system's."),
         ChromeAllowance(
             file: "Components.swift", fragment: ".frame(width: 200)",
