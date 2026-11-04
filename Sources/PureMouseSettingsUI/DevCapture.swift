@@ -10,6 +10,8 @@ import ObjectiveC
 /// `PUREMOUSE_DEV_CAPTURE_OFFSCREEN=1` instead draws each visible window's own view hierarchy,
 /// titlebar included, without the window server: it works on a locked Mac and gives true sizes,
 /// but materials draw flat. An attached sheet goes to `<file>-sheet.png`.
+/// `PUREMOUSE_DEV_CAPTURE_SHADOW=1` keeps the window shadow in an on-screen capture, with the clear
+/// margin it falls on, as the README's screenshots have it.
 ///
 /// An offscreen capture first makes the window look key and the app active (`makeKey`;
 /// `PUREMOUSE_DEV_CAPTURE_KEY`, default `fake`), renders the frame view's layer tree instead of
@@ -19,12 +21,14 @@ import ObjectiveC
 @MainActor
 enum DevCapture {
     private static var faked = false
+    private static var shadow = false
 
     static func schedule(_ environment: [String: String]) {
         guard let path = environment["PUREMOUSE_DEV_CAPTURE"] else { return }
         let delay = environment["PUREMOUSE_DEV_CAPTURE_DELAY"].flatMap(Double.init) ?? 2.5
         let offscreen = environment["PUREMOUSE_DEV_CAPTURE_OFFSCREEN"] == "1"
         let key = environment["PUREMOUSE_DEV_CAPTURE_KEY"] ?? "fake"
+        shadow = environment["PUREMOUSE_DEV_CAPTURE_SHADOW"] == "1"
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             let url = URL(filePath: path)
             let finish = {
@@ -178,7 +182,8 @@ enum DevCapture {
         guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CGWindowListCreateImageFromArray")
         else { return nil }
         let create = unsafeBitCast(symbol, to: Create.self)
-        return create(.null, windows, [.boundsIgnoreFraming, .bestResolution])?.takeRetainedValue()
+        let options: CGWindowImageOption = shadow ? [.bestResolution] : [.boundsIgnoreFraming, .bestResolution]
+        return create(.null, windows, options)?.takeRetainedValue()
     }
 }
 #endif

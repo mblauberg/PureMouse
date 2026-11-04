@@ -39,8 +39,20 @@ final class DeviceArtImages {
     /// `silhouettes/<family>-light.pdf` (or `-dark`) in the Settings helper's Resources
     /// (build-app.sh puts them there).
     static func bundled(_ family: DeviceArt.Family, dark: Bool, in bundle: Bundle = .main) -> NSImage? {
-        bundle.url(forResource: family.file(dark: dark), withExtension: "pdf", subdirectory: "silhouettes")
-            .flatMap(image(contentsOf:))
+        if let url = bundle.url(forResource: family.file(dark: dark), withExtension: "pdf", subdirectory: "silhouettes") {
+            return image(contentsOf: url)
+        }
+        #if DEBUG
+        // A SwiftPM debug run has no app bundle: read the drawing from the checkout's
+        // assets/silhouettes, so dev runs and captures show it. A release build has only the
+        // bundle's copy, so it carries no build path.
+        let fallback = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appending(path: "assets/silhouettes/\(family.file(dark: dark)).pdf")
+        return image(contentsOf: fallback)
+        #else
+        return nil
+        #endif
     }
 
     /// A PDF as an image, drawn in its own colours.
