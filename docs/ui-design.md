@@ -37,6 +37,14 @@ answering a question people have, and a good default means most people never tou
   ([Sizing](#implementation)).
 - It reopens on the last tab and segment (`SettingsSelection`) and remembers its position, not its
   size: the size always comes from the pane (no frame autosave).
+- **Changing page** (a tab, a Mouse segment, an app's page and back) is one transition, as in
+  System Settings: the old page fades out and the new one in while the window frame moves to the
+  new height, in one animation group with one duration and curve. The page stays against the top:
+  the toolbar and strip hold still and the window's bottom edge covers or uncovers the page, which
+  never slides. Two pages of the same height only cross-fade. A height change inside a page (a
+  disclosure, a notice, the Apps list growing) moves the frame the same way, without a fade. The
+  window opens at its size with no animation; a hidden window and Reduce Motion change at once,
+  with no fade ([Sizing](#implementation)).
 - Mouse's header strip has a leading slot for the mouse pop-up (`MousePopUp`: All Mice, then each
   known mouse), shown with two or more mice known or any `devices` entry. Its closed text is the
   mouse's name, in a pop-up as wide as the name needs, up to 240 pt and the width the strip leaves it
@@ -481,7 +489,23 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
   `preferredContentSize` for it, which is only as fresh as the pane's last layout. Fitting the
   same content twice gives the same size. A pane whose height changes while shown calls
   `SettingsContext.refit()` (a nested `NSHostingController` updates its `preferredContentSize`
-  without telling the tab controller), and `fitWindow` ignores a size that is zero or not finite.
+  without telling the tab controller), and `SettingsTabs.fittedFrame()` ignores a size that is zero
+  or not finite.
+- **Transitions.** `PaneTransition` (owned by `SettingsTabs`) is the one thing that moves the window
+  frame. A page change goes through `SettingsTabs.transition` (`open`, a toolbar click through
+  `tabView(_:willSelect:)` and `didSelect`, `MouseTab.transition` for segments,
+  `SettingsContext.transition` for an app's page and Back): it snapshots the page
+  (`cacheDisplay`, with the window's background left clear, so the real one shows through), makes
+  the change, lays out and measures once, then runs one `NSAnimationContext` group: the frame
+  (`window.animator().setFrame`), the snapshot's fade out and the tab view's fade in, with a
+  duration from `animationResizeTime` held to 0.2–0.35 s, ease in and out. While it runs the tab
+  view is pinned to the top at the new height (its bottom constraints let go), so the page does not
+  slide. `refit()` and `preferredContentSizeDidChange` call `fit()`, the same frame animation with
+  no fade, retargeting one under way; a change started mid-flight first lands the old one. The
+  tab controller has no transition of its own (`transitionOptions = []`) and its
+  `preferredContentSizeDidChange` does not reach super, which would size the window too. Grouped
+  forms hide their scroll background (`PaneForm`), which looks the same but lets the snapshot match
+  the window. The filmstrip hook checks it on screen ([development](development.md#screenshots)).
   A disclosure opened on a full pane scrolls rather than growing the window. `AppPage` and
   `AdvancedSheet` take their form caps from the same number.
 - **Advanced.** `PaneFooter` (Restore Defaults, Advanced…) opens an `AdvancedSheet`, which never

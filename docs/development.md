@@ -206,7 +206,9 @@ thread, so a window frame animated by the main thread shows as it moves, and are
 end with `frames.txt`, each frame's time in milliseconds from the moment the change began on the
 main thread. Use the same isolated config, daemon and companion directory as other dev runs; the
 window-server captures need no Screen Recording permission. Each capture takes some milliseconds,
-so the spacing between frames varies; `frames.txt` has the real times.
+so the spacing between frames varies; `frames.txt` has the real times. Now and then a frame catches
+the window between two sizes, with a few transparent rows along its top or bottom edge: that is the
+capture's timing, not the window's drawing.
 
 ### UI matrix
 
