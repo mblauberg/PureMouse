@@ -185,7 +185,12 @@ A release build carries none of this; with `-DDEVHOOKS` it carries only the rig'
 
 Take captures and README screenshots on a macOS 27 host from a build linked against the macOS 27
 SDK ([UI design](ui-design.md#motion-sound-and-accessibility)). `PUREMOUSE_DEV_CAPTURE` covers
-Settings. For the menu, `PUREMOUSE_DEV_MENU=1` opens it and `PUREMOUSE_DEV_CAPTURE=<png>` writes
+Settings, and `scripts/readme-shots.sh` takes the README's Settings screenshots with it: each the
+window on screen with its shadow (`PUREMOUSE_DEV_CAPTURE_SHADOW=1`), in light and dark, from a
+sandboxed sample config, scaled to 1000 pixels wide into `docs/images`. Run it on the spare Mac,
+unlocked and with no other Settings window open, since another window would take focus; its app
+pages need Microsoft Excel installed. A debug build reads the mouse drawings from
+`assets/silhouettes` and the action catalogue from its source folder, so captures show both. For the menu, `PUREMOUSE_DEV_MENU=1` opens it and `PUREMOUSE_DEV_CAPTURE=<png>` writes
 it. With Screen Recording permission that is the window server's image of the open menu; without
 it, which would be blank, the menu is drawn from its own views over the window background colour,
 with no glass: enough to check its rows and words in either appearance. A window capture
