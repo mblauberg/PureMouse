@@ -7,18 +7,6 @@ import Testing
 
 @MainActor
 @Suite struct SessionAppOffTests {
-    private func press(_ h: SessionHarness, _ cid: UInt16) async {
-        h.fake.emit(0x1B04, params: [UInt8(cid >> 8), UInt8(cid & 0xFF)])
-        await h.session.diversion.drain()
-        await h.session.deviceActions.drain()
-    }
-
-    private func release(_ h: SessionHarness) async {
-        h.fake.emit(0x1B04, params: [0, 0])
-        await h.session.diversion.drain()
-        await h.session.deviceActions.drain()
-    }
-
     static let appOffConfig = """
         {
           "buttons": {"back": "mute", "forward": "playPause", "gesture": {"click": "missionControl", "left": "spaceLeft"}},
@@ -63,9 +51,9 @@ import Testing
         // Back, Forward and the wheel press click as the mouse would: not mute, play/pause or the
         // app's own next track.
         for cid: UInt16 in [0x0053, 0x0056, 0x0052] {
-            await press(h, cid)
+            await h.press(cid)
             #expect(h.session.held.native == [cid])
-            await release(h)
+            await h.release()
             #expect(h.session.held.native.isEmpty)
         }
         #expect(posts.native.count == 6)
@@ -75,11 +63,11 @@ import Testing
         // The gesture button does nothing, holds no gesture and does not hold the pointer.
         #expect(h.fake.control(0x00C3)?.diverted == true)
         let before = posts.native.count
-        await press(h, 0x00C3)
+        await h.press(0x00C3)
         #expect(h.session.held.gesture == nil)
         #expect(h.session.pointerFree.contains(0x00C3))
         #expect(h.fake.control(0x00C3)?.rawXY == false)
-        await release(h)
+        await h.release()
         #expect(h.session.pointerFree.isEmpty)
         #expect(posts.native.count == before)
     }
@@ -121,10 +109,10 @@ import Testing
 
         // The gesture button is still a gesture here: held, and the pointer held still.
         _ = recording(h)
-        await press(h, 0x00C3)
+        await h.press(0x00C3)
         #expect(h.session.held.gesture != nil)
         #expect(!h.session.pointerFree.contains(0x00C3))
-        await release(h)
+        await h.release()
         #expect(h.session.held.gesture == nil)
     }
 
@@ -155,8 +143,8 @@ import Testing
         defer { h.close() }
         #expect(!h.session.hasDisabledApps)
         try await h.session.apply()
-        await press(h, 0x0053)
-        await release(h)
+        await h.press(0x0053)
+        await h.release()
         #expect(lookups == 0)
     }
 }

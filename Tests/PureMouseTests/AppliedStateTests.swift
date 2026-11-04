@@ -19,13 +19,11 @@ struct AppliedStateTests {
                            attemptTimeout: SessionEnvironment.reapplyAttemptTimeout, date: { date })
     }
 
-    private func harness(_ fake: FakeDevice = .mxMaster3S, environment: SessionEnvironment) async throws -> SessionHarness {
-        try await SessionHarness(fake, config: SessionHarness.config(Self.config), environment: environment)
-    }
-
-    /// A time a test moves by hand.
-    private final class Hand: @unchecked Sendable {
-        var now = ContinuousClock.now
+    /// `instantTimeouts`: for a silent mouse whose attempts are counted, not timed.
+    private func harness(_ fake: FakeDevice = .mxMaster3S, environment: SessionEnvironment,
+                         instantTimeouts: Bool = false) async throws -> SessionHarness {
+        try await SessionHarness(fake, config: SessionHarness.config(Self.config), environment: environment,
+                                 instantTimeouts: instantTimeouts)
     }
 
     /// The applied states a session publishes, consecutive repeats dropped.
@@ -77,7 +75,7 @@ struct AppliedStateTests {
         try await eventually { h.session.status.applied?.state == .applied && !h.session.isConfiguring }
         let seen = Transitions(h.session)
         let before = h.session.status
-        try await Task.sleep(for: .milliseconds(400))
+        try await Task.sleep(for: .milliseconds(50))  // there is no timer to wait for: any publish would be an event
         #expect(seen.changes == 0)
         #expect(h.session.status == before)
     }
@@ -88,7 +86,7 @@ struct AppliedStateTests {
         let session = try await h.adopt(FakeDevice.mxMaster3S)
         #expect(session.status.applied?.state == .applied)
         let first = h.daemon.status(running: true)
-        try await Task.sleep(for: .milliseconds(300))
+        try await Task.sleep(for: .milliseconds(50))
         // Nothing but the start time and process are in it, and neither moves.
         #expect(h.daemon.status(running: true) == first)
     }
@@ -153,7 +151,7 @@ struct AppliedStateTests {
                                                   attemptTimeout: .milliseconds(30))
 
     @Test func aMouseThatAnswersNothingIsAsleepNotNotApplied() async throws {
-        let h = try await harness(environment: Self.quick)
+        let h = try await harness(environment: Self.quick, instantTimeouts: true)
         defer { h.close() }
         h.fake.transport.timing = .never  // every request, not one write
         let seen = Transitions(h.session)
@@ -165,7 +163,7 @@ struct AppliedStateTests {
     }
 
     @Test func aMouseThatAnsweredAndStillFailedIsNotApplied() async throws {
-        let h = try await harness(environment: Self.quick)
+        let h = try await harness(environment: Self.quick, instantTimeouts: true)
         defer { h.close() }
         h.fake.failures[.init(0x1B04, 3)] = .timeout  // everything else answers
         h.session.configure()
@@ -174,10 +172,10 @@ struct AppliedStateTests {
     }
 
     @Test func anAsleepMouseThatAnswersAgainIsConfiguredByItsNextEvent() async throws {
-        let hand = Hand()
+        let hand = HandClock()
         var environment = Self.quick
         environment.now = { hand.now }
-        let h = try await harness(environment: environment)
+        let h = try await harness(environment: environment, instantTimeouts: true)
         defer { h.close() }
         h.fake.transport.timing = .never
         h.session.configure()
@@ -227,7 +225,11 @@ struct AppliedStateTests {
     }
 
     @Test func aCancelledConfigureLeavesRestoresTimeoutAlone() async throws {
-        let h = try await harness(environment: Self.live())
+        // Three different waits, so each is told from the others: the device's own (100 ms), the
+        // configure's (60 ms) and restore's.
+        var environment = Self.scaled
+        environment.restoreTimeout = .milliseconds(40)
+        let h = try await harness(environment: environment)
         defer { h.close() }
         h.session.configure()
         try await eventually { h.session.status.applied?.state == .applied && !h.session.isConfiguring }
@@ -236,10 +238,10 @@ struct AppliedStateTests {
         try await eventually { h.session.attemptsMade > 1 }
         // The mouse answers nothing, so restore holds its timeout for as long as its writes wait.
         let restoring = Task { await h.session.restore() }
-        try await eventually { h.device.effectiveTimeout == Session.restoreTimeout }
+        try await eventually { h.device.effectiveTimeout == environment.restoreTimeout }
         try await eventually { !h.session.isConfiguring }  // the cancelled configure has ended
         for _ in 0..<5 { await Task.yield() }
-        #expect(h.device.effectiveTimeout == Session.restoreTimeout)
+        #expect(h.device.effectiveTimeout == environment.restoreTimeout)
         await restoring.value
         #expect(h.device.effectiveTimeout == h.device.timeout)
     }
@@ -285,7 +287,7 @@ struct AppliedStateTests {
     }
 
     @Test(arguments: [1, 2]) func aWakeIsAppliedByTheAttemptAfterTheMouseAnswers(silentAttempts: Int) async throws {
-        let h = try await harness(environment: Self.scaled)
+        let h = try await harness(environment: Self.scaled, instantTimeouts: true)
         defer { h.close() }
         let attempts = try await attemptsUntilApplied(h, silentAttempts: silentAttempts) { h.session.configureAfterWake() }
         #expect(attempts <= silentAttempts + 1)
@@ -293,7 +295,7 @@ struct AppliedStateTests {
     }
 
     @Test(arguments: [1, 2]) func aReconnectIsAppliedByTheAttemptAfterTheMouseAnswers(silentAttempts: Int) async throws {
-        let h = try await harness(environment: Self.scaled)
+        let h = try await harness(environment: Self.scaled, instantTimeouts: true)
         defer { h.close() }
         h.session.configure()
         try await eventually { h.session.status.applied?.state == .applied && !h.session.isConfiguring }
@@ -307,7 +309,7 @@ struct AppliedStateTests {
     @Test(arguments: [1, 2]) func aHostSwitchBackIsAppliedByTheAttemptAfterTheLinkComesUp(silentAttempts: Int) async throws {
         let fake = FakeDevice.mxMaster3S
         fake.onReceiver(slot: 1)
-        let h = try await harness(fake, environment: Self.scaled)
+        let h = try await harness(fake, environment: Self.scaled, instantTimeouts: true)
         defer { h.close() }
         h.session.configure()
         try await eventually { h.session.status.applied?.state == .applied && !h.session.isConfiguring }
@@ -323,7 +325,7 @@ struct AppliedStateTests {
     }
 
     @Test func aMouseSilentThroughTheWindowNeverShowsApplying() async throws {
-        let h = try await harness(environment: Self.scaled)
+        let h = try await harness(environment: Self.scaled, instantTimeouts: true)
         defer { h.close() }
         h.session.configure()
         try await eventually { h.session.status.applied?.state == .applied && !h.session.isConfiguring }
@@ -340,7 +342,7 @@ struct AppliedStateTests {
     }
 
     @Test func aFreshSessionSilentThroughTheWindowPublishesNoAppliedState() async throws {
-        let h = try await harness(environment: Self.scaled)
+        let h = try await harness(environment: Self.scaled, instantTimeouts: true)
         defer { h.close() }
         h.fake.transport.timing = .never
         let seen = Transitions(h.session)
@@ -351,7 +353,7 @@ struct AppliedStateTests {
     }
 
     @Test func aMouseAnsweringOnTheSecondAttemptShowsApplyingThenApplied() async throws {
-        let h = try await harness(environment: Self.scaled)
+        let h = try await harness(environment: Self.scaled, instantTimeouts: true)
         defer { h.close() }
         let seen = Transitions(h.session)
         _ = try await attemptsUntilApplied(h, silentAttempts: 1) { h.session.configure() }
@@ -362,7 +364,7 @@ struct AppliedStateTests {
         let at = Date(timeIntervalSince1970: 1_700_000_321)
         var environment = Self.scaled
         environment.date = { at }
-        let h = try await harness(environment: environment)
+        let h = try await harness(environment: environment, instantTimeouts: true)
         defer { h.close() }
         h.session.configure()
         try await eventually { h.session.status.applied?.state == .applied && !h.session.isConfiguring }

@@ -553,7 +553,7 @@ private final class Rig: @unchecked Sendable {
         entered.wait()
         DispatchQueue.global().async(group: done) { _ = try? rig.item.start() }
         // The second command is waiting for the first, so it has not touched the service.
-        Thread.sleep(forTimeInterval: 0.3)
+        Thread.sleep(forTimeInterval: 0.1)
         #expect(rig.service.calls == ["stop daemon"])
         release.signal()
         done.wait()
@@ -562,7 +562,7 @@ private final class Rig: @unchecked Sendable {
     }
 
     @Test func aCommandGivesUpWhenAnotherHoldsTheLock() throws {
-        let rig = Rig(lockTimeout: 0.2)
+        let rig = Rig(lockTimeout: 0.1)
         try FileManager.default.createDirectory(at: rig.directory, withIntermediateDirectories: true)
         let fd = open(rig.item.host.lockFile.path, O_RDWR | O_CREAT, 0o600)
         defer { close(fd) }

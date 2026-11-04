@@ -20,6 +20,9 @@ struct SessionEnvironment {
     /// own timeout. Short, so a request lost while the mouse was still waking fails in time for the
     /// next attempt.
     var attemptTimeout: Duration?
+    /// How long each request of `Session.restore` waits; a test shortens it to count a silent
+    /// mouse's timeouts rather than wait them out.
+    var restoreTimeout: Duration = Session.restoreTimeout
     /// The wall clock, for the time settings were applied.
     var date: () -> Date = { Date() }
     /// The frontmost app and the app under the pointer, looked up without observers.

@@ -11,6 +11,9 @@ public final class FakeTransport: HIDPPTransport {
     public var usagePairs: [HIDUsagePair] = []
     public var sent: [Report] = []
     public var answer: ((Report) throws -> Report?)?
+    /// Whether the last request sent got no reply and none is coming (timing `.never`, or nothing
+    /// to answer it): what `failsSilenceAtOnce(on:)` ends early.
+    public private(set) var lastRequestUnanswered = false
     private var subscribers: [UInt8: (Report) -> Void] = [:]
 
     public init(product: String = "Fake mouse", productID: Int = 0xB034, isReceiver: Bool = false) {
@@ -21,11 +24,25 @@ public final class FakeTransport: HIDPPTransport {
 
     public func send(_ report: Report) throws {
         sent.append(report)
-        guard timing != .never, let reply = try answer?(report) else { return }
+        guard timing != .never, let reply = try answer?(report) else {
+            lastRequestUnanswered = true
+            return
+        }
+        lastRequestUnanswered = false
         switch timing {
         case .synchronous: deliver(reply)
         case .nextTurn: Task { self.deliver(reply) }
         case .never: break
+        }
+    }
+
+    /// Makes `device` time a request out as soon as it is sent when the transport will never answer
+    /// it, instead of after its timeout; a request that is answered still has the timeout it was
+    /// given. For tests that count what a silent mouse costs rather than time it.
+    public func failsSilenceAtOnce(on device: HIDPPDevice) {
+        device.sleep = { [unowned self] duration in
+            if lastRequestUnanswered { return }
+            try await Task.sleep(for: duration)
         }
     }
 

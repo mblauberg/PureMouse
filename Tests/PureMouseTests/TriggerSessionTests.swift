@@ -85,49 +85,34 @@ struct TriggerSessionTests {
         return (h, recorder)
     }
 
-    private func press(_ h: SessionHarness, _ cids: UInt16...) async {
-        var params: [UInt8] = []
-        for cid in cids { params += [UInt8(cid >> 8), UInt8(cid & 0xFF)] }
-        h.fake.emit(0x1B04, params: params.isEmpty ? [0, 0] : params)
-        await h.session.diversion.drain()
-        await h.session.deviceActions.drain()
-    }
-
-    private func release(_ h: SessionHarness) async { await press(h) }
-
-    private func settle(_ h: SessionHarness) async {
-        await h.session.diversion.drain()
-        await h.session.deviceActions.drain()
-    }
-
     // MARK: Click, hold, double-click
 
     @Test func aClickAloneFiresOnPressAndArmsNothing() async throws {
         let (h, r) = try await session(#"{"buttons": {"back": "navigateBack", "forward": {"click": "navigateForward"}}}"#)
         defer { h.close() }
-        await press(h, Self.back)
+        await h.press(Self.back)
         #expect(r.performed == [.navigateBack] && r.deadlines.armed.isEmpty)
-        await release(h)
-        await press(h, Self.forward)
+        await h.release()
+        await h.press(Self.forward)
         #expect(r.performed == [.navigateBack, .navigateForward] && r.deadlines.armed.isEmpty)
-        await release(h)
+        await h.release()
         #expect(r.performed.count == 2 && h.session.presses.isEmpty)
     }
 
     @Test func withAHoldTheClickFiresOnReleaseAndTheHoldOnceAfterwhichNoClick() async throws {
         let (h, r) = try await session(#"{"holdMs": 500, "buttons": {"forward": {"click": "navigateForward", "hold": "missionControl"}}}"#)
         defer { h.close() }
-        await press(h, Self.forward)
+        await h.press(Self.forward)
         #expect(r.performed.isEmpty)
         #expect(r.deadlines.pending.map(\.delay) == [.milliseconds(500)])
-        await release(h)
+        await h.release()
         #expect(r.performed == [.navigateForward])
         #expect(r.deadlines.pending.isEmpty && h.session.presses.isEmpty)
 
-        await press(h, Self.forward)
+        await h.press(Self.forward)
         r.deadlines.fire()
         #expect(r.performed == [.navigateForward, .missionControl])
-        await release(h)
+        await h.release()
         #expect(r.performed == [.navigateForward, .missionControl])
         #expect(r.deadlines.pending.isEmpty && h.session.presses.isEmpty)
     }
@@ -135,9 +120,9 @@ struct TriggerSessionTests {
     @Test func withADoubleClickALoneClickFiresAfterTheInterval() async throws {
         let (h, r) = try await session(#"{"buttons": {"forward": {"click": "navigateForward", "doubleClick": "appExpose"}}}"#)
         defer { h.close() }
-        await press(h, Self.forward)
+        await h.press(Self.forward)
         #expect(r.deadlines.armed.isEmpty)
-        await release(h)
+        await h.release()
         #expect(r.performed.isEmpty)
         // The system's interval, read as the click starts waiting.
         #expect(r.deadlines.pending.map(\.delay) == [.milliseconds(400)])
@@ -149,12 +134,12 @@ struct TriggerSessionTests {
     @Test func aSecondPressInTimeIsTheDoubleClick() async throws {
         let (h, r) = try await session(#"{"doubleClickMs": 250, "buttons": {"forward": {"click": "navigateForward", "doubleClick": "appExpose", "hold": "launchpad"}}}"#)
         defer { h.close() }
-        await press(h, Self.forward)
-        await release(h)
+        await h.press(Self.forward)
+        await h.release()
         #expect(r.deadlines.pending.map(\.delay) == [.milliseconds(250)])
-        await press(h, Self.forward)
+        await h.press(Self.forward)
         #expect(r.performed == [.appExpose] && r.deadlines.pending.isEmpty)
-        await release(h)
+        await h.release()
         #expect(r.performed == [.appExpose])
         #expect(r.deadlines.pending.isEmpty && h.session.presses.isEmpty)
     }
@@ -162,9 +147,9 @@ struct TriggerSessionTests {
     @Test func anotherButtonDoesNotWaitBehindALoneClick() async throws {
         let (h, r) = try await session(#"{"buttons": {"back": "navigateBack", "forward": {"click": "navigateForward", "doubleClick": "appExpose"}}}"#)
         defer { h.close() }
-        await press(h, Self.forward)
-        await release(h)
-        await press(h, Self.back)
+        await h.press(Self.forward)
+        await h.release()
+        await h.press(Self.back)
         #expect(r.performed == [.navigateForward, .navigateBack] && r.deadlines.pending.isEmpty)
     }
 
@@ -175,9 +160,9 @@ struct TriggerSessionTests {
             let key = cid == Self.forward ? "forward" : cid == Self.back ? "back" : "middle"
             let (h, r) = try await session(#"{"holdMs": 500, "buttons": {"\#(key)": {"hold": "missionControl"}}}"#)
             defer { h.close() }
-            await press(h, cid)
+            await h.press(cid)
             #expect(r.native.isEmpty, "the click waits to see whether the hold comes")
-            await release(h)
+            await h.release()
             #expect(r.native == [NativePost(cid: cid, down: true), NativePost(cid: cid, down: false)])
             #expect(r.acted.isEmpty && h.session.presses.isEmpty && h.session.held.native.isEmpty)
         }
@@ -186,17 +171,17 @@ struct TriggerSessionTests {
     @Test func aHoldOnlyTableStillFiresTheHoldWithoutAClick() async throws {
         let (h, r) = try await session(#"{"buttons": {"forward": {"hold": "missionControl"}}}"#)
         defer { h.close() }
-        await press(h, Self.forward)
+        await h.press(Self.forward)
         r.deadlines.fire()
-        await release(h)
+        await h.release()
         #expect(r.performed == [.missionControl] && r.native.isEmpty)
     }
 
     @Test func aDoubleClickOnlyTableOnANativeButtonClicksNativelyAfterTheInterval() async throws {
         let (h, r) = try await session(#"{"buttons": {"forward": {"doubleClick": "appExpose"}}}"#)
         defer { h.close() }
-        await press(h, Self.forward)
-        await release(h)
+        await h.press(Self.forward)
+        await h.release()
         #expect(r.native.isEmpty && r.acted.isEmpty)
         r.deadlines.fire()
         #expect(r.native == [NativePost(cid: Self.forward, down: true), NativePost(cid: Self.forward, down: false)])
@@ -206,62 +191,57 @@ struct TriggerSessionTests {
     @Test func aDoubleClickOnlyTableStillFiresTheDoubleClickWithoutAClick() async throws {
         let (h, r) = try await session(#"{"buttons": {"forward": {"doubleClick": "appExpose"}}}"#)
         defer { h.close() }
-        await press(h, Self.forward)
-        await release(h)
-        await press(h, Self.forward)
-        await release(h)
+        await h.press(Self.forward)
+        await h.release()
+        await h.press(Self.forward)
+        await h.release()
         #expect(r.performed == [.appExpose] && r.native.isEmpty && r.deadlines.pending.isEmpty)
     }
 
     @Test func aLoneNativeClickDoesNotWaitBehindAnotherButtonsPress() async throws {
         let (h, r) = try await session(#"{"buttons": {"forward": {"doubleClick": "appExpose"}, "back": "navigateBack"}}"#)
         defer { h.close() }
-        await press(h, Self.forward)
-        await release(h)
-        await press(h, Self.back)
+        await h.press(Self.forward)
+        await h.release()
+        await h.press(Self.back)
         #expect(r.native == [NativePost(cid: Self.forward, down: true), NativePost(cid: Self.forward, down: false)])
         #expect(r.performed == [.navigateBack])
     }
 
-    @Test func aTableWithNoClickOnAButtonWithNoNativeBehaviourDoesNothingOnAQuickPress() async throws {
-        // The gesture button has no behaviour of its own, but a top-level table is laid over the
-        // default set, which names its click: so the click is named "none", and nothing is the mouse's.
-        let gesture: UInt16 = 0x00C3
-        for json in [#"{"buttons": {"gesture": {"click": "none", "hold": "missionControl"}}}"#,
-                     #"{"buttons": {"gesture": {"click": "none", "hold": "none", "doubleClick": "appExpose"}}}"#] {
-            let (h, r) = try await session(json)
-            defer { h.close() }
-            await press(h, gesture)
-            await release(h)
-            if !r.deadlines.pending.isEmpty { r.deadlines.fire() }
-            #expect(r.native.isEmpty && r.acted.isEmpty && h.session.presses.isEmpty, "\(r.native) \(r.performed) \(json)")
-        }
+    /// A click named "none" is the table's own answer: nothing is the mouse's to do. The gesture
+    /// button has no behaviour of its own, but a top-level table is laid over the default set,
+    /// which names its click, so a table there names its click "none" too.
+    @Test(arguments: [
+        (0x53 as UInt16, #"{"holdMs": 500, "buttons": {"back": {"click": "none", "hold": "missionControl"}}}"#),
+        (0x53 as UInt16, #"{"buttons": {"back": {"click": "none"}}}"#),
+        (0x00C3 as UInt16, #"{"buttons": {"gesture": {"click": "none", "hold": "missionControl"}}}"#),
+        (0x00C3 as UInt16, #"{"buttons": {"gesture": {"click": "none", "hold": "none", "doubleClick": "appExpose"}}}"#),
+    ])
+    func aTableThatNamesNoneAsItsClickDoesNothingOnAQuickPress(cid: UInt16, json: String) async throws {
+        let (h, r) = try await session(json)
+        defer { h.close() }
+        await h.press(cid)
+        await h.release()
+        if !r.deadlines.pending.isEmpty { r.deadlines.fire() }  // a double-click wait, run out
+        #expect(r.native.isEmpty && r.acted.isEmpty && h.session.presses.isEmpty, "\(r.native) \(r.performed)")
     }
 
     @Test func aTableWithNoClickOnTheDPIButtonCyclesTheSpeedOnAQuickPress() async throws {
         let (h, r) = try await session(#"{"dpi": 800, "dpiPresets": [800, 1600], "buttons": {"0x00fd": {"hold": "missionControl"}}}"#, .m750)
         defer { h.close() }
-        await press(h, 0xFD)
+        await h.press(0xFD)
         #expect(h.fake.dpi == 800)
-        await release(h)
+        await h.release()
         #expect(h.fake.dpi == 1600 && r.native.isEmpty && r.acted.isEmpty)
     }
 
     @Test func holdAndMoveWithNoClickLeavesAQuickReleaseToTheMouse() async throws {
         let (h, r) = try await session(#"{"buttons": {"back": {"up": "appExpose"}}}"#)
         defer { h.close() }
-        await press(h, Self.back)
-        await release(h)
+        await h.press(Self.back)
+        await h.release()
         #expect(r.native == [NativePost(cid: Self.back, down: true), NativePost(cid: Self.back, down: false)])
         #expect(r.acted.isEmpty && h.session.presses.isEmpty)
-    }
-
-    @Test func aTableThatNamesNoneAsItsClickDoesNothingOnAQuickPress() async throws {
-        let (h, r) = try await session(#"{"holdMs": 500, "buttons": {"back": {"click": "none", "hold": "missionControl"}}}"#)
-        defer { h.close() }
-        await press(h, Self.back)
-        await release(h)
-        #expect(r.native.isEmpty && r.acted.isEmpty && h.session.presses.isEmpty)
     }
 
     @Test func aTableNamesItsClickOrLeavesItToTheMouse() throws {
@@ -278,14 +258,6 @@ struct TriggerSessionTests {
         #expect(PressPlan(app?[Self.back]).click == .mute)
     }
 
-    @Test func aTableOfOnlyANoneClickStillDoesNothing() async throws {
-        let (h, r) = try await session(#"{"buttons": {"back": {"click": "none"}}}"#)
-        defer { h.close() }
-        await press(h, Self.back)
-        await release(h)
-        #expect(r.native.isEmpty && r.acted.isEmpty)
-    }
-
     @Test func aTriggerSetToNoneIsNotWatchedForSoTheClickIsImmediate() throws {
         let config = try SessionHarness.config("""
             {"buttons": {"forward": {"click": "navigateForward", "doubleClick": "appExpose"}},
@@ -299,9 +271,9 @@ struct TriggerSessionTests {
     @Test func droppingThePressesCancelsTheirDeadlines() async throws {
         let (h, r) = try await session(#"{"buttons": {"forward": {"click": "navigateForward", "doubleClick": "appExpose"}, "back": {"click": "navigateBack", "hold": "launchpad"}}}"#)
         defer { h.close() }
-        await press(h, Self.forward)
-        await release(h)
-        await press(h, Self.back)
+        await h.press(Self.forward)
+        await h.release()
+        await h.press(Self.back)
         #expect(r.deadlines.pending.count == 1)  // forward's wait gave way to back's press
         h.session.dropHeld()
         #expect(r.deadlines.pending.isEmpty && h.session.presses.isEmpty)
@@ -311,9 +283,9 @@ struct TriggerSessionTests {
     @Test func holdAndMoveKeepsItsClickWhenNothingMoves() async throws {
         let (h, r) = try await session(#"{"buttons": {"gesture": {"click": "missionControl", "up": "appExpose"}}}"#)
         defer { h.close() }
-        await press(h, 0xC3)
+        await h.press(0xC3)
         #expect(r.performed.isEmpty && r.deadlines.armed.isEmpty)
-        await release(h)
+        await h.release()
         #expect(r.performed == [.missionControl] && h.session.presses.isEmpty)
     }
 
@@ -323,63 +295,63 @@ struct TriggerSessionTests {
         let (h, r) = try await session(#"{"dpi": 1600, "buttons": {"forward": "precisePointer"}}"#)
         defer { h.close() }
         #expect(h.fake.dpi == 1600)
-        await press(h, Self.forward)
+        await h.press(Self.forward)
         #expect(h.fake.dpi == 800 && h.session.state.dpi == 1600)
         #expect(r.deadlines.armed.isEmpty)
-        await release(h)
+        await h.release()
         #expect(h.fake.dpi == 1600 && h.session.state.preciseFrom == nil)
     }
 
     @Test func precisePointerOnAClickOwnsTheButton() async throws {
         let (h, r) = try await session(#"{"buttons": {"forward": {"click": {"precisePointer": 400}, "doubleClick": "appExpose", "hold": "launchpad"}}}"#)
         defer { h.close() }
-        await press(h, Self.forward)
+        await h.press(Self.forward)
         #expect(h.fake.dpi == 400 && r.deadlines.armed.isEmpty)
-        await release(h)
+        await h.release()
         #expect(h.fake.dpi == 1000 && r.performed.isEmpty && r.deadlines.armed.isEmpty)
     }
 
     @Test func precisePointerOnAHoldStartsAfterTheDelayAndAQuickClickStillClicks() async throws {
         let (h, r) = try await session(#"{"buttons": {"forward": {"click": "navigateForward", "hold": {"precisePointer": 400}}}}"#)
         defer { h.close() }
-        await press(h, Self.forward)
-        await release(h)
+        await h.press(Self.forward)
+        await h.release()
         #expect(r.performed == [.navigateForward] && h.fake.dpi == 1000)
-        await press(h, Self.forward)
+        await h.press(Self.forward)
         r.deadlines.fire()
-        await settle(h)
+        await h.settle()
         #expect(h.fake.dpi == 400)
-        await release(h)
+        await h.release()
         #expect(h.fake.dpi == 1000 && r.performed == [.navigateForward])
     }
 
     @Test func aCycleDPIWhileHeldIsNotUndone() async throws {
         let (h, _) = try await session(#"{"dpi": 800, "dpiPresets": [800, 1600], "buttons": {"forward": {"precisePointer": 400}, "back": "cycleDPI"}}"#)
         defer { h.close() }
-        await press(h, Self.forward)
+        await h.press(Self.forward)
         #expect(h.fake.dpi == 400)
-        await press(h, Self.forward, Self.back)
+        await h.press(Self.forward, Self.back)
         #expect(h.fake.dpi == 1600)
-        await press(h, Self.back)
+        await h.press(Self.back)
         #expect(h.fake.dpi == 1600)
-        await release(h)
+        await h.release()
         #expect(h.fake.dpi == 1600 && h.session.state.liveDPI == 1600)
     }
 
     @Test func precisePointerEndsOnAHandOff() async throws {
         let (h, _) = try await session(#"{"buttons": {"forward": {"precisePointer": 400}}}"#)
         defer { h.close() }
-        await press(h, Self.forward)
+        await h.press(Self.forward)
         #expect(h.fake.dpi == 400)
         h.session.setAway(true)
-        await settle(h)
+        await h.settle()
         #expect(h.fake.dpi == 1000 && h.session.precise == nil)
     }
 
     @Test func precisePointerEndsOnPauseAndQuit() async throws {
         let (h, _) = try await session(#"{"buttons": {"forward": {"precisePointer": 400}}}"#)
         defer { h.close() }
-        await press(h, Self.forward)
+        await h.press(Self.forward)
         #expect(h.fake.dpi == 400 && h.session.restoreSteps > 0)
         await h.session.restore()
         #expect(h.fake.dpi == 1000 && h.session.state.preciseFrom == nil)
@@ -390,11 +362,11 @@ struct TriggerSessionTests {
         fake.onReceiver(slot: 1)
         let (h, _) = try await session(#"{"buttons": {"forward": {"precisePointer": 400}}}"#, fake)
         defer { h.close() }
-        await press(h, Self.forward)
+        await h.press(Self.forward)
         #expect(h.fake.dpi == 400)
         h.session.handle(Report(reportID: .short, deviceIndex: h.device.index,
             featureIndex: 0x41, function: 0, softwareID: 0, params: [0x40]))
-        await settle(h)
+        await h.settle()
         #expect(h.session.precise == nil && h.session.state.preciseFrom == 1000)
         try await h.session.apply()
         #expect(h.fake.dpi == 1000 && h.session.state.preciseFrom == nil)
@@ -403,7 +375,7 @@ struct TriggerSessionTests {
     @Test func precisePointerHeldThroughAReloadIsUndoneByTheReplacement() async throws {
         let (h, r) = try await session(#"{"buttons": {"forward": {"precisePointer": 400}}}"#)
         defer { h.close() }
-        await press(h, Self.forward)
+        await h.press(Self.forward)
         #expect(h.fake.dpi == 400)
         h.session.close()
         let replacement = h.replacement(config: try SessionHarness.config(#"{"buttons": {"forward": "navigateForward"}}"#),
@@ -419,20 +391,20 @@ struct TriggerSessionTests {
     @Test func dragLockClicksToStartAndAgainToLetGo() async throws {
         let (h, r) = try await session(#"{"buttons": {"top": "dragLock"}}"#)
         defer { h.close() }
-        await press(h, 0xC4)
-        await release(h)
+        await h.press(0xC4)
+        await h.release()
         #expect(r.left == [true] && h.session.held.dragging)
-        await press(h, 0xC4)
-        await release(h)
+        await h.press(0xC4)
+        await h.release()
         #expect(r.left == [true, false] && !h.session.held.dragging)
     }
 
     @Test func dragLockIsLetGoWhenThePressesAreDropped() async throws {
         let (h, r) = try await session(#"{"buttons": {"top": {"click": "navigateForward", "hold": "dragLock"}}}"#)
         defer { h.close() }
-        await press(h, 0xC4)
+        await h.press(0xC4)
         r.deadlines.fire()
-        await release(h)
+        await h.release()
         #expect(r.left == [true] && r.performed.isEmpty)
         h.session.setAway(true)
         #expect(r.left == [true, false] && !h.session.held.dragging)
@@ -441,8 +413,8 @@ struct TriggerSessionTests {
     @Test func dragLockIsLetGoOnPauseAndQuit() async throws {
         let (h, r) = try await session(#"{"buttons": {"top": "dragLock"}}"#)
         defer { h.close() }
-        await press(h, 0xC4)
-        await release(h)
+        await h.press(0xC4)
+        await h.release()
         await h.session.restore()
         #expect(r.left == [true, false])
     }

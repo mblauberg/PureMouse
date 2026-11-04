@@ -5,7 +5,7 @@ import Testing
 
 /// A scratch tree with a config path two levels down, so there is an ancestor to fall back on.
 @MainActor
-private final class WatchFixture {
+final class WatchFixture {
     let root: URL
     let directory: URL
     let config: URL
@@ -24,7 +24,7 @@ private final class WatchFixture {
     }
 
     func start() {
-        watcher = ConfigWatcher(url: config) { [weak self] in
+        watcher = ConfigWatcher(url: config, debounce: Self.debounce) { [weak self] in
             guard let self else { return }
             seen.append(FileManager.default.fileExists(atPath: config.path))
         }
@@ -67,10 +67,26 @@ private final class WatchFixture {
         #expect(rename(temporary.path, directory.path) == 0)
     }
 
+    /// The watcher's debounce, far shorter than the daemon's so that the waits below are too.
+    static let debounce: DispatchTimeInterval = .milliseconds(20)
+
     /// A pause long enough for several debounce periods to have passed, for asserting that
     /// nothing more happens.
     func quiet() async throws {
-        try await Task.sleep(for: .milliseconds(600))
+        try await Task.sleep(for: .milliseconds(120))
+    }
+
+    /// How an edit reaches the config: a new inode, as an editor that saves by replacing does, or
+    /// the existing one, as one that saves in place does.
+    enum Save: CaseIterable {
+        case replacing, inPlace
+    }
+
+    func save(_ text: String, _ style: Save) throws {
+        switch style {
+        case .replacing: try writeConfig(text)
+        case .inPlace: try rewriteInPlace(text)
+        }
     }
 
     deinit {
@@ -101,11 +117,12 @@ private struct OpenFile {
 
 @MainActor
 @Suite(.quietLog) struct ConfigWatcherTests {
-    @Test func aSaveInPlaceReloadsOnce() async throws {
+    @Test(arguments: WatchFixture.Save.allCases)
+    func aSaveReloadsOnce(_ style: WatchFixture.Save) async throws {
         let fixture = try WatchFixture()
         try fixture.writeConfig()
         fixture.start()
-        try fixture.writeConfig("{\"dpi\": 800}")
+        try fixture.save("{\"dpi\": 800}", style)
         try await eventually { fixture.reloads >= 1 }
         try await fixture.quiet()
         #expect(fixture.reloads == 1)
@@ -116,7 +133,7 @@ private struct OpenFile {
         try fixture.writeConfig()
         fixture.start()
         try FileManager.default.removeItem(at: fixture.directory)
-        // Past the debounce, so the deletion is seen on its own.
+        // Past the debounce, so the deletion is seen on its own, and does not reload.
         try await fixture.quiet()
         try fixture.writeConfig("{\"dpi\": 800}")
         try await eventually { fixture.reloadsWithAFile >= 1 }
@@ -124,7 +141,8 @@ private struct OpenFile {
         #expect(fixture.reloads == 1)
     }
 
-    @Test func editsAfterTheDirectoryIsRecreatedStillReload() async throws {
+    @Test(arguments: WatchFixture.Save.allCases)
+    func editsAfterTheDirectoryIsRecreatedStillReload(_ style: WatchFixture.Save) async throws {
         let fixture = try WatchFixture()
         try fixture.writeConfig()
         fixture.start()
@@ -133,7 +151,7 @@ private struct OpenFile {
         try fixture.writeConfig()
         try await eventually { fixture.reloadsWithAFile >= 1 }
         try await fixture.quiet()
-        try fixture.writeConfig("{\"dpi\": 1600}")
+        try fixture.save("{\"dpi\": 1600}", style)
         try await eventually { fixture.reloadsWithAFile >= 2 }
     }
 
@@ -168,38 +186,6 @@ private struct OpenFile {
             at: fixture.root.appending(path: "elsewhere"), withIntermediateDirectories: true)
         try await fixture.quiet()
         #expect(fixture.reloads == 0)
-    }
-
-    @Test func aDeletedDirectoryDoesNotReloadUntilItReturns() async throws {
-        let fixture = try WatchFixture()
-        try fixture.writeConfig()
-        fixture.start()
-        try FileManager.default.removeItem(at: fixture.directory)
-        try await fixture.quiet()
-        #expect(fixture.reloads == 0)
-    }
-
-    @Test func aWriteThatKeepsTheInodeReloadsOnce() async throws {
-        let fixture = try WatchFixture()
-        try fixture.writeConfig()
-        fixture.start()
-        try fixture.rewriteInPlace("{\"dpi\": 800}")
-        try await eventually { fixture.reloads >= 1 }
-        try await fixture.quiet()
-        #expect(fixture.reloads == 1)
-    }
-
-    @Test func aWriteThatKeepsTheInodeStillReloadsAfterTheDirectoryIsRecreated() async throws {
-        let fixture = try WatchFixture()
-        try fixture.writeConfig()
-        fixture.start()
-        try FileManager.default.removeItem(at: fixture.directory)
-        try await fixture.quiet()
-        try fixture.writeConfig()
-        try await eventually { fixture.reloadsWithAFile >= 1 }
-        try await fixture.quiet()
-        try fixture.rewriteInPlace("{\"dpi\": 1600}")
-        try await eventually { fixture.reloadsWithAFile >= 2 }
     }
 
     @Test func swappingASymlinkedFolderForAnotherReloadsAndFollowsTheNewOne() async throws {
@@ -276,7 +262,7 @@ private struct OpenFile {
         try fixture.link(to: first)
         var files: [OpenFile] = []
         for _ in 0..<5 {
-            let watcher = ConfigWatcher(url: fixture.config) {}
+            let watcher = ConfigWatcher(url: fixture.config, debounce: WatchFixture.debounce) {}
             watcher.start()
             files += watcher.descriptors.compactMap { OpenFile($0) }
         }
@@ -288,7 +274,7 @@ private struct OpenFile {
         let fixture = try WatchFixture()
         try fixture.writeConfig()
         var count = 0
-        let watcher = ConfigWatcher(url: fixture.config) { count += 1 }
+        let watcher = ConfigWatcher(url: fixture.config, debounce: WatchFixture.debounce) { count += 1 }
         watcher.start()
         let files = watcher.descriptors.compactMap { OpenFile($0) }
         #expect(files.count >= 3)
