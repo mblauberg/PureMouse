@@ -74,6 +74,68 @@ struct SessionApplyTests {
         #expect(writes.dropFirst(2).allSatisfy { h.fake.feature(of: $0) == 0x1B04 })
     }
 
+    // MARK: Restore sends a step again when it timed out
+
+    /// The wheels diverted and nothing else, so a restore is a few steps long.
+    private static let wheelsOnly = #"{"smoothScroll": {}, "thumbWheel": {}, "buttons": {"back": "none", "forward": "none", "gesture": "none"}}"#
+
+    /// A mouse that dozed through the first request (the wheel's mode write) still ends native:
+    /// the step is sent again, and nothing is logged as failed. Counted, not timed.
+    @Test func restoreSendsAgainAWheelWriteTheMouseMissed() async throws {
+        let log = CapturedLog()
+        try await Log.$testOutput.withValue(.lines { log.append($0) }) {
+            let h = try await SessionHarness(config: SessionHarness.config(Self.wheelsOnly))
+            defer { h.close() }
+            try await h.session.apply()
+            #expect(h.fake.mainWheelDiverted)
+            h.fake.transport.sent.removeAll()
+            h.fake.dropNextRequest(to: .init(0x2121, 2))
+            await h.session.restore()
+            #expect(h.fake.droppedRequests == [.init(0x2121, 2)])
+            #expect(!h.fake.mainWheelDiverted && !h.fake.mainWheelHighResolution)
+            #expect(h.fake.requests(feature: 0x2121, function: 2).count == 2)
+            #expect(!h.fake.thumbWheelDiverted)
+        }
+        #expect(!log.lines.contains { $0.message.contains("failed") })
+        #expect(log.lines.contains { $0.message.contains("restored native behaviour") })
+    }
+
+    /// A step is sent twice at most, each step on its own, wheels first, and a failure is logged
+    /// once per step. A device that never answers costs `restoreSteps * restoreAttempts` requests,
+    /// each waiting `restoreTimeout`, which `Daemon.shutdownDeadline` allows for (the figures are
+    /// counted, not timed, so a slow machine cannot fail the test).
+    @Test func restoreOfASilentMouseSendsEachStepTwiceAndFinishes() async throws {
+        let log = CapturedLog()
+        var steps = 0
+        try await Log.$testOutput.withValue(.lines { log.append($0) }) {
+            let h = try await SessionHarness(config: SessionHarness.config(Self.wheelsOnly))
+            defer { h.close() }
+            try await h.session.apply()
+            steps = h.session.restoreSteps
+            #expect(steps >= 2)
+            h.fake.transport.timing = .never
+            h.fake.transport.sent.removeAll()
+            await h.session.restore()
+            #expect(h.fake.transport.sent.count == steps * Session.restoreAttempts)
+            #expect(h.fake.transport.sent.compactMap { h.fake.feature(of: $0) }.first == 0x2121)  // wheels first
+            #expect(Daemon.shutdownDeadline(restoreSteps: steps)
+                        >= min(Session.restoreTimeout * (steps * Session.restoreAttempts), .seconds(5)))
+        }
+        #expect(log.lines.filter { $0.message.contains("failed") }.count == steps)
+    }
+
+    /// Only a timeout is sent again: a mouse that answers with an error has answered.
+    @Test func restoreDoesNotRetryAnAnsweredError() async throws {
+        let h = try await SessionHarness(config: SessionHarness.config(Self.wheelsOnly))
+        defer { h.close() }
+        try await h.session.apply()
+        h.fake.failures[.init(0x2121, 2)] = .error(2)
+        h.fake.transport.sent.removeAll()
+        await h.session.restore()
+        #expect(h.fake.requests(feature: 0x2121, function: 2).count == 1)
+        #expect(!h.fake.thumbWheelDiverted)  // the next step still ran
+    }
+
     @Test func permissionDenialLeavesWheelsNativeAndLogsReason() async throws {
         let log = CapturedLog()
         try await Log.$testOutput.withValue(.lines { log.append($0) }) {

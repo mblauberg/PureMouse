@@ -300,9 +300,11 @@ touches.
   failures must reach configure's retry handling. Feature summaries use indices already resolved by
   a successful apply, never extra adoption queries.
 - On SIGTERM or SIGINT, `Session.restore()` returns the mouse to native behaviour, wheels first.
-  Each of its requests times out after `Session.restoreTimeout` (400 ms), and quitting waits long
-  enough for every one of them (`Daemon.shutdownDeadline`, 2 to 5 s), counting the restores of a
-  pause still under way (`Daemon.restoreSteps`), so a missed reply cannot leave the rest diverted.
+  Each of its requests times out after `Session.restoreTimeout` (400 ms). A step that times out is
+  sent once more (`Session.restoreAttempts`), since a dozing mouse can miss the request that wakes
+  it; any other error is not retried. Quitting waits long enough for every attempt of every step
+  (`Daemon.shutdownDeadline`, 2 to 5 s), counting the restores of a pause still under way
+  (`Daemon.restoreSteps`), so a missed reply cannot leave the rest diverted.
 - `restore()` decides whether to hand the wheels back from `Session.wheelsMayBeDiverted`, not from
   the current config: after a reload that drops or disables `smoothScroll`, the replacement session
   inherits the flag and keeps it until its own apply has set the wheels native. One found diverted
