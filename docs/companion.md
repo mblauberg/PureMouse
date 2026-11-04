@@ -375,6 +375,11 @@ helper itself 35.7 MB, with a cold start of 654 ms. Several menu and Settings ch
 between the two runs (the Settings request lock, the login controls, the battery notifications);
 the growth was not bisected. The comparisons below are from the 2026-11-02 set.
 
+For 0.6.0, re-measured on 2026-11-04 at main d6cf4c5 (the same Mac, macOS 27.0.1): fresh 8.9,
+after 1 menu open 13.6, after 10 opens 13.7, after 200 doorbells 9.0, after the helper quits
+8.7, hidden 6.0 to 6.7, and the helper itself 30.0 MB (down from 35.7), with a cold start of 547
+ms. Every scenario is inside its budget.
+
 With Show in menu bar off the menu app stays resident without a status item (`AppController.resident`), so
 battery notifications and the update check carry on. Medians of 5 rig runs on the same Mac on
 2026-11-03 (shipped build), two sets of 5 on the first-run branch: fresh 6.0 to 7.1 MB (the
