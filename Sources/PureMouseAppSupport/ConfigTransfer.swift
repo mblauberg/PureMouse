@@ -101,6 +101,11 @@ extension ConfigStore {
             data = ConfigTree().data()
         }
         do {
+            try ConfigCheck.validate(data)
+        } catch {
+            return "The config file has an error, so it wasn't exported: \(ConfigCheck.message(for: error))"
+        }
+        do {
             try data.write(to: url, options: .atomic)
             return nil
         } catch {

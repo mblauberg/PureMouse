@@ -61,6 +61,18 @@ struct ConfigTransferTests {
         #expect(!sandbox.exists(other))
     }
 
+    @Test func exportRefusesInvalidBytesWrittenSinceTheLastLoad() throws {
+        try sandbox.write(#"{"dpi": 800}"#)
+        let store = loadedStore()
+        #expect(store.configError == nil)
+
+        try sandbox.write(#"{"dpi": 999999}"#)
+        let target = sandbox.directory.appending(path: "copy.json")
+        #expect(store.exportSettings(to: target)
+            == "The config file has an error, so it wasn't exported: dpi must be 50–25600, not 999999")
+        #expect(!sandbox.exists(target))
+    }
+
     @Test func exportReportsAnUnwritableTarget() throws {
         try sandbox.write("{}")
         let problem = loadedStore().exportSettings(to: sandbox.directory.appending(path: "missing/dir/copy.json"))
