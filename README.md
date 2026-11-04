@@ -180,8 +180,8 @@ its features.
 |---|---|---|
 | Download | 4.9 MB dmg, 12.4 MB installed; universal (Apple silicon and Intel) | 0.5.1, 2026-11-03 |
 | Memory: background process | 4.9 MB after 10 hours with an MX Master 3S connected | 0.4.0, 2026-11-03, one reading |
-| Memory: menu bar app | About 9 MB fresh, about 14 MB once its menu has been opened | 0.4.0, 2026-11-03, median of 5 runs |
-| Memory: Settings | About 36 MB in its own process while its window is open, then nothing | 0.4.0, 2026-11-03, median of 5 runs |
+| Memory: menu bar app | About 9 MB fresh, about 14 MB once its menu has been opened | 0.6.0, 2026-11-04, median of 5 runs |
+| Memory: Settings | About 30 MB in its own process while its window is open, then nothing | 0.6.0, 2026-11-04, median of 5 runs |
 | Idle CPU | Zero in normal use: no polling, no timers, no wake-ups* | By design |
 | Processes | Two: the background process and an optional menu bar app, plus Settings while its window is open | By design |
 | Network | One small update check a day if you allow it, or when you press **Check for Updates**; an update only when you choose it | By design |
