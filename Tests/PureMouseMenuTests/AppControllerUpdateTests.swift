@@ -35,13 +35,21 @@ final class Suspended: @unchecked Sendable {
     private var continuation: CheckedContinuation<Void, Never>?
     private var released = false
     private var cancelledFlag = false
+    private var waitingFlag = false
 
     var cancelled: Bool { lock.withLock { cancelledFlag } }
+    /// Whether an install has reached `wait()` and is held there: what a test waits for before it
+    /// checks that nothing has happened yet, since the install runs off the main actor.
+    var isWaiting: Bool { lock.withLock { waitingFlag && !released } }
 
     func wait() async {
         await withCheckedContinuation { continuation in
             lock.lock()
-            if released { lock.unlock(); continuation.resume() } else { self.continuation = continuation; lock.unlock() }
+            if released { lock.unlock(); continuation.resume() } else {
+                self.continuation = continuation
+                waitingFlag = true
+                lock.unlock()
+            }
         }
     }
 
@@ -621,7 +629,8 @@ struct AppControllerUpdateTests {
         await idle()
         var ended = false
         controller.afterInstallEnds { ended = true }
-        await idle()
+        await settle { spy.cleanup?.isWaiting == true }
+        #expect(spy.cleanup?.isWaiting == true, "the install is held in its cleanup")
         #expect(spy.gate?.cancelled == true, "the install was told to stop")
         #expect(!ended, "but quitting waits for its cleanup")
         spy.cleanup?.release()
@@ -642,7 +651,8 @@ struct AppControllerUpdateTests {
         let controller = suspended(spy)
         await idle()
         #expect(controller.applicationShouldTerminate(NSApplication.shared) == .terminateLater)
-        await idle()
+        await settle { spy.cleanup?.isWaiting == true }
+        #expect(spy.cleanup?.isWaiting == true, "the install is held in its cleanup")
         #expect(spy.replies.isEmpty)
         spy.cleanup?.release()
         await settle { !spy.replies.isEmpty }
