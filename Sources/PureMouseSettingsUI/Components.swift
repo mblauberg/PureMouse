@@ -318,6 +318,9 @@ struct AdvancedSheet<Content: View, Leading: View>: View {
             // In line with the grouped form's content box, not the sheet's edge.
             .padding(.horizontal, Self.contentInset)
             .padding(.bottom)
+            // Its own height always: a greedy row above (the presets' empty state) squeezed Done
+            // to 13 pt.
+            .fixedSize(horizontal: false, vertical: true)
         }
         .frame(width: SettingsWindowController.sheetWidth)
     }
