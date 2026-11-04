@@ -75,6 +75,9 @@ enum Standby {
 struct FrontmostApp: Equatable {
     var bundleID: String?
     var name: String?
+    /// An ordinary app, with a Dock icon and menus of its own (`NSApplication.ActivationPolicy.regular`).
+    /// The login window, which is frontmost while the screen is locked, and agents are not.
+    var isRegular = true
 
     /// Apps with no settings of their own to offer: the Finder and the Dock never own the buttons or
     /// the scroll wheel the way a document app does, and PureMouse's own bundles (the daemon, the menu
@@ -85,7 +88,7 @@ struct FrontmostApp: Equatable {
     /// The bundle identifier "Settings for <app>…" would configure; nil when the app is excluded or
     /// has none.
     var configurable: String? {
-        guard let id = bundleID?.trimmingCharacters(in: .whitespacesAndNewlines), !id.isEmpty else { return nil }
+        guard isRegular, let id = bundleID?.trimmingCharacters(in: .whitespacesAndNewlines), !id.isEmpty else { return nil }
         let key = id.lowercased()
         if Self.excluded.contains(key) || key == Self.pureMouse || key.hasPrefix(Self.pureMouse + ".") { return nil }
         return id

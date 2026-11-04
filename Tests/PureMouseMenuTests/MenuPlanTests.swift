@@ -430,7 +430,7 @@ struct MenuPlanTests {
             .contains("Settings for Safari…"))
     }
 
-    @Test func finderDockPureMouseAndAppsWithoutAnIdentifierGetNoRow() {
+    @Test func finderDockPureMouseAgentsAndAppsWithoutAnIdentifierGetNoRow() {
         let none = settingsRows(front: nil)
         #expect(none == Self.footer.split(separator: "\n").dropFirst().joined(separator: "\n"))
         for id in ["com.apple.finder", "com.apple.Finder", "com.apple.dock", "io.github.mblauberg.puremouse",
@@ -438,6 +438,9 @@ struct MenuPlanTests {
                    "io.github.mblauberg.PureMouse.Settings", nil, "", "  "] {
             #expect(settingsRows(front: FrontmostApp(bundleID: id, name: "Whatever")) == none, "\(id ?? "nil")")
         }
+        // The login window (frontmost while the screen is locked) and agents are no ordinary app.
+        #expect(settingsRows(front: FrontmostApp(bundleID: "com.apple.loginwindow", name: "loginwindow",
+                                                 isRegular: false)) == none)
         // A lookalike is an app like any other.
         #expect(settingsRows(front: FrontmostApp(bundleID: "io.github.mblauberg.puremouse-tool", name: "Tool"))
             .contains("Settings for Tool…"))

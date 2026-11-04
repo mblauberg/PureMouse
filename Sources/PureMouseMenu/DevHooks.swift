@@ -43,8 +43,7 @@ enum DevHooks {
             // A status menu follows the menu bar's appearance, not the app's.
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { app.openMenuForTesting(appearance: NSApp.appearance) }
             if let path = environment["PUREMOUSE_DEV_CAPTURE"] {
-                // The open menu's own windows, composited without Screen Recording permission, as the
-                // helper's capture does; then quit.
+                // The open menu's own windows, as the helper's capture does; then quit.
                 // A timer in the common modes: menu tracking runs its own loop, which a dispatched block
                 // waits out.
                 let timer = Timer(timeInterval: 3, repeats: false) { _ in
@@ -58,8 +57,36 @@ enum DevHooks {
         }
     }
 
-    /// This process's on-screen windows but the backdrop, composited into one PNG.
+    /// The open menu's windows drawn from their own views, so no Screen Recording permission is
+    /// needed: a window server image of them is blank without it. The menu's glass draws nothing
+    /// this way, so the drawing goes over the window background colour.
+    private static func drawMenu(to url: URL) -> Bool {
+        let windows = NSApp.windows.filter { $0.isVisible && $0 !== backdrop }
+        guard let window = windows.max(by: { $0.frame.height < $1.frame.height }),
+              let view = window.contentView?.superview ?? window.contentView else { return false }
+        guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return false }
+        view.cacheDisplay(in: view.bounds, to: rep)
+        let size = view.bounds.size
+        guard let out = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: rep.pixelsWide, pixelsHigh: rep.pixelsHigh,
+                                         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                         colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return false }
+        out.size = size
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: out)
+        (NSApp.appearance ?? NSAppearance.currentDrawing()).performAsCurrentDrawingAppearance {
+            NSColor.windowBackgroundColor.setFill()
+            NSBezierPath(roundedRect: NSRect(origin: .zero, size: size), xRadius: 10, yRadius: 10).fill()
+        }
+        rep.draw(in: NSRect(origin: .zero, size: size))
+        NSGraphicsContext.restoreGraphicsState()
+        guard let png = out.representation(using: .png, properties: [:]) else { return false }
+        return (try? png.write(to: url)) != nil
+    }
+
+    /// This process's on-screen windows but the backdrop, composited into one PNG; without Screen
+    /// Recording permission, the menu drawn from its views instead.
     private static func writeMenu(to url: URL) -> Bool {
+        guard CGPreflightScreenCaptureAccess() else { return drawMenu(to: url) }
         let pid = ProcessInfo.processInfo.processIdentifier
         let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
             as? [[String: Any]] ?? []
