@@ -42,7 +42,7 @@ private final class Errors: @unchecked Sendable {
             do {
                 try FileLock.withLock(FileLock.url(for: control)) {
                     locked.signal()
-                    clearedWhileHeld.value = cleared.wait(timeout: .now() + .milliseconds(500)) == .success
+                    clearedWhileHeld.value = cleared.wait(timeout: .now() + .milliseconds(150)) == .success
                     try Data(#"{"paused":true,"capture":{"token":7}}"#.utf8).write(to: control, options: .atomic)
                 }
             } catch { errors.record(error) }
@@ -80,7 +80,7 @@ private final class Errors: @unchecked Sendable {
             finished.signal()
         }
         #expect(locked.wait(timeout: .now() + Self.bound) == .success)
-        StatusChannel.clearControl(control, timeout: 0.2)
+        StatusChannel.clearControl(control, timeout: 0.1)
         #expect(FileManager.default.fileExists(atPath: control.path))
         release.signal()
         #expect(finished.wait(timeout: .now() + Self.bound) == .success)

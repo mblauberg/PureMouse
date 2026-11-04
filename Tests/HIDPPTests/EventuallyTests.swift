@@ -17,9 +17,9 @@ struct EventuallyTests {
 
     @Test func aWaitQueuedBehindBusyMainActorWorkIsNotTimedOutByIt() async throws {
         var finished = 0
-        for _ in 0..<3 { hog(250) { finished += 1 } }
-        // The three bodies run before this wait is resumed: 750 ms against a 300 ms deadline.
-        try await eventually(within: .milliseconds(300)) { finished == 3 }
+        for _ in 0..<3 { hog(60) { finished += 1 } }
+        // The three bodies run before this wait is resumed: 180 ms against a 100 ms deadline.
+        try await eventually(within: .milliseconds(100)) { finished == 3 }
     }
 
     @Test func aConditionThatNeverHoldsFails() async {

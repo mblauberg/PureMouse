@@ -39,7 +39,7 @@ struct IdentityRetryTests {
     }
 
     @Test func anIdentityThatKeepsTimingOutIsReadOncePerConfigureAndThenAppliesOnReload() async throws {
-        let h = try DaemonHarness(Self.config)
+        let h = try DaemonHarness(Self.config, instantTimeouts: true)
         defer { h.close() }
         let mx = FakeDevice.mxMaster3S
         mx.failures[.init(0x0003, 0)] = .timeout
@@ -55,7 +55,7 @@ struct IdentityRetryTests {
     }
 
     @Test func aReconnectReadsAnUnresolvedIdentityAgain() async throws {
-        let h = try DaemonHarness(Self.config)
+        let h = try DaemonHarness(Self.config, instantTimeouts: true)
         defer { h.close() }
         let mx = FakeDevice.mxMaster3S
         mx.failures[.init(0x0003, 0)] = .timeout

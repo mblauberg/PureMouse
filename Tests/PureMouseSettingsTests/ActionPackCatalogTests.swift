@@ -71,15 +71,63 @@ private func isISODate(_ text: String) -> Bool {
         }
     }
 
-    @Test func validationRequiresHTTPSSources() {
-        let entries = (1...6).map { i in
-            ActionPackEntry(id: "act\(i)", bundleIDs: ["com.test"], label: "Action \(i)", category: "Test", payload: "cmd+\(i)",
-                            sourceURL: i == 6 ? "http://example.com" : "https://example.com", verifiedDate: "2026-11-04")
+    /// A pack of six valid actions with one thing wrong, and the error validation names for it.
+    enum Flaw: String, CaseIterable, CustomTestStringConvertible {
+        case duplicateID, unknownBundleID, invalidPayload, fewerThanSixActions
+        case missingSource, plainHTTPSource, brokenPairedOpposite
+
+        var testDescription: String { rawValue }
+
+        private static func entry(_ number: Int, id: String? = nil, bundleIDs: [String] = ["com.test"],
+                                  payload: String? = nil, sourceURL: String = "https://example.com",
+                                  pairedOpposite: String? = nil) -> ActionPackEntry {
+            ActionPackEntry(id: id ?? "act\(number)", bundleIDs: bundleIDs, label: "Action \(number)", category: "Test",
+                            payload: payload ?? "cmd+\(number)", sourceURL: sourceURL, verifiedDate: "2026-11-04",
+                            pairedOpposite: pairedOpposite)
         }
-        let data = ActionCatalogData(packs: [ActionPack(id: "test", name: "Test", bundleIDs: ["com.test"], actions: entries)])
-        #expect(throws: ActionPackCatalog.ValidationError.invalidSourceURL(actionID: "act6", url: "http://example.com")) {
-            try ActionPackCatalog.validate(data)
+
+        var data: ActionCatalogData {
+            var actions = (1...5).map { Self.entry($0) }
+            switch self {
+            case .duplicateID:
+                actions[1] = Self.entry(2, id: "act1")
+                actions.append(Self.entry(6))
+            case .unknownBundleID:
+                actions[0] = Self.entry(1, bundleIDs: ["com.unknown"])
+                actions.append(Self.entry(6))
+            case .fewerThanSixActions: break
+            case .invalidPayload: actions.append(Self.entry(6, payload: "invalid_key_combo@@@"))
+            case .missingSource: actions.append(Self.entry(6, sourceURL: ""))
+            case .plainHTTPSource: actions.append(Self.entry(6, sourceURL: "http://example.com"))
+            case .brokenPairedOpposite: actions.append(Self.entry(6, pairedOpposite: "nonexistent_action_id"))
+            }
+            return ActionCatalogData(packs: [ActionPack(id: "test", name: "Test", bundleIDs: ["com.test"], actions: actions)])
         }
+
+        var error: ActionPackCatalog.ValidationError {
+            switch self {
+            case .duplicateID: .duplicateActionID("act1")
+            case .unknownBundleID: .unknownBundleID(actionID: "act1", bundleID: "com.unknown")
+            case .invalidPayload: .invalidPayload(actionID: "act6", payload: "invalid_key_combo@@@")
+            case .fewerThanSixActions: .insufficientActions(packID: "test", count: 5)
+            case .missingSource: .missingVerification(actionID: "act6")
+            case .plainHTTPSource: .invalidSourceURL(actionID: "act6", url: "http://example.com")
+            case .brokenPairedOpposite: .invalidPairedOpposite(actionID: "act6", oppositeID: "nonexistent_action_id")
+            }
+        }
+    }
+
+    @Test func aPackOfSixValidActionsValidates() throws {
+        let valid = ActionCatalogData(packs: [ActionPack(
+            id: "test", name: "Test", bundleIDs: ["com.test"],
+            actions: (1...6).map { ActionPackEntry(id: "act\($0)", bundleIDs: ["com.test"], label: "Action \($0)", category: "Test",
+                                                   payload: "cmd+\($0)", sourceURL: "https://example.com", verifiedDate: "2026-11-04") })])
+        try ActionPackCatalog.validate(valid)
+    }
+
+    @Test(arguments: Flaw.allCases)
+    func validationRejectsEachFlawWithItsOwnError(flaw: Flaw) {
+        #expect(throws: flaw.error) { try ActionPackCatalog.validate(flaw.data) }
     }
 
     @Test func theCatalogueLoadsFromTheBundleItIsGiven() throws {
@@ -92,95 +140,6 @@ private func isISODate(_ text: String) -> Bool {
         let bundle = try #require(Bundle(url: bundleURL))
         #expect(ActionPackCatalog(bundle: bundle).packs.isEmpty)
         #expect(!ActionPackCatalog(bundle: Bundle.main).packs.isEmpty)
-    }
-
-    @Test func validationRejectsDuplicateIds() {
-        let entry1 = ActionPackEntry(id: "dup", bundleIDs: ["com.test"], label: "Action 1", category: "Test",
-                                     payload: "cmd+1", sourceURL: "https://example.com", verifiedDate: "2026-11-04")
-        let entry2 = ActionPackEntry(id: "dup", bundleIDs: ["com.test"], label: "Action 2", category: "Test",
-                                     payload: "cmd+2", sourceURL: "https://example.com", verifiedDate: "2026-11-04")
-        let dummy = (3...6).map { i in
-            ActionPackEntry(id: "act\(i)", bundleIDs: ["com.test"], label: "Action \(i)", category: "Test",
-                            payload: "cmd+\(i)", sourceURL: "https://example.com", verifiedDate: "2026-11-04")
-        }
-        let pack = ActionPack(id: "test", name: "Test", bundleIDs: ["com.test"], actions: [entry1, entry2] + dummy)
-        let data = ActionCatalogData(packs: [pack])
-
-        #expect(throws: ActionPackCatalog.ValidationError.self) {
-            try ActionPackCatalog.validate(data)
-        }
-    }
-
-    @Test func validationRejectsUnknownBundleIds() {
-        let entries = (1...6).map { i in
-            ActionPackEntry(id: "act\(i)", bundleIDs: ["com.unknown"], label: "Action \(i)", category: "Test",
-                            payload: "cmd+\(i)", sourceURL: "https://example.com", verifiedDate: "2026-11-04")
-        }
-        let pack = ActionPack(id: "test", name: "Test", bundleIDs: ["com.test"], actions: entries)
-        let data = ActionCatalogData(packs: [pack])
-
-        #expect(throws: ActionPackCatalog.ValidationError.self) {
-            try ActionPackCatalog.validate(data)
-        }
-    }
-
-    @Test func validationRejectsInvalidPayloads() {
-        var entries = (1...5).map { i in
-            ActionPackEntry(id: "act\(i)", bundleIDs: ["com.test"], label: "Action \(i)", category: "Test",
-                            payload: "cmd+\(i)", sourceURL: "https://example.com", verifiedDate: "2026-11-04")
-        }
-        entries.append(ActionPackEntry(id: "act6", bundleIDs: ["com.test"], label: "Action 6", category: "Test",
-                                       payload: "invalid_key_combo@@@", sourceURL: "https://example.com", verifiedDate: "2026-11-04"))
-        let pack = ActionPack(id: "test", name: "Test", bundleIDs: ["com.test"], actions: entries)
-        let data = ActionCatalogData(packs: [pack])
-
-        #expect(throws: ActionPackCatalog.ValidationError.self) {
-            try ActionPackCatalog.validate(data)
-        }
-    }
-
-    @Test func validationRejectsPacksWithFewerThanSixActions() {
-        let entries = (1...5).map { i in
-            ActionPackEntry(id: "act\(i)", bundleIDs: ["com.test"], label: "Action \(i)", category: "Test",
-                            payload: "cmd+\(i)", sourceURL: "https://example.com", verifiedDate: "2026-11-04")
-        }
-        let pack = ActionPack(id: "test", name: "Test", bundleIDs: ["com.test"], actions: entries)
-        let data = ActionCatalogData(packs: [pack])
-
-        #expect(throws: ActionPackCatalog.ValidationError.self) {
-            try ActionPackCatalog.validate(data)
-        }
-    }
-
-    @Test func validationRejectsMissingSourceOrDate() {
-        var entries = (1...5).map { i in
-            ActionPackEntry(id: "act\(i)", bundleIDs: ["com.test"], label: "Action \(i)", category: "Test",
-                            payload: "cmd+\(i)", sourceURL: "https://example.com", verifiedDate: "2026-11-04")
-        }
-        entries.append(ActionPackEntry(id: "act6", bundleIDs: ["com.test"], label: "Action 6", category: "Test",
-                                       payload: "cmd+6", sourceURL: "", verifiedDate: "2026-11-04"))
-        let pack = ActionPack(id: "test", name: "Test", bundleIDs: ["com.test"], actions: entries)
-        let data = ActionCatalogData(packs: [pack])
-
-        #expect(throws: ActionPackCatalog.ValidationError.self) {
-            try ActionPackCatalog.validate(data)
-        }
-    }
-
-    @Test func validationRejectsBrokenPairedOpposite() {
-        var entries = (1...5).map { i in
-            ActionPackEntry(id: "act\(i)", bundleIDs: ["com.test"], label: "Action \(i)", category: "Test",
-                            payload: "cmd+\(i)", sourceURL: "https://example.com", verifiedDate: "2026-11-04")
-        }
-        entries.append(ActionPackEntry(id: "act6", bundleIDs: ["com.test"], label: "Action 6", category: "Test",
-                                       payload: "cmd+6", sourceURL: "https://example.com", verifiedDate: "2026-11-04",
-                                       pairedOpposite: "nonexistent_action_id"))
-        let pack = ActionPack(id: "test", name: "Test", bundleIDs: ["com.test"], actions: entries)
-        let data = ActionCatalogData(packs: [pack])
-
-        #expect(throws: ActionPackCatalog.ValidationError.self) {
-            try ActionPackCatalog.validate(data)
-        }
     }
 
     @Test func lookupMatchesPacksAndActions() {

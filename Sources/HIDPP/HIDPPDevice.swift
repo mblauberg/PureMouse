@@ -17,6 +17,9 @@ public final class HIDPPDevice {
     /// How long a request waits for its reply unless `timeout` says otherwise.
     public static let defaultTimeout: Duration = .milliseconds(1500)
     public var timeout: Duration = HIDPPDevice.defaultTimeout
+    /// How a request waits out its timeout. A test replaces it to end a request the fake transport
+    /// will never answer at once; the cancel that ends a request any other way still stops it.
+    public var sleep: @MainActor (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
 
     /// A shorter or longer wait lent for a while, which wins over `timeout` until it is returned
     /// or another is lent. Each lend has its own number, so work that was superseded returns
@@ -129,8 +132,8 @@ public final class HIDPPDevice {
                     return
                 }
                 guard pending?.token == token else { return }  // answered or failed during send
-                pending?.deadline = Task { [weak self, timeout = effectiveTimeout] in
-                    do { try await Task.sleep(for: timeout) } catch { return }  // cancelled: ended already
+                pending?.deadline = Task { [weak self, timeout = effectiveTimeout, sleep] in
+                    do { try await sleep(timeout) } catch { return }  // cancelled: ended already
                     guard let self, self.pending?.token == token else { return }
                     self.failPending(HIDPPError.timeout)
                 }

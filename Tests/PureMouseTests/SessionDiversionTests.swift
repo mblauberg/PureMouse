@@ -73,7 +73,7 @@ struct SessionDiversionTests {
     @Test func timeoutLeavesScanPendingForTheNextApply() async throws {
         let fake = FakeDevice.mxMaster3S
         fake.setReporting(0x56, diverted: true)
-        let h = try await SessionHarness(fake, inheriting: .init(fresh: true))
+        let h = try await SessionHarness(fake, inheriting: .init(fresh: true), instantTimeouts: true)
         defer { h.close() }
         fake.failures[.init(0x1B04, 2)] = .timeout
         await #expect(throws: HIDPPError.timeout) { try await h.session.apply() }
@@ -86,7 +86,7 @@ struct SessionDiversionTests {
     }
 
     @Test func configureRetriesAFailedFreshScan() async throws {
-        let h = try await SessionHarness(inheriting: .init(fresh: true))
+        let h = try await SessionHarness(inheriting: .init(fresh: true), instantTimeouts: true)
         defer { h.close() }
         h.fake.failures[.init(0x1B04, 2)] = .timeout
         h.session.configure()
@@ -101,7 +101,7 @@ struct SessionDiversionTests {
     @Test func reloadBeforeAFreshScanSucceedsStillReleasesStaleDiversion() async throws {
         let fake = FakeDevice.mxMaster3S
         fake.setReporting(0x56, diverted: true)
-        let h = try await SessionHarness(fake, inheriting: .init(fresh: true))
+        let h = try await SessionHarness(fake, inheriting: .init(fresh: true), instantTimeouts: true)
         fake.failures[.init(0x1B04, 2)] = .timeout
         await #expect(throws: HIDPPError.timeout) { try await h.session.apply() }
         let inherited = h.session.inheritance

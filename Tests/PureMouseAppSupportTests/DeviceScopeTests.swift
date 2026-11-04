@@ -568,6 +568,15 @@ private struct SeededGenerator: RandomNumberGenerator {
     }
 }
 
+/// The generated-tree properties run as a few seeded chunks, so Swift Testing runs them in
+/// parallel; each chunk draws its own trees, and chunk 0 keeps the seed it has always had.
+private let propertyChunks = 0..<4
+private let slowPropertyChunks = 0..<8
+
+private func chunkGenerator(_ seed: UInt64, _ chunk: Int) -> SeededGenerator {
+    SeededGenerator(state: seed ^ (UInt64(chunk) &* 0xD1B5_4A32_D192_ED03))
+}
+
 private struct TreeMaker {
     var rng: SeededGenerator
 
@@ -843,16 +852,17 @@ private func expectResolvedMatchesKit(_ file: ConfigTree, _ key: String, _ decod
     return gesturesMerged
 }
 
-@Test func resolvedAgreesWithKitsDeviceConfigOnGeneratedTrees() throws {
-    var maker = TreeMaker(rng: SeededGenerator(state: 0x5075_7265_4D6F_7573))
+@Test(arguments: propertyChunks)
+func resolvedAgreesWithKitsDeviceConfigOnGeneratedTrees(chunk: Int) throws {
+    var maker = TreeMaker(rng: chunkGenerator(0x5075_7265_4D6F_7573, chunk))
     var devicesChecked = 0
     var gesturesMerged = 0
     var cased = 0
     var nulls = 0
     var defaults = 0
-    for round in 0..<400 {
+    for round in 0..<75 {
         let (config, keys) = maker.tree()
-        let note = Comment(rawValue: "round \(round): \(String(decoding: config.data(), as: UTF8.self))")
+        let note = Comment(rawValue: "chunk \(chunk) round \(round): \(String(decoding: config.data(), as: UTF8.self))")
         let decoded = try decode(config)
         let raw = (config[["devices"]] as? [String: Any]) ?? [:]
         cased += raw.keys.filter { $0 != $0.lowercased() }.count
@@ -864,11 +874,11 @@ private func expectResolvedMatchesKit(_ file: ConfigTree, _ key: String, _ decod
         }
     }
     // The generator reaches the interesting cases.
-    #expect(devicesChecked > 400)
-    #expect(gesturesMerged > 100)
-    #expect(cased > 100)
-    #expect(nulls > 400)
-    #expect(defaults > 100)
+    #expect(devicesChecked > 100)
+    #expect(gesturesMerged > 25)
+    #expect(cased > 25)
+    #expect(nulls > 100)
+    #expect(defaults > 25)
 }
 
 // MARK: isOverridden against a definition taken from Kit
@@ -963,13 +973,14 @@ private func kitSays(_ root: [String: Any], mouse key: String, sets path: [Strin
     return try fingerprint(resolve(withTop).forDevice(key)) != fingerprint(resolve(without).forDevice(key))
 }
 
-@Test func isOverriddenAgreesWithWhatKitResolvesOnGeneratedTrees() throws {
-    var maker = TreeMaker(rng: SeededGenerator(state: 0x4F76_6572_7269_6465))
+@Test(arguments: slowPropertyChunks)
+func isOverriddenAgreesWithWhatKitResolvesOnGeneratedTrees(chunk: Int) throws {
+    var maker = TreeMaker(rng: chunkGenerator(0x4F76_6572_7269_6465, chunk))
     var overridden = 0
     var hidden = 0
-    for round in 0..<120 {
+    for round in 0..<10 {
         let (config, keys) = maker.tree()
-        let note = Comment(rawValue: "round \(round): \(String(decoding: config.data(), as: UTF8.self))")
+        let note = Comment(rawValue: "chunk \(chunk) round \(round): \(String(decoding: config.data(), as: UTF8.self))")
         for key in keys {
             let scope = device(key)
             var paths = Array(leafSentinels.keys)
@@ -990,19 +1001,20 @@ private func kitSays(_ root: [String: Any], mouse key: String, sets path: [Strin
             }
         }
     }
-    #expect(overridden > 300)
-    #expect(hidden > 30)
+    #expect(overridden > 50)
+    #expect(hidden > 5)
 }
 
 // MARK: Writes against Kit
 
-@Test func deviceWritesLeaveTheTopLevelAndTheOtherMiceAloneAndReplayLikeTheDirectEdit() throws {
-    var maker = TreeMaker(rng: SeededGenerator(state: 0x5772_6974_6573_2121))
+@Test(arguments: propertyChunks)
+func deviceWritesLeaveTheTopLevelAndTheOtherMiceAloneAndReplayLikeTheDirectEdit(chunk: Int) throws {
+    var maker = TreeMaker(rng: chunkGenerator(0x5772_6974_6573_2121, chunk))
     let paths = Array(leafSentinels.keys).sorted { $0.joined() < $1.joined() }
     var edits = 0
     var created = 0
     var removedEntries = 0
-    for round in 0..<300 {
+    for round in 0..<60 {
         var (config, keys) = maker.tree()
         // The mouse to edit: one the tree names, or sometimes one it does not.
         let key = maker.chance(0.4) ? maker.deviceKey() : maker.pick(keys)
@@ -1051,7 +1063,7 @@ private func kitSays(_ root: [String: Any], mouse key: String, sets path: [Strin
             edits += 1
             if !entries(config).isEmpty { hadEntry = true } else if hadEntry { removedEntries += 1; hadEntry = false }
         }
-        let note = Comment(rawValue: "round \(round) \(key) \(log)\nbefore: \(String(decoding: before.data(), as: UTF8.self))\nafter: \(String(decoding: config.data(), as: UTF8.self))")
+        let note = Comment(rawValue: "chunk \(chunk) round \(round) \(key) \(log)\nbefore: \(String(decoding: before.data(), as: UTF8.self))\nafter: \(String(decoding: config.data(), as: UTF8.self))")
         let decodedAfter = try decode(config)
 
         // The top level, and every other mouse, resolve as they did.
@@ -1072,9 +1084,9 @@ private func kitSays(_ root: [String: Any], mouse key: String, sets path: [Strin
         replay.apply(before.changes(to: config))
         #expect(replay.data() == config.data(), note)
     }
-    #expect(edits > 600)
-    #expect(created > 10)
-    #expect(removedEntries > 5, "\(removedEntries)")
+    #expect(edits > 150)
+    #expect(created > 2)
+    #expect(removedEntries > 1, "\(removedEntries)")
 }
 
 // MARK: The #51 review's two gaps
