@@ -100,11 +100,11 @@ struct SessionApplyTests {
         #expect(log.lines.contains { $0.message.contains("restored native behaviour") })
     }
 
-    /// A step is sent twice at most, each step on its own, wheels first, and a failure is logged
-    /// once per step. A device that never answers costs `restoreSteps * restoreAttempts` requests,
-    /// each waiting `restoreTimeout`, which `Daemon.shutdownDeadline` allows for (the figures are
-    /// counted, not timed, so a slow machine cannot fail the test).
-    @Test func restoreOfASilentMouseSendsEachStepTwiceAndFinishes() async throws {
+    /// A mouse that never answers gets its first step twice and every later step once (it is taken
+    /// as gone), wheels first, and a failure is logged once per step: `restoreSteps + 1` requests,
+    /// each waiting `restoreTimeout`, well inside `Daemon.shutdownDeadline` (counted, not timed, so
+    /// a slow machine cannot fail the test).
+    @Test func restoreOfASilentMouseTriesTheFirstStepTwiceThenEachOnce() async throws {
         let log = CapturedLog()
         var steps = 0
         try await Log.$testOutput.withValue(.lines { log.append($0) }) {
@@ -116,10 +116,10 @@ struct SessionApplyTests {
             h.fake.transport.timing = .never
             h.fake.transport.sent.removeAll()
             await h.session.restore()
-            #expect(h.fake.transport.sent.count == steps * Session.restoreAttempts)
+            #expect(h.fake.transport.sent.count == steps + Session.restoreAttempts - 1)
             #expect(h.fake.transport.sent.compactMap { h.fake.feature(of: $0) }.first == 0x2121)  // wheels first
             #expect(Daemon.shutdownDeadline(restoreSteps: steps)
-                        >= min(Session.restoreTimeout * (steps * Session.restoreAttempts), .seconds(5)))
+                        > Session.restoreTimeout * (steps + Session.restoreAttempts - 1))
         }
         #expect(log.lines.filter { $0.message.contains("failed") }.count == steps)
     }

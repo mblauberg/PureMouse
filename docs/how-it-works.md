@@ -302,8 +302,9 @@ touches.
 - On SIGTERM or SIGINT, `Session.restore()` returns the mouse to native behaviour, wheels first.
   Each of its requests times out after `Session.restoreTimeout` (400 ms). A step that times out is
   sent once more (`Session.restoreAttempts`), since a dozing mouse can miss the request that wakes
-  it; any other error is not retried. Quitting waits long enough for every attempt of every step
-  (`Daemon.shutdownDeadline`, 2 to 5 s), counting the restores of a pause still under way
+  it; any other error is not retried, and once a step goes unanswered twice the mouse is taken as
+  gone and the steps after it get one attempt each. Quitting waits long enough for every attempt
+  of every step (`Daemon.shutdownDeadline`, 2 to 5 s), counting the restores of a pause still under way
   (`Daemon.restoreSteps`), so a missed reply cannot leave the rest diverted.
 - `restore()` decides whether to hand the wheels back from `Session.wheelsMayBeDiverted`, not from
   the current config: after a reload that drops or disables `smoothScroll`, the replacement session
