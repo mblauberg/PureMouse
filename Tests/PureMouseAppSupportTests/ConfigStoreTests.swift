@@ -153,3 +153,38 @@ private func loadedStore(_ sandbox: Sandbox, clock: Clock? = nil) -> ConfigStore
     #expect(flushes == 1)
     #expect(!sandbox.exists(sandbox.config))
 }
+
+@MainActor @Test func aReadFailureClearsOnceTheIdenticalFileIsBack() throws {
+    let sandbox = try Sandbox()
+    let text = #"{"dpi": 800}"#
+    try sandbox.write(text)
+    let store = loadedStore(sandbox)
+    #expect(!store.readOnly)
+    try FileManager.default.removeItem(at: sandbox.config)
+    try FileManager.default.createDirectory(at: sandbox.config, withIntermediateDirectories: false)
+    store.reloadConfig()
+    #expect(store.readOnly)
+    #expect(store.configProblem != nil)
+    try FileManager.default.removeItem(at: sandbox.config)
+    try sandbox.write(text)
+    store.reloadConfig()
+    #expect(!store.readOnly)
+    #expect(store.configProblem == nil)
+}
+
+@MainActor @Test func watchingAMissingDirectoryFollowsItsCreation() async throws {
+    let sandbox = try Sandbox()
+    let missing = sandbox.directory.appending(path: "a").appending(path: "b")
+    let config = missing.appending(path: "config.json")
+    let locations = Locations(config: config, log: sandbox.locations.log, daemon: nil,
+                              companion: sandbox.locations.companion)
+    let store = ConfigStore(locations: locations, clock: ManualClock().clock)
+    store.reloadConfig()
+    store.startWatching()
+    try FileManager.default.createDirectory(at: missing, withIntermediateDirectories: true)
+    try sandbox.write(#"{"dpi":800}"#, to: config)
+    for _ in 0..<100 where store.config.int(["dpi"]) != 800 {
+        try await Task.sleep(for: .milliseconds(50))
+    }
+    #expect(store.config.int(["dpi"]) == 800)
+}
