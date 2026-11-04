@@ -220,6 +220,34 @@ import Testing
         #expect(pins.allSatisfy { !$0.isActive })
     }
 
+    @Test func reentrantMeasurementRetargetsOnceAndKeepsPinsUntilLatestCompletion() {
+        let rig = Rig()
+        rig.controlledAnimation()
+        let bottom = rig.container.bottomAnchor.constraint(equalTo: rig.window.contentView!.bottomAnchor)
+        bottom.isActive = true
+        rig.height = 450
+        rig.transition.fit()
+        let pins = rig.window.contentView!.constraints.filter { $0.isActive && $0.firstAttribute == .top }
+        #expect(!pins.isEmpty)
+        rig.height = 470
+        rig.onMeasure = {
+            rig.transition.fit()
+            rig.height = 490
+        }
+        rig.transition.fit()
+        #expect(rig.measured == 3, "the nested request gets one fresh measurement")
+        #expect(rig.completions.count == 2, "measurement requests coalesce into one retarget")
+        #expect(rig.container.constraints.contains { $0.isActive && $0.firstAttribute == .height && $0.constant == 490 })
+        rig.completions[0]()
+        #expect(rig.transition.isAnimating)
+        #expect(!bottom.isActive)
+        #expect(pins.allSatisfy { $0.isActive })
+        rig.completions[1]()
+        #expect(!rig.transition.isAnimating)
+        #expect(bottom.isActive)
+        #expect(pins.allSatisfy { !$0.isActive })
+    }
+
     @Test func staleCompletionCannotLandANewerFlight() {
         let rig = Rig()
         rig.controlledAnimation()

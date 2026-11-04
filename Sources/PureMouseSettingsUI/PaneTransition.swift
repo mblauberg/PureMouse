@@ -62,6 +62,9 @@ final class PaneTransition {
     private var snapshot: NSView?
     private var flight: Flight?
     private var nextFlight = 0
+    /// Coalesce fits requested synchronously by measurement or layout into another pass.
+    private var fitting = false
+    private var fitRequested = false
 
     private static let fadeKey = "PaneTransition.fadeIn"
 
@@ -136,9 +139,31 @@ final class PaneTransition {
     /// Fits the window to the page after its height changed in place (a disclosure, a notice): the
     /// frame moves as in a page change, with no fade. A change being made fits when it ends.
     func fit() {
-        guard !isChanging, let window = host.window else { return }
+        guard !isChanging, host.window != nil else { return }
+        if fitting {
+            fitRequested = true
+            return
+        }
+        fitting = true
+        defer { fitting = false }
+        repeat {
+            fitRequested = false
+            fitOnce()
+        } while fitRequested && !isChanging && host.window != nil
+    }
+
+    private func fitOnce() {
+        guard let window = host.window else { return }
+        var measured = target()
+        // Measurement can synchronously request another fit. Measure again before retargeting,
+        // so all those requests share one frame generation and use the latest size.
+        while fitRequested && !isChanging && host.window != nil {
+            fitRequested = false
+            measured = target()
+        }
+        guard !isChanging, host.window === window else { return }
         if var flight {
-            let target = target() ?? flight.target
+            let target = measured ?? flight.target
             // Policy may have changed even when the measured target has not.
             guard case .animated = Self.style(visible: isVisible(window), reduceMotion: reduceMotion(),
                                                resizeTime: window.animationResizeTime(target)),
@@ -154,7 +179,7 @@ final class PaneTransition {
             pin(height: window.contentRect(forFrameRect: target).height)
             runFrame(window, to: target, duration: max(0, flight.deadline - now()), id: flight.id)
         } else {
-            guard let target = target(), window.frame != target else { return }
+            guard let target = measured, window.frame != target else { return }
             animate(window, to: target, fading: nil)
         }
     }
