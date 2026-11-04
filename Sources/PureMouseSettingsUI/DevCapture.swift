@@ -23,8 +23,12 @@ enum DevCapture {
     private static var faked = false
     private static var shadow = false
 
-    /// Captures a page change on an unlocked spare Mac, using the same window-server path as a
-    /// normal capture. Each delayed capture yields to the run loop so AppKit can animate.
+    /// Captures a page change on an unlocked spare Mac (`PUREMOUSE_DEV_FILMSTRIP=<directory>`): frame
+    /// 0 before the change, then frames at about 60 Hz for `PUREMOUSE_DEV_FILMSTRIP_SECONDS` (default
+    /// 0.6), each the window server's image of this process's windows. The frames are taken on a
+    /// background thread, so an animation the main thread drives (a window frame) shows as it
+    /// happens, and written once the run ends, with `frames.txt` giving each frame's time in ms from
+    /// the moment the change began on the main thread (frame 0's is negative). Then it quits.
     static func filmstrip(_ environment: [String: String], change: @escaping () -> Void) {
         guard let path = environment["PUREMOUSE_DEV_FILMSTRIP"] else { return }
         let directory = URL(filePath: path, directoryHint: .isDirectory)
@@ -36,19 +40,89 @@ enum DevCapture {
             return
         }
         let delay = environment["PUREMOUSE_DEV_CAPTURE_DELAY"].flatMap(Double.init) ?? 2.5
+        let seconds = environment["PUREMOUSE_DEV_FILMSTRIP_SECONDS"].flatMap(Double.init) ?? 0.6
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            @MainActor func capture(_ index: Int) {
-                let url = directory.appendingPathComponent(String(format: "%03d.png", index))
-                guard write(to: url) else {
-                    FileHandle.standardError.write(Data("filmstrip capture failed at frame \(index)\n".utf8))
-                    NSApp.terminateClosingSheets()
-                    return
+            let film = Film(ids: windowIDs(), shadow: shadow)
+            let change = Change(run: change)
+            Thread.detachNewThread {
+                film.run(seconds: seconds) {
+                    DispatchQueue.main.async {
+                        film.mark(returned: false)
+                        change.run()
+                        film.mark(returned: true)
+                    }
                 }
-                if index == 0 { change() }
-                if index == 30 { NSApp.terminateClosingSheets(); return }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0 / 60.0) { capture(index + 1) }
+                DispatchQueue.main.async {
+                    if !film.write(to: directory) {
+                        FileHandle.standardError.write(Data("filmstrip write failed\n".utf8))
+                    }
+                    NSApp.terminateClosingSheets()
+                }
             }
-            capture(0)
+        }
+    }
+
+    /// The change a filmstrip films, handed to its thread to start on main.
+    @MainActor private final class Change {
+        let run: () -> Void
+        init(run: @escaping () -> Void) { self.run = run }
+    }
+
+    /// A filmstrip's frames and their times, taken on its own thread; the change's times are set on main.
+    private final class Film: @unchecked Sendable {
+        private let ids: [CGWindowID]
+        private let shadow: Bool
+        private let lock = NSLock()
+        private var frames: [(time: UInt64, image: CGImage?)] = []
+        private var began: UInt64?
+        private var returned: UInt64?
+
+        init(ids: [CGWindowID], shadow: Bool) {
+            self.ids = ids
+            self.shadow = shadow
+        }
+
+        func mark(returned isEnd: Bool) {
+            let now = DispatchTime.now().uptimeNanoseconds
+            lock.withLock { if isEnd { returned = now } else { began = now } }
+        }
+
+        /// Captures until `seconds` have passed, starting the change once frame 0 is taken.
+        func run(seconds: Double, startChange: () -> Void) {
+            let interval = UInt64(1_000_000_000 / 60)
+            let start = DispatchTime.now().uptimeNanoseconds
+            let end = start + UInt64(seconds * 1_000_000_000)
+            var next = start
+            while next <= end {
+                let now = DispatchTime.now().uptimeNanoseconds
+                if now < next { usleep(useconds_t((next - now) / 1000)) }
+                let time = DispatchTime.now().uptimeNanoseconds
+                let image = DevCapture.composite(ids, shadow: shadow)
+                let count = lock.withLock {
+                    frames.append((time, image))
+                    return frames.count
+                }
+                if count == 1 { startChange() }
+                // A slow capture skips the slots it missed rather than bunching up.
+                repeat { next += interval } while next < DispatchTime.now().uptimeNanoseconds
+            }
+        }
+
+        @MainActor func write(to directory: URL) -> Bool {
+            let (frames, began, returned) = lock.withLock { (self.frames, self.began, self.returned) }
+            let zero = Double(began ?? frames.first?.time ?? 0)
+            func ms(_ time: UInt64) -> String { String(format: "%.1f", (Double(time) - zero) / 1e6) }
+            var lines = ["# frame, ms from the change beginning on the main thread"]
+            if let returned { lines.append("# the change returned at \(ms(returned))") }
+            for (index, frame) in frames.enumerated() {
+                let url = directory.appendingPathComponent(String(format: "%03d.png", index))
+                guard let image = frame.image,
+                      let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]),
+                      (try? png.write(to: url)) != nil else { return false }
+                lines.append(String(format: "%03d ", index) + ms(frame.time))
+            }
+            let text = lines.joined(separator: "\n") + "\n"
+            return (try? text.write(to: directory.appendingPathComponent("frames.txt"), atomically: true, encoding: .utf8)) != nil
         }
     }
 
@@ -119,16 +193,19 @@ enum DevCapture {
         report("after fake")
     }
 
-    /// This process's on-screen windows, front to back, composited into one image.
-    private static func write(to url: URL) -> Bool {
+    /// This process's on-screen windows, front to back.
+    private static func windowIDs() -> [CGWindowID] {
         let pid = ProcessInfo.processInfo.processIdentifier
         let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
             as? [[String: Any]] ?? []
-        var ids: [UnsafeRawPointer?] = info
+        return info
             .filter { ($0[kCGWindowOwnerPID as String] as? Int).map(pid_t.init) == pid }
-            .compactMap { ($0[kCGWindowNumber as String] as? Int).flatMap { UnsafeRawPointer(bitPattern: UInt($0)) } }
-        guard !ids.isEmpty, let windows = CFArrayCreate(nil, &ids, ids.count, nil),
-              let image = composite(windows),
+            .compactMap { ($0[kCGWindowNumber as String] as? Int).map(CGWindowID.init) }
+    }
+
+    /// This process's on-screen windows, front to back, composited into one image.
+    private static func write(to url: URL) -> Bool {
+        guard let image = composite(windowIDs(), shadow: shadow),
               let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
         else { return false }
         return (try? png.write(to: url)) != nil
@@ -206,9 +283,12 @@ enum DevCapture {
 
     /// `CGWindowListCreateImageFromArray`, looked up at run time: it is deprecated in favour of
     /// ScreenCaptureKit, which needs the Screen Recording permission even for a process's own windows.
-    private static func composite(_ windows: CFArray) -> CGImage? {
+    /// The filmstrip calls it off the main thread.
+    nonisolated private static func composite(_ ids: [CGWindowID], shadow: Bool) -> CGImage? {
         typealias Create = @convention(c) (CGRect, CFArray, CGWindowImageOption) -> Unmanaged<CGImage>?
-        guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CGWindowListCreateImageFromArray")
+        var pointers: [UnsafeRawPointer?] = ids.map { UnsafeRawPointer(bitPattern: UInt($0)) }
+        guard !pointers.isEmpty, let windows = CFArrayCreate(nil, &pointers, pointers.count, nil),
+              let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CGWindowListCreateImageFromArray")
         else { return nil }
         let create = unsafeBitCast(symbol, to: Create.self)
         let options: CGWindowImageOption = shadow ? [.bestResolution] : [.boundsIgnoreFraming, .bestResolution]
