@@ -480,6 +480,9 @@ which is its click, or a table of triggers ([ADR 24](adr/0024-one-action-model.m
 - A trigger exists in the UI only once it is added (More Ways to Press), so a fresh install looks as
   it does today plus one device row in General › Status.
 - The picker stays one popover:
+  - One surface, as a menu is: the search field, a hairline, then a plain list on the popover's own
+    material with no background of its own and no separators. A label stays on one line (its full
+    name as a tooltip), and the shortcut sits at the trailing edge.
   - On an app page for an app with a pack, the app's actions follow the top entries (Same as…,
     Mouse Default, Do Nothing) in a section named for the app ("Zoom"), before the generic groups.
     Every other page, and an app without a pack, lists what it did before.
