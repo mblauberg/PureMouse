@@ -121,11 +121,7 @@ public final class SettingsWindowController: NSWindowController, NSWindowDelegat
         // Someone is looking: let the daemon check what it only learns by looking (Logi Options+).
         model.askDaemonToRecheck()
         if let request { model.select(for: request) }
-        // The tab and an app's page change as one transition (none while the window is hidden).
-        tabs.transition { [context, tabs] in
-            if let pane = request?.pane { tabs.open(pane) }
-            if let app = request?.app { context.app = app }
-        }
+        context.show(request)
         guard let window else { return }
         if !window.isVisible, !restorePosition(of: window) { window.center() }
         NSApp.activate()
@@ -186,6 +182,7 @@ final class SettingsTabs: NSTabViewController {
     /// Called when another tab replaces Mouse, whichever way the change came.
     var didLeaveMouse: () -> Void = {}
     private var shownTab: SettingsTab?
+    private var tabChangeStarted = false
     /// The Mouse tab's segment, kept while another tab shows and used when Mouse is first built.
     private(set) var segment: MouseSegment = .buttons
     /// The Mouse tab, once built.
@@ -217,11 +214,18 @@ final class SettingsTabs: NSTabViewController {
 
     /// Shows a tab, or Mouse on a segment, as one transition.
     func open(_ pane: SettingsPane) {
+        guard changesPage(to: pane) else { return }
         let next = SettingsSelection(tab: selectedTab ?? .mouse, segment: segment).opening(pane)
         transition {
             selectSegment(next.segment)
             if let index = SettingsTab.shown.firstIndex(of: next.tab) { selectedTabViewItemIndex = index }
         }
+    }
+
+    /// Plain activation and repeated page requests leave an existing flight alone.
+    func changesPage(to pane: SettingsPane) -> Bool {
+        let next = SettingsSelection(tab: selectedTab ?? .mouse, segment: segment).opening(pane)
+        return selectedTab != next.tab || (next.tab == .mouse && segment != next.segment)
     }
 
     /// Makes a change to what the window shows (a tab, a segment, an app's page) as one transition:
@@ -232,7 +236,8 @@ final class SettingsTabs: NSTabViewController {
 
     override func tabView(_ tabView: NSTabView, willSelect tabViewItem: NSTabViewItem?) {
         // A toolbar click arrives here without `open`: the change starts before the old pane goes.
-        pageTransition.begin()
+        tabChangeStarted = (tabViewItem?.identifier as? String) != shownTab?.rawValue
+        if tabChangeStarted { pageTransition.begin() }
         super.tabView(tabView, willSelect: tabViewItem)
     }
 
@@ -244,7 +249,10 @@ final class SettingsTabs: NSTabViewController {
             shownTab = tab
             didSelect(tab)
         }
-        pageTransition.end()
+        if tabChangeStarted {
+            tabChangeStarted = false
+            pageTransition.end()
+        }
         // No field or button starts focused: Tab still reaches them.
         DispatchQueue.main.async { [weak self] in self?.view.window?.makeFirstResponder(nil) }
     }

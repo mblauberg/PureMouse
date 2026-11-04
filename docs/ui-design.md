@@ -39,7 +39,7 @@ answering a question people have, and a good default means most people never tou
   size: the size always comes from the pane (no frame autosave).
 - **Changing page** (a tab, a Mouse segment, an app's page and back) is one transition, as in
   System Settings: the old page fades out and the new one in while the window frame moves to the
-  new height, in one animation group with one duration and curve. The page stays against the top:
+  new height, with one duration and curve. The page stays against the top:
   the toolbar and strip hold still and the window's bottom edge covers or uncovers the page, which
   never slides. Two pages of the same height only cross-fade. A height change inside a page (a
   disclosure, a notice, the Apps list growing) moves the frame the same way, without a fade. The
@@ -496,14 +496,21 @@ Where the rules above live in `Sources/PureMouseSettingsUI` and `Sources/PureMou
   `tabView(_:willSelect:)` and `didSelect`, `MouseTab.transition` for segments,
   `SettingsContext.transition` for an app's page and Back): it snapshots the page
   (`cacheDisplay`, with the window's background left clear, so the real one shows through), makes
-  the change, lays out and measures once, then runs one `NSAnimationContext` group: the frame
-  (`window.animator().setFrame`), the snapshot's fade out and the tab view's fade in, with a
+  the change, lays out and measures once, then starts the frame (`window.animator().setFrame`)
+  and cross-fade in the same Core Animation transaction, with separate `NSAnimationContext`
+  completion groups for the frame and fade and a shared
   duration from `animationResizeTime` held to 0.2–0.35 s, ease in and out. While it runs the tab
   view is pinned to the top at the new height (its bottom constraints let go), so the page does not
   slide. `refit()` and `preferredContentSizeDidChange` call `fit()`, the same frame animation with
   no fade, retargeting one under way to its original end time; a hidden window or Reduce Motion
-  lands it immediately. The incoming page stays interactive and the snapshot ignores input and
-  accessibility. Closing the window cleans up a flight; a change started mid-flight first lands the old one. The
+  lands it immediately. Each frame retarget has a generation token: a cancelled group's completion
+  cannot remove the pins, and landing waits for both the latest frame and any fade. The incoming
+  page's view alpha stays at 1 for input; its layer opacity is zero during the swap. The final
+  layer opacity and an explicit fade from zero (with backwards fill and a layer-local start time)
+  are installed in one transaction, so a commit cannot expose the new page before the fade.
+  The snapshot ignores input and accessibility. Plain activation, a same-page request and opening
+  a sheet on the current page do not cross-fade; only a changed tab, segment or app page does.
+  Closing the window cleans up a flight; a change started mid-flight first lands the old one. The
   tab controller has no transition of its own (`transitionOptions = []`) and its
   `preferredContentSizeDidChange` does not reach super, which would size the window too. Grouped
   forms hide their scroll background (`PaneForm`), which looks the same but lets the snapshot match

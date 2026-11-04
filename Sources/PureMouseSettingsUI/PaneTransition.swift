@@ -2,8 +2,8 @@ import AppKit
 
 /// The one owner of the Settings window's frame (docs/ui-design.md, Motion and Sizing). A page
 /// change (a tab, a Mouse segment, an app's page and back) runs `change`: the old page is
-/// snapshotted, the change is made and laid out, and one animation group moves the window frame to
-/// the new page's height while the snapshot fades out and the new page fades in, with one duration
+/// snapshotted, the change is made and laid out, and one transaction starts the window frame moving
+/// to the new page's height while the snapshot fades out and the new page fades in, with one duration
 /// and curve. A height change inside a page (`fit`) moves the frame the same way, with no fade.
 ///
 /// While either runs, the page's container (the tab view) is held against the top of the window at
@@ -18,7 +18,7 @@ final class PaneTransition {
     enum Style: Equatable {
         /// The page swaps and the window takes its new size at once.
         case instant
-        /// One animation group of this length: the pages cross-fade, and the frame moves if the
+        /// One transition of this length: the pages cross-fade, and the frame moves if the
         /// height changed.
         case animated(TimeInterval)
     }
@@ -37,7 +37,7 @@ final class PaneTransition {
 
     /// Animation dependencies are replaceable for deterministic lifecycle tests.
     var isVisible: (NSWindow) -> Bool = { $0.isVisible }
-    var now: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
+    var now: () -> TimeInterval = { CACurrentMediaTime() }
     var animateGroup: (TimeInterval, @escaping () -> Void, @escaping @MainActor @Sendable () -> Void) -> Void = { duration, changes, completion in
         NSAnimationContext.runAnimationGroup { context in
             context.duration = duration
@@ -73,6 +73,9 @@ final class PaneTransition {
         var pins: [NSLayoutConstraint] = []
         /// The tab controller's own bottom constraints, off while the page is pinned.
         var released: [NSLayoutConstraint] = []
+        var frameGeneration = 0
+        var framePending = false
+        var fadePending = false
         let deadline: TimeInterval
     }
 
@@ -103,22 +106,28 @@ final class PaneTransition {
         snapshot = takeSnapshot()
         // The new page stays hidden under the snapshot until its fade starts: AppKit and SwiftUI
         // can draw between the swap and the animation, which showed both pages for a frame.
-        if snapshot != nil { container()?.alphaValue = 0 }
+        if snapshot != nil { setPageOpacity(0) }
     }
 
-    /// Ends a page change: lays the new page out, measures it and runs the one animation group.
+    /// Ends a page change: lays the new page out, measures it and starts the frame and fade.
     func end() {
         depth -= 1
         guard depth == 0 else { return }
         let snapshot = self.snapshot
         self.snapshot = nil
+        // Layout can consume an app-page request and call change again. Keep it inside this
+        // change so it joins the snapshot already taken rather than starting a second flight.
+        depth = 1
         // Twice: a change can set state that a pane acts on in its first update (a request for an
         // app's page), which then changes what it shows.
         host.layoutSubtreeIfNeeded()
         host.layoutSubtreeIfNeeded()
-        guard let window = host.window, let target = target() else {
+        let window = host.window
+        let target = window == nil ? nil : target()
+        depth = 0
+        guard let window, let target else {
             snapshot?.removeFromSuperview()
-            container()?.alphaValue = 1
+            setPageOpacity(1)
             return
         }
         animate(window, to: target, fading: snapshot)
@@ -143,8 +152,7 @@ final class PaneTransition {
             flight.target = target
             self.flight = flight
             pin(height: window.contentRect(forFrameRect: target).height)
-            run(window, to: target, fading: nil, duration: max(0, flight.deadline - now()), id: flight.id,
-                completesFlight: false)
+            runFrame(window, to: target, duration: max(0, flight.deadline - now()), id: flight.id)
         } else {
             guard let target = target(), window.frame != target else { return }
             animate(window, to: target, fading: nil)
@@ -155,7 +163,7 @@ final class PaneTransition {
     func cancel() {
         snapshot?.removeFromSuperview()
         snapshot = nil
-        container()?.alphaValue = 1
+        setPageOpacity(1)
         settle()
     }
 
@@ -166,46 +174,73 @@ final class PaneTransition {
                                resizeTime: window.animationResizeTime(target))
         guard case .animated(let duration) = style, window.frame != target || snapshot != nil else {
             snapshot?.removeFromSuperview()
-            container()?.alphaValue = 1
+            setPageOpacity(1)
             if window.frame != target { window.setFrame(target, display: isVisible(window)) }
             return
         }
         nextFlight += 1
         let id = nextFlight
-        flight = Flight(id: id, target: target, snapshot: snapshot, deadline: now() + duration)
+        flight = Flight(id: id, target: target, snapshot: snapshot, framePending: true, deadline: now() + duration)
         pin(height: window.contentRect(forFrameRect: target).height)
-        run(window, to: target, fading: snapshot, duration: duration, id: id, completesFlight: true)
+        // Separate completion ownership: replacing a frame animation can complete its AppKit
+        // group immediately. It must neither complete the fade nor release the page's pins.
+        CATransaction.begin()
+        if let snapshot {
+            flight?.fadePending = true
+            animateGroup(duration, { [self] in
+                snapshot.animator().alphaValue = 0
+                if let layer = container()?.layer {
+                    CATransaction.begin()
+                    CATransaction.setDisableActions(true)
+                    layer.opacity = 1
+                    let fade = CABasicAnimation(keyPath: "opacity")
+                    fade.fromValue = 0
+                    fade.toValue = 1
+                    fade.duration = duration
+                    fade.beginTime = layer.convertTime(now(), from: nil)
+                    fade.fillMode = .backwards
+                    fade.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                    layer.add(fade, forKey: Self.fadeKey)
+                    CATransaction.commit()
+                }
+            }, { [weak self] in
+                guard let self, flight?.id == id else { return }
+                flight?.fadePending = false
+                finishIfReady()
+            })
+        }
+        runFrame(window, to: target, duration: duration, id: id)
+        CATransaction.commit()
     }
 
-    /// Retargets share the original deadline; only the original group's completion lands the flight.
-    private func run(_ window: NSWindow, to target: NSRect, fading snapshot: NSView?,
-                     duration: TimeInterval, id: Int, completesFlight: Bool) {
-        animateGroup(duration, { [self] in
-            if let snapshot {
-                snapshot.animator().alphaValue = 0
-                if let page = container() {
-                    // The model remains hit-testable while the presentation fades in.
-                    page.alphaValue = 1
-                    if let layer = page.layer {
-                        let fade = CABasicAnimation(keyPath: "opacity")
-                        fade.fromValue = 0
-                        fade.toValue = 1
-                        fade.duration = duration
-                        fade.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                        layer.add(fade, forKey: Self.fadeKey)
-                    }
-                }
-            }
+    /// Retargets share the original deadline; only the latest frame completion owns the pins.
+    private func runFrame(_ window: NSWindow, to target: NSRect, duration: TimeInterval, id: Int) {
+        flight?.frameGeneration += 1
+        let generation = flight?.frameGeneration
+        flight?.framePending = true
+        animateGroup(duration, {
             if window.frame != target { window.animator().setFrame(target, display: true) }
         }, { [weak self] in
-            guard completesFlight else { return }
-            self?.finished(id)
+            guard let self, flight?.id == id, flight?.frameGeneration == generation else { return }
+            flight?.framePending = false
+            finishIfReady()
         })
     }
 
-    private func finished(_ id: Int) {
-        guard flight?.id == id else { return }
+    private func finishIfReady() {
+        guard let flight, !flight.framePending, !flight.fadePending else { return }
         land()
+    }
+
+    /// Layer opacity does not take the live view out of AppKit hit testing. Before a swap it is
+    /// zero; the final model value and explicit fade are installed together before commit.
+    private func setPageOpacity(_ opacity: Float) {
+        guard let page = container() else { return }
+        page.wantsLayer = true
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        page.layer?.opacity = opacity
+        CATransaction.commit()
     }
 
     /// Ends an animation under way at once: the frame at its target, the snapshot gone, the page
@@ -221,7 +256,7 @@ final class PaneTransition {
         self.flight = nil
         flight.snapshot?.removeFromSuperview()
         if let page = container() {
-            page.alphaValue = 1
+            setPageOpacity(1)
             page.layer?.removeAnimation(forKey: Self.fadeKey)
         }
         guard !flight.pins.isEmpty else { return }

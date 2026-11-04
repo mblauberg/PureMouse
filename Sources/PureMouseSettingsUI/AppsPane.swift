@@ -112,9 +112,7 @@ struct AppsPane: View {
 
     /// Opens the page of the app a request named, listing it first when it is not there.
     private func openRequested() {
-        guard let id = settings?.app else { return }
-        settings?.app = nil
-        list.add(id, in: model.config)
+        settings?.openRequested(in: &list, config: model.config)
     }
 
     /// The configured apps and those added here, by name.

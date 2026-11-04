@@ -1,5 +1,6 @@
 import AppKit
 import PureMouseAppSupport
+import PureMouseKit
 import Testing
 @testable import PureMouseSettingsUI
 
@@ -52,6 +53,7 @@ import Testing
         let container = NSView()
         var height: CGFloat = 300
         var measured = 0
+        var onMeasure: (() -> Void)?
         var time: TimeInterval = 100
         var visible = true
         var reduced = false
@@ -70,6 +72,9 @@ import Testing
         }
         lazy var transition = PaneTransition(host: window.contentView!) { [unowned self] in
             measured += 1
+            let update = onMeasure
+            onMeasure = nil
+            update?()
             var frame = window.frameRect(forContentRect: NSRect(x: 0, y: 0, width: 600, height: height))
             frame.origin = NSPoint(x: window.frame.minX, y: window.frame.maxY - frame.height)
             return frame
@@ -109,6 +114,21 @@ import Testing
         #expect(rig.window.contentLayoutRect.height == 420)
     }
 
+    @Test func navigationConsumedDuringMeasurementJoinsTheOriginalChange() {
+        let rig = Rig()
+        rig.controlledAnimation()
+        rig.onMeasure = {
+            #expect(rig.transition.isChanging)
+            rig.transition.change { rig.height = 460 }
+        }
+        rig.transition.change { rig.height = 450 }
+        #expect(rig.measured == 1)
+        #expect(rig.durations.count == 2, "one fade and one frame group, with no second flight")
+        #expect(!rig.transition.isChanging)
+        rig.transition.cancel()
+        #expect(rig.window.contentLayoutRect.height == 460)
+    }
+
     @Test func growthInAPageFitsTheWindow() {
         let rig = Rig()
         rig.height = 360
@@ -128,7 +148,33 @@ import Testing
         #expect(window.frame == frame)
     }
 
-    @Test func retargetFinishesWithTheOriginalFade() throws {
+    @Test func incomingPageIsHiddenDuringSwapButStillAcceptsInput() throws {
+        let rig = Rig()
+        rig.controlledAnimation()
+        let button = NSButton(frame: NSRect(x: 10, y: 10, width: 100, height: 30))
+        rig.container.addSubview(button)
+        rig.transition.change {
+            #expect(rig.container.alphaValue == 1)
+            #expect(rig.container.layer?.opacity == 0, "no incoming ink before the fade is attached")
+            #expect(rig.container.hitTest(NSPoint(x: 20, y: 20)) === button)
+            CATransaction.flush() // Even a layout-triggered commit during the swap stays hidden.
+            #expect(rig.container.layer?.opacity == 0)
+            rig.height = 450
+        }
+        #expect(rig.container.alphaValue == 1)
+        #expect(rig.container.layer?.opacity == 1)
+        let fade = try #require(rig.container.layer?.animation(forKey: "PaneTransition.fadeIn") as? CABasicAnimation)
+        #expect(fade.fromValue as? Int == 0)
+        #expect(fade.toValue as? Int == 1)
+        #expect(fade.fillMode == .backwards, "the first frame is hidden even before the animation starts")
+        #expect(fade.beginTime == rig.time)
+        #expect(fade.duration == rig.durations[0])
+        rig.transition.cancel()
+        #expect(rig.container.layer?.opacity == 1)
+        #expect(rig.container.layer?.animation(forKey: "PaneTransition.fadeIn") == nil)
+    }
+
+    @Test(arguments: [true, false]) func retargetWaitsForBothFadeAndLatestFrame(fadeFirst: Bool) throws {
         let rig = Rig()
         rig.controlledAnimation()
         rig.transition.change { rig.height = 450 }
@@ -138,13 +184,40 @@ import Testing
         rig.time += duration / 2
         rig.height = 470
         rig.transition.fit()
-        #expect(rig.durations.count == 2)
-        #expect(abs(rig.durations[1] - duration / 2) < 0.00001)
-        rig.completions[0]()
+        #expect(rig.durations.count == 3)
+        #expect(abs(rig.durations[2] - duration / 2) < 0.00001)
+        rig.completions[1]() // AppKit cancels the original frame animation.
+        #expect(rig.transition.isAnimating)
+        rig.completions[fadeFirst ? 0 : 2]()
+        #expect(rig.transition.isAnimating, "the remaining visual work still owns the pins")
+        rig.completions[fadeFirst ? 2 : 0]()
         #expect(!rig.transition.isAnimating)
         #expect(rig.window.contentView!.subviews.count == 1)
+    }
+
+    @Test func frameOnlyRetargetIgnoresCancelledCompletionAndKeepsPins() {
+        let rig = Rig()
+        rig.controlledAnimation()
+        let bottom = rig.container.bottomAnchor.constraint(equalTo: rig.window.contentView!.bottomAnchor)
+        bottom.isActive = true
+        rig.height = 450
+        rig.transition.fit()
+        let pins = rig.window.contentView!.constraints.filter { $0.isActive && $0.firstAttribute == .top }
+        #expect(!pins.isEmpty)
+        #expect(!bottom.isActive)
+        rig.time += 0.05
+        rig.height = 470
+        rig.transition.fit()
+        #expect(rig.completions.count == 2)
+        rig.completions[0]()
+        #expect(rig.transition.isAnimating)
+        #expect(!bottom.isActive)
+        #expect(pins.allSatisfy { $0.isActive }, "the top pin survives the cancelled group's callback")
+        #expect(rig.container.constraints.contains { $0.isActive && $0.firstAttribute == .height && $0.constant == 470 })
         rig.completions[1]()
         #expect(!rig.transition.isAnimating)
+        #expect(bottom.isActive)
+        #expect(pins.allSatisfy { !$0.isActive })
     }
 
     @Test func staleCompletionCannotLandANewerFlight() {
@@ -152,11 +225,13 @@ import Testing
         rig.controlledAnimation()
         rig.transition.change { rig.height = 450 }
         rig.transition.change { rig.height = 400 }
-        #expect(rig.completions.count == 2)
+        #expect(rig.completions.count == 4)
         rig.completions[0]()
+        rig.completions[1]()
         #expect(rig.transition.isAnimating)
         #expect(rig.window.contentView!.subviews.count == 2)
-        rig.completions[1]()
+        rig.completions[2]()
+        rig.completions[3]()
         #expect(!rig.transition.isAnimating)
     }
 
@@ -187,7 +262,7 @@ import Testing
         #expect(!rig.transition.isAnimating)
         #expect(rig.window.contentLayoutRect.height == 470)
         #expect(rig.window.contentView!.subviews.count == 1)
-        #expect(rig.durations.count == 1)
+        #expect(rig.durations.count == 2)
     }
 
     @Test func unchangedTargetStillRechecksMotionPolicy() {
@@ -198,7 +273,7 @@ import Testing
         rig.transition.fit()
         #expect(!rig.transition.isAnimating)
         #expect(rig.window.contentView!.subviews.count == 1)
-        #expect(rig.durations.count == 1)
+        #expect(rig.durations.count == 2)
     }
 
     @Test func snapshotIgnoresInputAndAccessibility() throws {
@@ -239,6 +314,65 @@ import Testing
             #expect(window.contentLayoutRect.height == height, "\(pane)")
             #expect(!tabs.pageTransition.isAnimating, "\(pane)")
         }
+    }
+
+    @Test func visibleShowActivationAndSamePageRequestsDoNotFade() {
+        let (tabs, window) = tabs(heights: [.mouse: 300])
+        tabs.open(.mouse(.pointer))
+        defer { window.close() }
+        let context = SettingsContext()
+        context.tabs = tabs
+        tabs.pageTransition.isVisible = { _ in true }
+        var animations = 0
+        tabs.pageTransition.animateGroup = { _, changes, _ in
+            animations += 1
+            changes()
+        }
+        // The navigation path used by show(nil), show(ShowRequest()), and sheet-only requests.
+        context.show(nil)
+        context.show(ShowRequest())
+        context.show(ShowRequest(pane: .tab(.mouse)))
+        context.show(ShowRequest(pane: .mouse(.pointer)))
+        context.show(ShowRequest(sheet: .presets))
+        #expect(animations == 0)
+        #expect(!tabs.pageTransition.isAnimating)
+        context.show(ShowRequest(pane: .mouse(.buttons)))
+        #expect(animations == 2, "a different segment still transitions")
+        context.show(nil)
+        context.show(ShowRequest(pane: .mouse(.buttons)))
+        #expect(animations == 2, "activation leaves the existing flight alone")
+        tabs.pageTransition.cancel()
+    }
+
+    @Test func repeatingAnAppRequestDoesNotFadeOrResetItsSegment() {
+        let (tabs, window) = tabs(heights: [.apps: 300])
+        tabs.open(.tab(.apps))
+        defer { window.close() }
+        let context = SettingsContext()
+        context.tabs = tabs
+        tabs.pageTransition.isVisible = { _ in true }
+        var animations = 0
+        tabs.pageTransition.animateGroup = { _, changes, _ in
+            animations += 1
+            changes()
+        }
+        let config = ConfigTree()
+        var list = AppList()
+        context.show(ShowRequest(app: "com.apple.Safari"))
+        context.openRequested(in: &list, config: config)
+        #expect(animations == 2)
+        tabs.pageTransition.cancel()
+        list.select(.scrolling)
+        context.show(ShowRequest(app: "com.apple.Safari"))
+        context.openRequested(in: &list, config: config)
+        #expect(animations == 2)
+        #expect(list.segment == .scrolling)
+        #expect(context.app == nil)
+        context.show(ShowRequest(app: "com.apple.TextEdit"))
+        context.openRequested(in: &list, config: config)
+        #expect(animations == 4)
+        #expect(list.segment == .buttons)
+        tabs.pageTransition.cancel()
     }
 
     @Test func aTallPaneLandsAtTheCap() {
