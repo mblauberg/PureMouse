@@ -12,14 +12,17 @@ struct SessionHarness {
     let session: Session
 
     /// `identify` reads the fake's identity as adoption does (`Identification.read`) and gives the
-    /// session the config resolved for it (`Config.forDevice`).
+    /// session the config resolved for it (`Config.forDevice`). `instantTimeouts` ends a request
+    /// the fake will never answer as soon as it is sent, for tests that count what a silent mouse
+    /// costs; leave it off when the request must stay pending (a lent timeout, a stalled reply).
     init(_ fake: FakeDevice = .mxMaster3S, config: Config = SessionHarness.nothing,
          inheriting inherited: Session.Inherited = .init(),
          environment: SessionEnvironment = .init(canPostEvents: true, configureRetryDelay: .milliseconds(1)),
-         identify: Bool = false) async throws {
+         identify: Bool = false, instantTimeouts: Bool = false) async throws {
         self.fake = fake
         device = fake.endpoint()
         device.timeout = .milliseconds(100)
+        if instantTimeouts { fake.transport.failsSilenceAtOnce(on: device) }
         let controls = try await ReprogControls.controls(device)
         let identity = identify
             ? await Identification.read(device, kind: DeviceName.Kind(rawValue: fake.kind),
@@ -80,10 +83,52 @@ struct SessionHarness {
 }
 """#
 
+    /// Presses `cids` together on the mouse (none at all is the release of everything) and lets the
+    /// session finish what it does about it.
+    func press(_ cids: UInt16...) async {
+        var params: [UInt8] = []
+        for cid in cids { params += [UInt8(cid >> 8), UInt8(cid & 0xFF)] }
+        fake.emit(0x1B04, params: params.isEmpty ? [0, 0] : params)
+        await settle()
+    }
+
+    func release() async { await press() }
+
+    /// Waits for the diversion and the device actions the session has queued.
+    func settle() async {
+        await session.diversion.drain()
+        await session.deviceActions.drain()
+    }
+
     func close() {
         session.close()
         device.close()
     }
+}
+
+/// A latch: a point a test holds a wait at until it lets go: a `wait()` suspends until `release()`, and returns
+/// at once after it. For ordering work with a handshake instead of a duration.
+@MainActor
+final class Latch {
+    private var isOpen = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func wait() async {
+        if isOpen { return }
+        await withCheckedContinuation { waiters.append($0) }
+    }
+
+    func release() {
+        isOpen = true
+        let released = waiters
+        waiters = []
+        for waiter in released { waiter.resume() }
+    }
+}
+
+/// A time a test moves by hand (`SessionEnvironment.now`), to step over the offline gap and the like.
+final class HandClock: @unchecked Sendable {
+    var now = ContinuousClock.now
 }
 
 /// A frame clock a test turns by hand, so a glide's frames are counted rather than waited for.
@@ -138,10 +183,13 @@ final class DaemonHarness {
     let url: URL
     let daemon: Daemon
     private var endpoints: [HIDPPDevice] = []
+    /// Ends a request a fake never answers as soon as it is sent (`SessionHarness`).
+    private let instantTimeouts: Bool
 
     init(_ json: String, permissions: Permissions = .all,
          logiOptions: @escaping () -> [String] = { [] },
-         adoptionSleep: ((Duration) async throws -> Void)? = nil) throws {
+         adoptionSleep: ((Duration) async throws -> Void)? = nil, instantTimeouts: Bool = false) throws {
+        self.instantTimeouts = instantTimeouts
         url = FileManager.default.temporaryDirectory.appending(path: "puremouse-\(UUID().uuidString).json")
         try Data(json.utf8).write(to: url)
         var environment = SessionEnvironment(canPostEvents: true, configureRetryDelay: .milliseconds(1))
@@ -160,6 +208,7 @@ final class DaemonHarness {
     func tryAdopting(_ fake: FakeDevice) async -> Daemon.Adoption {
         let endpoint = daemon.listen(fake.transport, index: fake.index)
         endpoint.timeout = .milliseconds(100)
+        if instantTimeouts { fake.transport.failsSilenceAtOnce(on: endpoint) }
         endpoints.append(endpoint)
         return await daemon.adopt(endpoint)
     }

@@ -10,18 +10,6 @@ import Testing
 /// pointer unless the press is a gesture.
 @MainActor
 @Suite struct SessionMouseDefaultTests {
-    private func press(_ h: SessionHarness, _ cid: UInt16) async {
-        h.fake.emit(0x1B04, params: [UInt8(cid >> 8), UInt8(cid & 0xFF)])
-        await h.session.diversion.drain()
-        await h.session.deviceActions.drain()
-    }
-
-    private func release(_ h: SessionHarness) async {
-        h.fake.emit(0x1B04, params: [0, 0])
-        await h.session.diversion.drain()
-        await h.session.deviceActions.drain()
-    }
-
     // MARK: Native behaviour
 
     @Test func theNativeBehaviourTableNamesTheControlsTheDaemonCanReproduce() {
@@ -45,8 +33,8 @@ import Testing
         try await h.session.apply()
         #expect(h.fake.control(0xC4)?.diverted == true)
         let before = h.fake.requests(feature: 0x2110, function: 1).count
-        await press(h, 0xC4)
-        await release(h)
+        await h.press(0xC4)
+        await h.release()
         #expect(h.session.state.scrollMode != nil)
         #expect(h.fake.requests(feature: 0x2110, function: 1).count > before)
     }
@@ -58,8 +46,8 @@ import Testing
         defer { h.close() }
         try await h.session.apply()
         #expect(h.fake.control(0xFD)?.diverted == true && h.fake.dpi == 800)
-        await press(h, 0xFD)
-        await release(h)
+        await h.press(0xFD)
+        await h.release()
         #expect(h.fake.dpi == 1600)
     }
 
@@ -69,8 +57,8 @@ import Testing
         defer { h.close() }
         try await h.session.apply()
         h.fake.transport.sent.removeAll()
-        await press(h, 0xC3)
-        await release(h)
+        await h.press(0xC3)
+        await h.release()
         #expect(h.session.held.native.isEmpty)
         #expect(h.fake.requests(feature: 0x2110, function: 1).isEmpty && h.fake.requests(feature: 0x2201, function: 3).isEmpty)
     }
@@ -88,9 +76,9 @@ import Testing
         defer { h.close() }
         try await h.session.apply()
         #expect(h.fake.control(0xC3)?.diverted == true && h.fake.control(0xC3)?.rawXY == true)
-        await press(h, 0xC3)
+        await h.press(0xC3)
         #expect(h.fake.control(0xC3)?.diverted == true && h.fake.control(0xC3)?.rawXY == false)
-        await release(h)
+        await h.release()
         #expect(h.fake.control(0xC3)?.diverted == true && h.fake.control(0xC3)?.rawXY == true)
         #expect(h.session.pointerFree.isEmpty)
     }
@@ -101,9 +89,9 @@ import Testing
         defer { h.close() }
         try await h.session.apply()
         h.fake.transport.sent.removeAll()
-        await press(h, 0xC3)
+        await h.press(0xC3)
         #expect(h.fake.control(0xC3)?.rawXY == true && h.fake.controlWrites(cid: 0xC3).isEmpty)
-        await release(h)
+        await h.release()
         #expect(h.fake.controlWrites(cid: 0xC3).isEmpty)
     }
 
@@ -115,7 +103,7 @@ import Testing
         let h = try await SessionHarness(config: config)
         defer { h.close() }
         try await h.session.apply()
-        await press(h, 0xC3)
+        await h.press(0xC3)
         #expect(h.session.pointerFree == [0xC3])
         h.session.dropHeld()
         #expect(h.session.pointerFree.isEmpty)
@@ -126,43 +114,50 @@ import Testing
 
     // MARK: A press held across a pending apply
 
-    /// Presses `cid` while a delayed configure is still waiting, and lets it apply while held.
+    /// Presses `cid` while a delayed configure is still waiting, and lets it apply while held. The
+    /// configure's delay is held at a latch until the press has settled, so the apply always comes
+    /// after the control became pointer-free.
     private func holdAcrossPendingApply(_ json: String, cid: UInt16) async throws -> SessionHarness {
-        let h = try await SessionHarness(config: try SessionHarness.config(json))
+        let gate = Latch()
+        var environment = SessionEnvironment(canPostEvents: true, configureRetryDelay: .milliseconds(1))
+        environment.configureWait = { _ in await gate.wait() }
+        let h = try await SessionHarness(config: try SessionHarness.config(json), environment: environment)
         try await h.session.apply()
         #expect(h.fake.control(cid)?.rawXY == true)
-        h.session.configure(after: .milliseconds(150))
-        await press(h, cid)
+        h.session.configure(after: .seconds(1))  // the latch, not this, decides when it applies
+        await h.press(cid)
+        #expect(h.session.isConfiguring)
         #expect(h.session.pointerFree == [cid])
         #expect(h.fake.control(cid)?.rawXY == false)
-        // Wait for the apply itself, not a guess at how long it takes: CI runners are slow.
-        try await Task.sleep(for: .milliseconds(150))
+        gate.release()
         try await eventually(within: .seconds(10)) { !h.session.isConfiguring }
         await h.session.diversion.drain()
         return h
     }
 
-    @Test func aPendingApplyDoesNotReFreezeAHeldPlainActionOnAGestureControl() async throws {
-        let h = try await holdAcrossPendingApply("""
-            {"buttons": {"gesture": "mute"},
-             "apps": {"com.example.x": {"buttons": {"gesture": {"click": "none", "up": "volumeUp"}}}}}
-            """, cid: 0xC3)
-        defer { h.close() }
-        #expect(h.fake.control(0xC3)?.diverted == true && h.fake.control(0xC3)?.rawXY == false)
-        await release(h)
-        #expect(h.fake.control(0xC3)?.diverted == true && h.fake.control(0xC3)?.rawXY == true)
-        #expect(h.session.pointerFree.isEmpty)
+    /// A control held across a pending apply, and the config where it is bound only in an app.
+    struct HeldControl: CustomTestStringConvertible, Sendable {
+        var testDescription: String
+        var cid: UInt16
+        var config: String
     }
 
-    @Test func aPendingApplyDoesNotReFreezeAHeldMouseDefaultControl() async throws {
-        let h = try await holdAcrossPendingApply("""
+    @Test(arguments: [
+        HeldControl(testDescription: "a plain action on the gesture control", cid: 0xC3, config: """
+            {"buttons": {"gesture": "mute"},
+             "apps": {"com.example.x": {"buttons": {"gesture": {"click": "none", "up": "volumeUp"}}}}}
+            """),
+        HeldControl(testDescription: "a mouse default control", cid: 0xC4, config: """
             {"buttons": {"top": "default"},
              "apps": {"com.example.x": {"buttons": {"top": {"click": "none", "up": "volumeUp"}}}}}
-            """, cid: 0xC4)
+            """),
+    ])
+    func aPendingApplyDoesNotReFreezeAHeldControl(_ held: HeldControl) async throws {
+        let h = try await holdAcrossPendingApply(held.config, cid: held.cid)
         defer { h.close() }
-        #expect(h.fake.control(0xC4)?.diverted == true && h.fake.control(0xC4)?.rawXY == false)
-        await release(h)
-        #expect(h.fake.control(0xC4)?.diverted == true && h.fake.control(0xC4)?.rawXY == true)
+        #expect(h.fake.control(held.cid)?.diverted == true && h.fake.control(held.cid)?.rawXY == false)
+        await h.release()
+        #expect(h.fake.control(held.cid)?.diverted == true && h.fake.control(held.cid)?.rawXY == true)
         #expect(h.session.pointerFree.isEmpty)
     }
 }

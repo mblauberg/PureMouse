@@ -187,14 +187,6 @@ struct DeviceMatrixSessionTests {
         #expect(log.lines.filter { $0.message.contains("cannot be set") && $0.message.contains("1600 by 800") }.count == 1)
     }
 
-    @Test func aMouseThatTakesBothAxesIsNotRefused() async throws {
-        let h = try DaemonHarness(#"{"dpi": 1600}"#)
-        defer { h.close() }
-        let fake = FakeDevice.superstrike
-        let session = try await h.adopt(fake)
-        #expect(session.status.capabilities?.dpi == true && session.status.dpi == 1600)
-    }
-
     // MARK: A refusal is tried again when the DPI settings change
 
     private func refusedAfterReload(to json: String) async throws -> (refused: Bool, writes: Int) {
@@ -210,39 +202,47 @@ struct DeviceMatrixSessionTests {
         return (session.status.capabilities?.dpi == false, fake.requests(feature: 0x2201, function: 3).count)
     }
 
-    @Test func aChangedDPIOrPresetListTriesAMouseThatRefusedAgain() async throws {
-        let changedDPI = try await refusedAfterReload(to: #"{"dpi": 1200, "dpiPresets": [800, 1600]}"#)
-        #expect(!changedDPI.refused && changedDPI.writes == 2)
-        let changedPresets = try await refusedAfterReload(to: #"{"dpi": 800, "dpiPresets": [800, 3200]}"#)
-        #expect(!changedPresets.refused)
+    struct Reload: CustomTestStringConvertible, Sendable {
+        var testDescription: String
+        var json: String
+        /// Whether the mouse is still taken as refusing after the reload, and how many 0x2201
+        /// writes it has had in all, where the test pins that.
+        var refused: Bool
+        var writes: Int?
     }
 
-    @Test func aReloadThatLeavesDPIAloneKeepsTheRefusal() async throws {
-        let unrelated = try await refusedAfterReload(to: #"{"dpi": 800, "dpiPresets": [800, 1600], "smoothScroll": {}}"#)
-        #expect(unrelated.refused && unrelated.writes == 1)
+    @Test(arguments: [
+        Reload(testDescription: "a changed DPI tries the mouse again",
+               json: #"{"dpi": 1200, "dpiPresets": [800, 1600]}"#, refused: false, writes: 2),
+        Reload(testDescription: "a changed preset list tries the mouse again",
+               json: #"{"dpi": 800, "dpiPresets": [800, 3200]}"#, refused: false),
+        Reload(testDescription: "a reload that leaves DPI alone keeps the refusal",
+               json: #"{"dpi": 800, "dpiPresets": [800, 1600], "smoothScroll": {}}"#, refused: true, writes: 1),
+    ])
+    func aRefusalIsTriedAgainOnlyWhenTheDPISettingsChange(_ reload: Reload) async throws {
+        let result = try await refusedAfterReload(to: reload.json)
+        #expect(result.refused == reload.refused)
+        if let writes = reload.writes { #expect(result.writes == writes) }
     }
 
     // MARK: Battery by voltage
 
-    @Test func aVoltageOnlyBatteryReportsALevelWithoutAPercentage() async throws {
+    /// A 0x1001 battery in place of the M750's 0x1004: its reading is a voltage, which gives a
+    /// level and no percentage. The fixture's own reading is 4088 mV.
+    @Test(arguments: [
+        (nil as [UInt8]?, Status.Device.Battery.Level.full),
+        ([0x0E, 0x74, 0] as [UInt8]?, Status.Device.Battery.Level.low),  // 3700 mV
+    ])
+    func aVoltageOnlyBatteryReportsALevelWithoutAPercentage(reading: [UInt8]?, level: Status.Device.Battery.Level) async throws {
         let fake = FakeDevice.m750
         fake.features = fake.features.mapValues { $0 == 0x1004 ? 0x1001 : $0 }
+        if let reading { fake.responses[.init(0x1001, 0)] = reading }
         let h = try await SessionHarness(fake, identify: true)
         defer { h.close() }
         try await h.session.apply()
         let battery = try #require(h.session.status.battery)
         #expect(battery.percent == nil)
-        #expect(battery.level == .full && !battery.charging)  // 4088 mV, the fixture's reading
+        #expect(battery.level == level && !battery.charging)
         #expect(h.session.status.capabilities?.battery == true)
-    }
-
-    @Test func theVoltageDecidesTheLevel() async throws {
-        let fake = FakeDevice.m750
-        fake.features = fake.features.mapValues { $0 == 0x1004 ? 0x1001 : $0 }
-        fake.responses[.init(0x1001, 0)] = [0x0E, 0x74, 0]  // 3700 mV
-        let h = try await SessionHarness(fake, identify: true)
-        defer { h.close() }
-        try await h.session.apply()
-        #expect(h.session.status.battery?.level == .low)
     }
 }

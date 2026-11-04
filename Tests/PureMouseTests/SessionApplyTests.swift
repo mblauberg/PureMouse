@@ -40,7 +40,7 @@ struct SessionApplyTests {
         let fake = FakeDevice.mxMaster3S
         fake.features[0x0E] = 0x2111
         fake.failures[.init(0x2111, 1)] = .timeout
-        let h = try await SessionHarness(fake)
+        let h = try await SessionHarness(fake, instantTimeouts: true)
         defer { h.close() }
         let log = CapturedLog()
         try await Log.$testOutput.withValue(.lines { log.append($0) }) {
@@ -84,7 +84,7 @@ struct SessionApplyTests {
     @Test func restoreSendsAgainAWheelWriteTheMouseMissed() async throws {
         let log = CapturedLog()
         try await Log.$testOutput.withValue(.lines { log.append($0) }) {
-            let h = try await SessionHarness(config: SessionHarness.config(Self.wheelsOnly))
+            let h = try await SessionHarness(config: SessionHarness.config(Self.wheelsOnly), instantTimeouts: true)
             defer { h.close() }
             try await h.session.apply()
             #expect(h.fake.mainWheelDiverted)
@@ -108,7 +108,7 @@ struct SessionApplyTests {
         let log = CapturedLog()
         var steps = 0
         try await Log.$testOutput.withValue(.lines { log.append($0) }) {
-            let h = try await SessionHarness(config: SessionHarness.config(Self.wheelsOnly))
+            let h = try await SessionHarness(config: SessionHarness.config(Self.wheelsOnly), instantTimeouts: true)
             defer { h.close() }
             try await h.session.apply()
             steps = h.session.restoreSteps

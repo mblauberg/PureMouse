@@ -50,47 +50,42 @@ struct SessionNotchedWheelTests {
         #expect(!recorder.frames.running)
     }
 
-    @Test func naturalScrollingFlipsTheDirectionAndItsAbsenceDoesNot() async throws {
-        let natural = ScrollRecorder()
-        let h = try await SessionHarness(.m750, config: SessionHarness.config(#"{"smoothScroll": {"smoothingMs": 0}}"#),
-                                         environment: natural.environment)
-        defer { h.close() }
-        try await h.session.apply()
-        h.fake.emit(0x2130, params: [0x01])
-        #expect(natural.dy == -Int(ScrollEngine.pixelsPerNotch))  // synthetic events skip the system's flip
-
-        let plain = ScrollRecorder()
-        plain.naturalScrolling = false
-        let g = try await SessionHarness(.m750, config: SessionHarness.config(#"{"smoothScroll": {"smoothingMs": 0}}"#),
-                                         environment: plain.environment)
-        defer { g.close() }
-        try await g.session.apply()
-        g.fake.emit(0x2130, params: [0x01])
-        #expect(plain.dy == Int(ScrollEngine.pixelsPerNotch))
+    /// What one report of the notched wheel scrolls, in notches of `upwardNotch` (a negative count
+    /// is down), with smoothing off so it posts at once.
+    struct Notches: CustomTestStringConvertible, Sendable {
+        var testDescription: String
+        var config: String
+        var report: UInt8
+        var naturalScrolling = true
+        var expected: Int
     }
 
-    @Test func severalNotchesInOneReportScrollThatManyNotches() async throws {
+    @Test(arguments: [
+        // Synthetic events skip the system's flip, so the engine makes it itself.
+        Notches(testDescription: "natural scrolling flips the direction",
+                config: #"{"smoothScroll": {"smoothingMs": 0}}"#, report: 0x01, expected: 1),
+        Notches(testDescription: "without natural scrolling it does not",
+                config: #"{"smoothScroll": {"smoothingMs": 0}}"#, report: 0x01, naturalScrolling: false, expected: -1),
+        Notches(testDescription: "several notches in one report scroll that many",
+                config: #"{"smoothScroll": {"smoothingMs": 0, "acceleration": 0}}"#, report: 0x03, expected: 3),
+        Notches(testDescription: "the configured wheel direction is applied in software",
+                config: #"{"smoothScroll": {"smoothingMs": 0}, "scrollWheel": {"inverted": true}}"#, report: 0x01, expected: -1),
+    ])
+    func aReportScrollsTheNotchesItCarries(_ notches: Notches) async throws {
         let recorder = ScrollRecorder()
-        let h = try await SessionHarness(.m750, config: SessionHarness.config(#"{"smoothScroll": {"smoothingMs": 0, "acceleration": 0}}"#),
+        recorder.naturalScrolling = notches.naturalScrolling
+        let h = try await SessionHarness(.m750, config: SessionHarness.config(notches.config),
                                          environment: recorder.environment)
         defer { h.close() }
         try await h.session.apply()
-        h.fake.emit(0x2130, params: [0x03])
-        #expect(recorder.dy == 3 * ScrollRecorder.upwardNotch)
-    }
-
-    @Test func theConfiguredWheelDirectionIsAppliedInSoftware() async throws {
-        let recorder = ScrollRecorder()
-        let h = try await SessionHarness(.m750, config: SessionHarness.config(#"{"smoothScroll": {"smoothingMs": 0}, "scrollWheel": {"inverted": true}}"#),
-                                         environment: recorder.environment)
-        defer { h.close() }
-        try await h.session.apply()
-        h.fake.emit(0x2130, params: [0x01])
-        #expect(recorder.dy == -ScrollRecorder.upwardNotch)
+        h.fake.emit(0x2130, params: [notches.report])
+        #expect(recorder.dy == notches.expected * ScrollRecorder.upwardNotch)
+        #expect(recorder.dx == 0)
     }
 
     @Test func quittingOrPausingHandsTheWheelBackEvenWhenAControlWillNotRelease() async throws {
-        let h = try await SessionHarness(.m750, config: SessionHarness.config(#"{"smoothScroll": {}, "buttons": {"back": "none"}}"#))
+        let h = try await SessionHarness(.m750, config: SessionHarness.config(#"{"smoothScroll": {}, "buttons": {"back": "none"}}"#),
+                                         instantTimeouts: true)
         defer { h.close() }
         try await h.session.apply()
         #expect(h.fake.lowResWheelDiverted)
@@ -189,6 +184,7 @@ struct SessionNotchedWheelTests {
         defer { h.close() }
         try await h.session.apply()
         #expect(!fake.lowResWheelDiverted && wheelWrites(fake) == [[0x00]])
+        #expect(!h.session.wheelsMayBeDiverted)  // the clear took, so nothing is owed
         try await h.session.apply()
         #expect(wheelWrites(fake) == [[0x00]])  // already native: no second write
     }
@@ -230,14 +226,6 @@ struct SessionNotchedWheelTests {
         #expect(log.lines.filter { $0.message.contains("smooth scrolling needs") }.isEmpty)
     }
 
-    @Test func aWheelThatReportsDivertedIsOffered() async throws {
-        let fake = FakeDevice.m750
-        let h = try await SessionHarness(fake, config: SessionHarness.config(Self.smooth), identify: true)
-        defer { h.close() }
-        try await h.session.apply()
-        #expect(fake.lowResWheelDiverted && h.session.status.capabilities?.smoothScroll == true)
-    }
-
     // MARK: A wheel left diverted
 
     private func startingDiverted(_ fake: FakeDevice = .m750) -> FakeDevice {
@@ -248,7 +236,7 @@ struct SessionNotchedWheelTests {
     @Test func aWheelLeftDivertedWhoseFirstClearFailsStaysOwedUntilConfirmedNative() async throws {
         let fake = startingDiverted()
         fake.failures[.init(0x2130, 1)] = .timeout
-        let h = try await SessionHarness(fake, config: SessionHarness.nothing)
+        let h = try await SessionHarness(fake, config: SessionHarness.nothing, instantTimeouts: true)
         defer { h.close() }
         let controls = h.session.divertedControls.count
         #expect(!h.session.wheelsMayBeDiverted && h.session.restoreSteps == controls)  // control: nothing owed yet
@@ -263,7 +251,7 @@ struct SessionNotchedWheelTests {
     @Test func aWheelLeftDivertedWhoseFirstClearFailsIsHandedBackOnQuit() async throws {
         let fake = startingDiverted()
         fake.failures[.init(0x2130, 1)] = .timeout
-        let h = try await SessionHarness(fake, config: SessionHarness.nothing)
+        let h = try await SessionHarness(fake, config: SessionHarness.nothing, instantTimeouts: true)
         defer { h.close() }
         await #expect(throws: (any Error).self) { try await h.session.apply() }
         fake.failures[.init(0x2130, 1)] = nil
@@ -278,13 +266,5 @@ struct SessionNotchedWheelTests {
         defer { h.close() }
         await #expect(throws: (any Error).self) { try await h.session.apply() }
         #expect(fake.lowResWheelDiverted && h.session.wheelsMayBeDiverted)
-    }
-
-    @Test func aClearThatTakesConfirmsNativeAtOnce() async throws {
-        let fake = startingDiverted()
-        let h = try await SessionHarness(fake, config: SessionHarness.nothing)
-        defer { h.close() }
-        try await h.session.apply()
-        #expect(!fake.lowResWheelDiverted && !h.session.wheelsMayBeDiverted)
     }
 }

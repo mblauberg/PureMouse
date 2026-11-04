@@ -18,6 +18,7 @@ import Foundation
 final class ConfigWatcher {
     private let url: URL
     private let onChange: () -> Void
+    private let debounce: DispatchTimeInterval
     private var directorySource: Watch?
     private var parentSources: [Watch] = []
     private var fileSource: Watch?
@@ -55,8 +56,10 @@ final class ConfigWatcher {
         var inode: ino_t
     }
 
-    init(url: URL, onChange: @escaping () -> Void) {
+    /// `debounce` is shorter only in tests, which wait several of them to see that nothing more fires.
+    init(url: URL, debounce: DispatchTimeInterval = ConfigWatcher.debounce, onChange: @escaping () -> Void) {
         self.url = url
+        self.debounce = debounce
         self.onChange = onChange
     }
 
@@ -157,7 +160,7 @@ final class ConfigWatcher {
         pending?.cancel()
         let work = DispatchWorkItem { [weak self] in MainActor.assumeIsolated { self?.settled() } }
         pending = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.debounce, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + debounce, execute: work)
     }
 
     private func settled() {

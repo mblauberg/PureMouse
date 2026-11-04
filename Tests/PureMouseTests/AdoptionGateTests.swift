@@ -138,6 +138,7 @@ struct AdoptionGateTests {
         defer { h.close() }
         let endpoint = h.daemon.listen(sleeping.transport, index: sleeping.index)
         endpoint.timeout = .milliseconds(100)
+        sleeping.transport.failsSilenceAtOnce(on: endpoint)
         defer { endpoint.close() }
         await h.daemon.adoptRetrying(endpoint)
         try await eventually { !h.daemon.sessions.isEmpty }

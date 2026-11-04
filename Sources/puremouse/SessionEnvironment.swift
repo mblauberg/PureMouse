@@ -8,6 +8,9 @@ struct SessionEnvironment {
     var canPostEvents: Bool
     /// The wait between the three attempts of one `Session.configure`.
     var configureRetryDelay: Duration = .seconds(5)
+    /// How `Session.configure(after:)` waits out its delay; a test holds it open until released
+    /// instead of guessing how long a press takes.
+    var configureWait: (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
     var now: () -> ContinuousClock.Instant = { .now }
     /// How the daemon waits between attempts to adopt an endpoint that did not answer (`Backoff`).
     var adoptionSleep: (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
@@ -20,6 +23,9 @@ struct SessionEnvironment {
     /// own timeout. Short, so a request lost while the mouse was still waking fails in time for the
     /// next attempt.
     var attemptTimeout: Duration?
+    /// How long each request of `Session.restore` waits; a test shortens it to count a silent
+    /// mouse's timeouts rather than wait them out.
+    var restoreTimeout: Duration = Session.restoreTimeout
     /// The wall clock, for the time settings were applied.
     var date: () -> Date = { Date() }
     /// The frontmost app and the app under the pointer, looked up without observers.

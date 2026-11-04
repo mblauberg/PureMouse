@@ -86,7 +86,7 @@ struct SessionStatusTests {
     @Test func aDeviceInfoThatTimesOutLeavesTheKeyUnknownRatherThanGuessed() async throws {
         let fake = FakeDevice.m750
         fake.failures[.init(0x0003, 0)] = .timeout
-        let h = try await SessionHarness(fake, identify: true)
+        let h = try await SessionHarness(fake, identify: true, instantTimeouts: true)
         defer { h.close() }
         #expect(h.session.deviceKey == nil && h.session.name == "Signature Plus M750")
     }

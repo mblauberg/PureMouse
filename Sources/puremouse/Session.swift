@@ -459,7 +459,7 @@ final class Session {
                     lastConfigureEnded = environment.now()
                 }
             }
-            try? await Task.sleep(for: delay)
+            try? await environment.configureWait(delay)
             for attempt in 1...3 {
                 guard !Task.isCancelled else { return }
                 attemptsMade += 1
@@ -677,7 +677,7 @@ final class Session {
 
     /// Each request `restore` makes waits this long at most, so one the mouse misses still leaves
     /// time for every other before the daemon's deadline (`Daemon.shutdownDeadline`).
-    static let restoreTimeout: Duration = .milliseconds(400)
+    nonisolated static let restoreTimeout: Duration = .milliseconds(400)
 
     /// How many times `restore` tries a step that times out: a dozing mouse can miss the first
     /// request that wakes it and answer the next.
@@ -713,7 +713,7 @@ final class Session {
         // Cancelled work stops at its next write, and its request in flight fails at once.
         await diversion.drain()
         await deviceActions.drain()
-        let lease = device.lendTimeout(Self.restoreTimeout)
+        let lease = device.lendTimeout(environment.restoreTimeout)
         defer { device.returnTimeout(lease) }
         var attempts = Self.restoreAttempts
         // Wheels first: a silent wheel is worse than a diverted button. Each step stands alone,

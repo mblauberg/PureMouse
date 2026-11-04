@@ -7,8 +7,8 @@ import Testing
 struct SessionOfflineTests {
     /// `onReceiver`: the mouse is in a receiver slot, the only place a short 0x41 connection
     /// notification comes from.
-    private func offline(onReceiver: Bool = false) async throws -> (SessionHarness, TestTime) {
-        let clock = TestTime()
+    private func offline(onReceiver: Bool = false) async throws -> (SessionHarness, HandClock) {
+        let clock = HandClock()
         let fake = FakeDevice.mxMaster3S
         if onReceiver { fake.onReceiver(slot: 1) }
         let h = try await SessionHarness(fake, config: SessionHarness.config(#"{"buttons":{"back":"none"}}"#),
@@ -34,7 +34,7 @@ struct SessionOfflineTests {
         let fake = FakeDevice.mxMaster3S
         fake.onReceiver(slot: 1)
         let h = try await SessionHarness(fake, config: SessionHarness.config(#"{"buttons":{"back":"none"}}"#),
-            environment: .init(canPostEvents: true, configureRetryDelay: .milliseconds(300)))
+            environment: .init(canPostEvents: true, configureRetryDelay: .milliseconds(100)))
         defer { h.close() }
         h.fake.failures[.init(0x1B04, 3)] = .error(2)
         h.session.configure()
@@ -44,7 +44,7 @@ struct SessionOfflineTests {
                                 function: 0, softwareID: 0, params: [0x00]))
         try await eventually { h.session.status.online && !h.session.isConfiguring }
         // Outlast the superseded task's sleep: its end must not undo or clear the new configure.
-        try await Task.sleep(for: .milliseconds(400))
+        try await Task.sleep(for: .milliseconds(150))
         #expect(h.session.status.online && !h.session.isConfiguring)
         #expect(h.fake.control(0x53)?.diverted == true)
     }
@@ -122,9 +122,4 @@ struct SessionOfflineTests {
                                 function: 0, softwareID: 0, params: [75, 4, 0, 0]))
         #expect(!h.session.isConfiguring && h.fake.transport.sent.isEmpty)
     }
-}
-
-@MainActor
-private final class TestTime {
-    var now = ContinuousClock.now
 }
