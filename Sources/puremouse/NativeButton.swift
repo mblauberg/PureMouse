@@ -107,23 +107,29 @@ struct HeldButtons {
 
     /// Presses `cid` as an ordinary mouse button, if it has one.
     mutating func clickNatively(_ cid: UInt16) {
-        if post(cid, true) { native.insert(cid) }
+        guard !native.contains(cid) else { return }
+        if NativeButton.number(for: cid) == 2 && !middle.isEmpty {
+            native.insert(cid)
+        } else if post(cid, true) {
+            native.insert(cid)
+        }
     }
 
     /// Presses the middle button for `cid`, held until `cid` is let go.
     mutating func pressMiddle(_ cid: UInt16) {
-        if postMiddle(true) { middle.insert(cid) }
+        guard !middle.contains(cid) else { return }
+        if !middle.isEmpty || native.contains(0x52) || postMiddle(true) { middle.insert(cid) }
     }
 
     /// Lets go of `cid`: a native click or a held middle click is released; the gesture it held
     /// is returned.
     mutating func release(_ cid: UInt16) -> Config.Binding.Gesture? {
         if native.remove(cid) != nil {
-            _ = post(cid, false)
+            if NativeButton.number(for: cid) != 2 || middle.isEmpty { _ = post(cid, false) }
             return nil
         }
         if middle.remove(cid) != nil {
-            _ = postMiddle(false)
+            if middle.isEmpty && !native.contains(0x52) { _ = postMiddle(false) }
             return nil
         }
         guard let held = gesture, held.cid == cid else { return nil }
@@ -133,7 +139,7 @@ struct HeldButtons {
 
     /// Lets go of everything without acting on it.
     mutating func drop() {
-        for cid in native { _ = post(cid, false) }
+        for cid in native where NativeButton.number(for: cid) != 2 || middle.isEmpty { _ = post(cid, false) }
         native = []
         if !middle.isEmpty {
             _ = postMiddle(false)
