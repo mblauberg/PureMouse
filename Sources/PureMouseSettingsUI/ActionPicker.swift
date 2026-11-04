@@ -456,8 +456,9 @@ private struct PickerRow: View {
             Label {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 4) {
-                        Text(entry.label).lineLimit(1).help(entry.label)
-                        if let detail = entry.detail { Text(detail).foregroundStyle(.secondary) }
+                        Text(entry.label).lineLimit(1).help(entry.label).layoutPriority(1)
+                        // The detail gives way first: one line, cut at its end, as a menu item is.
+                        if let detail = entry.detail { Text(detail).lineLimit(1).foregroundStyle(.secondary).help(detail) }
                     }
                     if let caption = entry.caption { Text(caption).font(.caption).foregroundStyle(.secondary) }
                     if let note = entry.note { Text(note).font(.caption).foregroundStyle(.secondary) }
