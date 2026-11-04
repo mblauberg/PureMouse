@@ -129,7 +129,9 @@ struct HIDPPDeviceTests {
         let transport = FakeTransport()
         let device = HIDPPDevice(interface: transport, index: directDeviceIndex)
         defer { device.close() }
-        device.timeout = Self.neverTimesOut
+        // The deadline task exits without timing out either request, regardless of runner stalls.
+        // Cancellation and the delivered reply must be the only ways these requests finish.
+        device.sleep = { _ in throw CancellationError() }
         let first = Task { try await device.request(featureIndex: 2, function: 0) }
         try await waitForSends(1, on: transport)
         let queued = Task { try await device.request(featureIndex: 3, function: 0) }
