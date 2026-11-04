@@ -2,8 +2,7 @@
 
 ## Status
 
-Accepted, not built. Epic #155 builds it in slices (with #153 and #154); each slice moves its part
-of the rules into `docs/configuration.md`, and until then the shipped config is unchanged.
+Accepted, partially built. Epic #155 builds the remaining parts in slices (with #153 and #154).
 
 ## Context
 
