@@ -23,6 +23,35 @@ enum DevCapture {
     private static var faked = false
     private static var shadow = false
 
+    /// Captures a page change on an unlocked spare Mac, using the same window-server path as a
+    /// normal capture. Each delayed capture yields to the run loop so AppKit can animate.
+    static func filmstrip(_ environment: [String: String], change: @escaping () -> Void) {
+        guard let path = environment["PUREMOUSE_DEV_FILMSTRIP"] else { return }
+        let directory = URL(filePath: path, directoryHint: .isDirectory)
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        } catch {
+            FileHandle.standardError.write(Data("filmstrip directory failed: \(error)\n".utf8))
+            NSApp.terminateClosingSheets()
+            return
+        }
+        let delay = environment["PUREMOUSE_DEV_CAPTURE_DELAY"].flatMap(Double.init) ?? 2.5
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            @MainActor func capture(_ index: Int) {
+                let url = directory.appendingPathComponent(String(format: "%03d.png", index))
+                guard write(to: url) else {
+                    FileHandle.standardError.write(Data("filmstrip capture failed at frame \(index)\n".utf8))
+                    NSApp.terminateClosingSheets()
+                    return
+                }
+                if index == 0 { change() }
+                if index == 30 { NSApp.terminateClosingSheets(); return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0 / 60.0) { capture(index + 1) }
+            }
+            capture(0)
+        }
+    }
+
     static func schedule(_ environment: [String: String]) {
         guard let path = environment["PUREMOUSE_DEV_CAPTURE"] else { return }
         let delay = environment["PUREMOUSE_DEV_CAPTURE_DELAY"].flatMap(Double.init) ?? 2.5

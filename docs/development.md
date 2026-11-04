@@ -197,6 +197,14 @@ with no glass: enough to check its rows and words in either appearance. A window
 (`screencapture -l`) leaves out the menu's blur, so the README's menu shots take the shape and
 shadow from a window capture and the body from a screen capture of the same rect.
 
+For a Settings transition, a debug helper can capture a filmstrip on the unlocked spare Mac.
+Set `PUREMOUSE_DEV_FILMSTRIP` to an output directory and `PUREMOUSE_DEV_FILMSTRIP_TO` to a tab or
+Mouse segment (the same names as `PUREMOUSE_DEV_PANE`), `app:<bundle id>`, or `back`. After the
+usual capture delay it writes `000.png` before the change and 30 numbered frames at approximately
+60 Hz, then quits. Use the same isolated config, daemon and companion directory as other dev runs;
+the window-server captures need no Screen Recording permission. Scheduling and capture cost can
+vary the actual spacing between frames.
+
 ### UI matrix
 
 `scripts/ui-matrix.sh` is the repeatable run of the accessibility dump and the captures. It runs

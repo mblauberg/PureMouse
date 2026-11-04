@@ -91,6 +91,17 @@ public enum DevHooks {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { send(key: name) }
         }
         DevCapture.schedule(environment)
+        if let target = environment["PUREMOUSE_DEV_FILMSTRIP_TO"] {
+            DevCapture.filmstrip(environment) {
+                if let pane = SettingsPane(rawValue: target) {
+                    show(ShowRequest(pane: pane))
+                } else if target == "back" {
+                    send(key: "esc")
+                } else if target.hasPrefix("app:") {
+                    show(ShowRequest(app: String(target.dropFirst(4))))
+                }
+            }
+        }
         DevAXDump.schedule(environment, show: show)
     }
 }
