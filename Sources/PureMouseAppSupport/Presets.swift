@@ -98,7 +98,11 @@ public enum DPIPresets {
 
     /// The step of `steps` nearest to `dpi` (the sensor's own list; the daemon snaps the same way).
     public static func snap(_ dpi: Int, to steps: [Int]) -> Int {
-        steps.min { abs($0 - dpi) < abs($1 - dpi) } ?? dpi
+        func distance(_ value: Int) -> UInt {
+            value >= dpi ? UInt(bitPattern: value) &- UInt(bitPattern: dpi)
+                : UInt(bitPattern: dpi) &- UInt(bitPattern: value)
+        }
+        return steps.min { distance($0) < distance($1) } ?? dpi
     }
 }
 

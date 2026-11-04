@@ -390,3 +390,13 @@ private let swappedVolume = #"{"thumbWheel":{"action":"volume","reversed":true},
     // The fitting one first; the one that fills the room (and truncates) only when that does not fit.
     #expect(components.contains("ViewThatFits(in: .horizontal) {\n                menu.fixedSize()\n                menu\n            }"))
 }
+
+@Test func pointerEditingClearsPendingValuesOnScopeChange() {
+    var editing = PointerEditingState()
+    editing.reading.request(1600)
+    editing.typed = 3200
+    #expect(editing.reading.current(live: 800, configured: nil) == 1600)
+    editing.scopeChanged()
+    #expect(editing.typed == nil)
+    #expect(editing.reading.current(live: 800, configured: nil) == 800)
+}

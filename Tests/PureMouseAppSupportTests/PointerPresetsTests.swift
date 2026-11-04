@@ -21,6 +21,14 @@ import Testing
         #expect(DPIPresets.newPreset(current: 1650, presets: Array(full.dropLast()), steps: []) == 1650)
     }
 
+    @Test func snappingHandlesIntegerExtremes() {
+        let steps = [25600, 50, 800]
+        #expect(DPIPresets.snap(Int.min, to: steps) == 50)
+        #expect(DPIPresets.snap(Int.max, to: steps) == 25600)
+        #expect(DPIPresets.snap(Int.min, to: [Int.max, Int.min]) == Int.min)
+        #expect(DPIPresets.snap(Int.max, to: [Int.min, Int.max]) == Int.max)
+    }
+
     @Test func theCheckedPresetIsTheOneTheSensorRunsAt() {
         let steps = [800, 1000, 1600, 1650, 3200]
         #expect(DPIPresets.selected(in: [1000, 1650], current: 1650, steps: steps) == 1650)

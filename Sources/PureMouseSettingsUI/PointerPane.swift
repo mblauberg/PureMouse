@@ -1,13 +1,23 @@
 import PureMouseAppSupport
+import PureMouseKit
 import SwiftUI
+
+struct PointerEditingState {
+    var typed: Int?
+    var reading = DPIReading()
+
+    mutating func scopeChanged() {
+        typed = nil
+        reading.clear()
+    }
+}
 
 struct PointerPane: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openURL) private var openURL
     @Environment(\.settings) private var settings
-    @State private var typed: Int?
+    @State private var editing = PointerEditingState()
     @State private var exactValue = false
-    @State private var reading = DPIReading()
 
     static let restoreMessage = "Pointer speed and presets return to PureMouse's defaults."
 
@@ -26,8 +36,8 @@ struct PointerPane: View {
 
     private var configured: Int? { model.config.resolvedInt(["dpi"], in: model.scope) }
     private var live: Int? { model.liveDevice(in: model.scope)?.dpi }
-    private var current: Int { reading.current(live: live, configured: configured) }
-    private var estimate: Bool { reading.isEstimate(live: live, configured: configured) }
+    private var current: Int { editing.reading.current(live: live, configured: configured) }
+    private var estimate: Bool { editing.reading.isEstimate(live: live, configured: configured) }
 
     var body: some View {
         let steps = steps
@@ -46,13 +56,13 @@ struct PointerPane: View {
                                                set: { DPIReading.step(at: $0, in: steps).map { setDPI($0, debounce: true) } }),
                                 range: 0...Double(max(steps.count - 1, 1)),
                                 low: PointerWords.slow, high: PointerWords.fast,
-                                format: { _ in reading.readout(live: live, configured: configured) },
+                                format: { _ in editing.reading.readout(live: live, configured: configured) },
                                 showsReadout: false, availability: layout.availability, mouseDefault: estimate, standing: speed)
                         // A sensor with a single setting has nothing to slide between.
                         .disabled(steps.count < 2)
                     LabeledContent {
                         if !exactValue {
-                            Text(reading.readout(live: live, configured: configured))
+                            Text(editing.reading.readout(live: live, configured: configured))
                                 .monospacedDigit().foregroundStyle(.secondary)
                         }
                     } label: {
@@ -61,7 +71,7 @@ struct PointerPane: View {
                     if exactValue {
                         LabeledContent {
                             HStack(spacing: 4) {
-                                TextField("Pointer speed", value: Binding(get: { typed ?? current }, set: { typed = $0 }),
+                                TextField("Pointer speed", value: Binding(get: { editing.typed ?? current }, set: { editing.typed = $0 }),
                                           format: .number.grouping(.automatic))
                                     .textFieldStyle(.plain)
                                     .multilineTextAlignment(.trailing)
@@ -98,16 +108,16 @@ struct PointerPane: View {
                     }
                     .buttonStyle(.link)
                     PaneFooter(restoreDefaults: {
-                        typed = nil
-                        reading.clear()
+                        editing.scopeChanged()
                         model.update(in: target) { $0.restorePointerDefaults(in: scope) }
                     }, restoreMessage: model.selectedMouse.map { Self.restoreMessage(for: $0.name) } ?? Self.restoreMessage)
                 }
             }
             .disabled(model.readOnly)
         }
-        .onChange(of: live) { reading.reported(live, steps: steps) }
-        .onChange(of: model.writeError) { if model.writeError != nil { reading.clear() } }
+        .onChange(of: scope) { editing.scopeChanged() }
+        .onChange(of: live) { editing.reading.reported(live, steps: steps) }
+        .onChange(of: model.writeError) { if model.writeError != nil { editing.reading.clear() } }
         .onChange(of: exactValue) { settings?.refit() }
         .sheet(isPresented: Binding(get: { settings?.sheet == .presets }, set: { if !$0 { settings?.sheet = nil } })) {
             PresetsSheet(current: current, steps: reportedSteps) { setDPI($0) }
@@ -115,14 +125,15 @@ struct PointerPane: View {
     }
 
     private func setDPI(_ dpi: Int, debounce: Bool = false) {
-        typed = nil
+        editing.typed = nil
         guard !model.readOnly else { return }
-        reading.request(dpi)
+        editing.reading.request(dpi)
         model.setDPI(dpi, debounce: debounce, in: model.scopeTarget)
     }
 
     private func commitTyped(_ steps: [Int]) {
-        guard let typed else { return }
-        setDPI(DPIPresets.snap(typed, to: steps))
+        guard let typed = editing.typed else { return }
+        let clamped = min(max(typed, Config.dpiRange.lowerBound), Config.dpiRange.upperBound)
+        setDPI(DPIPresets.snap(clamped, to: steps))
     }
 }
