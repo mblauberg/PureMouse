@@ -119,8 +119,13 @@ import Testing
         #expect(fresh.doubleClickInterval(systemSeconds: nil) == 500)
         #expect(fresh.doubleClickInterval(systemSeconds: 0.3) == 300)
         #expect(fresh.doubleClickInterval(systemSeconds: 5) == 1000)
+        #expect(fresh.doubleClickInterval(systemSeconds: 1e20) == Config.doubleClickMsRange.upperBound)
+        #expect(fresh.doubleClickInterval(systemSeconds: Double.greatestFiniteMagnitude) == Config.doubleClickMsRange.upperBound)
         #expect(fresh.doubleClickInterval(systemSeconds: 0.05) == 150)
         #expect(fresh.doubleClickInterval(systemSeconds: -1) == 500)
+        #expect(fresh.doubleClickInterval(systemSeconds: .infinity) == 500)
+        #expect(fresh.doubleClickInterval(systemSeconds: .nan) == 500)
+        #expect(fresh.doubleClickInterval(systemSeconds: 0.3005) == 301)
         #expect(try decode(#"{"doubleClickMs": 250}"#).doubleClickInterval(systemSeconds: 0.8) == 250)
     }
 

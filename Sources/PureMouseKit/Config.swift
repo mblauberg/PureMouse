@@ -549,7 +549,8 @@ public struct Config: Decodable, Sendable {
         if let configured { return configured }
         let seconds = systemSeconds.flatMap { $0 > 0 && $0.isFinite ? $0 : nil } ?? 0.5
         let range = doubleClickMsRange
-        return min(max(Int((seconds * 1000).rounded()), range.lowerBound), range.upperBound)
+        let milliseconds = min(max(seconds * 1000, Double(range.lowerBound)), Double(range.upperBound))
+        return Int(milliseconds.rounded())
     }
 
     public static var defaultURL: URL {
