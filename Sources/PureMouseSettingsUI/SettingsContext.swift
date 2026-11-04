@@ -52,6 +52,12 @@ final class SettingsContext {
         rowRequest = RowRequest(id: (rowRequest?.id ?? 0) + 1, button: button)
     }
 
+    /// Changes what the pane shows (an app's page, back to the list) as the window's one page
+    /// transition: the content cross-fades as the frame moves (`SettingsTabs.transition`).
+    func transition(_ change: () -> Void) {
+        if let tabs { tabs.transition(change) } else { change() }
+    }
+
     /// Fits the window to its pane once a change in the pane's height has laid out
     /// (`SettingsTabs.refit`).
     func refit() {
