@@ -20,7 +20,7 @@ private func requestFile() -> URL {
     let reader = Thread {
         try? FileLock.withLock(FileLock.url(for: file)) {
             held.signal()
-            Thread.sleep(forTimeInterval: 0.4)
+            Thread.sleep(forTimeInterval: 0.15)
             try? FileManager.default.removeItem(at: file) // the reader's remove, after its read
         }
     }
@@ -28,7 +28,7 @@ private func requestFile() -> URL {
     held.wait()
     let start = Date()
     SettingsRequest.write("", to: file)
-    #expect(Date().timeIntervalSince(start) >= 0.3, "the write waited for the lock")
+    #expect(Date().timeIntervalSince(start) >= 0.1, "the write waited for the lock")
     let taken = try #require(SettingsRequest.take(from: file), "the daemon's request survived the reader's remove")
     #expect(taken.body == "")
 }

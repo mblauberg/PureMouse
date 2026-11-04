@@ -125,13 +125,20 @@ struct AppControllerUpdateTests {
 
     private func settle(until condition: () -> Bool) async {
         for _ in 0..<1000 where !condition() { await Task.yield() }
+        await idle()
+    }
+
+    /// Lets every task already queued on the main actor run, for the tests that assert nothing
+    /// more happened. Waiting out the full `settle` bound for a condition that cannot come costs
+    /// half a second each.
+    private func idle() async {
         for _ in 0..<50 { await Task.yield() }
     }
 
     @Test func nothingIsAskedOnTheFirstLaunchAndTheQuestionShowsOnceOnTheSecond() async throws {
         try writeStatus()
         _ = launch()
-        await settle { false }
+        await idle()
         #expect(questions.asked == 0 && preferences.automatic == nil)
         _ = launch()
         await settle { questions.asked > 0 }
@@ -139,7 +146,7 @@ struct AppControllerUpdateTests {
         #expect(preferences.automatic == true)
         #expect(scheduler.delays == [0])  // the check is scheduled, not run
         for _ in 0..<3 { _ = launch() }
-        await settle { false }
+        await idle()
         #expect(questions.asked == 1)
     }
 
@@ -151,7 +158,7 @@ struct AppControllerUpdateTests {
         await settle { questions.asked > 0 }
         #expect(preferences.automatic == false)
         _ = launch()
-        await settle { false }
+        await idle()
         #expect(questions.asked == 1 && scheduler.delays.isEmpty)
     }
 
@@ -159,7 +166,7 @@ struct AppControllerUpdateTests {
         try writeStatus(accessibility: false)
         _ = launch()
         _ = launch()
-        await settle { false }
+        await idle()
         #expect(questions.asked == 0)
         try writeStatus(accessibility: true)
         _ = launch()
@@ -171,7 +178,7 @@ struct AppControllerUpdateTests {
         try writeStatus(running: false)
         _ = launch()
         _ = launch()
-        await settle { false }
+        await idle()
         #expect(questions.asked == 0)
     }
 
@@ -179,7 +186,7 @@ struct AppControllerUpdateTests {
         try writeStatus(running: false)  // the last run's file, still on disk at login
         _ = launch()
         let second = launch()
-        await settle { false }
+        await idle()
         #expect(questions.asked == 0)
         try writeStatus(running: true)   // the daemon starts and writes its own
         second.model.reloadStatus()
@@ -191,7 +198,7 @@ struct AppControllerUpdateTests {
     @Test func aStatusWrittenAfterLaunchStillGetsTheQuestionThisRun() async throws {
         _ = launch()
         let second = launch()  // no status yet, as at login before the daemon writes one
-        await settle { false }
+        await idle()
         #expect(questions.asked == 0)
         try writeStatus()
         second.model.reloadStatus()
@@ -203,7 +210,7 @@ struct AppControllerUpdateTests {
     @Test func aRunWithoutTheIconNeitherCountsNorAsksNorSchedules() async throws {
         try writeStatus()
         for _ in 0..<4 { _ = launch(iconShown: false) }
-        await settle { false }
+        await idle()
         #expect(preferences.launches == 0 && questions.asked == 0 && scheduler.delays.isEmpty)
     }
 
@@ -311,7 +318,7 @@ struct AppControllerUpdateTests {
         var hides = 0
         let controller = offered(spy, menuOff: { done in hides += 1; done(hideWorks) })
         controller.hideMenuBarIcon()
-        await settle { false }
+        await idle()
         #expect(hides == 1)
         controller.installUpdate()
         await settle { spy.installs.count == 1 }
@@ -326,7 +333,7 @@ struct AppControllerUpdateTests {
         controller.hideMenuBarIcon()
         await settle { finish != nil }
         controller.installUpdate()
-        await settle { false }
+        await idle()
         #expect(spy.confirmed.isEmpty && spy.installs.isEmpty)
         finish?(true)
         controller.installUpdate()
@@ -339,7 +346,7 @@ struct AppControllerUpdateTests {
         spy.confirm = false
         let controller = offered(spy)
         controller.installUpdate()
-        await settle { false }
+        await idle()
         #expect(spy.confirmed.map(\.version.text) == ["0.6.0"])
         #expect(spy.installs.isEmpty && controller.installState == .idle)
     }
@@ -391,7 +398,7 @@ struct AppControllerUpdateTests {
         let controller = offered(spy)
         preferences.latest = nil
         controller.installUpdate()
-        await settle { false }
+        await idle()
         #expect(spy.confirmed.isEmpty && spy.installs.isEmpty)
     }
 
@@ -484,9 +491,9 @@ struct AppControllerUpdateTests {
         let task = Task { @MainActor in
             await UpdateSetup.relaunchLive(Self.app, from: .about, launcher: launcher) { _, _ in opened += 1; return true }
         }
-        await settle { false }
+        await idle()
         #expect(helper.quitCount == 1 && opened == 0, "asked to quit, not yet gone")
-        for _ in 0..<5 { fake.runDelayed(); await settle { false } }
+        for _ in 0..<5 { fake.runDelayed(); await idle() }
         #expect(opened == 0, "still waiting while it is alive")
         helper.exit()
         fake.runDelayed()
@@ -506,7 +513,7 @@ struct AppControllerUpdateTests {
         }
         var waited: TimeInterval = 0
         while opened == 0, waited < 10 {
-            await settle { false }
+            await idle()
             waited += fake.delayed.map(\.0).reduce(0, +)
             fake.runDelayed()
         }
@@ -560,7 +567,7 @@ struct AppControllerUpdateTests {
             controller.startInstall(UpdateOffer(version: UpdateCheck.Version("0.6.0")!, page: Self.page), from: .about)   // About's request
         }
         controller.installUpdate()
-        await settle { false }
+        await idle()
         #expect(spy.confirmed.count == 1, "the second request did not open a second alert")
         #expect(spy.installs.count == 1)
         var ended = false
@@ -580,11 +587,11 @@ struct AppControllerUpdateTests {
             controller.installRequested()
         }
         controller.installUpdate()
-        await settle { false }
+        await idle()
         #expect(spy.confirmed.count == 1 && spy.installs.count == 1)
         #expect(preferences.installRequest == nil)
         spy.gate?.release(cancelled: true)
-        await settle { false }
+        await idle()
     }
 
     @Test func quittingWhileTheConfirmationIsUpInstallsNothingAfterIt() async {
@@ -593,7 +600,7 @@ struct AppControllerUpdateTests {
         var ended = false
         spy.duringConfirm = { [unowned controller] in controller.afterInstallEnds { ended = true } }
         controller.installUpdate()
-        await settle { false }
+        await idle()
         #expect(ended)
         #expect(spy.installs.isEmpty && controller.installState == .idle)
     }
@@ -611,10 +618,10 @@ struct AppControllerUpdateTests {
         let spy = InstallSpy()
         spy.cleanup = Suspended()
         let controller = suspended(spy)
-        await settle { false }
+        await idle()
         var ended = false
         controller.afterInstallEnds { ended = true }
-        await settle { false }
+        await idle()
         #expect(spy.gate?.cancelled == true, "the install was told to stop")
         #expect(!ended, "but quitting waits for its cleanup")
         spy.cleanup?.release()
@@ -633,9 +640,9 @@ struct AppControllerUpdateTests {
         let spy = InstallSpy()
         spy.cleanup = Suspended()
         let controller = suspended(spy)
-        await settle { false }
+        await idle()
         #expect(controller.applicationShouldTerminate(NSApplication.shared) == .terminateLater)
-        await settle { false }
+        await idle()
         #expect(spy.replies.isEmpty)
         spy.cleanup?.release()
         await settle { !spy.replies.isEmpty }
@@ -652,7 +659,7 @@ struct AppControllerUpdateTests {
         spy.cleanup = nil
         let controller = offered(spy)
         controller.installUpdate()
-        await settle { false }
+        await idle()
         var ended = false
         controller.afterInstallEnds { ended = true }
         spy.outcome = .installed(UpdateCheck.Version("0.6.0")!)
@@ -684,7 +691,7 @@ struct AppControllerUpdateTests {
         helper.exit()
         fake.runDelayed()
         await settle { ended }
-        for _ in 0..<5 { fake.runDelayed(); await settle { false } }
+        for _ in 0..<5 { fake.runDelayed(); await idle() }
         #expect(ended)
         #expect(opened == 0, "the replacement is not started")
         #expect(spy.terminated == 0 && spy.alerts.isEmpty, "no update termination, no failure alert")
@@ -700,7 +707,7 @@ struct AppControllerUpdateTests {
         let task = Task { @MainActor in
             await UpdateSetup.relaunchLive(Self.app, from: .menu, launcher: launcher) { _, _ in opened += 1; return true }
         }
-        await settle { false }
+        await idle()
         task.cancel()
         fake.runDelayed()   // one look, with the helper still alive
         #expect(await task.value == .abandoned)
@@ -712,7 +719,7 @@ struct AppControllerUpdateTests {
         let controller = offered(spy)
         controller.afterInstallEnds {}
         controller.installUpdate()
-        await settle { false }
+        await idle()
         #expect(spy.confirmed.isEmpty && spy.installs.isEmpty)
     }
 
@@ -768,7 +775,7 @@ struct AppControllerUpdateTests {
         spy.confirm = false
         let controller = aboutRequest(spy)
         defer { withExtendedLifetime(controller) {} }
-        await settle { false }
+        await idle()
         #expect(spy.confirmed.count == 1 && spy.installs.isEmpty && preferences.installStatus == nil)
         #expect(preferences.installRequest == nil)
     }
@@ -781,7 +788,7 @@ struct AppControllerUpdateTests {
         let spy = InstallSpy()
         let controller = aboutRequest(spy, version: version, page: page)
         defer { withExtendedLifetime(controller) {} }
-        await settle { false }
+        await idle()
         #expect(spy.confirmed.isEmpty && spy.installs.isEmpty && preferences.installRequest == nil)
     }
 
