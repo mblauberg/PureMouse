@@ -135,6 +135,11 @@ so the file's own descriptor goes stale). It reloads when the file's bytes chang
 about 150 ms, exactly as for SIGHUP. Hand edits therefore apply on save. A failed load keeps the
 previous config and reports `config.error`.
 
+The menu app and Settings (`ConfigStore`) watch the same directory, plus the file itself for
+in-place editors. While the directory does not exist yet, they watch its nearest existing ancestor
+and move the watch down as directories appear, so a config created later is still seen (events
+only, no polling). After a read error, the same bytes back on disk clear the error.
+
 Slider writes from the menu are debounced to about 300 ms.
 
 ## Versioning

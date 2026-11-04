@@ -117,7 +117,8 @@ public final class ConfigStore {
             undo?.clear()
             return
         }
-        guard data != diskBytes else { return }
+        // Identical bytes are a no-op, unless an error is showing: the file may have recovered.
+        guard data != diskBytes || configProblem != nil else { return }
         // Someone else changed the file: what the steps would put back no longer fits it.
         undo?.clear()
         // Edited by hand while a change of ours waits: save ours on top of the new file now.
@@ -277,15 +278,26 @@ public final class ConfigStore {
     /// watch the directory; some editors write in place, which leaves the directory untouched, so
     /// watch the file too, following each new one. `reloadConfig` compares bytes, so a save seen
     /// by both costs one read.
+    ///
+    /// While the directory does not exist, the nearest existing ancestor is watched instead; each
+    /// event there rearms the watches, so they move down as the directories appear and settle on
+    /// the real directory (event-driven, no polling).
     public func startWatching() {
         directoryWatch?.cancel()
         directoryWatch = nil
         let directory = locations.config.resolvingSymlinksInPath().deletingLastPathComponent()
-        directoryWatch = watch(directory.path, [.write, .delete, .rename]) { store, events in
-            if !events.isDisjoint(with: [.delete, .rename]) { store.startWatching() }
+        var watched = directory
+        while watched.path != "/", !FileManager.default.fileExists(atPath: watched.path) {
+            watched = watched.deletingLastPathComponent()
+        }
+        let waiting = watched.path != directory.path
+        directoryWatch = watch(watched.path, [.write, .delete, .rename]) { store, events in
+            if waiting || !events.isDisjoint(with: [.delete, .rename]) { store.startWatching() }
             store.configChanged()
         }
         watchConfigFile()
+        // The file may have appeared between the last event and the new watch.
+        if !waiting, directoryWatch != nil, fileWatch != nil { reloadConfig() }
     }
 
     private func watchConfigFile() {
