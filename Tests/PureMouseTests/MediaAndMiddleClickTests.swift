@@ -50,6 +50,70 @@ import PureMouseKit
         #expect(posts.native.isEmpty)
     }
 
+    @Test func overlappingMiddleHoldsReleaseOnlyAfterLastOwner() {
+        let posts = Posts()
+        var h = held(posts)
+        h.pressMiddle(0x53)
+        h.pressMiddle(0x53)
+        h.pressMiddle(0x54)
+        #expect(posts.middle == [true] && h.middle == [0x53, 0x54])
+        _ = h.release(0x53)
+        #expect(posts.middle == [true])
+        _ = h.release(0x54)
+        #expect(posts.middle == [true, false])
+    }
+
+    @Test func nativeWheelAndMiddleClickShareTheHold() {
+        for nativeFirst in [true, false] {
+            let posts = Posts()
+            var h = held(posts)
+            if nativeFirst {
+                h.clickNatively(0x52)
+                h.pressMiddle(0x53)
+                _ = h.release(0x52)
+                #expect(posts.native.map(\.1) == [true] && posts.middle.isEmpty)
+                _ = h.release(0x53)
+                #expect(posts.middle == [false])
+            } else {
+                h.pressMiddle(0x53)
+                h.clickNatively(0x52)
+                _ = h.release(0x53)
+                #expect(posts.middle == [true] && posts.native.isEmpty)
+                _ = h.release(0x52)
+                #expect(posts.native.map(\.1) == [false])
+            }
+        }
+    }
+
+    @Test func duplicateNativePressDoesNotPostTwice() {
+        let posts = Posts()
+        var h = held(posts)
+        h.clickNatively(0x52)
+        h.clickNatively(0x52)
+        _ = h.release(0x52)
+        #expect(posts.native.map(\.1) == [true, false])
+    }
+
+    @Test func failedFirstMiddlePressDoesNotCreateAnOwner() {
+        var attempts = 0
+        var h = HeldButtons(postMiddle: { _ in attempts += 1; return false })
+        h.pressMiddle(0x53)
+        #expect(h.middle.isEmpty && attempts == 1)
+        _ = h.release(0x53)
+        #expect(attempts == 1)
+    }
+
+    @Test func dropReleasesOverlappingMiddleHoldsOnce() {
+        let posts = Posts()
+        var h = held(posts)
+        h.clickNatively(0x52)
+        h.pressMiddle(0x53)
+        h.pressMiddle(0x54)
+        h.drop()
+        #expect(posts.native.map(\.1) == [true] && posts.middle == [false])
+        #expect(h.native.isEmpty && h.middle.isEmpty)
+    }
+
     @Test func dropReleasesAHeldMiddleClick() {
         let posts = Posts()
         var h = held(posts)
